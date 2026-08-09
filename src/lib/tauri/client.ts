@@ -59,7 +59,7 @@ export class ConversationCommandError extends Error implements UiError {
   }
 }
 
-const defaultTransport: InvokeTransport = {
+export const defaultTransport: InvokeTransport = {
   invoke(command, args) {
     return tauriInvoke<unknown>(command, args)
   },
@@ -232,7 +232,7 @@ function invalidInputError(): ConversationCommandError {
   })
 }
 
-function internalError(): ConversationCommandError {
+export function internalError(): ConversationCommandError {
   return new ConversationCommandError({
     code: "internal",
     message: "An unexpected error occurred.",
@@ -249,7 +249,7 @@ function mapConversation(dto: ConversationDto): ConversationView {
   }
 }
 
-function mapNode(dto: NodeDto): ConversationNodeView {
+export function mapNode(dto: NodeDto): ConversationNodeView {
   return {
     id: dto.id,
     ...(dto.parent_id === null ? {} : { parentId: dto.parent_id }),

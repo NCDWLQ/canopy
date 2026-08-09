@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use crate::conversations::PersistenceError;
+use crate::{conversations::PersistenceError, providers::ProviderError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -45,6 +45,72 @@ impl CommandError {
             message: "An unexpected error occurred.".to_owned(),
             retryable: false,
             details: None,
+        }
+    }
+
+    pub fn cancelled() -> Self {
+        Self {
+            code: CommandErrorCode::Cancelled,
+            message: "The generation was cancelled.".to_owned(),
+            retryable: false,
+            details: None,
+        }
+    }
+}
+
+impl From<ProviderError> for CommandError {
+    fn from(error: ProviderError) -> Self {
+        match error {
+            ProviderError::InvalidInput { field, reason } => Self::invalid_input(field, reason),
+            ProviderError::ProfileNotFound => Self {
+                code: CommandErrorCode::NotFound,
+                message: "The provider profile was not found.".to_owned(),
+                retryable: false,
+                details: Some(json!({ "entity": "provider_profile" })),
+            },
+            ProviderError::CredentialMissing | ProviderError::Authentication => Self {
+                code: CommandErrorCode::ProviderAuthentication,
+                message: "Provider authentication is required.".to_owned(),
+                retryable: false,
+                details: None,
+            },
+            ProviderError::CredentialUnavailable => Self {
+                code: CommandErrorCode::ProviderUnavailable,
+                message: "Secure credential storage is currently unavailable.".to_owned(),
+                retryable: true,
+                details: None,
+            },
+            ProviderError::GenerationAlreadyActive => {
+                Self::invalid_input("conversation_id", "generation_already_active")
+            }
+            ProviderError::RateLimited { retry_after_ms } => Self {
+                code: CommandErrorCode::RateLimited,
+                message: "The provider rate limit was reached.".to_owned(),
+                retryable: true,
+                details: retry_after_ms.map(|value| json!({ "retry_after_ms": value })),
+            },
+            ProviderError::Unavailable | ProviderError::Protocol => Self {
+                code: CommandErrorCode::ProviderUnavailable,
+                message: "The provider is currently unavailable.".to_owned(),
+                retryable: true,
+                details: None,
+            },
+            ProviderError::Network => Self {
+                code: CommandErrorCode::NetworkFailure,
+                message: "The provider network request failed.".to_owned(),
+                retryable: true,
+                details: None,
+            },
+            ProviderError::Cancelled => Self::cancelled(),
+            ProviderError::RuntimeInvariant => Self::internal(),
+            ProviderError::Persistence(error) => Self::from(error),
+            ProviderError::Storage(error) if is_transient_storage_error(&error) => Self {
+                code: CommandErrorCode::DatabaseUnavailable,
+                message: "The provider database is currently unavailable.".to_owned(),
+                retryable: true,
+                details: None,
+            },
+            ProviderError::Storage(_) => Self::internal(),
         }
     }
 }

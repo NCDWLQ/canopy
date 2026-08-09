@@ -7,6 +7,9 @@ use super::{
     Node, PersistenceError, Role, ValidatedPath,
 };
 
+const MAX_GENERATED_CONTENT_BYTES: usize = 1024 * 1024;
+const MAX_GENERATED_MODEL_BYTES: usize = 200;
+
 #[derive(Debug, Clone)]
 pub struct ConversationPersistenceService {
     pool: SqlitePool,
@@ -211,6 +214,82 @@ impl ConversationPersistenceService {
         .await?;
         transaction.commit().await?;
         Ok(path)
+    }
+
+    pub async fn load_generation_context(
+        &self,
+        conversation_id: &str,
+        active_node_id: &str,
+    ) -> Result<(Conversation, ValidatedPath), PersistenceError> {
+        let mut transaction = self.pool.begin().await?;
+        let conversation =
+            ConversationRepository::load_conversation(&mut transaction, conversation_id)
+                .await?
+                .ok_or(PersistenceError::NotFound {
+                    entity: "conversation",
+                })?;
+        if conversation.is_archived {
+            return Err(PersistenceError::invalid_input(
+                "archived_conversation_generation",
+            ));
+        }
+        let path = ConversationRepository::load_validated_path(
+            &mut transaction,
+            &conversation,
+            active_node_id,
+        )
+        .await?;
+        if path.as_slice().last().map(|node| node.role) != Some(Role::User) {
+            return Err(PersistenceError::invalid_input(
+                "generation_requires_user_node",
+            ));
+        }
+        transaction.commit().await?;
+        Ok((conversation, path))
+    }
+
+    pub async fn append_completed_assistant(
+        &self,
+        node: NewNode,
+    ) -> Result<Node, PersistenceError> {
+        let parent_id = node
+            .parent_id
+            .as_deref()
+            .ok_or_else(|| PersistenceError::invalid_input("append_completed_assistant"))?;
+        let valid_model = node.model.as_deref().is_some_and(|model| {
+            !model.trim().is_empty() && model.len() <= MAX_GENERATED_MODEL_BYTES
+        });
+        if node.role != Role::Assistant
+            || !valid_model
+            || node.content.trim().is_empty()
+            || node.content.len() > MAX_GENERATED_CONTENT_BYTES
+        {
+            return Err(PersistenceError::invalid_input(
+                "append_completed_assistant",
+            ));
+        }
+
+        let mut transaction = self.pool.begin().await?;
+        Self::require_writable_conversation(&mut transaction, &node.conversation_id).await?;
+        let parent =
+            ConversationRepository::load_node(&mut transaction, &node.conversation_id, parent_id)
+                .await?
+                .ok_or(PersistenceError::NotFound {
+                    entity: "parent node",
+                })?;
+        if parent.role != Role::User {
+            return Err(PersistenceError::invalid_input(
+                "append_completed_assistant",
+            ));
+        }
+        let stored = ConversationRepository::insert_node(
+            &mut transaction,
+            &node,
+            "append_completed_assistant",
+        )
+        .await?;
+        transaction.commit().await?;
+        Ok(stored)
     }
 
     pub async fn archive_conversation(

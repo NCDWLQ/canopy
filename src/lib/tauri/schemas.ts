@@ -18,7 +18,7 @@ function isRustWhitespace(codePoint: number): boolean {
   )
 }
 
-function containsNonRustWhitespace(value: string): boolean {
+export function containsNonRustWhitespace(value: string): boolean {
   return [...value].some((character) => {
     const codePoint = character.codePointAt(0)
     return codePoint !== undefined && !isRustWhitespace(codePoint)
@@ -40,7 +40,7 @@ function containsOnlyUnicodeScalars(value: string): boolean {
   return true
 }
 
-function trimRustWhitespace(value: string): string {
+export function trimRustWhitespace(value: string): string {
   let start = 0
   let end = value.length
   while (start < end && isRustWhitespace(value.charCodeAt(start))) start += 1
@@ -48,8 +48,12 @@ function trimRustWhitespace(value: string): string {
   return value.slice(start, end)
 }
 
-const unicodeScalarStringSchema = z.string().refine(containsOnlyUnicodeScalars)
-const idSchema = unicodeScalarStringSchema.refine(containsNonRustWhitespace)
+export const unicodeScalarStringSchema = z
+  .string()
+  .refine(containsOnlyUnicodeScalars)
+export const idSchema = unicodeScalarStringSchema.refine(
+  containsNonRustWhitespace,
+)
 const titleSchema = unicodeScalarStringSchema
   .transform(trimRustWhitespace)
   .refine((value) => value.length > 0 && [...value].length <= 200)

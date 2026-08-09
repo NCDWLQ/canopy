@@ -1,0 +1,302 @@
+use std::{sync::OnceLock, time::Duration};
+
+use eventsource_stream::Eventsource;
+use futures_util::{
+    future::{select, Either},
+    pin_mut, FutureExt, StreamExt,
+};
+use reqwest::{header::RETRY_AFTER, redirect::Policy, Client, StatusCode};
+use secrecy::{ExposeSecret, SecretString};
+use serde::{Deserialize, Serialize};
+use tokio_util::sync::CancellationToken;
+
+use crate::conversations::{Role, ValidatedPath};
+
+use super::{domain::validate_model, ProviderError, ValidatedEndpoint};
+
+const MAX_RESPONSE_BYTES: usize = 1024 * 1024;
+static HTTP_CLIENT: OnceLock<Client> = OnceLock::new();
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ChatMessage {
+    role: &'static str,
+    content: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ChatCompletionRequest {
+    model: String,
+    messages: Vec<ChatMessage>,
+    stream: bool,
+}
+
+pub fn build_request(
+    path: &ValidatedPath,
+    model: &str,
+) -> Result<ChatCompletionRequest, ProviderError> {
+    let model = validate_model(model)?;
+    let nodes = path.as_slice();
+    if nodes.last().map(|node| node.role) != Some(Role::User) {
+        return Err(ProviderError::invalid_input(
+            "active_node_id",
+            "terminal_role_must_be_user",
+        ));
+    }
+    let messages = nodes
+        .iter()
+        .map(|node| {
+            let role = match node.role {
+                Role::System => "system",
+                Role::User => "user",
+                Role::Assistant => "assistant",
+                Role::Tool => {
+                    return Err(ProviderError::invalid_input(
+                        "active_node_id",
+                        "tool_role_unsupported",
+                    ))
+                }
+            };
+            if node.content.trim().is_empty() {
+                return Err(ProviderError::invalid_input(
+                    "active_node_id",
+                    "blank_content",
+                ));
+            }
+            Ok(ChatMessage {
+                role,
+                content: node.content.clone(),
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(ChatCompletionRequest {
+        model,
+        messages,
+        stream: true,
+    })
+}
+
+#[derive(Debug, Clone)]
+pub struct OpenAiCompatibleClient {
+    client: Client,
+}
+
+impl OpenAiCompatibleClient {
+    pub fn new() -> Result<Self, ProviderError> {
+        if let Some(client) = HTTP_CLIENT.get() {
+            return Ok(Self {
+                client: client.clone(),
+            });
+        }
+        let client = Client::builder()
+            .no_proxy()
+            .redirect(Policy::none())
+            .connect_timeout(Duration::from_secs(15))
+            .read_timeout(Duration::from_secs(60))
+            .user_agent("Canopy/0.1")
+            .build()
+            .map_err(|_| ProviderError::Network)?;
+        let _ = HTTP_CLIENT.set(client.clone());
+        Ok(Self {
+            client: HTTP_CLIENT.get().cloned().unwrap_or(client),
+        })
+    }
+
+    pub async fn stream<F>(
+        &self,
+        endpoint: &ValidatedEndpoint,
+        path: &ValidatedPath,
+        model: &str,
+        secret: Option<&SecretString>,
+        cancellation: &CancellationToken,
+        mut on_delta: F,
+    ) -> Result<String, ProviderError>
+    where
+        F: FnMut(&str) -> Result<(), ProviderError>,
+    {
+        let request = build_request(path, model)?;
+        let mut builder = self
+            .client
+            .post(endpoint.chat_completions_url().clone())
+            .json(&request);
+        if let Some(secret) = secret {
+            builder = builder.bearer_auth(secret.expose_secret());
+        }
+
+        let response = match select(cancellation.cancelled().boxed(), builder.send().boxed()).await
+        {
+            Either::Left(_) => return Err(ProviderError::Cancelled),
+            Either::Right((response, _)) => response.map_err(map_transport_error)?,
+        };
+        if !response.status().is_success() {
+            return Err(map_status(response.status(), response.headers()));
+        }
+
+        let events = response.bytes_stream().eventsource();
+        pin_mut!(events);
+        let mut content = String::new();
+        let mut finished = false;
+        let mut done = false;
+        loop {
+            let next = match select(cancellation.cancelled().boxed(), events.next().boxed()).await {
+                Either::Left(_) => return Err(ProviderError::Cancelled),
+                Either::Right((event, _)) => event,
+            };
+            let Some(event) = next else { break };
+            let event = event.map_err(|_| ProviderError::Protocol)?;
+            if event.data == "[DONE]" {
+                done = true;
+                break;
+            }
+            if finished {
+                return Err(ProviderError::Protocol);
+            }
+            let chunk: StreamChunk =
+                serde_json::from_str(&event.data).map_err(|_| ProviderError::Protocol)?;
+            if chunk.error.is_some() || chunk.choices.len() != 1 {
+                return Err(ProviderError::Protocol);
+            }
+            let choice = &chunk.choices[0];
+            if choice.index != 0 {
+                return Err(ProviderError::Protocol);
+            }
+            if let Some(delta) = choice.delta.content.as_deref() {
+                if content.len().saturating_add(delta.len()) > MAX_RESPONSE_BYTES {
+                    return Err(ProviderError::Protocol);
+                }
+                if !delta.is_empty() {
+                    on_delta(delta)?;
+                    content.push_str(delta);
+                }
+            }
+            if let Some(reason) = choice.finish_reason.as_deref() {
+                if reason != "stop" {
+                    return Err(ProviderError::Protocol);
+                }
+                finished = true;
+            }
+        }
+
+        if !done || !finished || content.trim().is_empty() {
+            return Err(ProviderError::Protocol);
+        }
+        Ok(content)
+    }
+}
+
+fn map_transport_error(_: reqwest::Error) -> ProviderError {
+    // Endpoint, model, and credential inputs have already passed the local
+    // boundary before `send`. Reqwest's error categories overlap for early
+    // peer disconnects (they can be both builder and decode errors), so every
+    // failure from this send phase is a transport failure. Status responses
+    // and SSE protocol errors are handled after a response is received.
+    ProviderError::Network
+}
+
+fn map_status(status: StatusCode, headers: &reqwest::header::HeaderMap) -> ProviderError {
+    match status.as_u16() {
+        401 | 403 => ProviderError::Authentication,
+        429 => ProviderError::RateLimited {
+            retry_after_ms: headers
+                .get(RETRY_AFTER)
+                .and_then(|value| value.to_str().ok())
+                .and_then(|value| value.parse::<u64>().ok())
+                .map(|seconds| seconds.saturating_mul(1000)),
+        },
+        500..=599 => ProviderError::Unavailable,
+        _ => ProviderError::Protocol,
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct StreamChunk {
+    #[serde(default)]
+    choices: Vec<StreamChoice>,
+    #[serde(default)]
+    error: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize)]
+struct StreamChoice {
+    index: usize,
+    #[serde(default)]
+    delta: StreamDelta,
+    #[serde(default)]
+    finish_reason: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct StreamDelta {
+    #[serde(default)]
+    content: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use crate::conversations::{NewNode, Node, Role, ValidatedPath};
+
+    use super::build_request;
+
+    fn node(id: &str, parent_id: Option<&str>, role: Role, content: &str) -> Node {
+        let node = NewNode {
+            id: id.to_owned(),
+            parent_id: parent_id.map(str::to_owned),
+            conversation_id: "conversation".to_owned(),
+            role,
+            content: content.to_owned(),
+            model: None,
+            created_at: 1,
+            metadata: json!({}),
+        };
+        Node {
+            id: node.id,
+            parent_id: node.parent_id,
+            conversation_id: node.conversation_id,
+            role: node.role,
+            content: node.content,
+            model: node.model,
+            created_at: node.created_at,
+            metadata: node.metadata,
+        }
+    }
+
+    #[test]
+    fn request_preserves_validated_path_order_and_excludes_sibling_sentinel() {
+        let path = ValidatedPath::new(vec![
+            node("root", None, Role::System, "system"),
+            node("assistant", Some("root"), Role::Assistant, "shared"),
+            node(
+                "selected",
+                Some("assistant"),
+                Role::User,
+                "SELECTED_SENTINEL",
+            ),
+        ]);
+        let request = serde_json::to_value(build_request(&path, "fixture-model").unwrap()).unwrap();
+        assert_eq!(
+            request,
+            json!({
+                "model": "fixture-model",
+                "messages": [
+                    {"role": "system", "content": "system"},
+                    {"role": "assistant", "content": "shared"},
+                    {"role": "user", "content": "SELECTED_SENTINEL"}
+                ],
+                "stream": true
+            })
+        );
+        assert!(!request.to_string().contains("SIBLING_SENTINEL"));
+    }
+
+    #[test]
+    fn tool_and_non_user_terminal_paths_are_rejected() {
+        let tool_path = ValidatedPath::new(vec![node("tool", None, Role::Tool, "tool")]);
+        assert!(build_request(&tool_path, "model").is_err());
+        let assistant_path =
+            ValidatedPath::new(vec![node("assistant", None, Role::Assistant, "answer")]);
+        assert!(build_request(&assistant_path, "model").is_err());
+        let user_path = ValidatedPath::new(vec![node("user", None, Role::User, "question")]);
+        assert!(build_request(&user_path, &"m".repeat(201)).is_err());
+    }
+}

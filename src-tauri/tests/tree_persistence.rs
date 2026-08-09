@@ -122,7 +122,8 @@ fn ordered_migrations_create_the_expected_schema_and_managed_pool_is_reused() {
             vec![
                 (1, "bootstrap"),
                 (2, "conversation_tree"),
-                (3, "conversation_archive")
+                (3, "conversation_archive"),
+                (4, "provider_profile")
             ]
         );
 
@@ -140,7 +141,16 @@ fn ordered_migrations_create_the_expected_schema_and_managed_pool_is_reused() {
         .fetch_all(&pool)
         .await
         .expect("tables are inspectable");
-        assert_eq!(tables, vec!["_canopy_bootstrap", "conversations", "nodes"]);
+        assert_eq!(
+            tables,
+            vec![
+                "_canopy_bootstrap",
+                "conversations",
+                "nodes",
+                "provider_credential_operations",
+                "provider_profiles"
+            ]
+        );
 
         let indexes: Vec<String> = sqlx::query_scalar(
             "SELECT name FROM sqlite_schema \
