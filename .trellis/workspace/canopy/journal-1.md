@@ -80,3 +80,24 @@ Implemented and verified the SQLite conversation-tree persistence vertical slice
 ### Status
 
 [OK] **Completed**
+
+
+## Session 4: Implement typed conversation domain boundary
+
+**Date**: 2026-08-09
+**Task**: Implement typed conversation domain boundary
+**Branch**: `main`
+
+### Summary
+
+Added conversation-only archive, typed Rust/Tauri commands and errors, a shared IPC contract fixture, runtime-validated TypeScript bridge and projections, fail-closed full-tree validation, Unicode-aligned input checks, SQLite lock mapping, and cross-layer regression coverage.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0d66976` | (see git log) |
+
+### Status
+
+[OK] **Completed**

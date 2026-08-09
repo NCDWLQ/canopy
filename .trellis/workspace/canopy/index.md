@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 3
+- **Total Sessions**: 4
 - **Last Active**: 2026-08-09
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~82 | Active |
+| `journal-1.md` | ~103 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 4 | 2026-08-09 | Implement typed conversation domain boundary | `0d66976` | `main` |
 | 3 | 2026-08-09 | Tree persistence | `d651093` | `main` |
 | 2 | 2026-08-09 | Scaffold Canopy desktop foundation | `6e2b480` | `main` |
 | 1 | 2026-08-09 | Canopy week-one foundation | - | `-` |
