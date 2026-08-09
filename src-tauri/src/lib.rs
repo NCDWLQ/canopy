@@ -1,19 +1,13 @@
-use tauri_plugin_sql::{Migration, MigrationKind};
+pub mod conversations;
+pub mod database;
 
-const DATABASE_URL: &str = "sqlite:canopy.db";
+use database::{plugin_migrations, DATABASE_URL};
 
 fn app_builder() -> tauri::Builder<tauri::Wry> {
-    let migrations = vec![Migration {
-        version: 1,
-        description: "bootstrap",
-        sql: include_str!("../migrations/0001_bootstrap.sql"),
-        kind: MigrationKind::Up,
-    }];
-
     tauri::Builder::default()
         .plugin(
             tauri_plugin_sql::Builder::default()
-                .add_migrations(DATABASE_URL, migrations)
+                .add_migrations(DATABASE_URL, plugin_migrations())
                 .build(),
         )
         .setup(|app| {

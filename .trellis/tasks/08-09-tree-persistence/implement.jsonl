@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Rust module ownership, migration placement, and test layout"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Authoritative SQLite schema, repository, transaction, and path-query contract"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Persistence error boundaries and redaction requirements"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Required migration, repository, and sibling-isolation tests"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Pool-to-service-to-repository data-flow review"}

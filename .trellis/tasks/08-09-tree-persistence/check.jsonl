@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Verify Rust module and test placement"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Verify exact schema invariants and fail-closed path behavior"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Verify typed internal errors and sensitive-data boundaries"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify full backend validation and regression coverage"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Verify persistence diagnostics remain redacted and non-duplicative"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Verify the complete storage data flow and boundary ownership"}

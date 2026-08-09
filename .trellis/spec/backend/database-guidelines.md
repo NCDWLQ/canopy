@@ -125,6 +125,108 @@ one reviewed compatibility update.
 The correct form keeps persistence behind typed Rust commands even though the
 SQL plugin owns the production pool and migration lifecycle.
 
+## Scenario: Conversation Tree Persistence Boundary
+
+### 1. Scope / Trigger
+
+Use this contract when changing the conversation migration, repository SQL,
+managed-pool adapter, or persistence service. The implementation lives in
+`src-tauri/src/database.rs`, `src-tauri/src/conversations/`, and
+`src-tauri/tests/tree_persistence.rs`.
+
+### 2. Signatures
+
+The implemented persistence surface is:
+
+```rust
+managed_sqlite_pool(&DbInstances) -> Result<SqlitePool, PersistenceError>
+
+ConversationPersistenceService::new(SqlitePool)
+create_conversation(NewConversation, NewNode) -> Result<ConversationTree, PersistenceError>
+append_node(NewNode) -> Result<Node, PersistenceError>
+load_conversation_tree(&str) -> Result<ConversationTree, PersistenceError>
+load_active_path(&str, &str) -> Result<ValidatedPath, PersistenceError>
+archive_node(&str, &str) -> Result<Node, PersistenceError>
+```
+
+Service inputs accept explicit opaque IDs and epoch-millisecond timestamps.
+The future command layer owns ID/time generation and end-user input policy.
+
+### 3. Contracts
+
+- `database::MIGRATION_CATALOG` is the single ordered definition catalog used
+  by plugin registration and real-migration tests.
+- Production resolves `DATABASE_URL` from plugin-managed `DbInstances` and
+  clones the `DbPool::Sqlite` handle. Only test support constructs a pool.
+- Repository functions receive `&mut SqliteConnection`, bind every value, and
+  map rows into closed domain types.
+- The service owns every multi-statement unit, including an insert followed by
+  readback. Both steps execute in one transaction so a concurrent archive or
+  other writer cannot change the returned result between statements.
+- Metadata crosses the domain boundary as `serde_json::Value` and is stored as
+  canonical compact JSON with recursively sorted object keys.
+- Only validated query results can construct `ValidatedPath`.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+|---|---|
+| Managed database entry is missing | `PersistenceError::DatabaseUnavailable` |
+| Requested conversation or active node is missing/archived | `PersistenceError::NotFound` |
+| Root, adjacency, ownership, duplicate, or cycle validation fails | `PersistenceError::TreeIntegrity` |
+| Known constraint/trigger rejects a requested write | `PersistenceError::InvalidInput` |
+| Stored role, boolean, or JSON cannot map to the closed domain type | `PersistenceError::InvalidStoredData` |
+| Other SQL operation fails | Wrapped storage error with no public IPC mapping yet |
+
+No failure returns a partial tree/path or retries through a whole-conversation
+query.
+
+### 5. Good / Base / Bad Cases
+
+- **Good**: two siblings round-trip in deterministic order, and each active
+  path contains its ancestors plus only its selected leaf.
+- **Base**: one conversation and future root commit atomically through the
+  deferred composite foreign key.
+- **Bad**: a missing root, archived ancestor, broken/cross-conversation chain,
+  or cycle returns a typed failure rather than usable messages.
+
+### 6. Tests Required
+
+`src-tauri/tests/tree_persistence.rs` runs `MIGRATION_CATALOG` against a fresh,
+one-connection SQLite pool with foreign keys enabled. It must assert:
+
+- exact application table/index/trigger shape and deferred root ownership;
+- atomic rollback, same-conversation parentage, one root, immutable history,
+  archive protection, and delete rejection;
+- canonical metadata key order and domain round-trip;
+- deterministic tree order and explicit sibling-sentinel absence;
+- not-found, wrong-root, archived-ancestor, broken-chain,
+  cross-conversation-chain, and cycle fail-closed behavior;
+- the managed adapter returns the same pool handle's visible database state.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```rust
+repository.insert_node(&pool, &node).await?;
+repository.load_node(&pool, &node.id).await
+```
+
+The two statements can observe different archive state under concurrent
+writes.
+
+#### Correct
+
+```rust
+let mut transaction = pool.begin().await?;
+let stored = repository.insert_node(&mut transaction, &node).await?;
+transaction.commit().await?;
+Ok(stored)
+```
+
+The repository's insert/readback and the service result share one transaction.
+
 ## Physical Schema
 
 All DDL is migration-owned. Enable `PRAGMA foreign_keys = ON` for every

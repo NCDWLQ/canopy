@@ -357,6 +357,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-log",
  "tauri-plugin-sql",
+ "thiserror 2.0.20",
 ]
 
 [[package]]

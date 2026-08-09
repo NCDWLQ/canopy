@@ -1,0 +1,30 @@
+{
+  "id": "tree-persistence",
+  "name": "tree-persistence",
+  "title": "Tree Persistence",
+  "description": "Implement and verify the SQLite conversation-tree persistence vertical slice",
+  "status": "in_progress",
+  "dev_type": "backend",
+  "scope": "src-tauri",
+  "package": null,
+  "priority": "P2",
+  "creator": "canopy",
+  "assignee": "canopy",
+  "createdAt": "2026-08-09",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    "src-tauri/migrations/",
+    "src-tauri/src/",
+    ".trellis/spec/backend/"
+  ],
+  "notes": "",
+  "meta": {}
+}

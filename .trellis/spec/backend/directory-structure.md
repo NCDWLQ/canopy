@@ -2,7 +2,7 @@
 
 > Rust/Tauri module ownership for Canopy's local application core.
 
-## Current Foundation
+## Current Layout
 
 The backend is the `src-tauri` crate. Keep the two executable entry files thin:
 
@@ -11,10 +11,19 @@ src-tauri/
 ├── capabilities/
 │   └── default.json          # webview permissions; SQL stays Rust-only
 ├── migrations/
-│   └── 0001_bootstrap.sql    # ordered, plugin-managed migrations
+│   ├── 0001_bootstrap.sql    # private foundation marker
+│   └── 0002_conversation_tree.sql
 ├── src/
-│   ├── lib.rs                # Tauri builder, plugins, migration registration
+│   ├── conversations/
+│   │   ├── domain.rs         # durable records and ValidatedPath
+│   │   ├── error.rs          # internal persistence errors
+│   │   ├── repository.rs     # parameterized SQL and row mapping
+│   │   └── service.rs        # transactions and persistence operations
+│   ├── database.rs           # URL, migration catalog, managed-pool adapter
+│   ├── lib.rs                # Tauri builder and module exports
 │   └── main.rs               # desktop process entry point only
+├── tests/
+│   └── tree_persistence.rs   # real-migration SQLite regression suite
 ├── Cargo.toml
 └── tauri.conf.json           # application, security, and plugin configuration
 ```
@@ -26,7 +35,7 @@ by `application_builder_is_constructible` in `src-tauri/src/lib.rs`.
 ## Product Module Organization
 
 Add product code by domain, with technical boundaries visible inside the
-domain. The first conversation implementation should grow toward:
+domain. The conversation implementation establishes this pattern:
 
 ```text
 src-tauri/src/
@@ -35,6 +44,7 @@ src-tauri/src/
 ├── conversations/
 │   ├── mod.rs
 │   ├── domain.rs             # Node, Conversation, validated path types
+│   ├── error.rs              # domain-owned persistence errors
 │   ├── repository.rs         # parameterized sqlx queries and row mapping
 │   ├── service.rs            # transactions and domain invariants
 │   └── commands.rs           # typed Tauri DTO boundary
