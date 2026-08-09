@@ -1,0 +1,11 @@
+{"file":".trellis/spec/backend/index.md","reason":"Backend spec routing for full-scope compliance review."}
+{"file":".trellis/spec/backend/directory-structure.md","reason":"Verify provider/conversation/command boundaries and no monolithic leakage."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Verify migration safety, plugin-managed pool, path validation, and transaction semantics."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Verify stable provider/database errors and safe IPC payloads."}
+{"file":".trellis/spec/backend/logging-guidelines.md","reason":"Audit logs and error chains for secrets, prompts, paths, and raw bodies."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Run the required model-path, sibling-isolation, migration, and cross-layer checks."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Verify strict provider/profile/channel decoding and fail-closed projections."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Verify bridge tests, raw invoke ownership, accessibility handoff, and frontend boundaries."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Confirm this task did not take ownership of Conversation Workspace UI integration."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Review every new generation/profile field across Rust fixture and TypeScript consumers."}
+{"file":".trellis/tasks/08-09-model-path-proof/research/provider-streaming-and-credentials.md","reason":"Verify implementation matches researched platform, streaming, cancellation, and credential constraints."}

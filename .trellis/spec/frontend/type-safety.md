@@ -169,6 +169,127 @@ const activePath = [
 ] satisfies readonly PathMessageView[]
 ```
 
+## Scenario: Provider Profile and Generation IPC Boundary
+
+### 1. Scope / Trigger
+
+Use this contract when changing `src/lib/tauri/provider-*`, provider projection
+types, `contract-fixtures/provider-ipc.json`, or any later UI action that
+consumes the frozen provider client.
+
+### 2. Signatures
+
+```ts
+saveProviderProfile(input: SaveProviderProfileInput): Promise<ProviderProfileView>
+loadProviderProfile(): Promise<ProviderProfileView>
+deleteProviderProfile(): Promise<boolean>
+generateFromActivePath(conversationId, activeNodeId, onEvent): Promise<GenerationStartView>
+cancelGeneration(generationId): Promise<CancelGenerationView>
+commitGeneration(generationId, commitToken): Promise<CommitGenerationView>
+```
+
+All six calls reuse `InvokeTransport`; generation alone creates one
+`Channel<unknown>` and validates values before invoking `onEvent`.
+
+### 3. Contracts
+
+- Requests use one `{ request: snake_caseDto }` wrapper; generation also sends
+  `onEvent`. Only `src/lib/tauri` owns raw `invoke` and `Channel` construction.
+- Save accepts explicit `keep`, `replace`, or `remove`. A replacement value is
+  present only in the one-way request and is never part of a response,
+  projection, fixture success, store, or component prop.
+- String inputs reject lone UTF-16 surrogates. Blank checks and model trimming
+  use Rust's Unicode whitespace set; byte limits use `TextEncoder`.
+- Channel order is `started`, zero or more bounded `delta` events, one
+  `ready_to_commit`, then one `completed`, `failed`, or `cancelled`; a
+  pre-ready failure/cancellation is also legal. Every event after `started`
+  matches its canonical UUID v4 generation ID. No delta is valid after ready,
+  and no completed event is valid before ready.
+- `ready_to_commit.commit_token` is a canonical UUID v4, transient
+  generation-scoped capability. The bridge validates and projects it but never
+  auto-acknowledges, persists, logs, or stores it. Later UI code calls
+  `commitGeneration` once only after it has accepted the complete transient
+  stream as the current exact generation.
+- `started` conversation/active IDs must equal the request. `completed.node`
+  must be an assistant in that conversation, parented by the active user, use
+  the started model, and contain exactly the concatenated deltas. Cumulative
+  delta content is bounded to one MiB.
+- Any malformed payload, invalid transition, identity mismatch, bound breach,
+  or completed-node drift produces one safe local `internal` failure and
+  requests exact-ID cancellation when an authoritative ID is known.
+
+### 4. Validation & Error Matrix
+
+| Condition | Frontend result |
+|---|---|
+| Invalid endpoint/model/key/ID or lone surrogate | local `invalid_input`; no invoke |
+| Malformed command success/rejection | safe non-retryable `internal` |
+| Delta before started or generation mismatch | one `internal`; exact cancel |
+| Any value after a terminal event | ignored; never emit a second local terminal event |
+| Started request-identity mismatch | one `internal`; cancel returned generation ID when known |
+| Cumulative deltas above one MiB | one `internal`; exact cancel |
+| Ready before started, duplicate ready, delta/completed before the required phase, or invalid UUID v4 token | one `internal`; exact cancel |
+| Completed role/parent/conversation/model/content mismatch | one `internal`; exact cancel |
+| Wrong/replayed/expired/not-ready commit pair | valid `{ accepted: false }`; no inferred persistence |
+| Commit transport result is ambiguous or terminal delivery is lost after accepted acknowledgement | reconcile by loading SQLite authority; do not invent a node |
+| Valid failed event | normalized shared `UiError` |
+| Valid cancelled event | terminal cancellation projection, not an error toast decision |
+
+### 5. Good / Base / Bad Cases
+
+- **Good**: started IDs match the request, deltas concatenate to the committed
+  assistant content, ready is acknowledged exactly once by the consuming UI,
+  and only the later projected completed node is durable authority.
+- **Base**: a redacted profile without a key decodes with
+  `hasApiKey: false`; an unknown cancel returns `{ accepted: false }`.
+- **Bad**: casting `Channel<GenerationEventView>`, accepting a completed node
+  from another conversation, auto-acknowledging ready in the bridge, or storing
+  either an API key or commit token in Zustand.
+
+### 6. Tests Required
+
+- Assert all six command names, wrappers, snake-case fields, `onEvent`, redacted
+  profile shapes, and API-key non-echo against the shared fixture.
+- Cover all valid lifecycle events plus missing fields, unknown variants,
+  out-of-order/duplicate events, result/start ID mismatch, request identity
+  mismatch, UUID v4 generation/token validation, cumulative overflow,
+  ready ordering, and completed-node/content drift.
+- Assert malformed events emit one local failure and one best-effort exact
+  cancellation request; transport rejection after a known `started` also
+  terminalizes locally and exact-cancels, and later channel values are ignored.
+- Assert the bridge never invokes `commit_generation` automatically. UI/store
+  integration must explicitly acknowledge ready, handle `{ accepted: false }`,
+  and merge durable history only from `completed.node` or a fresh reload.
+- Run format, ESLint, strict TypeScript, Vitest, and the production Vite build.
+- Scan outside `src/lib/tauri` for raw `invoke`, provider HTTP, SQL, frontend
+  credential persistence, and duplicated event decoders.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const channel = new Channel<GenerationEventView>((event) => onEvent(event))
+```
+
+The generic type does not validate IPC data or lifecycle identity.
+
+#### Correct
+
+```ts
+const channel = new Channel<unknown>((value) => {
+  const parsed = generationEventDtoSchema.safeParse(value)
+  if (!parsed.success || !matchesGenerationState(parsed.data)) failClosed(value)
+  else onEvent(projectGenerationEvent(parsed.data))
+})
+
+// In the consuming UI, and only after accepting the exact transient stream:
+await providerClient.commitGeneration(event.generationId, event.commitToken)
+```
+
+The bridge is the sole trust boundary and forwards only validated projections;
+the consuming UI, not the bridge, owns the explicit commit decision.
+
 ## Forbidden Patterns
 
 - `any`, `@ts-ignore`, unchecked double assertions, or broad casts from

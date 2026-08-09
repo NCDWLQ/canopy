@@ -1,0 +1,12 @@
+{"file":".trellis/spec/backend/index.md","reason":"Backend guideline index and routing for the new provider domain."}
+{"file":".trellis/spec/backend/directory-structure.md","reason":"Rust domain, command, service, repository, and provider adapter ownership boundaries."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Plugin-managed SQLite, migrations, ValidatedPath, transactions, and provider request invariants."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Stable CommandError mapping, provider taxonomy, fail-closed behavior, and redaction."}
+{"file":".trellis/spec/backend/logging-guidelines.md","reason":"Credential, prompt, provider-body, and path redaction requirements."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Model-path release gate, sibling-absence assertions, real migrations, and cross-layer testing."}
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend guideline routing for shared provider projections and Tauri bridge work."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Strict Zod decoding and normalized unknown IPC payload handling."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Frontend bridge testing, raw invoke audit, and forbidden persistence/network patterns."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Generation events and provider profile DTOs cross Rust, IPC, and TypeScript boundaries."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Search/reuse requirements before adding transport, validation, and mapping helpers."}
+{"file":".trellis/tasks/08-09-model-path-proof/research/provider-streaming-and-credentials.md","reason":"Researched dependency, Tauri Channel, SSE, cancellation, native keyring, and recovery constraints."}

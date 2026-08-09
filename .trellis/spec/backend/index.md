@@ -20,6 +20,7 @@ Canopy foundation and first-week architecture.
 | [Error Handling](./error-handling.md) | Cross-layer error types, redaction, UI handling | Initial |
 | [Quality Guidelines](./quality-guidelines.md) | Backend standards and testing strategy | Initial |
 | [Logging Guidelines](./logging-guidelines.md) | Diagnostic events, levels, and redaction | Initial |
+| [Provider Guidelines](./provider-guidelines.md) | Secure profile storage, OpenAI-compatible SSE, and generation commits | Initial |
 
 ---
 
