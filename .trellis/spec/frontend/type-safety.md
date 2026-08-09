@@ -39,9 +39,113 @@ payloads. Schemas must validate:
 - string IDs and integer epoch-millisecond timestamps;
 - explicit nullable fields and JSON metadata;
 - the complete `CommandError` shape, including retryability and safe details.
+- request strings as valid Unicode scalar sequences, with blank checks and
+  title trimming that use the same Unicode whitespace set as Rust; JavaScript
+  `trim()` alone is not equivalent and lone UTF-16 surrogates cannot round-trip
+  through Rust UTF-8 strings;
+- normalized conversation trees as one graph fully reachable from the
+  designated structural root, using an intermediate map and a prototype-free
+  record so opaque IDs cannot collide with object prototype properties.
 
 Malformed or unknown error payloads normalize to a safe, non-retryable
 `internal` error. Components never parse error messages for control flow.
+
+## Scenario: Typed Conversation IPC Boundary
+
+### 1. Scope / Trigger
+
+Use this contract when adding or changing a conversation Tauri command, its
+request/response DTO, error envelope, shared fixture, or frontend projection.
+The owning files are `src-tauri/src/conversations/commands.rs`,
+`src-tauri/src/error.rs`, `contract-fixtures/conversation-ipc.json`,
+`src/lib/tauri/`, and `src/features/conversations/types/`.
+
+### 2. Signatures
+
+The frontend exposes one injected client rather than raw `invoke` calls:
+
+```ts
+createConversation({ title, content }): Promise<ConversationTreeView>
+appendNode({ conversationId, parentNodeId, content }): Promise<ConversationNodeView>
+createBranch({ conversationId, parentNodeId, content }): Promise<ConversationNodeView>
+editNodeAsBranch({ conversationId, sourceNodeId, content }): Promise<ConversationNodeView>
+loadConversationTree(conversationId): Promise<ConversationTreeView>
+loadActivePath(conversationId, activeNodeId): Promise<ActivePathView>
+archiveConversation(conversationId): Promise<ConversationView>
+```
+
+These map to the frozen snake-case commands `create_conversation`,
+`append_node`, `create_branch`, `edit_node_as_branch`,
+`load_conversation_tree`, `load_active_path`, and `archive_conversation`.
+
+### 3. Contracts
+
+- Every invoke call sends `{ request: <strict snake_case DTO> }`.
+- Rust responses use explicit nulls for nullable `parent_id` and `model`;
+  `src/lib/tauri` converts them to optional camelCase feature properties.
+- Node DTOs contain no archive field. `ConversationView.isArchived` is the only
+  archive state exposed to frontend code.
+- `ConversationTreeView.nodesById` is prototype-free and every returned node
+  must be reachable exactly once from `rootNodeId`.
+- `contract-fixtures/conversation-ipc.json` is consumed by both Rust and
+  TypeScript tests; do not copy its DTO examples into a second fixture.
+
+### 4. Validation & Error Matrix
+
+| Condition | Frontend result |
+|---|---|
+| Blank/oversized content, invalid title/ID, or lone UTF-16 surrogate | local non-retryable `invalid_input`; no invoke |
+| Valid rejected `CommandError` payload | `ConversationCommandError` preserving code/retryability/safe details |
+| Unknown/malformed rejected payload | generic non-retryable `internal` |
+| Malformed success DTO, duplicate/foreign node, bad root, disconnected component, or cycle | generic non-retryable `internal` |
+| Valid archived conversation response | readable `ConversationView` with `isArchived = true`; callers disable mutations |
+
+Title trimming and blank checks must use Rust's Unicode whitespace set.
+Content limits use UTF-8 byte length, not JavaScript UTF-16 code units.
+
+### 5. Good / Base / Bad Cases
+
+- **Good**: a two-branch tree decodes into one normalized graph, the active
+  path preserves root-to-active order, and the inactive sentinel is absent.
+- **Base**: a one-node user-root conversation decodes with null parent/model
+  and empty metadata without inventing an assistant node.
+- **Bad**: a DTO containing a valid designated root plus a disconnected cycle,
+  or an opaque ID such as `constructor`, never corrupts or bypasses projection.
+
+### 6. Tests Required
+
+- Assert all seven command names, the outer `request` wrapper, and exact
+  snake-case request fields through an injected transport.
+- Decode every shared success fixture and reject malformed conversation, node,
+  tree, and active-path fixtures.
+- Exercise all public error codes, malformed errors, nullability, nested
+  metadata, safe integer timestamps, Unicode whitespace, lone surrogates, and
+  the 1 MiB UTF-8 boundary.
+- Prove duplicate/foreign nodes, missing parents, wrong roots, disconnected
+  components, cycles, and prototype-like IDs fail closed or normalize safely.
+- Keep Rust serialization tests on the same shared fixture so either side fails
+  when casing or shape drifts.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const tree = await invoke<ConversationTreeView>("load_conversation_tree", args)
+```
+
+The generic parameter does no runtime validation and leaks the wire shape into
+feature code.
+
+#### Correct
+
+```ts
+const client = createConversationClient(injectedTransport)
+const tree = await client.loadConversationTree(conversationId)
+```
+
+The bridge validates unknown data, checks the complete graph, and returns only
+the canonical camelCase projection.
 
 ## Type Patterns
 

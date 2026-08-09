@@ -1,8 +1,10 @@
+use std::collections::{HashMap, HashSet};
+
 use sqlx::SqlitePool;
 
 use super::{
-    repository::ConversationRepository, ConversationTree, NewConversation, NewNode, Node,
-    PersistenceError, ValidatedPath,
+    repository::ConversationRepository, Conversation, ConversationTree, NewConversation, NewNode,
+    Node, PersistenceError, Role, ValidatedPath,
 };
 
 #[derive(Debug, Clone)]
@@ -56,10 +58,116 @@ impl ConversationPersistenceService {
         }
 
         let mut transaction = self.pool.begin().await?;
+        Self::require_writable_conversation(&mut transaction, &node.conversation_id).await?;
         let stored_node =
             ConversationRepository::insert_node(&mut transaction, &node, "append_node").await?;
         transaction.commit().await?;
         Ok(stored_node)
+    }
+
+    pub async fn append_user_node(&self, node: NewNode) -> Result<Node, PersistenceError> {
+        self.insert_user_child_with_policy(node, false).await
+    }
+
+    pub async fn create_branch(&self, node: NewNode) -> Result<Node, PersistenceError> {
+        self.insert_user_child_with_policy(node, true).await
+    }
+
+    async fn insert_user_child_with_policy(
+        &self,
+        node: NewNode,
+        requires_existing_child: bool,
+    ) -> Result<Node, PersistenceError> {
+        let parent_id = node
+            .parent_id
+            .as_deref()
+            .ok_or_else(|| PersistenceError::invalid_input("write_user_node"))?;
+        if node.role != Role::User {
+            return Err(PersistenceError::invalid_input("write_user_node"));
+        }
+
+        let mut transaction = self.pool.begin().await?;
+        Self::require_writable_conversation(&mut transaction, &node.conversation_id).await?;
+        let parent =
+            ConversationRepository::load_node(&mut transaction, &node.conversation_id, parent_id)
+                .await?
+                .ok_or(PersistenceError::NotFound {
+                    entity: "parent node",
+                })?;
+        if parent.role != Role::Assistant {
+            return Err(PersistenceError::invalid_input("write_user_node"));
+        }
+
+        let child_count = ConversationRepository::count_children(
+            &mut transaction,
+            &node.conversation_id,
+            parent_id,
+        )
+        .await?;
+        if (requires_existing_child && child_count == 0)
+            || (!requires_existing_child && child_count != 0)
+        {
+            return Err(PersistenceError::invalid_input("write_user_node"));
+        }
+
+        let operation = if requires_existing_child {
+            "create_branch"
+        } else {
+            "append_node"
+        };
+        let stored =
+            ConversationRepository::insert_node(&mut transaction, &node, operation).await?;
+        transaction.commit().await?;
+        Ok(stored)
+    }
+
+    pub async fn edit_node_as_branch(
+        &self,
+        source_node_id: &str,
+        mut node: NewNode,
+    ) -> Result<Node, PersistenceError> {
+        if node.role != Role::User {
+            return Err(PersistenceError::invalid_input("edit_node_as_branch"));
+        }
+
+        let mut transaction = self.pool.begin().await?;
+        let conversation =
+            Self::require_writable_conversation(&mut transaction, &node.conversation_id).await?;
+        let source = ConversationRepository::load_node(
+            &mut transaction,
+            &node.conversation_id,
+            source_node_id,
+        )
+        .await?
+        .ok_or(PersistenceError::NotFound {
+            entity: "source node",
+        })?;
+        if source.id == conversation.root_node_id || source.role != Role::User {
+            return Err(PersistenceError::invalid_input("edit_node_as_branch"));
+        }
+        let source_parent_id = source
+            .parent_id
+            .as_deref()
+            .ok_or_else(|| PersistenceError::invalid_input("edit_node_as_branch"))?;
+        node.parent_id = Some(source_parent_id.to_owned());
+        let source_parent = ConversationRepository::load_node(
+            &mut transaction,
+            &node.conversation_id,
+            source_parent_id,
+        )
+        .await?
+        .ok_or(PersistenceError::TreeIntegrity {
+            reason: "edit source parent is missing",
+        })?;
+        if source_parent.role != Role::Assistant {
+            return Err(PersistenceError::invalid_input("edit_node_as_branch"));
+        }
+
+        let stored =
+            ConversationRepository::insert_node(&mut transaction, &node, "edit_node_as_branch")
+                .await?;
+        transaction.commit().await?;
+        Ok(stored)
     }
 
     pub async fn load_conversation_tree(
@@ -74,6 +182,7 @@ impl ConversationPersistenceService {
                     entity: "conversation",
                 })?;
         let nodes = ConversationRepository::load_nodes(&mut transaction, conversation_id).await?;
+        validate_tree(&conversation, &nodes)?;
         transaction.commit().await?;
 
         Ok(ConversationTree {
@@ -104,15 +213,86 @@ impl ConversationPersistenceService {
         Ok(path)
     }
 
-    pub async fn archive_node(
+    pub async fn archive_conversation(
         &self,
         conversation_id: &str,
-        node_id: &str,
-    ) -> Result<Node, PersistenceError> {
+    ) -> Result<Conversation, PersistenceError> {
         let mut transaction = self.pool.begin().await?;
-        let node = ConversationRepository::archive_node(&mut transaction, conversation_id, node_id)
-            .await?;
+        let conversation =
+            ConversationRepository::archive_conversation(&mut transaction, conversation_id).await?;
         transaction.commit().await?;
-        Ok(node)
+        Ok(conversation)
     }
+
+    async fn require_writable_conversation(
+        connection: &mut sqlx::SqliteConnection,
+        conversation_id: &str,
+    ) -> Result<Conversation, PersistenceError> {
+        let conversation = ConversationRepository::load_conversation(connection, conversation_id)
+            .await?
+            .ok_or(PersistenceError::NotFound {
+                entity: "conversation",
+            })?;
+        if conversation.is_archived {
+            return Err(PersistenceError::invalid_input(
+                "archived_conversation_write",
+            ));
+        }
+        Ok(conversation)
+    }
+}
+
+fn validate_tree(conversation: &Conversation, nodes: &[Node]) -> Result<(), PersistenceError> {
+    let mut node_ids = HashSet::with_capacity(nodes.len());
+    let mut children_by_parent: HashMap<&str, Vec<&str>> = HashMap::new();
+    let mut structural_roots = Vec::new();
+
+    for node in nodes {
+        if node.conversation_id != conversation.id || !node_ids.insert(node.id.as_str()) {
+            return Err(PersistenceError::TreeIntegrity {
+                reason: "conversation tree contains a duplicate or foreign node",
+            });
+        }
+        match node.parent_id.as_deref() {
+            Some(parent_id) => children_by_parent
+                .entry(parent_id)
+                .or_default()
+                .push(node.id.as_str()),
+            None => structural_roots.push(node.id.as_str()),
+        }
+    }
+
+    if structural_roots.as_slice() != [conversation.root_node_id.as_str()] {
+        return Err(PersistenceError::TreeIntegrity {
+            reason: "conversation tree does not have its designated structural root",
+        });
+    }
+    if children_by_parent
+        .keys()
+        .any(|parent_id| !node_ids.contains(parent_id))
+    {
+        return Err(PersistenceError::TreeIntegrity {
+            reason: "conversation tree contains a missing parent",
+        });
+    }
+
+    let mut reachable_ids = HashSet::with_capacity(nodes.len());
+    let mut pending_ids = vec![conversation.root_node_id.as_str()];
+    while let Some(node_id) = pending_ids.pop() {
+        if !reachable_ids.insert(node_id) {
+            return Err(PersistenceError::TreeIntegrity {
+                reason: "conversation tree contains a cycle",
+            });
+        }
+        if let Some(child_ids) = children_by_parent.get(node_id) {
+            pending_ids.extend(child_ids.iter().copied());
+        }
+    }
+    if reachable_ids.len() != nodes.len() {
+        return Err(PersistenceError::TreeIntegrity {
+            reason: "conversation tree contains disconnected nodes",
+        });
+    }
+
+    Ok(())
 }

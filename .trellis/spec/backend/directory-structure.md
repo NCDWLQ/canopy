@@ -12,9 +12,12 @@ src-tauri/
 │   └── default.json          # webview permissions; SQL stays Rust-only
 ├── migrations/
 │   ├── 0001_bootstrap.sql    # private foundation marker
-│   └── 0002_conversation_tree.sql
+│   ├── 0002_conversation_tree.sql
+│   └── 0003_conversation_archive.sql
 ├── src/
+│   ├── error.rs               # stable public CommandError mapping
 │   ├── conversations/
+│   │   ├── commands.rs        # typed DTO and Tauri boundary
 │   │   ├── domain.rs         # durable records and ValidatedPath
 │   │   ├── error.rs          # internal persistence errors
 │   │   ├── repository.rs     # parameterized SQL and row mapping
@@ -23,7 +26,9 @@ src-tauri/
 │   ├── lib.rs                # Tauri builder and module exports
 │   └── main.rs               # desktop process entry point only
 ├── tests/
-│   └── tree_persistence.rs   # real-migration SQLite regression suite
+│   ├── support/mod.rs         # shared migrated in-memory pool
+│   ├── command_boundary.rs    # policy and shared-fixture contract tests
+│   └── tree_persistence.rs    # real-migration SQLite regression suite
 ├── Cargo.toml
 └── tauri.conf.json           # application, security, and plugin configuration
 ```

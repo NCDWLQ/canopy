@@ -16,7 +16,7 @@ rather than introducing a generic application-wide store.
 
 | State | Owner | Examples |
 |---|---|---|
-| Durable domain state | SQLite through Rust repositories | conversations, nodes, archived state |
+| Durable domain state | SQLite through Rust repositories | conversations and immutable nodes; archive state belongs to conversations |
 | Loaded client projection | conversation Zustand store | normalized nodes, root ID, active node ID |
 | Transient feature UI | feature store or local component state | expanded IDs, loading/streaming status |
 | Ephemeral control state | local component state | open menu, draft field, dialog visibility |
@@ -33,6 +33,7 @@ Store a normalized projection keyed by node ID:
 ```ts
 type ConversationTreeState = {
   conversationId: string | null
+  isArchived: boolean
   rootNodeId: string | null
   activeNodeId: string | null
   nodesById: Readonly<Record<string, TreeNodeView>>

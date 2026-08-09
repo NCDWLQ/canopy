@@ -9,8 +9,10 @@ The Vite application currently has this intentionally small structure:
 ```text
 src/
 ├── components/ui/button.tsx          # generated generic shadcn primitive
+├── features/conversations/types/     # canonical camelCase domain projections
 ├── features/conversations/store/
 │   └── README.md                     # reserved Zustand ownership boundary
+├── lib/tauri/                         # Zod-validated invoke bridge and tests
 ├── lib/utils.ts                      # shared cn() style composition helper
 ├── test/setup.ts                     # Vitest/Testing Library cleanup
 ├── App.tsx                           # temporary accessible shell

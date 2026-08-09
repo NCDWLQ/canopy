@@ -36,8 +36,8 @@ impl ConversationRepository {
         let metadata = canonical_json(&new_node.metadata)?;
         sqlx::query(
             "INSERT INTO nodes (id, parent_id, conversation_id, role, content, model, \
-             created_at, metadata, is_archived) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+             created_at, metadata) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         )
         .bind(&new_node.id)
         .bind(&new_node.parent_id)
@@ -47,7 +47,6 @@ impl ConversationRepository {
         .bind(&new_node.model)
         .bind(new_node.created_at)
         .bind(metadata)
-        .bind(i64::from(new_node.is_archived))
         .execute(&mut *connection)
         .await
         .map_err(|error| PersistenceError::from_write(operation, error))?;
@@ -63,10 +62,12 @@ impl ConversationRepository {
         connection: &mut SqliteConnection,
         conversation_id: &str,
     ) -> Result<Option<Conversation>, PersistenceError> {
-        let row = sqlx::query("SELECT id, title, root_node_id FROM conversations WHERE id = ?1")
-            .bind(conversation_id)
-            .fetch_optional(connection)
-            .await?;
+        let row = sqlx::query(
+            "SELECT id, title, root_node_id, is_archived FROM conversations WHERE id = ?1",
+        )
+        .bind(conversation_id)
+        .fetch_optional(connection)
+        .await?;
 
         row.map(decode_conversation).transpose()
     }
@@ -77,8 +78,7 @@ impl ConversationRepository {
         node_id: &str,
     ) -> Result<Option<Node>, PersistenceError> {
         let row = sqlx::query(
-            "SELECT id, parent_id, conversation_id, role, content, model, created_at, \
-             metadata, is_archived \
+            "SELECT id, parent_id, conversation_id, role, content, model, created_at, metadata \
              FROM nodes WHERE id = ?1 AND conversation_id = ?2",
         )
         .bind(node_id)
@@ -94,8 +94,7 @@ impl ConversationRepository {
         conversation_id: &str,
     ) -> Result<Vec<Node>, PersistenceError> {
         let rows = sqlx::query(
-            "SELECT id, parent_id, conversation_id, role, content, model, created_at, \
-             metadata, is_archived \
+            "SELECT id, parent_id, conversation_id, role, content, model, created_at, metadata \
              FROM nodes WHERE conversation_id = ?1 ORDER BY created_at ASC, id ASC",
         )
         .bind(conversation_id)
@@ -113,14 +112,14 @@ impl ConversationRepository {
         let rows = sqlx::query(
             "WITH RECURSIVE path AS ( \
                SELECT n.id, n.parent_id, n.conversation_id, n.role, n.content, n.model, \
-                      n.created_at, n.metadata, n.is_archived, 0 AS depth, \
+                      n.created_at, n.metadata, 0 AS depth, \
                       json_array(n.id) AS visited_ids, 0 AS cycle_detected \
                FROM nodes AS n \
-               WHERE n.id = ?1 AND n.conversation_id = ?2 AND n.is_archived = 0 \
+               WHERE n.id = ?1 AND n.conversation_id = ?2 \
                UNION ALL \
                SELECT parent.id, parent.parent_id, parent.conversation_id, parent.role, \
                       parent.content, parent.model, parent.created_at, parent.metadata, \
-                      parent.is_archived, child.depth + 1, \
+                      child.depth + 1, \
                       json_insert(child.visited_ids, '$[#]', parent.id), \
                       EXISTS (SELECT 1 FROM json_each(child.visited_ids) \
                               WHERE value = parent.id) \
@@ -128,10 +127,10 @@ impl ConversationRepository {
                JOIN path AS child \
                  ON child.parent_id = parent.id \
                 AND child.conversation_id = parent.conversation_id \
-               WHERE parent.is_archived = 0 AND child.cycle_detected = 0 \
+               WHERE child.cycle_detected = 0 \
              ) \
              SELECT id, parent_id, conversation_id, role, content, model, created_at, \
-                    metadata, is_archived, depth, cycle_detected \
+                    metadata, depth, cycle_detected \
              FROM path ORDER BY depth DESC, id ASC",
         )
         .bind(active_node_id)
@@ -158,27 +157,43 @@ impl ConversationRepository {
         validate_path(conversation, active_node_id, path_rows)
     }
 
-    pub(crate) async fn archive_node(
+    pub(crate) async fn count_children(
         connection: &mut SqliteConnection,
         conversation_id: &str,
-        node_id: &str,
-    ) -> Result<Node, PersistenceError> {
-        let result =
-            sqlx::query("UPDATE nodes SET is_archived = 1 WHERE id = ?1 AND conversation_id = ?2")
-                .bind(node_id)
-                .bind(conversation_id)
-                .execute(&mut *connection)
-                .await
-                .map_err(|error| PersistenceError::from_write("archive_node", error))?;
+        parent_id: &str,
+    ) -> Result<i64, PersistenceError> {
+        Ok(sqlx::query_scalar(
+            "SELECT count(*) FROM nodes WHERE conversation_id = ?1 AND parent_id = ?2",
+        )
+        .bind(conversation_id)
+        .bind(parent_id)
+        .fetch_one(connection)
+        .await?)
+    }
+
+    pub(crate) async fn archive_conversation(
+        connection: &mut SqliteConnection,
+        conversation_id: &str,
+    ) -> Result<Conversation, PersistenceError> {
+        let result = sqlx::query(
+            "UPDATE conversations SET is_archived = 1 WHERE id = ?1 AND is_archived = 0",
+        )
+        .bind(conversation_id)
+        .execute(&mut *connection)
+        .await
+        .map_err(|error| PersistenceError::from_write("archive_conversation", error))?;
 
         if result.rows_affected() == 0 {
-            return Err(PersistenceError::NotFound { entity: "node" });
+            let conversation = Self::load_conversation(connection, conversation_id).await?;
+            return conversation.ok_or(PersistenceError::NotFound {
+                entity: "conversation",
+            });
         }
 
-        Self::load_node(connection, conversation_id, node_id)
+        Self::load_conversation(connection, conversation_id)
             .await?
             .ok_or(PersistenceError::TreeIntegrity {
-                reason: "archived node could not be read",
+                reason: "archived conversation could not be read",
             })
     }
 }
@@ -195,6 +210,7 @@ fn decode_conversation(row: SqliteRow) -> Result<Conversation, PersistenceError>
         id: row.try_get("id")?,
         title: row.try_get("title")?,
         root_node_id: row.try_get("root_node_id")?,
+        is_archived: decode_boolean(&row, "is_archived")?,
     })
 }
 
@@ -213,7 +229,6 @@ fn decode_node(row: SqliteRow) -> Result<Node, PersistenceError> {
         created_at: row.try_get("created_at")?,
         metadata: serde_json::from_str(&metadata)
             .map_err(|_| PersistenceError::InvalidStoredData { field: "metadata" })?,
-        is_archived: decode_boolean(&row, "is_archived")?,
     })
 }
 

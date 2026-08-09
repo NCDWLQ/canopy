@@ -1,0 +1,335 @@
+{
+  "command_names": [
+    "create_conversation",
+    "append_node",
+    "create_branch",
+    "edit_node_as_branch",
+    "load_conversation_tree",
+    "load_active_path",
+    "archive_conversation"
+  ],
+  "requests": {
+    "create_conversation": {
+      "title": "Fixture conversation",
+      "content": "  preserved root content\n"
+    },
+    "append_node": {
+      "conversation_id": "conversation-fixture",
+      "parent_node_id": "assistant-a",
+      "content": "append content"
+    },
+    "create_branch": {
+      "conversation_id": "conversation-fixture",
+      "parent_node_id": "assistant-a",
+      "content": "branch content"
+    },
+    "edit_node_as_branch": {
+      "conversation_id": "conversation-fixture",
+      "source_node_id": "user-left",
+      "content": "edited sibling content"
+    },
+    "load_conversation_tree": {
+      "conversation_id": "conversation-fixture"
+    },
+    "load_active_path": {
+      "conversation_id": "conversation-fixture",
+      "active_node_id": "user-right"
+    },
+    "archive_conversation": {
+      "conversation_id": "conversation-fixture"
+    }
+  },
+  "successes": {
+    "conversation": {
+      "id": "conversation-fixture",
+      "title": "Fixture conversation",
+      "root_node_id": "root",
+      "is_archived": false
+    },
+    "archived_conversation": {
+      "id": "conversation-fixture",
+      "title": "Fixture conversation",
+      "root_node_id": "root",
+      "is_archived": true
+    },
+    "root_node": {
+      "id": "root",
+      "parent_id": null,
+      "conversation_id": "conversation-fixture",
+      "role": "user",
+      "content": "  preserved root content\n",
+      "model": null,
+      "created_at": 1770000000123,
+      "metadata": {}
+    },
+    "assistant_node": {
+      "id": "assistant-a",
+      "parent_id": "root",
+      "conversation_id": "conversation-fixture",
+      "role": "assistant",
+      "content": "assistant response",
+      "model": "fixture-model",
+      "created_at": 1770000001123,
+      "metadata": {
+        "nested": {
+          "tokens": 17,
+          "cached": false
+        },
+        "tags": ["fixture", null]
+      }
+    },
+    "left_node": {
+      "id": "user-left",
+      "parent_id": "assistant-a",
+      "conversation_id": "conversation-fixture",
+      "role": "user",
+      "content": "LEFT_BRANCH_SENTINEL",
+      "model": null,
+      "created_at": 1770000002123,
+      "metadata": {}
+    },
+    "right_node": {
+      "id": "user-right",
+      "parent_id": "assistant-a",
+      "conversation_id": "conversation-fixture",
+      "role": "user",
+      "content": "RIGHT_BRANCH_SENTINEL",
+      "model": null,
+      "created_at": 1770000002124,
+      "metadata": {}
+    },
+    "conversation_tree": {
+      "conversation": {
+        "id": "conversation-fixture",
+        "title": "Fixture conversation",
+        "root_node_id": "root",
+        "is_archived": false
+      },
+      "nodes": [
+        {
+          "id": "root",
+          "parent_id": null,
+          "conversation_id": "conversation-fixture",
+          "role": "user",
+          "content": "  preserved root content\n",
+          "model": null,
+          "created_at": 1770000000123,
+          "metadata": {}
+        },
+        {
+          "id": "assistant-a",
+          "parent_id": "root",
+          "conversation_id": "conversation-fixture",
+          "role": "assistant",
+          "content": "assistant response",
+          "model": "fixture-model",
+          "created_at": 1770000001123,
+          "metadata": {
+            "nested": {
+              "tokens": 17,
+              "cached": false
+            },
+            "tags": ["fixture", null]
+          }
+        },
+        {
+          "id": "user-left",
+          "parent_id": "assistant-a",
+          "conversation_id": "conversation-fixture",
+          "role": "user",
+          "content": "LEFT_BRANCH_SENTINEL",
+          "model": null,
+          "created_at": 1770000002123,
+          "metadata": {}
+        },
+        {
+          "id": "user-right",
+          "parent_id": "assistant-a",
+          "conversation_id": "conversation-fixture",
+          "role": "user",
+          "content": "RIGHT_BRANCH_SENTINEL",
+          "model": null,
+          "created_at": 1770000002124,
+          "metadata": {}
+        }
+      ]
+    },
+    "active_path": {
+      "conversation_id": "conversation-fixture",
+      "active_node_id": "user-right",
+      "nodes": [
+        {
+          "id": "root",
+          "parent_id": null,
+          "conversation_id": "conversation-fixture",
+          "role": "user",
+          "content": "  preserved root content\n",
+          "model": null,
+          "created_at": 1770000000123,
+          "metadata": {}
+        },
+        {
+          "id": "assistant-a",
+          "parent_id": "root",
+          "conversation_id": "conversation-fixture",
+          "role": "assistant",
+          "content": "assistant response",
+          "model": "fixture-model",
+          "created_at": 1770000001123,
+          "metadata": {
+            "nested": {
+              "tokens": 17,
+              "cached": false
+            },
+            "tags": ["fixture", null]
+          }
+        },
+        {
+          "id": "user-right",
+          "parent_id": "assistant-a",
+          "conversation_id": "conversation-fixture",
+          "role": "user",
+          "content": "RIGHT_BRANCH_SENTINEL",
+          "model": null,
+          "created_at": 1770000002124,
+          "metadata": {}
+        }
+      ]
+    }
+  },
+  "errors": [
+    {
+      "code": "invalid_input",
+      "message": "Invalid input.",
+      "retryable": false,
+      "details": { "field": "content", "reason": "blank" }
+    },
+    {
+      "code": "not_found",
+      "message": "Not found.",
+      "retryable": false,
+      "details": { "entity": "conversation" }
+    },
+    {
+      "code": "tree_integrity",
+      "message": "Tree invalid.",
+      "retryable": false,
+      "details": { "reason": "broken_parent" }
+    },
+    {
+      "code": "database_unavailable",
+      "message": "Database unavailable.",
+      "retryable": true
+    },
+    {
+      "code": "migration_failure",
+      "message": "Migration failed.",
+      "retryable": false
+    },
+    {
+      "code": "provider_authentication",
+      "message": "Authentication required.",
+      "retryable": false
+    },
+    {
+      "code": "rate_limited",
+      "message": "Try later.",
+      "retryable": true,
+      "details": { "retry_after_ms": 1000 }
+    },
+    {
+      "code": "provider_unavailable",
+      "message": "Provider unavailable.",
+      "retryable": true
+    },
+    {
+      "code": "network_failure",
+      "message": "Network failed.",
+      "retryable": true
+    },
+    { "code": "cancelled", "message": "Cancelled.", "retryable": false },
+    { "code": "internal", "message": "Unexpected failure.", "retryable": false }
+  ],
+  "malformed_successes": [
+    {
+      "id": "missing-created-at",
+      "parent_id": null,
+      "conversation_id": "conversation-fixture",
+      "role": "user",
+      "content": "content",
+      "model": null,
+      "metadata": {}
+    },
+    {
+      "id": "node-archive-leak",
+      "parent_id": null,
+      "conversation_id": "conversation-fixture",
+      "role": "user",
+      "content": "content",
+      "model": null,
+      "created_at": 1,
+      "metadata": {},
+      "is_archived": true
+    },
+    {
+      "id": "bad-role",
+      "parent_id": null,
+      "conversation_id": "conversation-fixture",
+      "role": "developer",
+      "content": "content",
+      "model": null,
+      "created_at": 1,
+      "metadata": {}
+    }
+  ],
+  "malformed_command_successes": {
+    "archive_conversation": {
+      "id": "conversation-fixture",
+      "title": "Fixture conversation",
+      "root_node_id": "root"
+    },
+    "load_conversation_tree": {
+      "conversation": {
+        "id": "conversation-fixture",
+        "title": "Fixture conversation",
+        "root_node_id": "root",
+        "is_archived": false
+      },
+      "nodes": [
+        {
+          "id": "root",
+          "parent_id": null,
+          "conversation_id": "conversation-fixture",
+          "role": "user",
+          "content": "root",
+          "model": null,
+          "created_at": 1,
+          "metadata": {},
+          "is_archived": true
+        }
+      ]
+    },
+    "load_active_path": {
+      "conversation_id": "conversation-fixture",
+      "active_node_id": null,
+      "nodes": []
+    }
+  },
+  "malformed_errors": [
+    { "code": "unknown", "message": "unsafe", "retryable": true },
+    {
+      "code": "internal",
+      "message": "unsafe",
+      "retryable": false,
+      "extra": "field"
+    },
+    { "code": "rate_limited", "message": "unsafe", "retryable": "yes" },
+    {
+      "code": "rate_limited",
+      "message": "unsafe",
+      "retryable": true,
+      "details": []
+    },
+    "plain string failure"
+  ]
+}

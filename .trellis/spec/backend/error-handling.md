@@ -29,7 +29,7 @@ codes are:
 | Code | Meaning | Default retryable |
 |---|---|---:|
 | `invalid_input` | A command DTO or domain input is invalid | false |
-| `not_found` | The requested conversation/node/path does not exist or is archived | false |
+| `not_found` | The requested conversation/node/path does not exist | false |
 | `tree_integrity` | Stored root, parent, branch, or path invariants are broken | false |
 | `database_unavailable` | The managed database/pool cannot currently be used | true |
 | `migration_failure` | Required migrations did not apply | false |
@@ -75,10 +75,15 @@ pub struct CommandError {
   failures caused by rejected user operations normally map to `invalid_input`;
   evidence that durable tree data violates its invariants maps to
   `tree_integrity`.
-- The root-to-active repository fails closed. Missing/archived active nodes map
-  to `not_found`; a wrong root, broken adjacency, cross-conversation link,
-  archived ancestor, or cycle maps to `tree_integrity`. Neither case may trigger
+- Classify SQLite `BUSY` and `LOCKED` result codes, including their extended
+  forms, as retryable `database_unavailable`. Match numeric result codes rather
+  than parsing localized or version-dependent database error text.
+- The root-to-active repository fails closed. Missing active nodes map to
+  `not_found`; a wrong root, broken adjacency, cross-conversation link, or
+  cycle maps to `tree_integrity`. Neither case may trigger
   a full-history provider request.
+- Archived conversations remain readable. A mutation targeting one maps to
+  `invalid_input`; node-level archive has no public command.
 - Provider status/transport errors map to authentication, rate limiting,
   availability, network, or cancellation codes before reaching commands.
   Unknown provider payloads map to `internal` or `provider_unavailable` based on

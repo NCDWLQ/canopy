@@ -84,11 +84,11 @@ At minimum, prove:
 - child ordering is deterministic by `created_at, id`;
 - cross-conversation parents, self-parenting, and multiple structural roots
   fail;
-- the designated root cannot have a parent, cannot be inserted as archived,
-  and cannot be archived later;
-- immutable node fields reject updates while eligible archive changes work;
-- deleting any node is rejected; archiving remains the non-destructive removal
-  operation;
+- the designated root cannot have a parent and every node archive attempt is
+  rejected after provisional flags are normalized;
+- immutable node fields reject updates;
+- deleting any node is rejected; conversation archive is idempotent,
+  forward-only, and preserves all node bytes;
 - branch/edit inserts a sibling and leaves the original node and all existing
   descendants byte-for-byte unchanged;
 - a released-schema fixture upgrades forward once one exists; until the first
@@ -105,8 +105,8 @@ branches containing unique sentinel content. For each active leaf, assert:
 4. no node or sentinel content from the sibling branch occurs;
 5. the provider request contains exactly the same ordered role/content sequence.
 
-Also assert fail-closed errors for a missing/archived active node, archived
-ancestor, wrong conversation ID, wrong designated root, broken adjacency, and a
+Also assert fail-closed errors for a missing active node, wrong conversation
+ID, wrong designated root, broken adjacency, and a
   corrupt/cyclic fixture constructed by a test-only corruption setup. The
   cycle-safe recursive query must terminate and return `tree_integrity`.
 No failure may fall back to a conversation scan or emit a provider request.

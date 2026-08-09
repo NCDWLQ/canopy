@@ -7,6 +7,7 @@ pub struct Conversation {
     pub id: String,
     pub title: String,
     pub root_node_id: String,
+    pub is_archived: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -70,7 +71,6 @@ pub struct Node {
     pub model: Option<String>,
     pub created_at: i64,
     pub metadata: Value,
-    pub is_archived: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -83,7 +83,6 @@ pub struct NewNode {
     pub model: Option<String>,
     pub created_at: i64,
     pub metadata: Value,
-    pub is_archived: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -144,13 +144,17 @@ managed_sqlite_pool(&DbInstances) -> Result<SqlitePool, PersistenceError>
 ConversationPersistenceService::new(SqlitePool)
 create_conversation(NewConversation, NewNode) -> Result<ConversationTree, PersistenceError>
 append_node(NewNode) -> Result<Node, PersistenceError>
+append_user_node(NewNode) -> Result<Node, PersistenceError>
+create_branch(NewNode) -> Result<Node, PersistenceError>
+edit_node_as_branch(&str, NewNode) -> Result<Node, PersistenceError>
 load_conversation_tree(&str) -> Result<ConversationTree, PersistenceError>
 load_active_path(&str, &str) -> Result<ValidatedPath, PersistenceError>
-archive_node(&str, &str) -> Result<Node, PersistenceError>
+archive_conversation(&str) -> Result<Conversation, PersistenceError>
 ```
 
-Service inputs accept explicit opaque IDs and epoch-millisecond timestamps.
-The future command layer owns ID/time generation and end-user input policy.
+Persistence-service inputs accept explicit opaque IDs and epoch-millisecond
+timestamps. `conversations::commands::ConversationCommandService` owns
+production UUID/time generation and end-user input policy.
 
 ### 3. Contracts
 
@@ -172,11 +176,13 @@ The future command layer owns ID/time generation and end-user input policy.
 | Condition | Required result |
 |---|---|
 | Managed database entry is missing | `PersistenceError::DatabaseUnavailable` |
-| Requested conversation or active node is missing/archived | `PersistenceError::NotFound` |
+| Requested conversation, node, or active node is missing | `PersistenceError::NotFound` |
+| A write targets an archived conversation or violates branch policy | `PersistenceError::InvalidInput` |
 | Root, adjacency, ownership, duplicate, or cycle validation fails | `PersistenceError::TreeIntegrity` |
 | Known constraint/trigger rejects a requested write | `PersistenceError::InvalidInput` |
 | Stored role, boolean, or JSON cannot map to the closed domain type | `PersistenceError::InvalidStoredData` |
-| Other SQL operation fails | Wrapped storage error with no public IPC mapping yet |
+| SQLite result code `BUSY` or `LOCKED`, including extended forms | `database_unavailable`, retryable |
+| Other SQL operation fails | Wrapped storage error mapped centrally to safe `internal` |
 
 No failure returns a partial tree/path or retries through a whole-conversation
 query.
@@ -187,7 +193,7 @@ query.
   path contains its ancestors plus only its selected leaf.
 - **Base**: one conversation and future root commit atomically through the
   deferred composite foreign key.
-- **Bad**: a missing root, archived ancestor, broken/cross-conversation chain,
+- **Bad**: a missing root, broken/cross-conversation chain,
   or cycle returns a typed failure rather than usable messages.
 
 ### 6. Tests Required
@@ -197,10 +203,10 @@ one-connection SQLite pool with foreign keys enabled. It must assert:
 
 - exact application table/index/trigger shape and deferred root ownership;
 - atomic rollback, same-conversation parentage, one root, immutable history,
-  archive protection, and delete rejection;
+  conversation archive protection, node-archive rejection, and delete rejection;
 - canonical metadata key order and domain round-trip;
 - deterministic tree order and explicit sibling-sentinel absence;
-- not-found, wrong-root, archived-ancestor, broken-chain,
+- not-found, wrong-root, broken-chain,
   cross-conversation-chain, and cycle fail-closed behavior;
 - the managed adapter returns the same pool handle's visible database state.
 
@@ -242,6 +248,8 @@ CREATE TABLE conversations (
   id           TEXT PRIMARY KEY,
   title        TEXT NOT NULL,
   root_node_id TEXT NOT NULL,
+  is_archived  INTEGER NOT NULL DEFAULT 0
+                 CHECK (is_archived IN (0, 1)),
   FOREIGN KEY (root_node_id, id)
     REFERENCES nodes (id, conversation_id)
     DEFERRABLE INITIALLY DEFERRED
@@ -258,7 +266,7 @@ CREATE TABLE nodes (
   created_at      INTEGER NOT NULL,
   metadata        TEXT NOT NULL DEFAULT '{}'
                     CHECK (json_valid(metadata)),
-  is_archived     INTEGER NOT NULL DEFAULT 0
+  is_archived     INTEGER NOT NULL DEFAULT 0 -- pre-release compatibility only
                     CHECK (is_archived IN (0, 1)),
   CHECK (parent_id IS NULL OR parent_id <> id),
   UNIQUE (id, conversation_id),
@@ -345,18 +353,24 @@ foreign key is deferred so conversation creation can insert both records in one
 transaction. Do not enable `PRAGMA defer_foreign_keys`; it would defer the
 parent constraint and invalidate this cycle-prevention argument.
 
+Migration `0003_conversation_archive.sql` adds `conversations.is_archived`,
+normalizes every provisional node archive flag to zero, rejects later node
+archive inserts/updates, rejects inserts into archived conversations, and
+allows conversation archive only in the forward direction. The compatibility
+node column remains checksum-safe storage from migration v2; it is not part of
+the Rust domain or IPC contract.
+
 Migration triggers must also enforce the invariants that foreign keys cannot
 express alone:
 
 - A node named by `conversations.root_node_id` has `parent_id IS NULL`, whether
   the root node or the conversation reference is inserted first.
-- Node identity, `parent_id`, `conversation_id`, `role`, `content`, `model`,
-  `created_at`, and `metadata` are immutable after insertion. `is_archived` is
-  the only supported semantic node update in the MVP.
-- A conversation's designated root cannot be inserted as archived or archived
-  by a later update.
-- Nodes cannot be deleted in application data; archiving is the
-  history-preserving removal mechanism. Repositories must also never use
+- Every node field is immutable after insertion. The compatibility
+  `nodes.is_archived` value is always zero after migration v3 and all future
+  attempts to set it are rejected.
+- Archive belongs only to the conversation. Archiving is idempotent, does not
+  rewrite nodes, keeps tree/path reads available, and has no restore operation.
+- Nodes cannot be deleted in application data. Repositories must also never use
   `INSERT OR REPLACE` for nodes.
 - Conversation identity and `root_node_id` are immutable in application data.
   If a repair migration ever needs to change them, it must explicitly replace
@@ -377,9 +391,11 @@ The minimum tree repository contract is:
 - create a conversation and its root;
 - append a child node;
 - create a branch/edit node without modifying history;
-- load an ordered conversation tree or ordered children;
+- load an ordered conversation tree or ordered children, rejecting a missing
+  designated root, missing parent, duplicate/foreign node, disconnected
+  component, or cycle as `TreeIntegrity` rather than returning a partial tree;
 - load and validate the root-to-active path;
-- archive an eligible non-root node.
+- archive a whole conversation without changing any node bytes.
 
 Create a conversation in one deferred transaction:
 
@@ -401,13 +417,13 @@ workstream freezes these command names and DTOs in the shared IPC contract:
 
 | Command | Required input | Result / invariant |
 |---|---|---|
-| `create_conversation` | title and root node content/role/model/metadata | Conversation and root DTOs created atomically; Rust assigns IDs and time |
-| `append_node` | `conversation_id`, `parent_id`, role/content/model/metadata | New child DTO; parent must belong to the conversation |
-| `create_branch` | `conversation_id`, assistant `parent_id`, new node data | New child branch; existing children remain unchanged |
-| `edit_node_as_branch` | `conversation_id`, `source_node_id`, replacement content/model/metadata | New sibling with the source role and parent; source and descendants remain unchanged |
+| `create_conversation` | `title`, `content` | User root and conversation created atomically; Rust assigns IDs/time/model/metadata |
+| `append_node` | `conversation_id`, `parent_node_id`, `content` | User child; parent is an assistant leaf |
+| `create_branch` | `conversation_id`, `parent_node_id`, `content` | User child; assistant parent already has a child and existing children remain unchanged |
+| `edit_node_as_branch` | `conversation_id`, `source_node_id`, `content` | User sibling under the eligible source's assistant parent; source and descendants remain unchanged |
 | `load_conversation_tree` | `conversation_id` | Conversation plus deterministically ordered node DTOs |
 | `load_active_path` | `conversation_id`, `active_node_id` | Validated root-to-active DTO list, or a typed fail-closed error |
-| `archive_node` | `conversation_id`, `node_id` | Updated archive state; the designated root is rejected |
+| `archive_conversation` | `conversation_id` | Idempotent whole-conversation archive; all node bytes remain unchanged |
 | `generate_from_active_path` | `conversation_id`, `active_node_id`, provider/model selection | Provider output built only from `load_active_path`'s validated domain value |
 
 DTOs use string IDs, integer epoch-millisecond timestamps, explicit nullable
@@ -424,8 +440,8 @@ commands.
 ## Root-to-Active Path Query
 
 The path repository method requires both `conversation_id` and
-`active_node_id`. It anchors at the active node, walks parent links, excludes
-archived nodes, and orders the result from root to active:
+`active_node_id`. It anchors at the active node, walks parent links, and orders
+the result from root to active. Archived conversations remain readable:
 
 ```sql
 WITH RECURSIVE path AS (
@@ -434,7 +450,6 @@ WITH RECURSIVE path AS (
   FROM nodes AS n
   WHERE n.id = ?1
     AND n.conversation_id = ?2
-    AND n.is_archived = 0
 
   UNION ALL
 
@@ -449,8 +464,7 @@ WITH RECURSIVE path AS (
   JOIN path AS child
     ON child.parent_id = parent.id
    AND child.conversation_id = parent.conversation_id
-  WHERE parent.is_archived = 0
-    AND child.cycle_detected = 0
+  WHERE child.cycle_detected = 0
 )
 SELECT *
 FROM path
@@ -474,8 +488,8 @@ After reading the rows, validate all of the following before returning a path:
 5. The final row equals `active_node_id` and every row belongs to
    `conversation_id`.
 
-A missing or archived active node returns `not_found`. A disconnected,
-cross-conversation, archived-ancestor, duplicate/cyclic, or wrong-root path
+A missing active node returns `not_found`. A disconnected,
+cross-conversation, duplicate/cyclic, or wrong-root path
 returns `tree_integrity`. Fail closed: never
 substitute the whole conversation, another branch, or a partial path. Provider
 request construction consumes only this validated ordered result.

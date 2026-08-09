@@ -1,0 +1,13 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Rust/Tauri module ownership, command placement, migration naming, and test layout"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "SQLite ownership, immutable tree invariants, transactions, archive semantics, and path validation"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Stable CommandError taxonomy, safe mapping, and frontend normalization"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Diagnostic context and redaction requirements at the command boundary"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Rust, migration, transaction, path, and dependency verification gates"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Ownership of shared feature types and the sole raw invoke bridge"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Strict TypeScript, unknown IPC decoding, Zod, nullability, and fixture rules"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Canonical TreeNodeView, PathMessageView, and UiError consumer contracts"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Normalized conversation projection and future action handoff contract"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend test matrix, forbidden boundary leaks, and static audits"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "End-to-end DTO data flow and shared contract ownership"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Centralized mapping and duplicate-contract review"}

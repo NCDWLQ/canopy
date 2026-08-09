@@ -49,6 +49,9 @@ impl PersistenceError {
                     "node_history_is_immutable",
                     "node_history_cannot_be_deleted",
                     "conversation_identity_and_root_are_immutable",
+                    "node_archive_is_not_supported",
+                    "archived_conversation_is_read_only",
+                    "conversation_archive_is_forward_only",
                 ]
                 .iter()
                 .any(|marker| database_error.message().contains(marker))

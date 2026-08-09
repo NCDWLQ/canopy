@@ -23,6 +23,11 @@ pub const MIGRATION_CATALOG: &[ApplicationMigration] = &[
         description: "conversation_tree",
         sql: include_str!("../migrations/0002_conversation_tree.sql"),
     },
+    ApplicationMigration {
+        version: 3,
+        description: "conversation_archive",
+        sql: include_str!("../migrations/0003_conversation_archive.sql"),
+    },
 ];
 
 pub fn plugin_migrations() -> Vec<Migration> {

@@ -119,12 +119,18 @@ Use this contract whenever a component renders the conversation outline, the act
 ```ts
 type NodeId = string;
 
+type ConversationView = {
+  id: string;
+  title: string;
+  rootNodeId: NodeId;
+  isArchived: boolean;
+};
+
 type TreeNodeView = {
   id: NodeId;
   role: "system" | "user" | "assistant" | "tool";
   preview: string;
   childIds: readonly NodeId[];
-  isArchived: boolean;
 };
 
 type PathMessageView = {
@@ -200,7 +206,7 @@ Provider forms follow the same pattern: controlled, secret-masked fields emit a 
 | Tree is loading | Render a stable-size skeleton; do not show a fake root |
 | Root or active node is absent | Render the supplied integrity error/recovery action; do not choose another node |
 | Active path is empty for an existing conversation | Render an error/empty boundary supplied by the container |
-| A node is archived | Exclude it unless an explicit archive view is active |
+| The conversation is archived | Keep history readable and disable all mutation capabilities |
 | Branch/edit capability is false | Hide or disable the action consistently and prevent keyboard activation |
 | Status is `error` | Show the safe error message; offer retry only when `retryable` is true |
 | User cancels streaming | Return to idle/cancelled state without an error toast |
@@ -254,7 +260,7 @@ The correct form is deterministic, fixture-driven, and independent of SQLite and
 - Preserve shadcn primitives as upgradeable building blocks; wrap them instead of editing generated internals for domain behavior.
 - The outline uses tree/treeitem semantics or an equivalent tested Radix pattern, visible focus, correct expanded/selected state, and roving keyboard focus.
 - Every icon-only action has an accessible name. Menus, dialogs, and tooltips use Radix focus management.
-- Do not rely on color alone for active paths, roles, errors, or archived state.
+- Do not rely on color alone for active paths, roles, errors, or conversation archive state.
 - Respect reduced motion and keep the interface usable at desktop webview zoom levels.
 
 ## Common Mistakes

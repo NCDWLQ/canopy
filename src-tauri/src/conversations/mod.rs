@@ -1,3 +1,4 @@
+pub mod commands;
 mod domain;
 mod error;
 mod repository;

@@ -38,7 +38,7 @@ The initial toolchain is Vitest, React Testing Library, `@testing-library/user-e
 | Layer | Required coverage | Assertion points |
 |---|---|---|
 | Pure functions/selectors | normalized tree updates, expansion, active selection, root-to-active projection | deterministic IDs/order; original input unchanged; sibling excluded |
-| Typed Tauri bridge | success decoding and every stable `CommandError` shape | malformed payload rejected; secrets absent |
+| Typed Tauri bridge | success decoding and every stable `CommandError` shape | malformed payload, invalid Unicode, disconnected/cyclic trees, and opaque prototype-like IDs covered; secrets absent |
 | Components | tree navigation, message path, branch/edit intents, composer, provider form states | roles/names/state, callback IDs/counts, disabled behavior |
 | Feature integration | mocked bridge -> store -> rendered path | loading-to-ready transition; exact active path; no sibling leakage |
 | Desktop smoke | one create/select/branch path after the vertical proof exists | durable selection after reload and visible branch separation |

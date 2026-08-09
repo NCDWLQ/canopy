@@ -1,4 +1,4 @@
-use std::str::FromStr;
+mod support;
 
 use canopy_lib::{
     conversations::{
@@ -7,35 +7,10 @@ use canopy_lib::{
     database::{managed_sqlite_pool, DATABASE_URL, MIGRATION_CATALOG},
 };
 use serde_json::json;
-use sqlx::{
-    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
-    SqlitePool,
-};
+use sqlx::SqlitePool;
 use tauri_plugin_sql::{DbInstances, DbPool};
 
-fn run_async(test: impl std::future::Future<Output = ()>) {
-    tauri::async_runtime::block_on(test);
-}
-
-async fn migrated_pool() -> SqlitePool {
-    let options = SqliteConnectOptions::from_str("sqlite::memory:")
-        .expect("in-memory SQLite URL is valid")
-        .foreign_keys(true);
-    let pool = SqlitePoolOptions::new()
-        .max_connections(1)
-        .connect_with(options)
-        .await
-        .expect("test database connects");
-
-    for migration in MIGRATION_CATALOG {
-        sqlx::raw_sql(migration.sql)
-            .execute(&pool)
-            .await
-            .unwrap_or_else(|error| panic!("migration {} failed: {error}", migration.version));
-    }
-
-    pool
-}
+use support::{migrated_pool, migrated_pool_through, run_async};
 
 fn conversation(id: &str, root_node_id: &str) -> NewConversation {
     NewConversation {
@@ -62,7 +37,6 @@ fn node(
         model: None,
         created_at,
         metadata: json!({}),
-        is_archived: false,
     }
 }
 
@@ -145,7 +119,11 @@ fn ordered_migrations_create_the_expected_schema_and_managed_pool_is_reused() {
                 .iter()
                 .map(|migration| (migration.version, migration.description))
                 .collect::<Vec<_>>(),
-            vec![(1, "bootstrap"), (2, "conversation_tree")]
+            vec![
+                (1, "bootstrap"),
+                (2, "conversation_tree"),
+                (3, "conversation_archive")
+            ]
         );
 
         let pool = migrated_pool().await;
@@ -189,12 +167,16 @@ fn ordered_migrations_create_the_expected_schema_and_managed_pool_is_reused() {
         assert_eq!(
             triggers,
             vec![
+                "conversations_archive_forward_only",
                 "conversations_immutable_identity_and_root",
                 "nodes_immutable_history",
+                "nodes_reject_archive_on_insert",
+                "nodes_reject_archive_on_update",
                 "nodes_reject_delete",
                 "nodes_reject_designated_root_archive",
                 "nodes_reject_designated_root_archived_on_insert",
                 "nodes_reject_designated_root_parent",
+                "nodes_reject_insert_into_archived_conversation",
             ]
         );
 
@@ -246,21 +228,20 @@ fn invalid_root_rolls_back_conversation_and_node_atomically() {
     run_async(async {
         let pool = migrated_pool().await;
         let service = ConversationPersistenceService::new(pool.clone());
-        let mut archived_root = node(
+        let invalid_root = node(
             "invalid-root",
-            None,
+            Some("missing-parent"),
             "invalid-conversation",
             Role::System,
             "invalid root",
             100,
         );
-        archived_root.is_archived = true;
 
         assert!(matches!(
             service
                 .create_conversation(
                     conversation("invalid-conversation", "invalid-root"),
-                    archived_root,
+                    invalid_root,
                 )
                 .await,
             Err(PersistenceError::InvalidInput { .. })
@@ -312,7 +293,6 @@ fn sibling_branches_round_trip_deterministically_and_paths_are_isolated() {
                 "z_last": true
             })
         );
-        assert!(!left.is_archived);
         let stored_metadata: String =
             sqlx::query_scalar("SELECT metadata FROM nodes WHERE id = ?1")
                 .bind("user-left")
@@ -363,43 +343,165 @@ fn sibling_branches_round_trip_deterministically_and_paths_are_isolated() {
                 .await,
             Err(PersistenceError::NotFound { .. })
         ));
+    });
+}
 
-        let before_archive = left.clone();
+#[test]
+fn archive_migration_normalizes_old_node_flags_and_rejects_future_node_archive() {
+    run_async(async {
+        let pool = migrated_pool_through(2).await;
+        let mut transaction = pool.begin().await.expect("legacy transaction starts");
+        sqlx::query(
+            "INSERT INTO conversations (id, title, root_node_id) \
+             VALUES ('legacy-conversation', 'Legacy', 'legacy-root')",
+        )
+        .execute(&mut *transaction)
+        .await
+        .expect("legacy conversation is inserted");
+        sqlx::query(
+            "INSERT INTO nodes \
+             (id, parent_id, conversation_id, role, content, created_at, metadata, is_archived) \
+             VALUES ('legacy-root', NULL, 'legacy-conversation', 'user', 'root', 1, '{}', 0)",
+        )
+        .execute(&mut *transaction)
+        .await
+        .expect("legacy root is inserted");
+        sqlx::query(
+            "INSERT INTO nodes \
+             (id, parent_id, conversation_id, role, content, created_at, metadata, is_archived) \
+             VALUES ('legacy-child', 'legacy-root', 'legacy-conversation', \
+                     'assistant', 'child', 2, '{}', 0)",
+        )
+        .execute(&mut *transaction)
+        .await
+        .expect("legacy child is inserted");
+        transaction.commit().await.expect("legacy fixture commits");
+        sqlx::query("UPDATE nodes SET is_archived = 1 WHERE id = 'legacy-child'")
+            .execute(&pool)
+            .await
+            .expect("v2 permits the provisional node archive flag");
+
+        sqlx::raw_sql(MIGRATION_CATALOG[2].sql)
+            .execute(&pool)
+            .await
+            .expect("archive migration applies");
+        let normalized: i64 =
+            sqlx::query_scalar("SELECT is_archived FROM nodes WHERE id = 'legacy-child'")
+                .fetch_one(&pool)
+                .await
+                .expect("normalized flag is readable");
+        assert_eq!(normalized, 0);
+
+        let archived_insert = sqlx::query(
+            "INSERT INTO nodes \
+             (id, parent_id, conversation_id, role, content, created_at, metadata, is_archived) \
+             VALUES ('archived-node', 'legacy-child', 'legacy-conversation', \
+                     'user', 'bad', 3, '{}', 1)",
+        )
+        .execute(&pool)
+        .await;
+        assert!(archived_insert.is_err());
+        let archived_update =
+            sqlx::query("UPDATE nodes SET is_archived = 1 WHERE id = 'legacy-child'")
+                .execute(&pool)
+                .await;
+        assert!(archived_update.is_err());
+    });
+}
+
+#[test]
+fn conversation_archive_is_idempotent_readable_and_preserves_node_bytes() {
+    run_async(async {
+        let pool = migrated_pool().await;
+        let service = create_branch_fixture(&pool).await;
+        let before: Vec<String> = sqlx::query_scalar(
+            "SELECT json_object( \
+               'id', id, 'parent_id', parent_id, 'conversation_id', conversation_id, \
+               'role', role, 'content', content, 'model', model, 'created_at', created_at, \
+               'metadata', metadata, 'is_archived', is_archived) \
+             FROM nodes WHERE conversation_id = ?1 ORDER BY created_at, id",
+        )
+        .bind("conversation-a")
+        .fetch_all(&pool)
+        .await
+        .expect("node bytes are readable before archive");
+
         let archived = service
-            .archive_node("conversation-a", "user-left")
+            .archive_conversation("conversation-a")
             .await
-            .expect("eligible node archives");
+            .expect("conversation archives");
         assert!(archived.is_archived);
-        assert_eq!(archived.id, before_archive.id);
-        assert_eq!(archived.parent_id, before_archive.parent_id);
-        assert_eq!(archived.role, before_archive.role);
-        assert_eq!(archived.content, before_archive.content);
-        assert_eq!(archived.model, before_archive.model);
-        assert_eq!(archived.created_at, before_archive.created_at);
-        assert_eq!(archived.metadata, before_archive.metadata);
-        assert!(matches!(
-            service
-                .load_active_path("conversation-a", "user-left")
-                .await,
-            Err(PersistenceError::NotFound { .. })
-        ));
-
-        let archived_tree = service
-            .load_conversation_tree("conversation-a")
-            .await
-            .expect("archived nodes remain in history");
         assert!(
-            archived_tree
-                .nodes
-                .iter()
-                .find(|node| node.id == "user-left")
-                .expect("archived node remains")
+            service
+                .archive_conversation("conversation-a")
+                .await
+                .expect("archive is idempotent")
                 .is_archived
         );
+        let after: Vec<String> = sqlx::query_scalar(
+            "SELECT json_object( \
+               'id', id, 'parent_id', parent_id, 'conversation_id', conversation_id, \
+               'role', role, 'content', content, 'model', model, 'created_at', created_at, \
+               'metadata', metadata, 'is_archived', is_archived) \
+             FROM nodes WHERE conversation_id = ?1 ORDER BY created_at, id",
+        )
+        .bind("conversation-a")
+        .fetch_all(&pool)
+        .await
+        .expect("node bytes are readable after archive");
+        assert_eq!(after, before);
+
+        let tree = service
+            .load_conversation_tree("conversation-a")
+            .await
+            .expect("archived tree remains readable");
+        assert!(tree.conversation.is_archived);
+        assert_eq!(tree.nodes.len(), 5);
+        assert_eq!(
+            service
+                .load_active_path("conversation-a", "user-right")
+                .await
+                .expect("archived path remains readable")
+                .as_slice()
+                .last()
+                .map(|node| node.id.as_str()),
+            Some("user-right")
+        );
+
         assert!(matches!(
-            service.archive_node("conversation-a", "root").await,
+            service
+                .append_node(node(
+                    "blocked-child",
+                    Some("user-right"),
+                    "conversation-a",
+                    Role::Assistant,
+                    "blocked",
+                    500,
+                ))
+                .await,
             Err(PersistenceError::InvalidInput { .. })
         ));
+        let direct_insert = sqlx::query(
+            "INSERT INTO nodes \
+             (id, parent_id, conversation_id, role, content, created_at, metadata) \
+             VALUES ('direct-blocked', 'user-right', 'conversation-a', \
+                     'assistant', 'blocked', 501, '{}')",
+        )
+        .execute(&pool)
+        .await;
+        assert!(direct_insert.is_err());
+        let restore =
+            sqlx::query("UPDATE conversations SET is_archived = 0 WHERE id = 'conversation-a'")
+                .execute(&pool)
+                .await;
+        assert!(restore.is_err());
+        let node_count: i64 =
+            sqlx::query_scalar("SELECT count(*) FROM nodes WHERE conversation_id = ?1")
+                .bind("conversation-a")
+                .fetch_one(&pool)
+                .await
+                .expect("node count is readable");
+        assert_eq!(node_count, 5);
     });
 }
 
@@ -535,19 +637,6 @@ fn sqlite_constraints_and_triggers_protect_tree_history() {
 #[test]
 fn corrupt_active_paths_fail_closed() {
     run_async(async {
-        let archived_pool = migrated_pool().await;
-        let archived_service = create_branch_fixture(&archived_pool).await;
-        archived_service
-            .archive_node("conversation-a", "assistant-a")
-            .await
-            .expect("non-root ancestor archives");
-        assert!(matches!(
-            archived_service
-                .load_active_path("conversation-a", "user-right")
-                .await,
-            Err(PersistenceError::TreeIntegrity { .. })
-        ));
-
         let wrong_root_pool = migrated_pool().await;
         let wrong_root_service = create_branch_fixture(&wrong_root_pool).await;
         sqlx::query("DROP TRIGGER conversations_immutable_identity_and_root")
@@ -659,6 +748,32 @@ fn corrupt_active_paths_fail_closed() {
             cross_conversation_service
                 .load_active_path("conversation-a", "user-right")
                 .await,
+            Err(PersistenceError::TreeIntegrity { .. })
+        ));
+    });
+}
+
+#[test]
+fn corrupt_full_tree_fails_closed_instead_of_returning_disconnected_nodes() {
+    run_async(async {
+        let pool = migrated_pool().await;
+        let service = create_branch_fixture(&pool).await;
+        sqlx::query("DROP TRIGGER nodes_immutable_history")
+            .execute(&pool)
+            .await
+            .expect("test-only corruption trigger is removed");
+        sqlx::query(
+            "UPDATE nodes SET parent_id = CASE id \
+               WHEN 'user-left' THEN 'user-right' \
+               WHEN 'user-right' THEN 'user-left' \
+             END WHERE id IN ('user-left', 'user-right')",
+        )
+        .execute(&pool)
+        .await
+        .expect("test-only disconnected cycle is installed");
+
+        assert!(matches!(
+            service.load_conversation_tree("conversation-a").await,
             Err(PersistenceError::TreeIntegrity { .. })
         ));
     });

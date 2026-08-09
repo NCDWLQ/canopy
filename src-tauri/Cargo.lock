@@ -351,6 +351,7 @@ name = "canopy"
 version = "0.1.0"
 dependencies = [
  "log",
+ "serde",
  "serde_json",
  "sqlx",
  "tauri",
@@ -358,6 +359,7 @@ dependencies = [
  "tauri-plugin-log",
  "tauri-plugin-sql",
  "thiserror 2.0.20",
+ "uuid",
 ]
 
 [[package]]
