@@ -6,7 +6,8 @@
 
 ## Overview
 
-This directory contains guidelines for backend development. Fill in each file with your project's specific conventions.
+This directory records the initial Rust/Tauri conventions established by the
+Canopy foundation and first-week architecture.
 
 ---
 
@@ -14,11 +15,11 @@ This directory contains guidelines for backend development. Fill in each file wi
 
 | Guide | Description | Status |
 |-------|-------------|--------|
-| [Directory Structure](./directory-structure.md) | Module organization and file layout | To fill |
+| [Directory Structure](./directory-structure.md) | Rust/Tauri module organization and ownership | Initial |
 | [Database Guidelines](./database-guidelines.md) | SQLite schema, repositories, queries, migrations | Initial |
 | [Error Handling](./error-handling.md) | Cross-layer error types, redaction, UI handling | Initial |
 | [Quality Guidelines](./quality-guidelines.md) | Backend standards and testing strategy | Initial |
-| [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | To fill |
+| [Logging Guidelines](./logging-guidelines.md) | Diagnostic events, levels, and redaction | Initial |
 
 ---
 
