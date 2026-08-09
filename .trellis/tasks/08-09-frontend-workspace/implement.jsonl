@@ -1,0 +1,6 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend package conventions and pointers for implementation."}
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Feature ownership, typed Tauri boundary, and application composition rules."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Conversation workspace props, semantic tree behavior, archive capability rules, and accessibility requirements."}
+{"file":".trellis/spec/frontend/hook-guidelines.md","reason":"Narrow Zustand subscriptions, effect lifecycle, and single active-path projection ownership."}
+{"file":".trellis/spec/frontend/state-management.md","reason":"Normalized non-persistent Zustand state, SQLite authority, immutable actions, and fail-closed selectors."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Canonical feature type ownership and strict TypeScript/runtime boundary rules."}

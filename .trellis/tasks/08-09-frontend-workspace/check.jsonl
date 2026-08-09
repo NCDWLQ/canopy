@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend package index and quality-check routing for the full workspace review."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Conversation component contracts, semantic tree accessibility, capability handling, and component test expectations."}
+{"file":".trellis/spec/frontend/state-management.md","reason":"Normalized Zustand projection, SQLite authority, immutable reconciliation, active-path fail-closed rules, and archive behavior."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Strict TypeScript boundaries and prohibition on unchecked IPC or unknown-value casts."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Required sibling-exclusion, behavioral component, selector, and cross-layer verification coverage."}
