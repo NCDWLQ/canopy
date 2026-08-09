@@ -59,3 +59,24 @@ Initialized the local Git repository and a validated Tauri 2 + React/Vite/shadcn
 ### Status
 
 [OK] **Completed**
+
+
+## Session 3: Tree persistence
+
+**Date**: 2026-08-09
+**Task**: Tree persistence
+**Branch**: `main`
+
+### Summary
+
+Implemented and verified the SQLite conversation-tree persistence vertical slice with plugin-managed pooling, immutable tree constraints, transactional services, fail-closed root-to-active queries, and real migration regressions.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d651093` | (see git log) |
+
+### Status
+
+[OK] **Completed**
