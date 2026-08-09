@@ -1,0 +1,23 @@
+# Dependencies and frontend build output
+node_modules/
+dist/
+coverage/
+
+# Rust and Tauri build output
+target/
+src-tauri/target/
+
+# Local environment and editor files
+.env
+.env.*
+!.env.example
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak

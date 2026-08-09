@@ -1,0 +1,9 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Load the frontend guideline status and language contract."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Preserve component ownership and prevent persistence/IPC leakage into the scaffold UI."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Configure the approved frontend test and quality baseline."}
+{"file":".trellis/spec/backend/index.md","reason":"Load the backend guideline status and package boundary."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Register the Tauri SQL plugin and sqlx stack without violating repository/pool rules."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Keep the scaffold compatible with the future typed Tauri error boundary."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Configure Rust, migration, and dependency verification gates."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Verify Vite, IPC, Tauri, plugin, and SQLite boundaries as one data flow."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Keep scripts, aliases, versions, and shared configuration single-sourced."}

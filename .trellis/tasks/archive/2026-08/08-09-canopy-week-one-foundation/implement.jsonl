@@ -1,0 +1,2 @@
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Keep component-to-SQL contracts explicit across IPC and repository boundaries."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Give shared DTO, error, and query contracts a single documented owner."}

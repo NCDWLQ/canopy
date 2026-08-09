@@ -1,0 +1,9 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Check scaffold changes against the complete frontend spec index."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Check component and developer-managed frontend-agent ownership boundaries."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Check lint, type, test, accessibility, and fixture conventions."}
+{"file":".trellis/spec/backend/index.md","reason":"Check scaffold changes against the complete backend spec index."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Audit plugin ownership, sqlx compatibility, capabilities, and migration boundaries."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Audit that the foundation does not introduce conflicting IPC error patterns."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Run the required Rust and SQLite foundation quality gates."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Review the complete frontend-to-SQL integration boundary."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Detect duplicated config, scripts, aliases, and version sources."}

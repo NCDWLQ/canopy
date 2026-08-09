@@ -1,0 +1,2 @@
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Audit the complete UI-to-SQL data flow and single ownership at boundaries."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Check that shared contracts are centralized rather than repeated across layer specs."}

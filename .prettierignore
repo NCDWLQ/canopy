@@ -1,0 +1,10 @@
+.agents/
+.codex/
+.trellis/
+AGENTS.md
+dist/
+node_modules/
+src-tauri/gen/
+src-tauri/target/
+src-tauri/icons/
+pnpm-lock.yaml
