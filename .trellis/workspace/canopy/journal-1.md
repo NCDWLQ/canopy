@@ -38,3 +38,24 @@ Defined and verified Canopy's first-week delivery framework and minimum frontend
 ### Next Steps
 
 - Initialize the application repository and create the week-one foundation implementation task; the developer launches the separate frontend UI agent after shared contracts are frozen.
+
+
+## Session 2: Scaffold Canopy desktop foundation
+
+**Date**: 2026-08-09
+**Task**: Scaffold Canopy desktop foundation
+**Branch**: `main`
+
+### Summary
+
+Initialized the local Git repository and a validated Tauri 2 + React/Vite/shadcn desktop shell with pnpm, Rust quality gates, Rust-only SQLite plugin wiring, MIT licensing, smoke tests, and executable Trellis infrastructure contracts; no product conversation features were implemented.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6e2b480` | (see git log) |
+
+### Status
+
+[OK] **Completed**
