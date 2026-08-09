@@ -1,0 +1,497 @@
+import { create } from "zustand"
+
+import type {
+  ConversationNodeView,
+  ConversationTreeView,
+  PathMessageView,
+  TreeNodeView,
+  UiError,
+} from "../types"
+import { ConversationCommandError, type ConversationClient } from "@/lib/tauri"
+
+export type ConversationTreeState = {
+  conversationId: string | null
+  isArchived: boolean
+  rootNodeId: string | null
+  activeNodeId: string | null
+  nodesById: Readonly<Record<string, TreeNodeView>>
+  fullNodes: Readonly<Record<string, ConversationNodeView>>
+  expandedIds: ReadonlySet<string>
+  status: "idle" | "loading" | "ready" | "streaming" | "error"
+  error: UiError | null
+}
+
+export type ActivePathProjection =
+  | { kind: "empty"; path: readonly [] }
+  | { kind: "ready"; path: readonly PathMessageView[] }
+  | { kind: "error"; path: readonly []; error: UiError }
+
+export type ConversationStore = ConversationTreeState & {
+  loadConversation: (client: ConversationClient, id: string) => Promise<void>
+  selectNode: (nodeId: string) => void
+  toggleExpanded: (nodeId: string) => void
+  createConversation: (
+    client: ConversationClient,
+    title: string,
+    content: string,
+  ) => Promise<void>
+  appendNode: (client: ConversationClient, content: string) => Promise<void>
+  createBranch: (
+    client: ConversationClient,
+    parentNodeId: string,
+    content: string,
+  ) => Promise<void>
+  editNodeAsBranch: (
+    client: ConversationClient,
+    sourceNodeId: string,
+    content: string,
+  ) => Promise<void>
+  archiveConversation: (client: ConversationClient) => Promise<void>
+  clearError: () => void
+}
+
+const TREE_INTEGRITY_ERROR: UiError = {
+  code: "tree_integrity",
+  message: "The conversation tree could not be displayed safely.",
+  retryable: true,
+}
+
+const INTERNAL_ERROR: UiError = {
+  code: "internal",
+  message: "An unexpected error occurred.",
+  retryable: false,
+}
+
+function emptyRecord<T>(): Record<string, T> {
+  const record: Record<string, T> = {}
+  Object.setPrototypeOf(record, null)
+  return record
+}
+
+function copyRecord<T>(source: Readonly<Record<string, T>>): Record<string, T> {
+  const record = Object.fromEntries(Object.entries(source))
+  Object.setPrototypeOf(record, null)
+  return record
+}
+
+function indexFullNodes(
+  tree: ConversationTreeView,
+): Record<string, ConversationNodeView> {
+  const nodes = Object.fromEntries(tree.nodes.map((node) => [node.id, node]))
+  Object.setPrototypeOf(nodes, null)
+  return nodes
+}
+
+function normalizeError(error: unknown): UiError {
+  if (error instanceof ConversationCommandError) {
+    return {
+      code: error.code,
+      message: error.message,
+      retryable: error.retryable,
+      ...(error.details === undefined ? {} : { details: error.details }),
+    }
+  }
+  return INTERNAL_ERROR
+}
+
+const initialState: ConversationTreeState = {
+  conversationId: null,
+  isArchived: false,
+  rootNodeId: null,
+  activeNodeId: null,
+  nodesById: emptyRecord(),
+  fullNodes: emptyRecord(),
+  expandedIds: new Set(),
+  status: "idle",
+  error: null,
+}
+
+function loadedTreeState(tree: ConversationTreeView): ConversationTreeState {
+  return {
+    conversationId: tree.conversation.id,
+    isArchived: tree.conversation.isArchived,
+    rootNodeId: tree.rootNodeId,
+    activeNodeId: tree.rootNodeId,
+    nodesById: copyRecord(tree.nodesById),
+    fullNodes: indexFullNodes(tree),
+    expandedIds: new Set([tree.rootNodeId]),
+    status: "ready",
+    error: null,
+  }
+}
+
+function addAuthoritativeNode(
+  state: ConversationTreeState,
+  node: ConversationNodeView,
+  expectedParentId: string,
+): Partial<ConversationTreeState> | null {
+  if (
+    state.conversationId === null ||
+    node.conversationId !== state.conversationId ||
+    node.parentId !== expectedParentId ||
+    !Object.hasOwn(state.nodesById, expectedParentId) ||
+    Object.hasOwn(state.nodesById, node.id) ||
+    Object.hasOwn(state.fullNodes, node.id)
+  ) {
+    return null
+  }
+
+  const parentNode = state.nodesById[expectedParentId]
+  if (parentNode === undefined) return null
+
+  const nodesById = copyRecord(state.nodesById)
+  const fullNodes = copyRecord(state.fullNodes)
+  nodesById[node.id] = {
+    id: node.id,
+    parentId: expectedParentId,
+    role: node.role,
+    preview: node.content,
+    childIds: [],
+  }
+  nodesById[expectedParentId] = {
+    ...parentNode,
+    childIds: [...parentNode.childIds, node.id],
+  }
+  fullNodes[node.id] = node
+
+  const expandedIds = new Set(state.expandedIds)
+  expandedIds.add(expectedParentId)
+  expandedIds.add(node.id)
+
+  return {
+    nodesById,
+    fullNodes,
+    activeNodeId: node.id,
+    expandedIds,
+    status: "ready",
+    error: null,
+  }
+}
+
+export const useConversationStore = create<ConversationStore>((set, get) => ({
+  ...initialState,
+
+  clearError: () => {
+    const state = get()
+    set({
+      error: null,
+      status:
+        state.status === "error"
+          ? state.conversationId === null
+            ? "idle"
+            : "ready"
+          : state.status,
+    })
+  },
+
+  toggleExpanded: (nodeId) => {
+    const state = get()
+    const node = state.nodesById[nodeId]
+    if (node === undefined || node.childIds.length === 0) return
+
+    set((currentState) => {
+      const expandedIds = new Set(currentState.expandedIds)
+      if (expandedIds.has(nodeId)) expandedIds.delete(nodeId)
+      else expandedIds.add(nodeId)
+      return { expandedIds }
+    })
+  },
+
+  selectNode: (nodeId) => {
+    const state = get()
+    if (!Object.hasOwn(state.nodesById, nodeId)) return
+    const projection = selectActivePath({ ...state, activeNodeId: nodeId })
+    if (projection.kind !== "ready") return
+    set({ activeNodeId: nodeId })
+  },
+
+  loadConversation: async (client, id) => {
+    set({ status: "loading", error: null })
+    try {
+      const tree = await client.loadConversationTree(id)
+      set(loadedTreeState(tree))
+    } catch (error: unknown) {
+      set({ status: "error", error: normalizeError(error) })
+    }
+  },
+
+  createConversation: async (client, title, content) => {
+    if (get().status === "loading") return
+    set({ status: "loading", error: null })
+    try {
+      const tree = await client.createConversation({ title, content })
+      set(loadedTreeState(tree))
+    } catch (error: unknown) {
+      set({ status: "error", error: normalizeError(error) })
+    }
+  },
+
+  appendNode: async (client, content) => {
+    const state = get()
+    const activeNode = state.activeNodeId
+      ? state.nodesById[state.activeNodeId]
+      : undefined
+    if (
+      state.conversationId === null ||
+      state.activeNodeId === null ||
+      state.isArchived ||
+      state.status !== "ready" ||
+      activeNode?.role !== "assistant" ||
+      activeNode.childIds.length !== 0
+    ) {
+      return
+    }
+
+    set({ status: "loading", error: null })
+    try {
+      const node = await client.appendNode({
+        conversationId: state.conversationId,
+        parentNodeId: state.activeNodeId,
+        content,
+      })
+      const update = addAuthoritativeNode(state, node, state.activeNodeId)
+      if (update === null) {
+        set({ status: "error", error: TREE_INTEGRITY_ERROR })
+        return
+      }
+      set(update)
+    } catch (error: unknown) {
+      set({ status: "error", error: normalizeError(error) })
+    }
+  },
+
+  createBranch: async (client, parentNodeId, content) => {
+    const state = get()
+    const parentNode = state.nodesById[parentNodeId]
+    if (
+      state.conversationId === null ||
+      state.isArchived ||
+      state.status !== "ready" ||
+      parentNode?.role !== "assistant" ||
+      parentNode.childIds.length === 0
+    ) {
+      return
+    }
+
+    set({ status: "loading", error: null })
+    try {
+      const node = await client.createBranch({
+        conversationId: state.conversationId,
+        parentNodeId,
+        content,
+      })
+      const update = addAuthoritativeNode(state, node, parentNodeId)
+      if (update === null) {
+        set({ status: "error", error: TREE_INTEGRITY_ERROR })
+        return
+      }
+      set(update)
+    } catch (error: unknown) {
+      set({ status: "error", error: normalizeError(error) })
+    }
+  },
+
+  editNodeAsBranch: async (client, sourceNodeId, content) => {
+    const state = get()
+    const sourceNode = state.fullNodes[sourceNodeId]
+    const sourceParent = sourceNode?.parentId
+      ? state.fullNodes[sourceNode.parentId]
+      : undefined
+    if (
+      state.conversationId === null ||
+      state.isArchived ||
+      state.status !== "ready" ||
+      sourceNode?.role !== "user" ||
+      sourceNode.parentId === undefined ||
+      sourceParent?.role !== "assistant"
+    ) {
+      return
+    }
+
+    set({ status: "loading", error: null })
+    try {
+      const node = await client.editNodeAsBranch({
+        conversationId: state.conversationId,
+        sourceNodeId,
+        content,
+      })
+      const update = addAuthoritativeNode(state, node, sourceNode.parentId)
+      if (update === null) {
+        set({ status: "error", error: TREE_INTEGRITY_ERROR })
+        return
+      }
+      set(update)
+    } catch (error: unknown) {
+      set({ status: "error", error: normalizeError(error) })
+    }
+  },
+
+  archiveConversation: async (client) => {
+    const state = get()
+    if (
+      state.conversationId === null ||
+      state.isArchived ||
+      state.status !== "ready"
+    ) {
+      return
+    }
+
+    set({ status: "loading", error: null })
+    try {
+      const conversation = await client.archiveConversation(
+        state.conversationId,
+      )
+      if (
+        conversation.id !== state.conversationId ||
+        conversation.rootNodeId !== state.rootNodeId ||
+        !conversation.isArchived
+      ) {
+        set({ status: "error", error: TREE_INTEGRITY_ERROR })
+        return
+      }
+      set({ isArchived: true, status: "ready", error: null })
+    } catch (error: unknown) {
+      set({ status: "error", error: normalizeError(error) })
+    }
+  },
+}))
+
+function hasValidTreeShape(state: ConversationTreeState): boolean {
+  if (
+    state.conversationId === null ||
+    state.rootNodeId === null ||
+    state.activeNodeId === null
+  ) {
+    return false
+  }
+
+  const nodeIds = Object.keys(state.nodesById)
+  const fullNodeIds = Object.keys(state.fullNodes)
+  if (
+    nodeIds.length === 0 ||
+    nodeIds.length !== fullNodeIds.length ||
+    !Object.hasOwn(state.nodesById, state.rootNodeId) ||
+    !Object.hasOwn(state.fullNodes, state.rootNodeId) ||
+    !Object.hasOwn(state.nodesById, state.activeNodeId)
+  ) {
+    return false
+  }
+
+  const visited = new Set<string>()
+  const pending: Array<{ id: string; parentId: string | undefined }> = [
+    { id: state.rootNodeId, parentId: undefined },
+  ]
+
+  while (pending.length > 0) {
+    const current = pending.pop()
+    if (current === undefined || visited.has(current.id)) return false
+
+    const node = state.nodesById[current.id]
+    const fullNode = state.fullNodes[current.id]
+    if (
+      node === undefined ||
+      fullNode === undefined ||
+      node.id !== current.id ||
+      fullNode.id !== current.id ||
+      node.parentId !== current.parentId ||
+      fullNode.parentId !== current.parentId ||
+      node.role !== fullNode.role ||
+      fullNode.conversationId !== state.conversationId
+    ) {
+      return false
+    }
+
+    visited.add(current.id)
+    for (const childId of node.childIds) {
+      pending.push({ id: childId, parentId: current.id })
+    }
+  }
+
+  return (
+    visited.size === nodeIds.length &&
+    fullNodeIds.every((nodeId) => visited.has(nodeId))
+  )
+}
+
+const activePathProjectionCache = new WeakMap<
+  ConversationTreeState,
+  ActivePathProjection
+>()
+
+function cacheActivePathProjection(
+  state: ConversationTreeState,
+  projection: ActivePathProjection,
+): ActivePathProjection {
+  activePathProjectionCache.set(state, projection)
+  return projection
+}
+
+export const selectActivePath = (
+  state: ConversationTreeState,
+): ActivePathProjection => {
+  const cached = activePathProjectionCache.get(state)
+  if (cached !== undefined) return cached
+
+  const isEmpty =
+    state.conversationId === null &&
+    state.rootNodeId === null &&
+    state.activeNodeId === null &&
+    Object.keys(state.nodesById).length === 0 &&
+    Object.keys(state.fullNodes).length === 0
+  if (isEmpty) {
+    return cacheActivePathProjection(state, { kind: "empty", path: [] })
+  }
+  if (!hasValidTreeShape(state)) {
+    return cacheActivePathProjection(state, {
+      kind: "error",
+      path: [],
+      error: TREE_INTEGRITY_ERROR,
+    })
+  }
+
+  const path: PathMessageView[] = []
+  const visited = new Set<string>()
+  let currentId: string | undefined = state.activeNodeId ?? undefined
+
+  while (currentId !== undefined) {
+    if (visited.has(currentId)) {
+      return cacheActivePathProjection(state, {
+        kind: "error",
+        path: [],
+        error: TREE_INTEGRITY_ERROR,
+      })
+    }
+    visited.add(currentId)
+
+    const node = state.fullNodes[currentId]
+    if (node === undefined) {
+      return cacheActivePathProjection(state, {
+        kind: "error",
+        path: [],
+        error: TREE_INTEGRITY_ERROR,
+      })
+    }
+    path.unshift({
+      id: node.id,
+      role: node.role,
+      content: node.content,
+      ...(node.model === undefined ? {} : { model: node.model }),
+      createdAt: node.createdAt,
+      metadata: node.metadata,
+    })
+    if (currentId === state.rootNodeId) break
+    currentId = node.parentId
+  }
+
+  if (
+    path[0]?.id !== state.rootNodeId ||
+    path.at(-1)?.id !== state.activeNodeId
+  ) {
+    return cacheActivePathProjection(state, {
+      kind: "error",
+      path: [],
+      error: TREE_INTEGRITY_ERROR,
+    })
+  }
+  return cacheActivePathProjection(state, { kind: "ready", path })
+}
