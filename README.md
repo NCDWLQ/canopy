@@ -5,7 +5,7 @@ Canopy is a local-first desktop application foundation built with React, TypeScr
 ## Prerequisites
 
 - Node.js 24.x
-- pnpm 11.12.0
+- pnpm 11.21.0
 - Rust 1.97.1 (selected automatically by `rust-toolchain.toml`)
 - The [Tauri Linux system dependencies](https://v2.tauri.app/start/prerequisites/#linux) for your distribution
 
