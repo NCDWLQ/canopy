@@ -1,0 +1,12 @@
+{"file":".trellis/spec/backend/index.md","reason":"Backend layer index and routing for the SQLite/Tauri changes."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Repository/service ownership, deterministic SQL, managed-pool and migration compatibility contracts."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Safe persistence and command error mapping for discovery failures."}
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend layer index and routing for typed restore work."}
+{"file":".trellis/spec/frontend/state-management.md","reason":"SQLite authority, Zustand projection, rehydration, and no browser-persistence rules."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Strict IPC fixture, Zod validation, DTO projection, and command-boundary requirements."}
+{"file":".trellis/spec/frontend/hook-guidelines.md","reason":"Startup effect and stale async completion conventions."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Workspace composition, accessible sidebar state, and archived-readonly behavior."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"End-to-end source/retrieve/store/display contract review."}
+{"file":".trellis/tasks/08-10-fix-history-restore-after-restart/research/backend-persistence.md","reason":"Confirmed durable storage behavior, missing discovery root cause, and backend test gaps."}
+{"file":".trellis/tasks/08-10-fix-history-restore-after-restart/research/frontend-restore.md","reason":"Confirmed startup hydration gap, UI/store races, and frontend regression requirements."}
+{"file":".trellis/tasks/08-10-fix-history-restore-after-restart/research/regression-history.md","reason":"Commit evidence and smallest user-visible regression test."}

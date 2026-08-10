@@ -1,0 +1,9 @@
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Rust integration, real-migration, deterministic fixture, and lint/test quality gate."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Verify managed-pool SQL ownership, ordering, compatibility, and file-backed durability."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Verify safe discovery error mapping and retryability."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Behavioral UI/store regression standards and full frontend validation gate."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Verify exact cross-language IPC contract and fail-closed schema decoding."}
+{"file":".trellis/spec/frontend/state-management.md","reason":"Verify SQLite-only durability, race-safe hydration, and projection invariants."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Verify discovery payload consistency across database, Rust, IPC, store, and UI."}
+{"file":".trellis/tasks/08-10-fix-history-restore-after-restart/research/backend-persistence.md","reason":"Root-cause evidence and required restart-boundary checks."}
+{"file":".trellis/tasks/08-10-fix-history-restore-after-restart/research/frontend-restore.md","reason":"Startup, StrictMode, switching, and sibling-isolation verification inventory."}
