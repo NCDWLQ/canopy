@@ -147,6 +147,7 @@ append_node(NewNode) -> Result<Node, PersistenceError>
 append_user_node(NewNode) -> Result<Node, PersistenceError>
 create_branch(NewNode) -> Result<Node, PersistenceError>
 edit_node_as_branch(&str, NewNode) -> Result<Node, PersistenceError>
+list_conversations() -> Result<Vec<ConversationSummary>, PersistenceError>
 load_conversation_tree(&str) -> Result<ConversationTree, PersistenceError>
 load_active_path(&str, &str) -> Result<ValidatedPath, PersistenceError>
 archive_conversation(&str) -> Result<Conversation, PersistenceError>
@@ -170,6 +171,8 @@ production UUID/time generation and end-user input policy.
 - Metadata crosses the domain boundary as `serde_json::Value` and is stored as
   canonical compact JSON with recursively sorted object keys.
 - Only validated query results can construct `ValidatedPath`.
+- Conversation discovery derives `updated_at` from `MAX(nodes.created_at)`
+  and orders every active and archived summary by `updated_at DESC, id ASC`.
 
 ### 4. Validation & Error Matrix
 

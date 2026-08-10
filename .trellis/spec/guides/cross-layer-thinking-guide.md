@@ -100,6 +100,25 @@ create one owner for:
 
 Rendering code may format fields, but it must not redefine the payload contract.
 
+### Mistake 5: Durable Writes Without Cold-Start Discovery
+
+**Bad**: Prove that records survive in SQLite and that a loader works when an
+ID is supplied, but keep that ID only in an in-memory UI store. The feature
+works until the renderer or application restarts, then durable records become
+undiscoverable.
+
+**Good**: For every durable aggregate, trace both flows independently:
+
+```text
+write -> durable store
+cold start -> discover IDs/summaries -> select -> load -> display
+```
+
+Keep discovery behind the same typed boundary as loading, distinguish loading,
+empty, and error states, and test with a fresh client/store plus a reopened
+file-backed database. Do not patch the gap with a second browser-side source of
+truth.
+
 ---
 
 ## Checklist for Cross-Layer Features
@@ -120,6 +139,10 @@ After implementation:
       casting payload fields locally
 - [ ] Checked that derived state points back to the source event identifier
       (`seq`, `id`, `version`) instead of inventing a second cursor
+- [ ] For durable data projected into memory, tested cold-start discovery from
+      an empty process/store without carrying IDs from the writer session
+- [ ] Distinguished "no durable records" from "discovery failed" and kept the
+      UI in loading until the selected authoritative record is installed
 
 ---
 

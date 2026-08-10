@@ -15,7 +15,7 @@ sources of truth.
 | State | Owner | Examples |
 |---|---|---|
 | Durable domain state | SQLite through Rust repositories | conversations and immutable nodes; archive state belongs to conversations |
-| Loaded client projection | conversation Zustand store | normalized nodes, root ID, active node ID |
+| Loaded client projection | conversation Zustand store | ordered history summaries, normalized nodes, root ID, active node ID |
 | Transient feature UI | feature store or local component state | expanded IDs, loading/streaming status |
 | Ephemeral control state | local component state | open menu, draft field, dialog visibility |
 | Provider secrets | native/provider boundary | never persisted in Zustand or browser storage |
@@ -66,6 +66,13 @@ decoded and projected before entering the store.
   records. Reload durable state from SQLite through typed commands.
 - Do not issue SQL from the webview even though the Tauri SQL plugin is
   installed.
+- On startup, discover summaries through the typed client, prefer the first
+  unarchived summary in durable activity order (falling back to the first
+  archived summary), and keep discovery `loading` until its tree is installed.
+- Use a monotonic request epoch so StrictMode initialization and stale
+  list/tree responses cannot replace a later selection or newly created tree.
+- A loaded tree selects the greatest leaf by `(createdAt, id)`; this restores a
+  deterministic latest path without claiming to persist the prior UI cursor.
 - A failed load preserves the last safe visible projection when possible and
   records a normalized `UiError`; it never substitutes another branch.
 - After a successful branch/edit command, merge the returned node and select

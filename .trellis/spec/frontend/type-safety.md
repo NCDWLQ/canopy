@@ -69,6 +69,7 @@ createConversation({ title, content }): Promise<ConversationTreeView>
 appendNode({ conversationId, parentNodeId, content }): Promise<ConversationNodeView>
 createBranch({ conversationId, parentNodeId, content }): Promise<ConversationNodeView>
 editNodeAsBranch({ conversationId, sourceNodeId, content }): Promise<ConversationNodeView>
+listConversations(): Promise<readonly ConversationSummaryView[]>
 loadConversationTree(conversationId): Promise<ConversationTreeView>
 loadActivePath(conversationId, activeNodeId): Promise<ActivePathView>
 archiveConversation(conversationId): Promise<ConversationView>
@@ -76,7 +77,8 @@ archiveConversation(conversationId): Promise<ConversationView>
 
 These map to the frozen snake-case commands `create_conversation`,
 `append_node`, `create_branch`, `edit_node_as_branch`,
-`load_conversation_tree`, `load_active_path`, and `archive_conversation`.
+`list_conversations`, `load_conversation_tree`, `load_active_path`, and
+`archive_conversation`.
 
 ### 3. Contracts
 
@@ -85,6 +87,8 @@ These map to the frozen snake-case commands `create_conversation`,
   `src/lib/tauri` converts them to optional camelCase feature properties.
 - Node DTOs contain no archive field. `ConversationView.isArchived` is the only
   archive state exposed to frontend code.
+- Conversation summary arrays validate safe-integer activity timestamps and
+  reject duplicate conversation IDs before entering feature state.
 - `ConversationTreeView.nodesById` is prototype-free and every returned node
   must be reachable exactly once from `rootNodeId`.
 - `contract-fixtures/conversation-ipc.json` is consumed by both Rust and
@@ -114,8 +118,10 @@ Content limits use UTF-8 byte length, not JavaScript UTF-16 code units.
 
 ### 6. Tests Required
 
-- Assert all seven command names, the outer `request` wrapper, and exact
-  snake-case request fields through an injected transport.
+- Assert all eight command names, the outer `request` wrapper, and exact
+  snake-case request fields through an injected transport. For discovery,
+  also assert deterministic summary ordering, safe timestamps, and duplicate
+  ID rejection.
 - Decode every shared success fixture and reject malformed conversation, node,
   tree, and active-path fixtures.
 - Exercise all public error codes, malformed errors, nullability, nested
