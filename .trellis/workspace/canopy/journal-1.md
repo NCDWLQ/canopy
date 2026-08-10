@@ -145,3 +145,24 @@ Integrated redacted provider settings and strict streamed generation into the tr
 ### Status
 
 [OK] **Completed**
+
+
+## Session 7: Integrate workspace and fix AppImage rendering
+
+**Date**: 2026-08-10
+**Task**: Integrate workspace and fix AppImage rendering
+**Branch**: `main`
+
+### Summary
+
+Fast-forwarded the completed Conversation Workspace and provider generation UI into main, fixed NVIDIA/WebKitGTK DMA-BUF blank rendering before Tauri initialization, passed 54 frontend and 46 Rust tests plus lint/type/build gates, and generated and visually verified the complete AppImage.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5044b5f` | (see git log) |
+
+### Status
+
+[OK] **Completed**
