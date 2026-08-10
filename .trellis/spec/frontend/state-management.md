@@ -77,8 +77,9 @@ decoded and projected before entering the store.
 
 Use this contract when a workspace action consumes the typed provider client,
 renders streamed assistant content, automatically acknowledges
-`ready_to_commit`, cancels generation during navigation, or reconciles an
-ambiguous acknowledged commit.
+`ready_to_commit`, starts generation after authoritative user-message
+persistence, cancels generation during navigation, or reconciles an ambiguous
+acknowledged commit.
 
 ### 2. Signatures
 
@@ -105,6 +106,15 @@ grace period is 1,500 milliseconds and is injectable in tests.
   Zustand field, response, error, log, or browser-persisted value.
 - Generation deltas live only in `GenerationState.content`. They never enter
   `nodesById`, `fullNodes`, the durable active path, or the outline.
+- Creating a conversation or appending a user message starts generation only
+  after the corresponding typed persistence call returns authoritative data and
+  the store accepts that exact conversation/user node as the current target.
+  Capture the target IDs from that persistence result, then re-read the live
+  conversation and provider stores; never infer success from mutable post-await
+  state or a changed object reference. A replaced target, unmounted controller,
+  unavailable provider, unsafe path, or active run suppresses auto-start while
+  leaving the persisted user message intact. Manual Generate remains the retry
+  path.
 - A monotonically changing UI `runId` rejects stale callbacks. Conversation,
   selected user parent, generation ID, model, and current safe path must still
   match before `ready_to_commit` changes the phase to `committing`.
@@ -131,6 +141,8 @@ grace period is 1,500 milliseconds and is injectable in tests.
 |---|---|
 | Provider missing/loading/error | Generation disabled; local conversation actions retain their normal capability |
 | Archived conversation, unsafe path, non-user selection, or active run | Generation rejected locally |
+| Create/append returns and the exact authoritative user target remains active | Start one generation from that target |
+| Persistence fails, target is replaced, controller unmounts, or provider becomes unavailable while awaiting | Keep any authoritative persisted state; do not auto-start generation |
 | Navigation/unmount before acknowledgement | Invalidate the run, discard transient content, best-effort exact cancel when the ID is known |
 | Exact ready for a current writable user path | Enter committing, pass the callback-local token once |
 | Commit returns `accepted: false` | Retryable failed state; no durable node |
@@ -144,17 +156,24 @@ grace period is 1,500 milliseconds and is injectable in tests.
   path, transient content appears outside the tree, and the exact completed
   assistant becomes one new child without changing its sibling.
 - **Base**: no provider profile disables Generate but still permits creating,
-  loading, navigating, and reading local conversations.
+  appending, loading, navigating, and reading local conversations; saved user
+  messages remain available without automatic generation.
 - **Bad**: inserting deltas optimistically, saving a commit token in Zustand,
-  cancelling because the start promise resolved after an exact completed
-  event, or declaring failure because an early reconciliation reload did not
-  yet observe the commit.
+  starting generation from whichever node happens to be active after an awaited
+  persistence call, cancelling because the start promise resolved after an
+  exact completed event, or declaring failure because an early reconciliation
+  reload did not yet observe the commit.
 
 ### 6. Tests Required
 
 - Assert pre-ready deltas change transient content while both normalized maps
   remain unchanged; assert the sibling sentinel is absent from the request and
   rendered path.
+- For create and append, assert persistence resolves before generation, the
+  exact returned conversation/user IDs are used, and generation occurs once.
+  Cover persistence failure, invalid authoritative data, provider changes while
+  awaiting, target replacement, unmount, an already-active run, and manual retry
+  after a generation-start failure.
 - Cover started-before-result and result-before-started, completed-before-
   commit-result, completed-before-start-result, cancel-before-start, stale
   ready, commit rejection, commit transport ambiguity, and exact completion
