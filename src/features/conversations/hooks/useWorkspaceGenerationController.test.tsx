@@ -2,7 +2,7 @@ import { act, renderHook, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { useWorkspaceGenerationController } from "./useWorkspaceGenerationController"
-import { useConversationStore } from "../store"
+import { selectActivePath, useConversationStore } from "../store"
 import type {
   ConversationNodeView,
   ConversationTreeView,
@@ -101,6 +101,106 @@ const tree: ConversationTreeView = {
   },
 }
 
+const inactiveAssistant: ConversationNodeView = {
+  id: "inactive-assistant",
+  parentId: root.id,
+  conversationId: conversation.id,
+  role: "assistant",
+  content: "INACTIVE_ASSISTANT_SENTINEL",
+  model: "old-model",
+  createdAt: 2,
+  metadata: null,
+}
+
+const appendableTree: ConversationTreeView = {
+  ...tree,
+  nodes: [root, inactiveAssistant, assistant],
+  nodesById: {
+    root: {
+      ...tree.nodesById.root!,
+      childIds: [inactiveAssistant.id, assistant.id],
+    },
+    [inactiveAssistant.id]: {
+      id: inactiveAssistant.id,
+      parentId: root.id,
+      role: inactiveAssistant.role,
+      preview: inactiveAssistant.content,
+      childIds: [],
+    },
+    assistant: { ...tree.nodesById.assistant!, childIds: [] },
+  },
+}
+
+const appendedUser: ConversationNodeView = {
+  id: "appended-user",
+  parentId: assistant.id,
+  conversationId: conversation.id,
+  role: "user",
+  content: "APPENDED_USER_SENTINEL",
+  createdAt: 5,
+  metadata: null,
+}
+
+const createdConversation: ConversationView = {
+  id: "created-conversation",
+  title: "Created conversation",
+  rootNodeId: "created-root",
+  isArchived: false,
+}
+
+const createdRoot: ConversationNodeView = {
+  id: createdConversation.rootNodeId,
+  conversationId: createdConversation.id,
+  role: "user",
+  content: "CREATED_ROOT_SENTINEL",
+  createdAt: 10,
+  metadata: null,
+}
+
+const createdTree: ConversationTreeView = {
+  conversation: createdConversation,
+  rootNodeId: createdRoot.id,
+  nodes: [createdRoot],
+  nodesById: {
+    [createdRoot.id]: {
+      id: createdRoot.id,
+      role: createdRoot.role,
+      preview: createdRoot.content,
+      childIds: [],
+    },
+  },
+}
+
+const replacementConversation: ConversationView = {
+  id: "replacement-conversation",
+  title: "Replacement conversation",
+  rootNodeId: "replacement-root",
+  isArchived: false,
+}
+
+const replacementRoot: ConversationNodeView = {
+  id: replacementConversation.rootNodeId,
+  conversationId: replacementConversation.id,
+  role: "user",
+  content: "REPLACEMENT_ROOT_SENTINEL",
+  createdAt: 11,
+  metadata: null,
+}
+
+const replacementTree: ConversationTreeView = {
+  conversation: replacementConversation,
+  rootNodeId: replacementRoot.id,
+  nodes: [replacementRoot],
+  nodesById: {
+    [replacementRoot.id]: {
+      id: replacementRoot.id,
+      role: replacementRoot.role,
+      preview: replacementRoot.content,
+      childIds: [],
+    },
+  },
+}
+
 const profile: ProviderProfileView = {
   baseEndpoint: "http://127.0.0.1:7788/v1",
   model: "fixture-model",
@@ -137,6 +237,21 @@ function createProviderClient() {
       .mockResolvedValue({ accepted: true }),
     commitGeneration: vi.fn<ProviderClient["commitGeneration"]>(),
   } satisfies ProviderClient
+}
+
+function resetConversationStore() {
+  useConversationStore.setState({
+    conversationId: null,
+    isArchived: false,
+    rootNodeId: null,
+    activeNodeId: null,
+    nodesById: {},
+    fullNodes: {},
+    expandedIds: new Set(),
+    status: "idle",
+    error: null,
+    generation: { phase: "idle" },
+  })
 }
 
 function deferred<T>() {
@@ -179,24 +294,376 @@ describe("workspace generation controller", () => {
   beforeEach(async () => {
     conversationClient = createConversationClient()
     providerClient = createProviderClient()
-    useConversationStore.setState({
-      conversationId: null,
-      isArchived: false,
-      rootNodeId: null,
-      activeNodeId: null,
-      nodesById: {},
-      fullNodes: {},
-      expandedIds: new Set(),
-      status: "idle",
-      error: null,
-      generation: { phase: "idle" },
-    })
+    resetConversationStore()
     useProviderProfileStore.setState({ phase: "ready", profile })
     await useConversationStore
       .getState()
       .loadConversation(conversationClient, conversation.id)
     useConversationStore.getState().selectNode(right.id)
     conversationClient.loadConversationTree.mockClear()
+  })
+
+  it("starts generation once from an appended user only after persistence", async () => {
+    conversationClient.loadConversationTree.mockResolvedValueOnce(
+      appendableTree,
+    )
+    await useConversationStore
+      .getState()
+      .loadConversation(conversationClient, conversation.id)
+    useConversationStore.getState().selectNode(assistant.id)
+    const append = deferred<ConversationNodeView>()
+    const start = deferred<{ generationId: string }>()
+    conversationClient.appendNode.mockReturnValueOnce(append.promise)
+    providerClient.generateFromActivePath.mockReturnValueOnce(start.promise)
+    const { result } = renderHook(() =>
+      useWorkspaceGenerationController({ conversationClient, providerClient }),
+    )
+
+    let appendOperation!: Promise<void>
+    act(() => {
+      appendOperation = result.current.appendNode(appendedUser.content)
+    })
+    expect(conversationClient.appendNode).toHaveBeenCalledWith({
+      conversationId: conversation.id,
+      parentNodeId: assistant.id,
+      content: appendedUser.content,
+    })
+    expect(providerClient.generateFromActivePath).not.toHaveBeenCalled()
+
+    await act(async () => {
+      append.resolve(appendedUser)
+      await appendOperation
+    })
+
+    expect(useConversationStore.getState().activeNodeId).toBe(appendedUser.id)
+    const activePath = selectActivePath(useConversationStore.getState())
+    expect(activePath.kind).toBe("ready")
+    expect(activePath.path.map((node) => node.id)).toEqual([
+      root.id,
+      assistant.id,
+      appendedUser.id,
+    ])
+    expect(activePath.path.map((node) => node.id)).not.toContain(
+      inactiveAssistant.id,
+    )
+    expect(providerClient.generateFromActivePath).toHaveBeenCalledTimes(1)
+    expect(providerClient.generateFromActivePath).toHaveBeenCalledWith(
+      conversation.id,
+      appendedUser.id,
+      expect.any(Function),
+    )
+
+    act(() => result.current.generate())
+    expect(providerClient.generateFromActivePath).toHaveBeenCalledTimes(1)
+  })
+
+  it("starts generation once from a created conversation only after persistence", async () => {
+    resetConversationStore()
+    const create = deferred<ConversationTreeView>()
+    const start = deferred<{ generationId: string }>()
+    conversationClient.createConversation.mockReturnValueOnce(create.promise)
+    providerClient.generateFromActivePath.mockReturnValueOnce(start.promise)
+    const { result } = renderHook(() =>
+      useWorkspaceGenerationController({ conversationClient, providerClient }),
+    )
+
+    let createOperation!: Promise<void>
+    act(() => {
+      createOperation = result.current.createConversation(
+        createdConversation.title,
+        createdRoot.content,
+      )
+    })
+    expect(conversationClient.createConversation).toHaveBeenCalledWith({
+      title: createdConversation.title,
+      content: createdRoot.content,
+    })
+    expect(providerClient.generateFromActivePath).not.toHaveBeenCalled()
+
+    await act(async () => {
+      create.resolve(createdTree)
+      await createOperation
+    })
+
+    expect(useConversationStore.getState().activeNodeId).toBe(createdRoot.id)
+    expect(providerClient.generateFromActivePath).toHaveBeenCalledTimes(1)
+    expect(providerClient.generateFromActivePath).toHaveBeenCalledWith(
+      createdConversation.id,
+      createdRoot.id,
+      expect.any(Function),
+    )
+  })
+
+  it("does not generate when conversation creation fails", async () => {
+    resetConversationStore()
+    conversationClient.createConversation.mockRejectedValueOnce(
+      new ConversationCommandError({
+        code: "database_unavailable",
+        message: "Conversation could not be saved.",
+        retryable: true,
+      }),
+    )
+    const { result } = renderHook(() =>
+      useWorkspaceGenerationController({ conversationClient, providerClient }),
+    )
+
+    await act(async () => {
+      await result.current.createConversation(
+        createdConversation.title,
+        createdRoot.content,
+      )
+    })
+
+    expect(useConversationStore.getState()).toMatchObject({
+      conversationId: null,
+      activeNodeId: null,
+      status: "error",
+    })
+    expect(providerClient.generateFromActivePath).not.toHaveBeenCalled()
+  })
+
+  it("does not generate when an appended node fails authoritative validation", async () => {
+    conversationClient.loadConversationTree.mockResolvedValueOnce(
+      appendableTree,
+    )
+    await useConversationStore
+      .getState()
+      .loadConversation(conversationClient, conversation.id)
+    useConversationStore.getState().selectNode(assistant.id)
+    conversationClient.appendNode.mockResolvedValueOnce({
+      ...appendedUser,
+      parentId: root.id,
+    })
+    const { result } = renderHook(() =>
+      useWorkspaceGenerationController({ conversationClient, providerClient }),
+    )
+
+    await act(async () => {
+      await result.current.appendNode(appendedUser.content)
+    })
+
+    expect(useConversationStore.getState().status).toBe("error")
+    expect(useConversationStore.getState().activeNodeId).toBe(assistant.id)
+    expect(providerClient.generateFromActivePath).not.toHaveBeenCalled()
+  })
+
+  it("does not generate when appending a node fails", async () => {
+    conversationClient.loadConversationTree.mockResolvedValueOnce(
+      appendableTree,
+    )
+    await useConversationStore
+      .getState()
+      .loadConversation(conversationClient, conversation.id)
+    useConversationStore.getState().selectNode(assistant.id)
+    conversationClient.appendNode.mockRejectedValueOnce(
+      new ConversationCommandError({
+        code: "database_unavailable",
+        message: "Message could not be saved.",
+        retryable: true,
+      }),
+    )
+    const { result } = renderHook(() =>
+      useWorkspaceGenerationController({ conversationClient, providerClient }),
+    )
+
+    await act(async () => {
+      await result.current.appendNode(appendedUser.content)
+    })
+
+    expect(useConversationStore.getState()).toMatchObject({
+      conversationId: conversation.id,
+      activeNodeId: assistant.id,
+      status: "error",
+    })
+    expect(providerClient.generateFromActivePath).not.toHaveBeenCalled()
+  })
+
+  it("persists an appended user without generating when the provider is unavailable", async () => {
+    conversationClient.loadConversationTree.mockResolvedValueOnce(
+      appendableTree,
+    )
+    await useConversationStore
+      .getState()
+      .loadConversation(conversationClient, conversation.id)
+    useConversationStore.getState().selectNode(assistant.id)
+    useProviderProfileStore.setState({ phase: "idle", profile: null })
+    conversationClient.appendNode.mockResolvedValueOnce(appendedUser)
+    const { result } = renderHook(() =>
+      useWorkspaceGenerationController({ conversationClient, providerClient }),
+    )
+
+    await act(async () => {
+      await result.current.appendNode(appendedUser.content)
+    })
+
+    expect(useConversationStore.getState().activeNodeId).toBe(appendedUser.id)
+    expect(useConversationStore.getState().fullNodes[appendedUser.id]).toEqual(
+      appendedUser,
+    )
+    expect(providerClient.generateFromActivePath).not.toHaveBeenCalled()
+  })
+
+  it("rechecks provider availability after append persistence", async () => {
+    conversationClient.loadConversationTree.mockResolvedValueOnce(
+      appendableTree,
+    )
+    await useConversationStore
+      .getState()
+      .loadConversation(conversationClient, conversation.id)
+    useConversationStore.getState().selectNode(assistant.id)
+    const append = deferred<ConversationNodeView>()
+    conversationClient.appendNode.mockReturnValueOnce(append.promise)
+    const { result } = renderHook(() =>
+      useWorkspaceGenerationController({ conversationClient, providerClient }),
+    )
+
+    let appendOperation!: Promise<void>
+    act(() => {
+      appendOperation = result.current.appendNode(appendedUser.content)
+    })
+    useProviderProfileStore.setState({ phase: "idle", profile: null })
+
+    await act(async () => {
+      append.resolve(appendedUser)
+      await appendOperation
+    })
+
+    expect(useConversationStore.getState().activeNodeId).toBe(appendedUser.id)
+    expect(providerClient.generateFromActivePath).not.toHaveBeenCalled()
+  })
+
+  it("does not generate from state that replaces the exact created result", async () => {
+    resetConversationStore()
+    conversationClient.createConversation.mockResolvedValueOnce(createdTree)
+    const unsubscribe = useConversationStore.subscribe((state) => {
+      if (state.conversationId === createdConversation.id) {
+        useConversationStore.setState({
+          conversationId: replacementConversation.id,
+          isArchived: false,
+          rootNodeId: replacementRoot.id,
+          activeNodeId: replacementRoot.id,
+          nodesById: replacementTree.nodesById,
+          fullNodes: { [replacementRoot.id]: replacementRoot },
+          expandedIds: new Set([replacementRoot.id]),
+          status: "ready",
+          error: null,
+          generation: { phase: "idle" },
+        })
+      }
+    })
+    const { result } = renderHook(() =>
+      useWorkspaceGenerationController({ conversationClient, providerClient }),
+    )
+
+    await act(async () => {
+      await result.current.createConversation(
+        createdConversation.title,
+        createdRoot.content,
+      )
+    })
+    unsubscribe()
+
+    expect(useConversationStore.getState().conversationId).toBe(
+      replacementConversation.id,
+    )
+    expect(providerClient.generateFromActivePath).not.toHaveBeenCalled()
+  })
+
+  it("does not start generation after unmount while append is pending", async () => {
+    conversationClient.loadConversationTree.mockResolvedValueOnce(
+      appendableTree,
+    )
+    await useConversationStore
+      .getState()
+      .loadConversation(conversationClient, conversation.id)
+    useConversationStore.getState().selectNode(assistant.id)
+    const append = deferred<ConversationNodeView>()
+    conversationClient.appendNode.mockReturnValueOnce(append.promise)
+    const { result, unmount } = renderHook(() =>
+      useWorkspaceGenerationController({ conversationClient, providerClient }),
+    )
+
+    let appendOperation!: Promise<void>
+    act(() => {
+      appendOperation = result.current.appendNode(appendedUser.content)
+    })
+    unmount()
+
+    await act(async () => {
+      append.resolve(appendedUser)
+      await appendOperation
+    })
+
+    expect(useConversationStore.getState().activeNodeId).toBe(appendedUser.id)
+    expect(providerClient.generateFromActivePath).not.toHaveBeenCalled()
+  })
+
+  it("does not generate from an unsafe created tree", async () => {
+    resetConversationStore()
+    conversationClient.createConversation.mockResolvedValueOnce({
+      ...createdTree,
+      nodesById: {
+        [createdRoot.id]: {
+          ...createdTree.nodesById[createdRoot.id]!,
+          childIds: ["missing-child"],
+        },
+      },
+    })
+    const { result } = renderHook(() =>
+      useWorkspaceGenerationController({ conversationClient, providerClient }),
+    )
+
+    await act(async () => {
+      await result.current.createConversation(
+        createdConversation.title,
+        createdRoot.content,
+      )
+    })
+
+    expect(useConversationStore.getState().activeNodeId).toBe(createdRoot.id)
+    expect(providerClient.generateFromActivePath).not.toHaveBeenCalled()
+  })
+
+  it("keeps the saved user selected and allows manual retry after start failure", async () => {
+    conversationClient.loadConversationTree.mockResolvedValueOnce(
+      appendableTree,
+    )
+    await useConversationStore
+      .getState()
+      .loadConversation(conversationClient, conversation.id)
+    useConversationStore.getState().selectNode(assistant.id)
+    conversationClient.appendNode.mockResolvedValueOnce(appendedUser)
+    providerClient.generateFromActivePath
+      .mockRejectedValueOnce(
+        new ConversationCommandError({
+          code: "provider_unavailable",
+          message: "Provider unavailable.",
+          retryable: true,
+        }),
+      )
+      .mockReturnValueOnce(deferred<{ generationId: string }>().promise)
+    const { result } = renderHook(() =>
+      useWorkspaceGenerationController({ conversationClient, providerClient }),
+    )
+
+    await act(async () => {
+      await result.current.appendNode(appendedUser.content)
+    })
+    await waitFor(() => {
+      expect(useConversationStore.getState().generation.phase).toBe("failed")
+    })
+
+    expect(useConversationStore.getState().activeNodeId).toBe(appendedUser.id)
+    expect(useConversationStore.getState().fullNodes[appendedUser.id]).toEqual(
+      appendedUser,
+    )
+    act(() => result.current.generate())
+    expect(providerClient.generateFromActivePath).toHaveBeenCalledTimes(2)
+    expect(providerClient.generateFromActivePath).toHaveBeenLastCalledWith(
+      conversation.id,
+      appendedUser.id,
+      expect.any(Function),
+    )
   })
 
   it("merges completed before the commit call resolves and never stores the token", async () => {

@@ -6,7 +6,11 @@ import {
   selectActivePath,
   useConversationStore,
 } from "../store"
-import type { UiError } from "../types"
+import type {
+  ConversationNodeView,
+  ConversationTreeView,
+  UiError,
+} from "../types"
 import { useProviderProfileStore } from "@/features/providers/store"
 import type { GenerationEventView } from "@/features/providers/types"
 import type { ConversationClient, ProviderClient } from "@/lib/tauri"
@@ -46,6 +50,11 @@ export type WorkspaceGenerationController = {
   retryReconciliation: () => void
 }
 
+type GenerationTarget = {
+  conversationId: string
+  parentNodeId: string
+}
+
 export function useWorkspaceGenerationController({
   conversationClient,
   providerClient,
@@ -65,6 +74,7 @@ export function useWorkspaceGenerationController({
   const cancelRequestedRuns = React.useRef(new Set<number>())
   const cancelSentIds = React.useRef(new Set<string>())
   const generationIds = React.useRef(new Map<number, string>())
+  const isMounted = React.useRef(false)
   const reconciliationTimers = React.useRef(
     new Map<number, ReturnType<typeof setTimeout>>(),
   )
@@ -212,53 +222,69 @@ export function useWorkspaceGenerationController({
     if (generationId !== undefined) requestExactCancellation(generationId)
   }, [requestExactCancellation])
 
-  const generate = React.useCallback(() => {
-    if (providerPhase !== "ready") return
-    const runId = useConversationStore.getState().beginGeneration()
-    if (runId === null) return
-    const current = useConversationStore.getState().generation
-    if (current.phase !== "starting" || current.runId !== runId) return
+  const startGeneration = React.useCallback(
+    (expectedTarget?: GenerationTarget) => {
+      if (!isMounted.current) return
+      if (useProviderProfileStore.getState().phase !== "ready") return
+      const store = useConversationStore.getState()
+      if (
+        expectedTarget !== undefined &&
+        (store.conversationId !== expectedTarget.conversationId ||
+          store.activeNodeId !== expectedTarget.parentNodeId)
+      ) {
+        return
+      }
+      const runId = store.beginGeneration()
+      if (runId === null) return
+      const current = useConversationStore.getState().generation
+      if (current.phase !== "starting" || current.runId !== runId) return
 
-    void providerClient
-      .generateFromActivePath(
-        current.conversationId,
-        current.parentNodeId,
-        (event) => handleEvent(runId, event),
-      )
-      .then(({ generationId }) => {
-        generationIds.current.set(runId, generationId)
-        const store = useConversationStore.getState()
-        const current = store.generation
-        if (
-          cancelRequestedRuns.current.has(runId) ||
-          current.phase === "idle" ||
-          current.runId !== runId ||
-          current.phase === "cancelled"
-        ) {
-          requestExactCancellation(generationId)
-          return
-        }
-        if (
-          current.phase === "starting" &&
-          !store.recordGenerationId(runId, generationId)
-        ) {
-          requestExactCancellation(generationId)
-          return
-        }
-        if (
-          isGenerationActive(current) &&
-          current.generationId !== undefined &&
-          current.generationId !== generationId
-        ) {
-          requestExactCancellation(generationId)
-        }
-      })
-      .catch((error: unknown) => {
-        useConversationStore
-          .getState()
-          .failGeneration(runId, normalizeUiError(error))
-      })
-  }, [handleEvent, providerClient, providerPhase, requestExactCancellation])
+      void providerClient
+        .generateFromActivePath(
+          current.conversationId,
+          current.parentNodeId,
+          (event) => handleEvent(runId, event),
+        )
+        .then(({ generationId }) => {
+          generationIds.current.set(runId, generationId)
+          const store = useConversationStore.getState()
+          const current = store.generation
+          if (
+            cancelRequestedRuns.current.has(runId) ||
+            current.phase === "idle" ||
+            current.runId !== runId ||
+            current.phase === "cancelled"
+          ) {
+            requestExactCancellation(generationId)
+            return
+          }
+          if (
+            current.phase === "starting" &&
+            !store.recordGenerationId(runId, generationId)
+          ) {
+            requestExactCancellation(generationId)
+            return
+          }
+          if (
+            isGenerationActive(current) &&
+            current.generationId !== undefined &&
+            current.generationId !== generationId
+          ) {
+            requestExactCancellation(generationId)
+          }
+        })
+        .catch((error: unknown) => {
+          useConversationStore
+            .getState()
+            .failGeneration(runId, normalizeUiError(error))
+        })
+    },
+    [handleEvent, providerClient, requestExactCancellation],
+  )
+
+  const generate = React.useCallback(() => {
+    startGeneration()
+  }, [startGeneration])
 
   const prepareMutation = React.useCallback(() => {
     const current = useConversationStore.getState().generation
@@ -269,8 +295,11 @@ export function useWorkspaceGenerationController({
     return true
   }, [cancel])
 
-  React.useEffect(
-    () => () => {
+  React.useEffect(() => {
+    isMounted.current = true
+    const timers = reconciliationTimers.current
+    return () => {
+      isMounted.current = false
       const current = useConversationStore.getState().generation
       if (current.phase === "starting" || current.phase === "streaming") {
         cancel()
@@ -285,13 +314,12 @@ export function useWorkspaceGenerationController({
       } else if (current.phase === "reconciling") {
         void reconcile(current.runId)
       }
-      for (const timer of reconciliationTimers.current.values()) {
+      for (const timer of timers.values()) {
         clearTimeout(timer)
       }
-      reconciliationTimers.current.clear()
-    },
-    [cancel, reconcile],
-  )
+      timers.clear()
+    }
+  }, [cancel, reconcile])
 
   const mutationLocked =
     generation.phase === "committing" || generation.phase === "reconciling"
@@ -341,9 +369,23 @@ export function useWorkspaceGenerationController({
     },
     createConversation: async (title, content) => {
       if (!prepareMutation()) return
+      let authoritativeTree: ConversationTreeView | undefined
+      const trackingClient: ConversationClient = {
+        ...conversationClient,
+        createConversation: async (input) => {
+          const tree = await conversationClient.createConversation(input)
+          authoritativeTree = tree
+          return tree
+        },
+      }
       await useConversationStore
         .getState()
-        .createConversation(conversationClient, title, content)
+        .createConversation(trackingClient, title, content)
+      if (authoritativeTree === undefined) return
+      startGeneration({
+        conversationId: authoritativeTree.conversation.id,
+        parentNodeId: authoritativeTree.rootNodeId,
+      })
     },
     loadConversation: async (id) => {
       if (!prepareMutation()) return
@@ -353,9 +395,21 @@ export function useWorkspaceGenerationController({
     },
     appendNode: async (content) => {
       if (!prepareMutation()) return
-      await useConversationStore
-        .getState()
-        .appendNode(conversationClient, content)
+      let authoritativeNode: ConversationNodeView | undefined
+      const trackingClient: ConversationClient = {
+        ...conversationClient,
+        appendNode: async (input) => {
+          const node = await conversationClient.appendNode(input)
+          authoritativeNode = node
+          return node
+        },
+      }
+      await useConversationStore.getState().appendNode(trackingClient, content)
+      if (authoritativeNode === undefined) return
+      startGeneration({
+        conversationId: authoritativeNode.conversationId,
+        parentNodeId: authoritativeNode.id,
+      })
     },
     createBranch: async (parentNodeId, content) => {
       if (!prepareMutation()) return
