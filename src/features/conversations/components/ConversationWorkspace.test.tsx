@@ -1,15 +1,27 @@
-import { render, screen, waitFor, within } from "@testing-library/react"
+import { act, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { ConversationWorkspace } from "./ConversationWorkspace"
 import { useConversationStore } from "../store"
 import type { ConversationNodeView, ConversationTreeView } from "../types"
-import { createConversationClient, type ConversationClient } from "@/lib/tauri"
+import { useProviderProfileStore } from "@/features/providers/store"
+import type { GenerationEventView } from "@/features/providers/types"
+import {
+  ConversationCommandError,
+  createConversationClient,
+  createProviderClient,
+  type ConversationClient,
+  type ProviderClient,
+} from "@/lib/tauri"
 
 vi.mock("@/lib/tauri", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/tauri")>()
-  return { ...original, createConversationClient: vi.fn() }
+  return {
+    ...original,
+    createConversationClient: vi.fn(),
+    createProviderClient: vi.fn(),
+  }
 })
 
 const root: ConversationNodeView = {
@@ -133,6 +145,25 @@ function createMockClient() {
   } satisfies ConversationClient
 }
 
+function createMockProviderClient() {
+  return {
+    saveProviderProfile: vi.fn<ProviderClient["saveProviderProfile"]>(),
+    loadProviderProfile: vi
+      .fn<ProviderClient["loadProviderProfile"]>()
+      .mockRejectedValue(
+        new ConversationCommandError({
+          code: "not_found",
+          message: "Provider profile not found.",
+          retryable: false,
+        }),
+      ),
+    deleteProviderProfile: vi.fn<ProviderClient["deleteProviderProfile"]>(),
+    generateFromActivePath: vi.fn<ProviderClient["generateFromActivePath"]>(),
+    cancelGeneration: vi.fn<ProviderClient["cancelGeneration"]>(),
+    commitGeneration: vi.fn<ProviderClient["commitGeneration"]>(),
+  } satisfies ProviderClient
+}
+
 function resetStore() {
   useConversationStore.setState({
     conversationId: null,
@@ -144,15 +175,20 @@ function resetStore() {
     expandedIds: new Set(),
     status: "idle",
     error: null,
+    generation: { phase: "idle" },
   })
+  useProviderProfileStore.setState({ phase: "idle", profile: null })
 }
 
 describe("ConversationWorkspace", () => {
   let client: ReturnType<typeof createMockClient>
+  let providerClient: ReturnType<typeof createMockProviderClient>
 
   beforeEach(() => {
     client = createMockClient()
+    providerClient = createMockProviderClient()
     vi.mocked(createConversationClient).mockReturnValue(client)
+    vi.mocked(createProviderClient).mockReturnValue(providerClient)
     resetStore()
   })
 
@@ -277,7 +313,7 @@ describe("ConversationWorkspace", () => {
     expect(useConversationStore.getState().fullNodes[edited.id]).toEqual(edited)
   })
 
-  it("creates only the returned user root and marks generation unavailable", async () => {
+  it("creates only the returned user root and keeps generation unavailable without a provider", async () => {
     const user = userEvent.setup()
     client.createConversation.mockResolvedValueOnce(rootOnlyTree)
     render(<ConversationWorkspace />)
@@ -303,12 +339,108 @@ describe("ConversationWorkspace", () => {
       content: "ONE_USER_ROOT_SENTINEL",
     })
     expect(screen.queryByLabelText("assistant message")).not.toBeInTheDocument()
-    expect(
-      screen.getByRole("button", { name: "Generate unavailable" }),
-    ).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Generate" })).toBeDisabled()
     expect(
       screen.getByRole("textbox", { name: "Message composer" }),
     ).toBeDisabled()
+  })
+
+  it("renders one transient response and merges only the authoritative completion", async () => {
+    const user = userEvent.setup()
+    const generationId = "11111111-1111-4111-8111-111111111111"
+    const commitToken = "22222222-2222-4222-8222-222222222222"
+    const streamedContent = "WORKSPACE_STREAM_SENTINEL"
+    let onEvent: ((event: GenerationEventView) => void) | undefined
+    providerClient.loadProviderProfile.mockReset()
+    providerClient.loadProviderProfile.mockResolvedValue({
+      baseEndpoint: "http://127.0.0.1:7788/v1",
+      model: "fixture-model",
+      hasApiKey: false,
+      updatedAt: 10,
+    })
+    providerClient.generateFromActivePath.mockImplementation(
+      (_conversationId, _activeNodeId, callback) => {
+        onEvent = callback
+        return Promise.resolve({ generationId })
+      },
+    )
+    providerClient.commitGeneration.mockResolvedValue({ accepted: true })
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(right.id)
+    render(<ConversationWorkspace />)
+
+    const generateButton = await screen.findByRole("button", {
+      name: "Generate",
+    })
+    await waitFor(() => expect(generateButton).toBeEnabled())
+    await user.click(generateButton)
+    expect(providerClient.generateFromActivePath).toHaveBeenCalledWith(
+      root.conversationId,
+      right.id,
+      expect.any(Function),
+    )
+
+    act(() => {
+      onEvent!({
+        type: "started",
+        generationId,
+        conversationId: root.conversationId,
+        activeNodeId: right.id,
+        model: "fixture-model",
+      })
+      onEvent!({ type: "delta", generationId, content: streamedContent })
+    })
+
+    const pane = screen.getByTestId("conversation-pane")
+    expect(
+      within(pane).getByRole("article", {
+        name: "Transient assistant response",
+      }),
+    ).toHaveTextContent(streamedContent)
+    expect(within(pane).queryByText(left.content)).not.toBeInTheDocument()
+    expect(
+      Object.values(useConversationStore.getState().fullNodes).some(
+        (node) => node.content === streamedContent,
+      ),
+    ).toBe(false)
+
+    const completed: ConversationNodeView = {
+      id: "workspace-completed",
+      parentId: right.id,
+      conversationId: root.conversationId,
+      role: "assistant",
+      content: streamedContent,
+      model: "fixture-model",
+      createdAt: 5,
+      metadata: null,
+    }
+    act(() => {
+      onEvent!({ type: "ready_to_commit", generationId, commitToken })
+    })
+    await waitFor(() => {
+      expect(providerClient.commitGeneration).toHaveBeenCalledWith(
+        generationId,
+        commitToken,
+      )
+    })
+    act(() => {
+      onEvent!({ type: "completed", generationId, node: completed })
+    })
+
+    await waitFor(() => {
+      expect(
+        within(pane).queryByRole("article", {
+          name: "Transient assistant response",
+        }),
+      ).not.toBeInTheDocument()
+      expect(within(pane).getByText(streamedContent)).toBeVisible()
+    })
+    expect(useConversationStore.getState().fullNodes[completed.id]).toEqual(
+      completed,
+    )
+    expect(document.body).not.toHaveTextContent(commitToken)
   })
 
   it("renders an integrity recovery state without leaking any path", async () => {

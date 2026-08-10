@@ -1,17 +1,54 @@
 import * as React from "react"
-import { Archive, PanelLeftClose, PanelLeftOpen, Sparkles } from "lucide-react"
+import {
+  Archive,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Sparkles,
+  Square,
+} from "lucide-react"
 import { useShallow } from "zustand/react/shallow"
 
 import { Composer } from "./Composer"
 import { ConversationPane } from "./ConversationPane"
 import { NewConversationForm } from "./NewConversationForm"
 import { OutlineTree } from "./OutlineTree"
-import { selectActivePath, useConversationStore } from "../store"
+import { useWorkspaceGenerationController } from "../hooks/useWorkspaceGenerationController"
+import {
+  isGenerationActive,
+  selectActivePath,
+  useConversationStore,
+} from "../store"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { createConversationClient } from "@/lib/tauri"
+import { ProviderSettingsDialog } from "@/features/providers/components"
+import { useProviderProfileStore } from "@/features/providers/store"
+import {
+  createConversationClient,
+  createProviderClient,
+  type ConversationClient,
+  type ProviderClient,
+} from "@/lib/tauri"
 
-export function ConversationWorkspace() {
-  const client = React.useMemo(() => createConversationClient(), [])
+export type ConversationWorkspaceProps = {
+  conversationClient?: ConversationClient
+  providerClient?: ProviderClient
+}
+
+export function ConversationWorkspace({
+  conversationClient: injectedConversationClient,
+  providerClient: injectedProviderClient,
+}: ConversationWorkspaceProps = {}) {
+  const client = React.useMemo(
+    () => injectedConversationClient ?? createConversationClient(),
+    [injectedConversationClient],
+  )
+  const providerClient = React.useMemo(
+    () => injectedProviderClient ?? createProviderClient(),
+    [injectedProviderClient],
+  )
+  const loadProviderProfile = useProviderProfileStore(
+    (state) => state.loadProfile,
+  )
   const store = useConversationStore(
     useShallow((state) => ({
       conversationId: state.conversationId,
@@ -23,29 +60,82 @@ export function ConversationWorkspace() {
       expandedIds: state.expandedIds,
       status: state.status,
       error: state.error,
-      loadConversation: state.loadConversation,
-      selectNode: state.selectNode,
+      generation: state.generation,
       toggleExpanded: state.toggleExpanded,
-      createConversation: state.createConversation,
-      appendNode: state.appendNode,
-      createBranch: state.createBranch,
-      editNodeAsBranch: state.editNodeAsBranch,
-      archiveConversation: state.archiveConversation,
       clearError: state.clearError,
     })),
   )
   const pathProjection = useConversationStore(useShallow(selectActivePath))
+  const controller = useWorkspaceGenerationController({
+    conversationClient: client,
+    providerClient,
+  })
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true)
+
+  React.useEffect(() => {
+    void loadProviderProfile(providerClient)
+  }, [loadProviderProfile, providerClient])
 
   const projectionError =
     pathProjection.kind === "error" ? pathProjection.error : null
   const visiblePath = pathProjection.kind === "ready" ? pathProjection.path : []
   const isProjectionValid = pathProjection.kind !== "error"
+  const transientGeneration = (() => {
+    const generation = store.generation
+    switch (generation.phase) {
+      case "starting":
+        return {
+          phase: "starting" as const,
+          content: "",
+          status: "Starting generation…",
+          retryable: false,
+        }
+      case "streaming":
+        return {
+          phase: "streaming" as const,
+          content: generation.content,
+          status: "Streaming response. Not yet saved.",
+          retryable: false,
+        }
+      case "committing":
+        return {
+          phase: "committing" as const,
+          content: generation.content,
+          status: "Saving the accepted response…",
+          retryable: false,
+        }
+      case "reconciling":
+        return {
+          phase: "reconciling" as const,
+          content: generation.content,
+          status: generation.error.message,
+          retryable: generation.error.retryable,
+        }
+      case "failed":
+        return {
+          phase: "failed" as const,
+          content: "",
+          status: generation.error.message,
+          retryable: generation.error.retryable,
+        }
+      case "cancelled":
+        return {
+          phase: "cancelled" as const,
+          content: "",
+          status: "The transient response was discarded.",
+          retryable: false,
+        }
+      case "idle":
+      case "completed":
+        return null
+    }
+  })()
   const canMutate =
     store.conversationId !== null &&
     !store.isArchived &&
     store.status === "ready" &&
-    isProjectionValid
+    isProjectionValid &&
+    !controller.mutationLocked
 
   const canAppend = (() => {
     if (!canMutate || store.activeNodeId === null) return false
@@ -69,7 +159,7 @@ export function ConversationWorkspace() {
 
   const handleRetry = () => {
     if (store.conversationId === null) store.clearError()
-    else void store.loadConversation(client, store.conversationId)
+    else void controller.loadConversation(store.conversationId)
   }
 
   return (
@@ -94,7 +184,7 @@ export function ConversationWorkspace() {
               nodesById={store.nodesById}
               expandedIds={store.expandedIds}
               onToggle={store.toggleExpanded}
-              onSelect={store.selectNode}
+              onSelect={controller.selectNode}
             />
           ) : projectionError !== null ? (
             <div className="p-4 text-sm text-destructive" role="alert">
@@ -128,32 +218,45 @@ export function ConversationWorkspace() {
               )}
             </Button>
             {store.isArchived && (
-              <span className="inline-flex items-center gap-1.5 rounded-md bg-secondary px-2 py-1 text-xs font-medium text-secondary-foreground">
-                <Archive aria-hidden="true" />
+              <Badge variant="secondary">
+                <Archive data-icon="inline-start" />
                 Archived — read only
-              </span>
+              </Badge>
             )}
           </div>
 
           <div className="flex items-center gap-2">
-            {store.conversationId !== null && !store.isArchived && (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled
-                title="Assistant generation is not available in this build"
-              >
-                <Sparkles aria-hidden="true" />
-                Generate unavailable
-              </Button>
-            )}
+            <ProviderSettingsDialog
+              client={providerClient}
+              readOnly={store.isArchived}
+              generationActive={isGenerationActive(store.generation)}
+            />
+            {store.conversationId !== null &&
+              !store.isArchived &&
+              (controller.canCancel ? (
+                <Button variant="outline" size="sm" onClick={controller.cancel}>
+                  <Square data-icon="inline-start" />
+                  Cancel generation
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={controller.generate}
+                  disabled={!controller.canGenerate}
+                  title={controller.unavailableReason ?? "Generate response"}
+                >
+                  <Sparkles data-icon="inline-start" />
+                  Generate
+                </Button>
+              ))}
             {canMutate && (
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => void store.archiveConversation(client)}
+                onClick={() => void controller.archiveConversation()}
               >
-                <Archive aria-hidden="true" />
+                <Archive data-icon="inline-start" />
                 Archive
               </Button>
             )}
@@ -166,7 +269,7 @@ export function ConversationWorkspace() {
             error={store.error}
             onDismissError={store.clearError}
             onSubmit={(title, content) =>
-              void store.createConversation(client, title, content)
+              void controller.createConversation(title, content)
             }
           />
         ) : (
@@ -179,15 +282,17 @@ export function ConversationWorkspace() {
               canBranch={canCreateBranch}
               canEdit={canEditAsBranch}
               onCreateBranch={(nodeId, content) =>
-                void store.createBranch(client, nodeId, content)
+                void controller.createBranch(nodeId, content)
               }
               onEditAsBranch={(nodeId, content) =>
-                void store.editNodeAsBranch(client, nodeId, content)
+                void controller.editNodeAsBranch(nodeId, content)
               }
+              transientGeneration={transientGeneration}
+              onRetryReconciliation={controller.retryReconciliation}
             />
 
             <Composer
-              onSubmit={(content) => void store.appendNode(client, content)}
+              onSubmit={(content) => void controller.appendNode(content)}
               disabled={!canAppend}
               placeholder={
                 store.isArchived

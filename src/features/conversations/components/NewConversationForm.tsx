@@ -43,8 +43,8 @@ export function NewConversationForm({
             Start a conversation
           </h1>
           <p className="text-sm text-muted-foreground">
-            This creates one user root. Assistant generation is not available in
-            this build, so no assistant reply will be invented.
+            This creates one user root. Afterward, generate a response from the
+            selected user message when a provider is configured.
           </p>
         </div>
 

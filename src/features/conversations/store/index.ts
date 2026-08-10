@@ -7,7 +7,47 @@ import type {
   TreeNodeView,
   UiError,
 } from "../types"
+import type { GenerationEventView } from "@/features/providers/types"
 import { ConversationCommandError, type ConversationClient } from "@/lib/tauri"
+
+type StartedGenerationEvent = Extract<GenerationEventView, { type: "started" }>
+type DeltaGenerationEvent = Extract<GenerationEventView, { type: "delta" }>
+
+type ActiveGeneration = {
+  runId: number
+  conversationId: string
+  parentNodeId: string
+  generationId?: string
+}
+
+export type GenerationState =
+  | { phase: "idle" }
+  | (ActiveGeneration & { phase: "starting" })
+  | (Required<ActiveGeneration> & {
+      phase: "streaming"
+      model: string
+      content: string
+    })
+  | (Required<ActiveGeneration> & {
+      phase: "committing"
+      model: string
+      content: string
+    })
+  | (Required<ActiveGeneration> & {
+      phase: "reconciling"
+      model: string
+      content: string
+      error: UiError
+    })
+  | {
+      phase: "completed"
+      runId: number
+      conversationId: string
+      parentNodeId: string
+      nodeId: string
+    }
+  | { phase: "failed"; runId: number; error: UiError }
+  | { phase: "cancelled"; runId: number }
 
 export type ConversationTreeState = {
   conversationId: string | null
@@ -19,6 +59,7 @@ export type ConversationTreeState = {
   expandedIds: ReadonlySet<string>
   status: "idle" | "loading" | "ready" | "streaming" | "error"
   error: UiError | null
+  generation: GenerationState
 }
 
 export type ActivePathProjection =
@@ -48,6 +89,28 @@ export type ConversationStore = ConversationTreeState & {
   ) => Promise<void>
   archiveConversation: (client: ConversationClient) => Promise<void>
   clearError: () => void
+  beginGeneration: () => number | null
+  recordGenerationId: (runId: number, generationId: string) => boolean
+  acceptGenerationStarted: (
+    runId: number,
+    event: StartedGenerationEvent,
+  ) => boolean
+  appendGenerationDelta: (runId: number, event: DeltaGenerationEvent) => boolean
+  markGenerationCommitting: (runId: number, generationId: string) => boolean
+  completeGeneration: (
+    runId: number,
+    generationId: string,
+    node: ConversationNodeView,
+  ) => boolean
+  failGeneration: (
+    runId: number,
+    error: UiError,
+    generationId?: string,
+  ) => boolean
+  cancelGenerationRun: (runId: number) => boolean
+  beginGenerationReconciliation: (runId: number, error: UiError) => boolean
+  reconcileGeneration: (runId: number, tree: ConversationTreeView) => boolean
+  markGenerationReconciliationFailed: (runId: number, error: UiError) => boolean
 }
 
 const TREE_INTEGRITY_ERROR: UiError = {
@@ -60,6 +123,13 @@ const INTERNAL_ERROR: UiError = {
   code: "internal",
   message: "An unexpected error occurred.",
   retryable: false,
+}
+
+const RECONCILIATION_PENDING_ERROR: UiError = {
+  code: "internal",
+  message:
+    "The conversation was reloaded, but the saved response has not been observed yet.",
+  retryable: true,
 }
 
 function emptyRecord<T>(): Record<string, T> {
@@ -82,7 +152,7 @@ function indexFullNodes(
   return nodes
 }
 
-function normalizeError(error: unknown): UiError {
+export function normalizeUiError(error: unknown): UiError {
   if (error instanceof ConversationCommandError) {
     return {
       code: error.code,
@@ -104,9 +174,13 @@ const initialState: ConversationTreeState = {
   expandedIds: new Set(),
   status: "idle",
   error: null,
+  generation: { phase: "idle" },
 }
 
-function loadedTreeState(tree: ConversationTreeView): ConversationTreeState {
+function loadedTreeState(
+  tree: ConversationTreeView,
+  generation: GenerationState = { phase: "idle" },
+): ConversationTreeState {
   return {
     conversationId: tree.conversation.id,
     isArchived: tree.conversation.isArchived,
@@ -117,6 +191,7 @@ function loadedTreeState(tree: ConversationTreeView): ConversationTreeState {
     expandedIds: new Set([tree.rootNodeId]),
     status: "ready",
     error: null,
+    generation,
   }
 }
 
@@ -168,193 +243,500 @@ function addAuthoritativeNode(
   }
 }
 
-export const useConversationStore = create<ConversationStore>((set, get) => ({
-  ...initialState,
+function addAuthoritativeAssistantNode(
+  state: ConversationTreeState,
+  generation: Extract<GenerationState, { phase: "committing" | "reconciling" }>,
+  node: ConversationNodeView,
+): Partial<ConversationTreeState> | null {
+  const parent = state.fullNodes[generation.parentNodeId]
+  if (
+    state.isArchived ||
+    state.status !== "ready" ||
+    state.activeNodeId !== generation.parentNodeId ||
+    parent?.role !== "user" ||
+    node.role !== "assistant" ||
+    node.model !== generation.model ||
+    node.content !== generation.content ||
+    !hasValidTreeShape(state)
+  ) {
+    return null
+  }
+  return addAuthoritativeNode(state, node, generation.parentNodeId)
+}
 
-  clearError: () => {
-    const state = get()
-    set({
-      error: null,
-      status:
-        state.status === "error"
-          ? state.conversationId === null
-            ? "idle"
-            : "ready"
-          : state.status,
-    })
-  },
+export const useConversationStore = create<ConversationStore>((set, get) => {
+  let nextRunId = 0
 
-  toggleExpanded: (nodeId) => {
-    const state = get()
-    const node = state.nodesById[nodeId]
-    if (node === undefined || node.childIds.length === 0) return
+  return {
+    ...initialState,
 
-    set((currentState) => {
-      const expandedIds = new Set(currentState.expandedIds)
-      if (expandedIds.has(nodeId)) expandedIds.delete(nodeId)
-      else expandedIds.add(nodeId)
-      return { expandedIds }
-    })
-  },
-
-  selectNode: (nodeId) => {
-    const state = get()
-    if (!Object.hasOwn(state.nodesById, nodeId)) return
-    const projection = selectActivePath({ ...state, activeNodeId: nodeId })
-    if (projection.kind !== "ready") return
-    set({ activeNodeId: nodeId })
-  },
-
-  loadConversation: async (client, id) => {
-    set({ status: "loading", error: null })
-    try {
-      const tree = await client.loadConversationTree(id)
-      set(loadedTreeState(tree))
-    } catch (error: unknown) {
-      set({ status: "error", error: normalizeError(error) })
-    }
-  },
-
-  createConversation: async (client, title, content) => {
-    if (get().status === "loading") return
-    set({ status: "loading", error: null })
-    try {
-      const tree = await client.createConversation({ title, content })
-      set(loadedTreeState(tree))
-    } catch (error: unknown) {
-      set({ status: "error", error: normalizeError(error) })
-    }
-  },
-
-  appendNode: async (client, content) => {
-    const state = get()
-    const activeNode = state.activeNodeId
-      ? state.nodesById[state.activeNodeId]
-      : undefined
-    if (
-      state.conversationId === null ||
-      state.activeNodeId === null ||
-      state.isArchived ||
-      state.status !== "ready" ||
-      activeNode?.role !== "assistant" ||
-      activeNode.childIds.length !== 0
-    ) {
-      return
-    }
-
-    set({ status: "loading", error: null })
-    try {
-      const node = await client.appendNode({
-        conversationId: state.conversationId,
-        parentNodeId: state.activeNodeId,
-        content,
-      })
-      const update = addAuthoritativeNode(state, node, state.activeNodeId)
-      if (update === null) {
-        set({ status: "error", error: TREE_INTEGRITY_ERROR })
-        return
-      }
-      set(update)
-    } catch (error: unknown) {
-      set({ status: "error", error: normalizeError(error) })
-    }
-  },
-
-  createBranch: async (client, parentNodeId, content) => {
-    const state = get()
-    const parentNode = state.nodesById[parentNodeId]
-    if (
-      state.conversationId === null ||
-      state.isArchived ||
-      state.status !== "ready" ||
-      parentNode?.role !== "assistant" ||
-      parentNode.childIds.length === 0
-    ) {
-      return
-    }
-
-    set({ status: "loading", error: null })
-    try {
-      const node = await client.createBranch({
-        conversationId: state.conversationId,
-        parentNodeId,
-        content,
-      })
-      const update = addAuthoritativeNode(state, node, parentNodeId)
-      if (update === null) {
-        set({ status: "error", error: TREE_INTEGRITY_ERROR })
-        return
-      }
-      set(update)
-    } catch (error: unknown) {
-      set({ status: "error", error: normalizeError(error) })
-    }
-  },
-
-  editNodeAsBranch: async (client, sourceNodeId, content) => {
-    const state = get()
-    const sourceNode = state.fullNodes[sourceNodeId]
-    const sourceParent = sourceNode?.parentId
-      ? state.fullNodes[sourceNode.parentId]
-      : undefined
-    if (
-      state.conversationId === null ||
-      state.isArchived ||
-      state.status !== "ready" ||
-      sourceNode?.role !== "user" ||
-      sourceNode.parentId === undefined ||
-      sourceParent?.role !== "assistant"
-    ) {
-      return
-    }
-
-    set({ status: "loading", error: null })
-    try {
-      const node = await client.editNodeAsBranch({
-        conversationId: state.conversationId,
-        sourceNodeId,
-        content,
-      })
-      const update = addAuthoritativeNode(state, node, sourceNode.parentId)
-      if (update === null) {
-        set({ status: "error", error: TREE_INTEGRITY_ERROR })
-        return
-      }
-      set(update)
-    } catch (error: unknown) {
-      set({ status: "error", error: normalizeError(error) })
-    }
-  },
-
-  archiveConversation: async (client) => {
-    const state = get()
-    if (
-      state.conversationId === null ||
-      state.isArchived ||
-      state.status !== "ready"
-    ) {
-      return
-    }
-
-    set({ status: "loading", error: null })
-    try {
-      const conversation = await client.archiveConversation(
-        state.conversationId,
-      )
+    beginGeneration: () => {
+      const state = get()
+      const activeNode =
+        state.activeNodeId === null
+          ? undefined
+          : state.fullNodes[state.activeNodeId]
+      const projection = selectActivePath(state)
       if (
-        conversation.id !== state.conversationId ||
-        conversation.rootNodeId !== state.rootNodeId ||
-        !conversation.isArchived
+        state.conversationId === null ||
+        state.activeNodeId === null ||
+        state.isArchived ||
+        state.status !== "ready" ||
+        activeNode?.role !== "user" ||
+        projection.kind !== "ready" ||
+        projection.path.at(-1)?.id !== state.activeNodeId ||
+        isGenerationActive(state.generation)
       ) {
-        set({ status: "error", error: TREE_INTEGRITY_ERROR })
+        return null
+      }
+
+      const runId = ++nextRunId
+      set({
+        generation: {
+          phase: "starting",
+          runId,
+          conversationId: state.conversationId,
+          parentNodeId: state.activeNodeId,
+        },
+      })
+      return runId
+    },
+
+    recordGenerationId: (runId, generationId) => {
+      const generation = get().generation
+      if (
+        generation.phase !== "starting" ||
+        generation.runId !== runId ||
+        (generation.generationId !== undefined &&
+          generation.generationId !== generationId)
+      ) {
+        return false
+      }
+      set({ generation: { ...generation, generationId } })
+      return true
+    },
+
+    acceptGenerationStarted: (runId, event) => {
+      const state = get()
+      const generation = state.generation
+      if (generation.phase !== "starting" || generation.runId !== runId) {
+        return false
+      }
+      const parent = state.fullNodes[generation.parentNodeId]
+      if (
+        generation.conversationId !== event.conversationId ||
+        generation.parentNodeId !== event.activeNodeId ||
+        (generation.generationId !== undefined &&
+          generation.generationId !== event.generationId) ||
+        state.conversationId !== generation.conversationId ||
+        state.activeNodeId !== generation.parentNodeId ||
+        state.isArchived ||
+        state.status !== "ready" ||
+        parent?.role !== "user"
+      ) {
+        return false
+      }
+      set({
+        generation: {
+          phase: "streaming",
+          runId,
+          conversationId: generation.conversationId,
+          parentNodeId: generation.parentNodeId,
+          generationId: event.generationId,
+          model: event.model,
+          content: "",
+        },
+      })
+      return true
+    },
+
+    appendGenerationDelta: (runId, event) => {
+      const generation = get().generation
+      if (
+        generation.phase !== "streaming" ||
+        generation.runId !== runId ||
+        generation.generationId !== event.generationId
+      ) {
+        return false
+      }
+      set({
+        generation: {
+          ...generation,
+          content: generation.content + event.content,
+        },
+      })
+      return true
+    },
+
+    markGenerationCommitting: (runId, generationId) => {
+      const state = get()
+      const generation = state.generation
+      const projection = selectActivePath(state)
+      if (
+        generation.phase !== "streaming" ||
+        generation.runId !== runId ||
+        generation.generationId !== generationId ||
+        state.conversationId !== generation.conversationId ||
+        state.activeNodeId !== generation.parentNodeId ||
+        state.isArchived ||
+        state.status !== "ready" ||
+        state.fullNodes[generation.parentNodeId]?.role !== "user" ||
+        projection.kind !== "ready" ||
+        projection.path.at(-1)?.id !== generation.parentNodeId
+      ) {
+        return false
+      }
+      set({ generation: { ...generation, phase: "committing" } })
+      return true
+    },
+
+    completeGeneration: (runId, generationId, node) => {
+      const state = get()
+      const generation = state.generation
+      if (
+        (generation.phase !== "committing" &&
+          generation.phase !== "reconciling") ||
+        generation.runId !== runId ||
+        generation.generationId !== generationId
+      ) {
+        return false
+      }
+      const update = addAuthoritativeAssistantNode(state, generation, node)
+      if (update === null) {
+        set({
+          generation: {
+            phase: "failed",
+            runId,
+            error: TREE_INTEGRITY_ERROR,
+          },
+        })
+        return false
+      }
+      set({
+        ...update,
+        generation: {
+          phase: "completed",
+          runId,
+          conversationId: generation.conversationId,
+          parentNodeId: generation.parentNodeId,
+          nodeId: node.id,
+        },
+      })
+      return true
+    },
+
+    failGeneration: (runId, error, generationId) => {
+      const generation = get().generation
+      if (
+        !isGenerationActive(generation) ||
+        generation.runId !== runId ||
+        (generationId !== undefined &&
+          generation.generationId !== undefined &&
+          generation.generationId !== generationId)
+      ) {
+        return false
+      }
+      set({ generation: { phase: "failed", runId, error } })
+      return true
+    },
+
+    cancelGenerationRun: (runId) => {
+      const generation = get().generation
+      if (
+        !isGenerationActive(generation) ||
+        generation.runId !== runId ||
+        generation.phase === "committing" ||
+        generation.phase === "reconciling"
+      ) {
+        return false
+      }
+      set({ generation: { phase: "cancelled", runId } })
+      return true
+    },
+
+    beginGenerationReconciliation: (runId, error) => {
+      const generation = get().generation
+      if (generation.phase !== "committing" || generation.runId !== runId) {
+        return false
+      }
+      set({ generation: { ...generation, phase: "reconciling", error } })
+      return true
+    },
+
+    reconcileGeneration: (runId, tree) => {
+      const state = get()
+      const generation = state.generation
+      if (
+        generation.phase !== "reconciling" ||
+        generation.runId !== runId ||
+        tree.conversation.id !== generation.conversationId
+      ) {
+        return false
+      }
+
+      const candidate = loadedTreeState(tree, generation)
+      if (!hasValidTreeShape(candidate)) return false
+
+      const oldNodeIds = new Set(Object.keys(state.fullNodes))
+      const matches = tree.nodes.filter(
+        (node) =>
+          !oldNodeIds.has(node.id) &&
+          node.conversationId === generation.conversationId &&
+          node.parentId === generation.parentNodeId &&
+          node.role === "assistant" &&
+          node.model === generation.model &&
+          node.content === generation.content,
+      )
+      const match = matches.length === 1 ? matches[0] : undefined
+      const preservedActiveId =
+        state.activeNodeId !== null &&
+        Object.hasOwn(candidate.nodesById, state.activeNodeId)
+          ? state.activeNodeId
+          : candidate.rootNodeId
+      const expandedIds = new Set(
+        [...state.expandedIds].filter((id) =>
+          Object.hasOwn(candidate.nodesById, id),
+        ),
+      )
+      expandedIds.add(candidate.rootNodeId ?? tree.rootNodeId)
+      if (match !== undefined) expandedIds.add(generation.parentNodeId)
+
+      set({
+        ...candidate,
+        activeNodeId: match?.id ?? preservedActiveId,
+        expandedIds,
+        generation:
+          match === undefined
+            ? {
+                ...generation,
+                error: RECONCILIATION_PENDING_ERROR,
+              }
+            : {
+                phase: "completed",
+                runId,
+                conversationId: generation.conversationId,
+                parentNodeId: generation.parentNodeId,
+                nodeId: match.id,
+              },
+      })
+      return true
+    },
+
+    markGenerationReconciliationFailed: (runId, error) => {
+      const generation = get().generation
+      if (generation.phase !== "reconciling" || generation.runId !== runId) {
+        return false
+      }
+      set({ generation: { ...generation, error } })
+      return true
+    },
+
+    clearError: () => {
+      const state = get()
+      set({
+        error: null,
+        status:
+          state.status === "error"
+            ? state.conversationId === null
+              ? "idle"
+              : "ready"
+            : state.status,
+      })
+    },
+
+    toggleExpanded: (nodeId) => {
+      const state = get()
+      const node = state.nodesById[nodeId]
+      if (node === undefined || node.childIds.length === 0) return
+
+      set((currentState) => {
+        const expandedIds = new Set(currentState.expandedIds)
+        if (expandedIds.has(nodeId)) expandedIds.delete(nodeId)
+        else expandedIds.add(nodeId)
+        return { expandedIds }
+      })
+    },
+
+    selectNode: (nodeId) => {
+      const state = get()
+      if (isGenerationActive(state.generation)) return
+      if (!Object.hasOwn(state.nodesById, nodeId)) return
+      const projection = selectActivePath({ ...state, activeNodeId: nodeId })
+      if (projection.kind !== "ready") return
+      set({ activeNodeId: nodeId })
+    },
+
+    loadConversation: async (client, id) => {
+      if (isGenerationActive(get().generation)) return
+      set({ status: "loading", error: null })
+      try {
+        const tree = await client.loadConversationTree(id)
+        set(loadedTreeState(tree))
+      } catch (error: unknown) {
+        set({ status: "error", error: normalizeUiError(error) })
+      }
+    },
+
+    createConversation: async (client, title, content) => {
+      if (get().status === "loading" || isGenerationActive(get().generation))
+        return
+      set({ status: "loading", error: null })
+      try {
+        const tree = await client.createConversation({ title, content })
+        set(loadedTreeState(tree))
+      } catch (error: unknown) {
+        set({ status: "error", error: normalizeUiError(error) })
+      }
+    },
+
+    appendNode: async (client, content) => {
+      const state = get()
+      const activeNode = state.activeNodeId
+        ? state.nodesById[state.activeNodeId]
+        : undefined
+      if (
+        state.conversationId === null ||
+        state.activeNodeId === null ||
+        state.isArchived ||
+        state.status !== "ready" ||
+        isGenerationActive(state.generation) ||
+        activeNode?.role !== "assistant" ||
+        activeNode.childIds.length !== 0
+      ) {
         return
       }
-      set({ isArchived: true, status: "ready", error: null })
-    } catch (error: unknown) {
-      set({ status: "error", error: normalizeError(error) })
-    }
-  },
-}))
+
+      set({ status: "loading", error: null })
+      try {
+        const node = await client.appendNode({
+          conversationId: state.conversationId,
+          parentNodeId: state.activeNodeId,
+          content,
+        })
+        const update = addAuthoritativeNode(state, node, state.activeNodeId)
+        if (update === null) {
+          set({ status: "error", error: TREE_INTEGRITY_ERROR })
+          return
+        }
+        set(update)
+      } catch (error: unknown) {
+        set({ status: "error", error: normalizeUiError(error) })
+      }
+    },
+
+    createBranch: async (client, parentNodeId, content) => {
+      const state = get()
+      const parentNode = state.nodesById[parentNodeId]
+      if (
+        state.conversationId === null ||
+        state.isArchived ||
+        state.status !== "ready" ||
+        isGenerationActive(state.generation) ||
+        parentNode?.role !== "assistant" ||
+        parentNode.childIds.length === 0
+      ) {
+        return
+      }
+
+      set({ status: "loading", error: null })
+      try {
+        const node = await client.createBranch({
+          conversationId: state.conversationId,
+          parentNodeId,
+          content,
+        })
+        const update = addAuthoritativeNode(state, node, parentNodeId)
+        if (update === null) {
+          set({ status: "error", error: TREE_INTEGRITY_ERROR })
+          return
+        }
+        set(update)
+      } catch (error: unknown) {
+        set({ status: "error", error: normalizeUiError(error) })
+      }
+    },
+
+    editNodeAsBranch: async (client, sourceNodeId, content) => {
+      const state = get()
+      const sourceNode = state.fullNodes[sourceNodeId]
+      const sourceParent = sourceNode?.parentId
+        ? state.fullNodes[sourceNode.parentId]
+        : undefined
+      if (
+        state.conversationId === null ||
+        state.isArchived ||
+        state.status !== "ready" ||
+        isGenerationActive(state.generation) ||
+        sourceNode?.role !== "user" ||
+        sourceNode.parentId === undefined ||
+        sourceParent?.role !== "assistant"
+      ) {
+        return
+      }
+
+      set({ status: "loading", error: null })
+      try {
+        const node = await client.editNodeAsBranch({
+          conversationId: state.conversationId,
+          sourceNodeId,
+          content,
+        })
+        const update = addAuthoritativeNode(state, node, sourceNode.parentId)
+        if (update === null) {
+          set({ status: "error", error: TREE_INTEGRITY_ERROR })
+          return
+        }
+        set(update)
+      } catch (error: unknown) {
+        set({ status: "error", error: normalizeUiError(error) })
+      }
+    },
+
+    archiveConversation: async (client) => {
+      const state = get()
+      if (
+        state.conversationId === null ||
+        state.isArchived ||
+        state.status !== "ready" ||
+        isGenerationActive(state.generation)
+      ) {
+        return
+      }
+
+      set({ status: "loading", error: null })
+      try {
+        const conversation = await client.archiveConversation(
+          state.conversationId,
+        )
+        if (
+          conversation.id !== state.conversationId ||
+          conversation.rootNodeId !== state.rootNodeId ||
+          !conversation.isArchived
+        ) {
+          set({ status: "error", error: TREE_INTEGRITY_ERROR })
+          return
+        }
+        set({ isArchived: true, status: "ready", error: null })
+      } catch (error: unknown) {
+        set({ status: "error", error: normalizeUiError(error) })
+      }
+    },
+  }
+})
+
+export function isGenerationActive(
+  generation: GenerationState,
+): generation is Extract<
+  GenerationState,
+  { phase: "starting" | "streaming" | "committing" | "reconciling" }
+> {
+  return (
+    generation.phase === "starting" ||
+    generation.phase === "streaming" ||
+    generation.phase === "committing" ||
+    generation.phase === "reconciling"
+  )
+}
 
 function hasValidTreeShape(state: ConversationTreeState): boolean {
   if (
