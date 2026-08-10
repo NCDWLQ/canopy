@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 8
+- **Total Sessions**: 9
 - **Last Active**: 2026-08-10
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~190 | Active |
+| `journal-1.md` | ~212 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 9 | 2026-08-10 | Restore conversation history after restart | `0a32173`, `e7df2f5` | `main` |
 | 8 | 2026-08-10 | Automatic generation after message send | `98caf1a`, `aa4e840` | `main` |
 | 7 | 2026-08-10 | Integrate workspace and fix AppImage rendering | `5044b5f` | `main` |
 | 6 | 2026-08-10 | Integrate provider generation workspace | `9b2fd85`, `d07f20e` | `integration-generation-ui` |

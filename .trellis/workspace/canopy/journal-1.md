@@ -188,3 +188,25 @@ Added persistence-first automatic assistant generation for new conversations and
 ### Status
 
 [OK] **Completed**
+
+
+## Session 9: Restore conversation history after restart
+
+**Date**: 2026-08-10
+**Task**: Restore conversation history after restart
+**Branch**: `main`
+
+### Summary
+
+Added SQLite-backed conversation discovery and startup rehydration, a history sidebar, deterministic latest-path selection, cold-start/file-backed regressions, and documented the restore contract.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0a32173` | (see git log) |
+| `e7df2f5` | (see git log) |
+
+### Status
+
+[OK] **Completed**
