@@ -45,3 +45,13 @@ cargo fmt --manifest-path src-tauri/Cargo.toml --check
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml --all-features
 ```
+
+## Automated desktop builds
+
+The `Build desktop clients` GitHub Actions workflow builds installable clients for Linux x64,
+Windows x64, macOS Apple Silicon, and macOS Intel. It runs for pull requests and pushes to
+`main`, version tags matching `v*`, and manual dispatches.
+
+Download the unsigned AppImage, deb, exe, and dmg bundles from the workflow run's
+**Artifacts** section. Production distribution still requires platform-specific code signing
+and macOS notarization.
