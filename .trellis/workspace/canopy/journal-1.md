@@ -166,3 +166,25 @@ Fast-forwarded the completed Conversation Workspace and provider generation UI i
 ### Status
 
 [OK] **Completed**
+
+
+## Session 8: Automatic generation after message send
+
+**Date**: 2026-08-10
+**Task**: Automatic generation after message send
+**Branch**: `main`
+
+### Summary
+
+Added persistence-first automatic assistant generation for new conversations and appended user messages, guarded it against stale targets, unmounts, provider changes, and duplicate starts, expanded regression coverage, and documented the frontend state-management contract.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `98caf1a` | (see git log) |
+| `aa4e840` | (see git log) |
+
+### Status
+
+[OK] **Completed**
