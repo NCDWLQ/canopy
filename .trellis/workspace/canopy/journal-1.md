@@ -123,3 +123,25 @@ Implemented and independently verified secure provider profiles, OpenAI-compatib
 ### Status
 
 [OK] **Completed**
+
+
+## Session 6: Integrate provider generation workspace
+
+**Date**: 2026-08-10
+**Task**: Integrate provider generation workspace
+**Branch**: `integration-generation-ui`
+
+### Summary
+
+Integrated redacted provider settings and strict streamed generation into the tree-native workspace, including automatic ready acknowledgement, exact cancellation, authoritative assistant merge, post-ack SQLite reconciliation, accessibility, tests, and frontend code-spec updates.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9b2fd85` | (see git log) |
+| `d07f20e` | (see git log) |
+
+### Status
+
+[OK] **Completed**

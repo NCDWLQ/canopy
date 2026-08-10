@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 5
-- **Last Active**: 2026-08-09
+- **Total Sessions**: 6
+- **Last Active**: 2026-08-10
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~125 | Active |
+| `journal-1.md` | ~147 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 6 | 2026-08-10 | Integrate provider generation workspace | `9b2fd85`, `d07f20e` | `integration-generation-ui` |
 | 5 | 2026-08-09 | Secure Provider Generation Path | `51dca22`, `1da6460` | `main` |
 | 4 | 2026-08-09 | Implement typed conversation domain boundary | `0d66976` | `main` |
 | 3 | 2026-08-09 | Tree persistence | `d651093` | `main` |
