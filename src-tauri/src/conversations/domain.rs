@@ -11,6 +11,15 @@ pub struct Conversation {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConversationSummary {
+    pub id: String,
+    pub title: String,
+    pub root_node_id: String,
+    pub is_archived: bool,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewConversation {
     pub id: String,
     pub title: String,

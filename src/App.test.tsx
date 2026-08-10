@@ -3,7 +3,9 @@ import App from "./App"
 
 // Mock tauri client so we don't call real IPC in component tests
 vi.mock("@/lib/tauri", () => ({
-  createConversationClient: () => ({}),
+  createConversationClient: () => ({
+    listConversations: () => Promise.resolve([]),
+  }),
   createProviderClient: () => ({
     loadProviderProfile: () =>
       Promise.resolve({
@@ -16,10 +18,10 @@ vi.mock("@/lib/tauri", () => ({
 }))
 
 describe("Canopy scaffold", () => {
-  it("renders the ConversationWorkspace", () => {
+  it("renders the ConversationWorkspace", async () => {
     render(<App />)
     expect(
-      screen.getByRole("heading", { name: "Start a conversation" }),
+      await screen.findByRole("heading", { name: "Start a conversation" }),
     ).toBeVisible()
     expect(
       screen.getByText(/generate a response from the selected user message/i),

@@ -2,6 +2,7 @@ import { create } from "zustand"
 
 import type {
   ConversationNodeView,
+  ConversationSummaryView,
   ConversationTreeView,
   PathMessageView,
   TreeNodeView,
@@ -67,7 +68,29 @@ export type ActivePathProjection =
   | { kind: "ready"; path: readonly PathMessageView[] }
   | { kind: "error"; path: readonly []; error: UiError }
 
+export type ConversationHistoryState =
+  | {
+      status: "idle" | "loading"
+      summaries: readonly ConversationSummaryView[]
+      error: null
+    }
+  | {
+      status: "ready"
+      summaries: readonly ConversationSummaryView[]
+      error: null
+    }
+  | { status: "empty"; summaries: readonly []; error: null }
+  | {
+      status: "error"
+      summaries: readonly ConversationSummaryView[]
+      error: UiError
+    }
+
 export type ConversationStore = ConversationTreeState & {
+  history: ConversationHistoryState
+  initializeHistory: (client: ConversationClient) => Promise<void>
+  retryHistory: (client: ConversationClient) => Promise<void>
+  selectConversation: (client: ConversationClient, id: string) => Promise<void>
   loadConversation: (client: ConversationClient, id: string) => Promise<void>
   selectNode: (nodeId: string) => void
   toggleExpanded: (nodeId: string) => void
@@ -177,18 +200,101 @@ const initialState: ConversationTreeState = {
   generation: { phase: "idle" },
 }
 
+const initialHistoryState: ConversationHistoryState = {
+  status: "idle",
+  summaries: [],
+  error: null,
+}
+
+function sortedSummaries(
+  summaries: readonly ConversationSummaryView[],
+): readonly ConversationSummaryView[] {
+  return [...summaries].sort(
+    (left, right) =>
+      right.updatedAt - left.updatedAt ||
+      (left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
+  )
+}
+
+function upsertSummary(
+  summaries: readonly ConversationSummaryView[],
+  summary: ConversationSummaryView,
+): readonly ConversationSummaryView[] {
+  return sortedSummaries([
+    ...summaries.filter((item) => item.id !== summary.id),
+    summary,
+  ])
+}
+
+function summaryFromTree(tree: ConversationTreeView): ConversationSummaryView {
+  return {
+    ...tree.conversation,
+    updatedAt: Math.max(...tree.nodes.map((node) => node.createdAt)),
+  }
+}
+
+function updateSummaryActivity(
+  history: ConversationHistoryState,
+  conversationId: string,
+  updatedAt: number,
+): ConversationHistoryState {
+  const current = history.summaries.find(
+    (summary) => summary.id === conversationId,
+  )
+  if (current === undefined) return history
+  return {
+    status: "ready",
+    summaries: upsertSummary(history.summaries, {
+      ...current,
+      updatedAt: Math.max(current.updatedAt, updatedAt),
+    }),
+    error: null,
+  }
+}
+
+function newestLeafId(tree: ConversationTreeView): string {
+  const leaves = tree.nodes.filter(
+    (node) => tree.nodesById[node.id]?.childIds.length === 0,
+  )
+  const newest = leaves.reduce<ConversationNodeView | undefined>(
+    (candidate, node) =>
+      candidate === undefined ||
+      node.createdAt > candidate.createdAt ||
+      (node.createdAt === candidate.createdAt && node.id > candidate.id)
+        ? node
+        : candidate,
+    undefined,
+  )
+  return newest?.id ?? tree.rootNodeId
+}
+
+function expandedPathIds(
+  tree: ConversationTreeView,
+  activeNodeId: string,
+): ReadonlySet<string> {
+  const fullNodes = indexFullNodes(tree)
+  const expandedIds = new Set<string>()
+  let currentId: string | undefined = activeNodeId
+  while (currentId !== undefined) {
+    expandedIds.add(currentId)
+    currentId = fullNodes[currentId]?.parentId
+  }
+  return expandedIds
+}
+
 function loadedTreeState(
   tree: ConversationTreeView,
   generation: GenerationState = { phase: "idle" },
 ): ConversationTreeState {
+  const activeNodeId = newestLeafId(tree)
   return {
     conversationId: tree.conversation.id,
     isArchived: tree.conversation.isArchived,
     rootNodeId: tree.rootNodeId,
-    activeNodeId: tree.rootNodeId,
+    activeNodeId,
     nodesById: copyRecord(tree.nodesById),
     fullNodes: indexFullNodes(tree),
-    expandedIds: new Set([tree.rootNodeId]),
+    expandedIds: expandedPathIds(tree, activeNodeId),
     status: "ready",
     error: null,
     generation,
@@ -266,9 +372,126 @@ function addAuthoritativeAssistantNode(
 
 export const useConversationStore = create<ConversationStore>((set, get) => {
   let nextRunId = 0
+  let requestEpoch = 0
+
+  const loadSelectedConversation = async (
+    client: ConversationClient,
+    id: string,
+    epoch: number,
+  ): Promise<boolean> => {
+    set({ status: "loading", error: null })
+    try {
+      const tree = await client.loadConversationTree(id)
+      if (epoch !== requestEpoch) return false
+      if (tree.conversation.id !== id) {
+        set({ status: "error", error: TREE_INTEGRITY_ERROR })
+        return false
+      }
+      const summary = get().history.summaries.find((item) => item.id === id)
+      if (
+        summary !== undefined &&
+        (summary.rootNodeId !== tree.conversation.rootNodeId ||
+          summary.isArchived !== tree.conversation.isArchived)
+      ) {
+        set({ status: "error", error: TREE_INTEGRITY_ERROR })
+        return false
+      }
+      set(loadedTreeState(tree))
+      return true
+    } catch (error: unknown) {
+      if (epoch !== requestEpoch) return false
+      set({ status: "error", error: normalizeUiError(error) })
+      return false
+    }
+  }
 
   return {
     ...initialState,
+    history: initialHistoryState,
+
+    initializeHistory: async (client) => {
+      const current = get().history
+      if (
+        current.status === "loading" ||
+        current.status === "ready" ||
+        current.status === "empty"
+      ) {
+        return
+      }
+
+      const epoch = ++requestEpoch
+      set({
+        history: {
+          status: "loading",
+          summaries: current.summaries,
+          error: null,
+        },
+      })
+      try {
+        const summaries = await client.listConversations()
+        if (epoch !== requestEpoch) return
+        if (summaries.length === 0) {
+          set({ history: { status: "empty", summaries: [], error: null } })
+          return
+        }
+
+        const ordered = sortedSummaries(summaries)
+        const selected =
+          ordered.find((summary) => !summary.isArchived) ?? ordered[0]
+        if (selected === undefined) return
+        set({
+          history: { status: "loading", summaries: ordered, error: null },
+        })
+        const loaded = await loadSelectedConversation(
+          client,
+          selected.id,
+          epoch,
+        )
+        if (epoch === requestEpoch) {
+          if (loaded) {
+            set({
+              history: { status: "ready", summaries: ordered, error: null },
+            })
+          } else {
+            const error = get().error ?? INTERNAL_ERROR
+            set({ history: { status: "error", summaries: ordered, error } })
+          }
+        }
+      } catch (error: unknown) {
+        if (epoch !== requestEpoch) return
+        const normalized = normalizeUiError(error)
+        set({
+          history: {
+            status: "error",
+            summaries: current.summaries,
+            error: normalized,
+          },
+        })
+      }
+    },
+
+    retryHistory: async (client) => {
+      if (get().history.status !== "error") return
+      set({
+        history: {
+          status: "idle",
+          summaries: get().history.summaries,
+          error: null,
+        },
+      })
+      await get().initializeHistory(client)
+    },
+
+    selectConversation: async (client, id) => {
+      const state = get()
+      if (
+        isGenerationActive(state.generation) ||
+        !state.history.summaries.some((summary) => summary.id === id)
+      ) {
+        return
+      }
+      await loadSelectedConversation(client, id, ++requestEpoch)
+    },
 
     beginGeneration: () => {
       const state = get()
@@ -414,6 +637,11 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
       }
       set({
         ...update,
+        history: updateSummaryActivity(
+          state.history,
+          generation.conversationId,
+          node.createdAt,
+        ),
         generation: {
           phase: "completed",
           runId,
@@ -505,6 +733,11 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
         ...candidate,
         activeNodeId: match?.id ?? preservedActiveId,
         expandedIds,
+        history: updateSummaryActivity(
+          state.history,
+          generation.conversationId,
+          summaryFromTree(tree).updatedAt,
+        ),
         generation:
           match === undefined
             ? {
@@ -568,23 +801,28 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
 
     loadConversation: async (client, id) => {
       if (isGenerationActive(get().generation)) return
-      set({ status: "loading", error: null })
-      try {
-        const tree = await client.loadConversationTree(id)
-        set(loadedTreeState(tree))
-      } catch (error: unknown) {
-        set({ status: "error", error: normalizeUiError(error) })
-      }
+      await loadSelectedConversation(client, id, ++requestEpoch)
     },
 
     createConversation: async (client, title, content) => {
       if (get().status === "loading" || isGenerationActive(get().generation))
         return
+      const epoch = ++requestEpoch
       set({ status: "loading", error: null })
       try {
         const tree = await client.createConversation({ title, content })
-        set(loadedTreeState(tree))
+        if (epoch !== requestEpoch) return
+        const history: ConversationHistoryState = {
+          status: "ready",
+          summaries: upsertSummary(
+            get().history.summaries,
+            summaryFromTree(tree),
+          ),
+          error: null,
+        }
+        set({ ...loadedTreeState(tree), history })
       } catch (error: unknown) {
+        if (epoch !== requestEpoch) return
         set({ status: "error", error: normalizeUiError(error) })
       }
     },
@@ -618,7 +856,14 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
           set({ status: "error", error: TREE_INTEGRITY_ERROR })
           return
         }
-        set(update)
+        set({
+          ...update,
+          history: updateSummaryActivity(
+            get().history,
+            state.conversationId,
+            node.createdAt,
+          ),
+        })
       } catch (error: unknown) {
         set({ status: "error", error: normalizeUiError(error) })
       }
@@ -650,7 +895,14 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
           set({ status: "error", error: TREE_INTEGRITY_ERROR })
           return
         }
-        set(update)
+        set({
+          ...update,
+          history: updateSummaryActivity(
+            get().history,
+            state.conversationId,
+            node.createdAt,
+          ),
+        })
       } catch (error: unknown) {
         set({ status: "error", error: normalizeUiError(error) })
       }
@@ -686,7 +938,14 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
           set({ status: "error", error: TREE_INTEGRITY_ERROR })
           return
         }
-        set(update)
+        set({
+          ...update,
+          history: updateSummaryActivity(
+            get().history,
+            state.conversationId,
+            node.createdAt,
+          ),
+        })
       } catch (error: unknown) {
         set({ status: "error", error: normalizeUiError(error) })
       }
@@ -716,7 +975,26 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
           set({ status: "error", error: TREE_INTEGRITY_ERROR })
           return
         }
-        set({ isArchived: true, status: "ready", error: null })
+        const summary = get().history.summaries.find(
+          (item) => item.id === conversation.id,
+        )
+        set({
+          isArchived: true,
+          status: "ready",
+          error: null,
+          ...(summary === undefined
+            ? {}
+            : {
+                history: {
+                  status: "ready" as const,
+                  summaries: upsertSummary(get().history.summaries, {
+                    ...summary,
+                    isArchived: true,
+                  }),
+                  error: null,
+                },
+              }),
+        })
       } catch (error: unknown) {
         set({ status: "error", error: normalizeUiError(error) })
       }

@@ -14,6 +14,7 @@ fn register_conversation_commands<R: tauri::Runtime>(
         conversations::commands::append_node,
         conversations::commands::create_branch,
         conversations::commands::edit_node_as_branch,
+        conversations::commands::list_conversations,
         conversations::commands::load_conversation_tree,
         conversations::commands::load_active_path,
         conversations::commands::archive_conversation,
@@ -26,6 +27,7 @@ fn register_commands<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Bu
         conversations::commands::append_node,
         conversations::commands::create_branch,
         conversations::commands::edit_node_as_branch,
+        conversations::commands::list_conversations,
         conversations::commands::load_conversation_tree,
         conversations::commands::load_active_path,
         conversations::commands::archive_conversation,
@@ -121,6 +123,7 @@ mod tests {
                     "content": "Content"
                 } }),
             ),
+            ("list_conversations", json!({ "request": {} })),
             (
                 "load_conversation_tree",
                 json!({ "request": { "conversation_id": "conversation" } }),

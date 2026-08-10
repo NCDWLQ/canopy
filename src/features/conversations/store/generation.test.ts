@@ -95,6 +95,7 @@ function createClient() {
     appendNode: vi.fn<ConversationClient["appendNode"]>(),
     createBranch: vi.fn<ConversationClient["createBranch"]>(),
     editNodeAsBranch: vi.fn<ConversationClient["editNodeAsBranch"]>(),
+    listConversations: vi.fn<ConversationClient["listConversations"]>(),
     loadConversationTree: vi
       .fn<ConversationClient["loadConversationTree"]>()
       .mockResolvedValue(tree),
@@ -149,6 +150,7 @@ describe("conversation generation state", () => {
       status: "idle",
       error: null,
       generation: { phase: "idle" },
+      history: { status: "idle", summaries: [], error: null },
     })
   })
 
@@ -245,6 +247,13 @@ describe("conversation generation state", () => {
 
   it("reconciles one exact unseen assistant from SQLite authority", async () => {
     await loadActiveUser()
+    useConversationStore.setState({
+      history: {
+        status: "ready",
+        summaries: [{ ...conversation, updatedAt: nodes.right.createdAt }],
+        error: null,
+      },
+    })
     const runId = beginStreaming()
     useConversationStore
       .getState()
@@ -290,6 +299,10 @@ describe("conversation generation state", () => {
     expect(useConversationStore.getState().generation).toMatchObject({
       phase: "completed",
       nodeId: completed.id,
+    })
+    expect(useConversationStore.getState().history).toMatchObject({
+      status: "ready",
+      summaries: [{ id: conversation.id, updatedAt: completed.createdAt }],
     })
   })
 

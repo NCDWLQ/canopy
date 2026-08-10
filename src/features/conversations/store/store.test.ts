@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { selectActivePath, useConversationStore } from "./index"
 import type {
   ConversationNodeView,
+  ConversationSummaryView,
   ConversationTreeView,
   ConversationView,
 } from "../types"
@@ -89,12 +90,28 @@ const tree: ConversationTreeView = {
   },
 }
 
+const summary: ConversationSummaryView = {
+  ...conversation,
+  updatedAt: right.createdAt,
+}
+
+const archivedSummary: ConversationSummaryView = {
+  id: "conversation-archived",
+  title: "Archived recent",
+  rootNodeId: "archived-root",
+  isArchived: true,
+  updatedAt: 100,
+}
+
 function createMockClient() {
   return {
     createConversation: vi.fn<ConversationClient["createConversation"]>(),
     appendNode: vi.fn<ConversationClient["appendNode"]>(),
     createBranch: vi.fn<ConversationClient["createBranch"]>(),
     editNodeAsBranch: vi.fn<ConversationClient["editNodeAsBranch"]>(),
+    listConversations: vi
+      .fn<ConversationClient["listConversations"]>()
+      .mockResolvedValue([]),
     loadConversationTree: vi
       .fn<ConversationClient["loadConversationTree"]>()
       .mockResolvedValue(tree),
@@ -114,6 +131,8 @@ function resetStore() {
     expandedIds: new Set(),
     status: "idle",
     error: null,
+    generation: { phase: "idle" },
+    history: { status: "idle", summaries: [], error: null },
   })
 }
 
@@ -125,19 +144,175 @@ describe("conversation store", () => {
     resetStore()
   })
 
-  it("loads the authoritative tree with the structural root selected", async () => {
+  it("loads the authoritative tree with the newest deterministic leaf selected", async () => {
     await useConversationStore
       .getState()
       .loadConversation(client, conversation.id)
 
     const state = useConversationStore.getState()
     expect(state.status).toBe("ready")
-    expect(state.activeNodeId).toBe(root.id)
-    expect(state.expandedIds).toEqual(new Set([root.id]))
+    expect(state.activeNodeId).toBe(right.id)
+    expect(state.expandedIds).toEqual(
+      new Set([root.id, assistant.id, right.id]),
+    )
     expect(selectActivePath(state)).toMatchObject({
       kind: "ready",
-      path: [{ id: root.id }],
+      path: [{ id: root.id }, { id: assistant.id }, { id: right.id }],
     })
+  })
+
+  it("breaks latest-leaf timestamp ties by the greater node ID", async () => {
+    client.loadConversationTree.mockResolvedValueOnce({
+      ...tree,
+      nodes: [root, assistant, { ...left, createdAt: right.createdAt }, right],
+    })
+
+    await useConversationStore
+      .getState()
+      .loadConversation(client, conversation.id)
+
+    expect(useConversationStore.getState().activeNodeId).toBe(right.id)
+  })
+
+  it("discovers history, prefers the newest unarchived conversation, and restores its latest path", async () => {
+    client.listConversations.mockResolvedValueOnce([archivedSummary, summary])
+
+    await useConversationStore.getState().initializeHistory(client)
+
+    const state = useConversationStore.getState()
+    expect(client.listConversations).toHaveBeenCalledTimes(1)
+    expect(client.loadConversationTree).toHaveBeenCalledWith(conversation.id)
+    expect(state.history).toEqual({
+      status: "ready",
+      summaries: [archivedSummary, summary],
+      error: null,
+    })
+    expect(state.conversationId).toBe(conversation.id)
+    expect(state.activeNodeId).toBe(right.id)
+    const projection = selectActivePath(state)
+    expect(projection.kind).toBe("ready")
+    expect(projection.path.map((node) => node.id)).toEqual([
+      root.id,
+      assistant.id,
+      right.id,
+    ])
+    expect(projection.path.map((node) => node.content)).not.toContain(
+      left.content,
+    )
+  })
+
+  it("keeps discovery loading until the selected persisted tree is installed", async () => {
+    let resolveTree: ((value: ConversationTreeView) => void) | undefined
+    client.listConversations.mockResolvedValueOnce([summary])
+    client.loadConversationTree.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveTree = resolve
+      }),
+    )
+
+    const initialization = useConversationStore
+      .getState()
+      .initializeHistory(client)
+    await vi.waitFor(() => {
+      expect(client.loadConversationTree).toHaveBeenCalledWith(conversation.id)
+    })
+
+    expect(useConversationStore.getState()).toMatchObject({
+      conversationId: null,
+      status: "loading",
+      history: { status: "loading", summaries: [summary], error: null },
+    })
+
+    resolveTree?.(tree)
+    await initialization
+    expect(useConversationStore.getState()).toMatchObject({
+      conversationId: conversation.id,
+      status: "ready",
+      history: { status: "ready", summaries: [summary], error: null },
+    })
+  })
+
+  it("distinguishes empty and retryable discovery failures", async () => {
+    await useConversationStore.getState().initializeHistory(client)
+    expect(useConversationStore.getState().history.status).toBe("empty")
+    expect(useConversationStore.getState().conversationId).toBeNull()
+
+    resetStore()
+    client.listConversations.mockRejectedValueOnce(
+      new ConversationCommandError({
+        code: "database_unavailable",
+        message: "Database unavailable.",
+        retryable: true,
+      }),
+    )
+    await useConversationStore.getState().initializeHistory(client)
+    expect(useConversationStore.getState().history).toMatchObject({
+      status: "error",
+      summaries: [],
+      error: { code: "database_unavailable", retryable: true },
+    })
+
+    client.listConversations.mockResolvedValueOnce([summary])
+    await useConversationStore.getState().retryHistory(client)
+    expect(useConversationStore.getState().history.status).toBe("ready")
+    expect(useConversationStore.getState().conversationId).toBe(conversation.id)
+  })
+
+  it("makes duplicate startup initialization idempotent and ignores its stale response after create", async () => {
+    let resolveList: ((value: ConversationSummaryView[]) => void) | undefined
+    client.listConversations.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveList = resolve
+      }),
+    )
+    const firstInitialization = useConversationStore
+      .getState()
+      .initializeHistory(client)
+    const duplicateInitialization = useConversationStore
+      .getState()
+      .initializeHistory(client)
+    expect(client.listConversations).toHaveBeenCalledTimes(1)
+
+    const createdTree: ConversationTreeView = {
+      conversation: {
+        id: "conversation-created",
+        title: "Created while restoring",
+        rootNodeId: "created-root",
+        isArchived: false,
+      },
+      rootNodeId: "created-root",
+      nodes: [
+        {
+          id: "created-root",
+          conversationId: "conversation-created",
+          role: "user",
+          content: "CREATED_SENTINEL",
+          createdAt: 200,
+          metadata: null,
+        },
+      ],
+      nodesById: {
+        "created-root": {
+          id: "created-root",
+          role: "user",
+          preview: "CREATED_SENTINEL",
+          childIds: [],
+        },
+      },
+    }
+    client.createConversation.mockResolvedValueOnce(createdTree)
+    await useConversationStore
+      .getState()
+      .createConversation(client, "Created while restoring", "CREATED_SENTINEL")
+    resolveList?.([summary])
+    await Promise.all([firstInitialization, duplicateInitialization])
+
+    const state = useConversationStore.getState()
+    expect(state.conversationId).toBe("conversation-created")
+    expect(state.history.summaries.map((item) => item.id)).toEqual([
+      "conversation-created",
+    ])
+    expect(client.loadConversationTree).not.toHaveBeenCalled()
   })
 
   it("projects exactly root-to-active order and excludes the sibling sentinel", async () => {
@@ -225,6 +400,24 @@ describe("conversation store", () => {
     expect(client.createBranch).not.toHaveBeenCalled()
     expect(client.editNodeAsBranch).not.toHaveBeenCalled()
     expect(client.archiveConversation).not.toHaveBeenCalled()
+  })
+
+  it("keeps an archived conversation in the discovered history", async () => {
+    client.listConversations.mockResolvedValueOnce([summary])
+    client.archiveConversation.mockResolvedValueOnce({
+      ...conversation,
+      isArchived: true,
+    })
+    await useConversationStore.getState().initializeHistory(client)
+
+    await useConversationStore.getState().archiveConversation(client)
+
+    const state = useConversationStore.getState()
+    expect(state.isArchived).toBe(true)
+    expect(state.history).toMatchObject({
+      status: "ready",
+      summaries: [{ id: conversation.id, isArchived: true }],
+    })
   })
 
   it("merges an authoritative edit as a sibling without changing history", async () => {

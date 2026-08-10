@@ -1,5 +1,7 @@
 mod support;
 
+use std::{fs, path::Path};
+
 use canopy_lib::{
     conversations::{
         ConversationPersistenceService, NewConversation, NewNode, PersistenceError, Role,
@@ -7,10 +9,14 @@ use canopy_lib::{
     database::{managed_sqlite_pool, DATABASE_URL, MIGRATION_CATALOG},
 };
 use serde_json::json;
-use sqlx::SqlitePool;
+use sqlx::{
+    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
+    SqlitePool,
+};
 use tauri_plugin_sql::{DbInstances, DbPool};
 
 use support::{migrated_pool, migrated_pool_through, run_async};
+use uuid::Uuid;
 
 fn conversation(id: &str, root_node_id: &str) -> NewConversation {
     NewConversation {
@@ -109,6 +115,29 @@ async fn create_branch_fixture(pool: &SqlitePool) -> ConversationPersistenceServ
         .expect("right branch is appended");
 
     service
+}
+
+async fn file_pool(path: &Path, create_if_missing: bool) -> SqlitePool {
+    let options = SqliteConnectOptions::new()
+        .filename(path)
+        .create_if_missing(create_if_missing)
+        .foreign_keys(true);
+    SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(options)
+        .await
+        .expect("file-backed test database connects")
+}
+
+async fn migrated_file_pool(path: &Path) -> SqlitePool {
+    let pool = file_pool(path, true).await;
+    for migration in MIGRATION_CATALOG {
+        sqlx::raw_sql(migration.sql)
+            .execute(&pool)
+            .await
+            .unwrap_or_else(|error| panic!("migration {} failed: {error}", migration.version));
+    }
+    pool
 }
 
 #[test]
@@ -352,6 +381,159 @@ fn sibling_branches_round_trip_deterministically_and_paths_are_isolated() {
                 .load_active_path("conversation-a", "missing-node")
                 .await,
             Err(PersistenceError::NotFound { .. })
+        ));
+    });
+}
+
+#[test]
+fn file_backed_history_lists_and_loads_after_pool_reopen() {
+    run_async(async {
+        let database_path =
+            std::env::temp_dir().join(format!("canopy-history-reopen-{}.sqlite", Uuid::new_v4()));
+        let first_pool = migrated_file_pool(&database_path).await;
+        let first_service = ConversationPersistenceService::new(first_pool.clone());
+        first_service
+            .create_conversation(
+                conversation("conversation-z", "root-z"),
+                node(
+                    "root-z",
+                    None,
+                    "conversation-z",
+                    Role::User,
+                    "OLDER_ROOT_SENTINEL",
+                    100,
+                ),
+            )
+            .await
+            .expect("older conversation is created");
+        first_service
+            .create_conversation(
+                conversation("conversation-a", "root-a"),
+                node(
+                    "root-a",
+                    None,
+                    "conversation-a",
+                    Role::User,
+                    "NEWER_ROOT_SENTINEL",
+                    200,
+                ),
+            )
+            .await
+            .expect("newer conversation is created");
+        first_service
+            .create_conversation(
+                conversation("conversation-b", "root-b"),
+                node(
+                    "root-b",
+                    None,
+                    "conversation-b",
+                    Role::User,
+                    "TIED_ACTIVITY_SENTINEL",
+                    200,
+                ),
+            )
+            .await
+            .expect("tied conversation is created");
+        first_service
+            .append_node(node(
+                "newest-node",
+                Some("root-z"),
+                "conversation-z",
+                Role::Assistant,
+                "LATEST_ACTIVITY_SENTINEL",
+                300,
+            ))
+            .await
+            .expect("latest activity is appended");
+        first_service
+            .archive_conversation("conversation-z")
+            .await
+            .expect("latest conversation is archived");
+        drop(first_service);
+        first_pool.close().await;
+
+        let second_pool = file_pool(&database_path, false).await;
+        let second_service = ConversationPersistenceService::new(second_pool.clone());
+        let summaries = second_service
+            .list_conversations()
+            .await
+            .expect("reopened history is listed");
+        assert_eq!(summaries.len(), 3);
+        assert_eq!(summaries[0].id, "conversation-z");
+        assert_eq!(summaries[0].updated_at, 300);
+        assert!(summaries[0].is_archived);
+        assert_eq!(summaries[1].id, "conversation-a");
+        assert_eq!(summaries[1].updated_at, 200);
+        assert_eq!(summaries[2].id, "conversation-b");
+        assert_eq!(summaries[2].updated_at, 200);
+
+        for summary in summaries {
+            let tree = second_service
+                .load_conversation_tree(&summary.id)
+                .await
+                .expect("listed conversation remains loadable");
+            assert_eq!(tree.conversation.id, summary.id);
+            assert_eq!(tree.conversation.root_node_id, summary.root_node_id);
+            assert!(!tree.nodes.is_empty());
+        }
+
+        second_pool.close().await;
+        fs::remove_file(database_path).expect("history reopen database is removed");
+    });
+}
+
+#[test]
+fn empty_history_listing_returns_an_empty_collection() {
+    run_async(async {
+        let service = ConversationPersistenceService::new(migrated_pool().await);
+        assert_eq!(
+            service
+                .list_conversations()
+                .await
+                .expect("empty history lists safely"),
+            Vec::new()
+        );
+    });
+}
+
+#[test]
+fn history_listing_rejects_an_invalid_stored_archive_flag() {
+    run_async(async {
+        let pool = migrated_pool().await;
+        let service = ConversationPersistenceService::new(pool.clone());
+        service
+            .create_conversation(
+                conversation("conversation-corrupt", "root-corrupt"),
+                node(
+                    "root-corrupt",
+                    None,
+                    "conversation-corrupt",
+                    Role::User,
+                    "CORRUPT_SUMMARY_SENTINEL",
+                    100,
+                ),
+            )
+            .await
+            .expect("conversation is created before corruption");
+
+        sqlx::query("DROP TRIGGER conversations_archive_forward_only")
+            .execute(&pool)
+            .await
+            .expect("test-only corruption removes the archive guard");
+        sqlx::query("PRAGMA ignore_check_constraints = ON")
+            .execute(&pool)
+            .await
+            .expect("test-only corruption enables invalid values");
+        sqlx::query("UPDATE conversations SET is_archived = 2 WHERE id = 'conversation-corrupt'")
+            .execute(&pool)
+            .await
+            .expect("test-only corruption writes an invalid archive flag");
+
+        assert!(matches!(
+            service.list_conversations().await,
+            Err(PersistenceError::InvalidStoredData {
+                field: "is_archived"
+            })
         ));
     });
 }

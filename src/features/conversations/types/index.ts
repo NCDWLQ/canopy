@@ -15,6 +15,10 @@ export type ConversationView = {
   isArchived: boolean
 }
 
+export type ConversationSummaryView = ConversationView & {
+  updatedAt: number
+}
+
 export type ConversationNodeView = {
   id: string
   parentId?: string

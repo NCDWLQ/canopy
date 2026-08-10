@@ -3,8 +3,8 @@ use std::collections::{HashMap, HashSet};
 use sqlx::SqlitePool;
 
 use super::{
-    repository::ConversationRepository, Conversation, ConversationTree, NewConversation, NewNode,
-    Node, PersistenceError, Role, ValidatedPath,
+    repository::ConversationRepository, Conversation, ConversationSummary, ConversationTree,
+    NewConversation, NewNode, Node, PersistenceError, Role, ValidatedPath,
 };
 
 const MAX_GENERATED_CONTENT_BYTES: usize = 1024 * 1024;
@@ -192,6 +192,13 @@ impl ConversationPersistenceService {
             conversation,
             nodes,
         })
+    }
+
+    pub async fn list_conversations(&self) -> Result<Vec<ConversationSummary>, PersistenceError> {
+        let mut transaction = self.pool.begin().await?;
+        let conversations = ConversationRepository::list_conversations(&mut transaction).await?;
+        transaction.commit().await?;
+        Ok(conversations)
     }
 
     pub async fn load_active_path(

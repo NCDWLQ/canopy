@@ -38,13 +38,14 @@ class WireDatabaseError extends Error {
 }
 
 describe("conversation Tauri contract", () => {
-  it("uses the shared exact command list and maps all seven request shapes", async () => {
+  it("uses the shared exact command list and maps all eight request shapes", async () => {
     expect(Object.values(CONVERSATION_COMMANDS)).toEqual(fixture.command_names)
     const transport = resolvingTransport({
       create_conversation: fixture.successes.conversation_tree,
       append_node: fixture.successes.right_node,
       create_branch: fixture.successes.left_node,
       edit_node_as_branch: fixture.successes.right_node,
+      list_conversations: fixture.successes.conversation_summaries,
       load_conversation_tree: fixture.successes.conversation_tree,
       load_active_path: fixture.successes.active_path,
       archive_conversation: fixture.successes.archived_conversation,
@@ -70,6 +71,7 @@ describe("conversation Tauri contract", () => {
       sourceNodeId: fixture.requests.edit_node_as_branch.source_node_id,
       content: fixture.requests.edit_node_as_branch.content,
     })
+    await client.listConversations()
     await client.loadConversationTree(
       fixture.requests.load_conversation_tree.conversation_id,
     )
@@ -90,6 +92,54 @@ describe("conversation Tauri contract", () => {
         },
       })),
     )
+  })
+
+  it("validates and projects unique conversation summaries", async () => {
+    const client = createConversationClient(
+      resolvingTransport({
+        list_conversations: fixture.successes.conversation_summaries,
+      }),
+    )
+    await expect(client.listConversations()).resolves.toEqual([
+      {
+        id: "conversation-fixture",
+        title: "Fixture conversation",
+        rootNodeId: "root",
+        isArchived: false,
+        updatedAt: 1770000002124,
+      },
+      {
+        id: "conversation-archived",
+        title: "Archived fixture",
+        rootNodeId: "archived-root",
+        isArchived: true,
+        updatedAt: 1760000000000,
+      },
+    ])
+
+    const duplicate = [
+      fixture.successes.conversation_summaries[0],
+      fixture.successes.conversation_summaries[0],
+    ]
+    const duplicateClient = createConversationClient(
+      resolvingTransport({ list_conversations: duplicate }),
+    )
+    await expect(duplicateClient.listConversations()).rejects.toMatchObject({
+      code: "internal",
+      retryable: false,
+    })
+
+    const malformedClient = createConversationClient(
+      resolvingTransport({
+        list_conversations: [
+          { ...fixture.successes.conversation_summaries[0], updated_at: null },
+        ],
+      }),
+    )
+    await expect(malformedClient.listConversations()).rejects.toMatchObject({
+      code: "internal",
+      retryable: false,
+    })
   })
 
   it("projects nullability, nested metadata, normalized children, and active path order", async () => {

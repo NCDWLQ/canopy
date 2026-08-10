@@ -3,7 +3,10 @@ use std::collections::HashSet;
 use serde_json::Value;
 use sqlx::{sqlite::SqliteRow, Row, SqliteConnection};
 
-use super::{Conversation, NewConversation, NewNode, Node, PersistenceError, Role, ValidatedPath};
+use super::{
+    Conversation, ConversationSummary, NewConversation, NewNode, Node, PersistenceError, Role,
+    ValidatedPath,
+};
 
 #[derive(Debug, Default)]
 pub(crate) struct ConversationRepository;
@@ -70,6 +73,23 @@ impl ConversationRepository {
         .await?;
 
         row.map(decode_conversation).transpose()
+    }
+
+    pub(crate) async fn list_conversations(
+        connection: &mut SqliteConnection,
+    ) -> Result<Vec<ConversationSummary>, PersistenceError> {
+        let rows = sqlx::query(
+            "SELECT c.id, c.title, c.root_node_id, c.is_archived, \
+                    MAX(n.created_at) AS updated_at \
+             FROM conversations AS c \
+             JOIN nodes AS n ON n.conversation_id = c.id \
+             GROUP BY c.id, c.title, c.root_node_id, c.is_archived \
+             ORDER BY updated_at DESC, c.id ASC",
+        )
+        .fetch_all(connection)
+        .await?;
+
+        rows.into_iter().map(decode_conversation_summary).collect()
     }
 
     pub(crate) async fn load_node(
@@ -211,6 +231,16 @@ fn decode_conversation(row: SqliteRow) -> Result<Conversation, PersistenceError>
         title: row.try_get("title")?,
         root_node_id: row.try_get("root_node_id")?,
         is_archived: decode_boolean(&row, "is_archived")?,
+    })
+}
+
+fn decode_conversation_summary(row: SqliteRow) -> Result<ConversationSummary, PersistenceError> {
+    Ok(ConversationSummary {
+        id: row.try_get("id")?,
+        title: row.try_get("title")?,
+        root_node_id: row.try_get("root_node_id")?,
+        is_archived: decode_boolean(&row, "is_archived")?,
+        updated_at: row.try_get("updated_at")?,
     })
 }
 

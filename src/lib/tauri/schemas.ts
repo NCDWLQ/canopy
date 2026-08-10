@@ -93,6 +93,7 @@ export const editNodeAsBranchRequestSchema = z
 export const loadConversationTreeRequestSchema = z
   .object({ conversation_id: idSchema })
   .strict()
+export const listConversationsRequestSchema = z.object({}).strict()
 export const loadActivePathRequestSchema = z
   .object({ conversation_id: idSchema, active_node_id: idSchema })
   .strict()
@@ -131,6 +132,26 @@ export const conversationDtoSchema = z
   })
   .strict()
 
+export const conversationSummaryDtoSchema = conversationDtoSchema.extend({
+  updated_at: z.number().int().safe(),
+})
+
+export const conversationSummariesDtoSchema = z
+  .array(conversationSummaryDtoSchema)
+  .superRefine((summaries, context) => {
+    const ids = new Set<string>()
+    summaries.forEach((summary, index) => {
+      if (ids.has(summary.id)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "duplicate conversation summary",
+          path: [index, "id"],
+        })
+      }
+      ids.add(summary.id)
+    })
+  })
+
 export const nodeDtoSchema = z
   .object({
     id: idSchema,
@@ -160,6 +181,9 @@ export const activePathDtoSchema = z
   .strict()
 
 export type ConversationDto = z.infer<typeof conversationDtoSchema>
+export type ConversationSummaryDto = z.infer<
+  typeof conversationSummaryDtoSchema
+>
 export type NodeDto = z.infer<typeof nodeDtoSchema>
 export type ConversationTreeDto = z.infer<typeof conversationTreeDtoSchema>
 export type ActivePathDto = z.infer<typeof activePathDtoSchema>

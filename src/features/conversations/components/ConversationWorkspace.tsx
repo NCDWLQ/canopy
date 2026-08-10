@@ -20,6 +20,8 @@ import {
 } from "../store"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Separator } from "@/components/ui/separator"
 import { ProviderSettingsDialog } from "@/features/providers/components"
 import { useProviderProfileStore } from "@/features/providers/store"
 import {
@@ -61,9 +63,15 @@ export function ConversationWorkspace({
       status: state.status,
       error: state.error,
       generation: state.generation,
+      history: state.history,
       toggleExpanded: state.toggleExpanded,
       clearError: state.clearError,
+      retryHistory: state.retryHistory,
+      selectConversation: state.selectConversation,
     })),
+  )
+  const initializeHistory = useConversationStore(
+    (state) => state.initializeHistory,
   )
   const pathProjection = useConversationStore(useShallow(selectActivePath))
   const controller = useWorkspaceGenerationController({
@@ -75,6 +83,10 @@ export function ConversationWorkspace({
   React.useEffect(() => {
     void loadProviderProfile(providerClient)
   }, [loadProviderProfile, providerClient])
+
+  React.useEffect(() => {
+    void initializeHistory(client)
+  }, [client, initializeHistory])
 
   const projectionError =
     pathProjection.kind === "error" ? pathProjection.error : null
@@ -174,9 +186,73 @@ export function ConversationWorkspace({
         inert={!isSidebarOpen}
       >
         <div className="flex h-12 shrink-0 items-center justify-between border-b px-4 text-sm font-semibold">
-          <span>Conversation tree</span>
+          <span>History</span>
         </div>
-        <div className="flex-1 overflow-hidden py-2">
+        <div className="max-h-64 shrink-0 overflow-y-auto p-2">
+          {store.history.summaries.length > 0 && (
+            <ul
+              aria-label="Conversation history"
+              className="flex flex-col gap-1"
+            >
+              {store.history.summaries.map((summary) => (
+                <li key={summary.id}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="h-auto w-full justify-between px-2 py-2 text-left"
+                    aria-current={
+                      store.conversationId === summary.id ? "page" : undefined
+                    }
+                    disabled={
+                      store.status === "loading" ||
+                      isGenerationActive(store.generation)
+                    }
+                    onClick={() =>
+                      void store.selectConversation(client, summary.id)
+                    }
+                  >
+                    <span className="truncate">{summary.title}</span>
+                    {summary.isArchived && (
+                      <Badge variant="secondary">Archived</Badge>
+                    )}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {store.history.status === "loading" &&
+            store.history.summaries.length === 0 && (
+              <p className="px-2 py-3 text-sm text-muted-foreground">
+                Loading history…
+              </p>
+            )}
+          {store.history.status === "empty" && (
+            <p className="px-2 py-3 text-sm text-muted-foreground">
+              No saved conversations.
+            </p>
+          )}
+          {store.history.status === "error" && (
+            <Alert variant="destructive">
+              <AlertDescription className="flex flex-col gap-2">
+                <p>{store.history.error.message}</p>
+                {store.history.error.retryable && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void store.retryHistory(client)}
+                  >
+                    Retry history
+                  </Button>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+        </div>
+        <Separator />
+        <div className="flex h-10 shrink-0 items-center px-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Conversation tree
+        </div>
+        <div className="flex-1 overflow-hidden pb-2">
           {store.rootNodeId !== null && isProjectionValid ? (
             <OutlineTree
               rootNodeId={store.rootNodeId}
@@ -263,7 +339,28 @@ export function ConversationWorkspace({
           </div>
         </header>
 
-        {store.conversationId === null ? (
+        {store.conversationId === null &&
+        (store.history.status === "idle" ||
+          store.history.status === "loading") ? (
+          <div
+            className="flex flex-1 items-center justify-center text-sm text-muted-foreground"
+            role="status"
+          >
+            Loading conversation history…
+          </div>
+        ) : store.conversationId === null &&
+          store.history.status === "error" ? (
+          <Alert variant="destructive" className="m-auto max-w-md">
+            <AlertDescription className="flex flex-col gap-4 text-center">
+              <p>{store.history.error.message}</p>
+              {store.history.error.retryable && (
+                <Button onClick={() => void store.retryHistory(client)}>
+                  Retry loading history
+                </Button>
+              )}
+            </AlertDescription>
+          </Alert>
+        ) : store.conversationId === null ? (
           <NewConversationForm
             disabled={store.status === "loading"}
             error={store.error}

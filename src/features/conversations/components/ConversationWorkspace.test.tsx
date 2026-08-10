@@ -1,5 +1,6 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import { StrictMode } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { ConversationWorkspace } from "./ConversationWorkspace"
@@ -137,6 +138,9 @@ function createMockClient() {
     appendNode: vi.fn<ConversationClient["appendNode"]>(),
     createBranch: vi.fn<ConversationClient["createBranch"]>(),
     editNodeAsBranch: vi.fn<ConversationClient["editNodeAsBranch"]>(),
+    listConversations: vi
+      .fn<ConversationClient["listConversations"]>()
+      .mockResolvedValue([]),
     loadConversationTree: vi
       .fn<ConversationClient["loadConversationTree"]>()
       .mockResolvedValue(tree),
@@ -176,6 +180,7 @@ function resetStore() {
     status: "idle",
     error: null,
     generation: { phase: "idle" },
+    history: { status: "idle", summaries: [], error: null },
   })
   useProviderProfileStore.setState({ phase: "idle", profile: null })
 }
@@ -190,6 +195,130 @@ describe("ConversationWorkspace", () => {
     vi.mocked(createConversationClient).mockReturnValue(client)
     vi.mocked(createProviderClient).mockReturnValue(providerClient)
     resetStore()
+  })
+
+  it("restores persisted history once on a clean StrictMode mount", async () => {
+    let resolveTree: ((value: ConversationTreeView) => void) | undefined
+    client.listConversations.mockResolvedValueOnce([
+      {
+        ...tree.conversation,
+        updatedAt: right.createdAt,
+      },
+    ])
+    client.loadConversationTree.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveTree = resolve
+      }),
+    )
+
+    render(
+      <StrictMode>
+        <ConversationWorkspace />
+      </StrictMode>,
+    )
+
+    expect(screen.getByText("Loading conversation history…")).toBeVisible()
+    await waitFor(() => {
+      expect(client.listConversations).toHaveBeenCalledTimes(1)
+      expect(client.loadConversationTree).toHaveBeenCalledTimes(1)
+      expect(client.loadConversationTree).toHaveBeenCalledWith(
+        tree.conversation.id,
+      )
+    })
+    expect(screen.getByText("Loading conversation history…")).toBeVisible()
+    expect(
+      screen.queryByRole("heading", { name: "Start a conversation" }),
+    ).not.toBeInTheDocument()
+
+    act(() => {
+      resolveTree?.(tree)
+    })
+    const pane = await screen.findByTestId("conversation-pane")
+    expect(
+      screen.getByRole("button", { name: "Branch proof" }),
+    ).toHaveAttribute("aria-current", "page")
+    expect(within(pane).getByText(right.content)).toBeVisible()
+    expect(within(pane).queryByText(left.content)).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole("heading", { name: "Start a conversation" }),
+    ).not.toBeInTheDocument()
+  })
+
+  it("switches history without leaking nodes from the prior conversation", async () => {
+    const user = userEvent.setup()
+    const otherRoot: ConversationNodeView = {
+      id: "other-root",
+      conversationId: "conversation-other",
+      role: "user",
+      content: "OTHER_CONVERSATION_SENTINEL",
+      createdAt: 8,
+      metadata: null,
+    }
+    const otherTree: ConversationTreeView = {
+      conversation: {
+        id: otherRoot.conversationId,
+        title: "Other history",
+        rootNodeId: otherRoot.id,
+        isArchived: true,
+      },
+      rootNodeId: otherRoot.id,
+      nodes: [otherRoot],
+      nodesById: {
+        [otherRoot.id]: {
+          id: otherRoot.id,
+          role: otherRoot.role,
+          preview: otherRoot.content,
+          childIds: [],
+        },
+      },
+    }
+    client.listConversations.mockResolvedValueOnce([
+      { ...tree.conversation, updatedAt: right.createdAt },
+      { ...otherTree.conversation, updatedAt: otherRoot.createdAt },
+    ])
+    client.loadConversationTree.mockImplementation((id) =>
+      Promise.resolve(id === otherTree.conversation.id ? otherTree : tree),
+    )
+    render(<ConversationWorkspace />)
+    const initialPane = await screen.findByTestId("conversation-pane")
+    await within(initialPane).findByText(right.content)
+
+    await user.click(screen.getByRole("button", { name: /Other history/ }))
+
+    const pane = await screen.findByTestId("conversation-pane")
+    await waitFor(() => {
+      expect(within(pane).getByText(otherRoot.content)).toBeVisible()
+    })
+    expect(within(pane).queryByText(root.content)).not.toBeInTheDocument()
+    expect(within(pane).queryByText(left.content)).not.toBeInTheDocument()
+    expect(screen.getByText("Archived — read only")).toBeVisible()
+  })
+
+  it("shows a retryable discovery error instead of the empty form", async () => {
+    const user = userEvent.setup()
+    client.listConversations.mockRejectedValueOnce(
+      new ConversationCommandError({
+        code: "database_unavailable",
+        message: "History is temporarily unavailable.",
+        retryable: true,
+      }),
+    )
+    render(<ConversationWorkspace />)
+
+    expect(
+      await screen.findByRole("button", { name: "Retry loading history" }),
+    ).toBeVisible()
+    expect(
+      screen.queryByRole("heading", { name: "Start a conversation" }),
+    ).not.toBeInTheDocument()
+
+    client.listConversations.mockResolvedValueOnce([])
+    await user.click(
+      screen.getByRole("button", { name: "Retry loading history" }),
+    )
+    expect(
+      await screen.findByRole("heading", { name: "Start a conversation" }),
+    ).toBeVisible()
   })
 
   it("renders the exact selected path in order and excludes its sibling", async () => {
@@ -258,7 +387,9 @@ describe("ConversationWorkspace", () => {
     render(<ConversationWorkspace />)
 
     expect(screen.getByText("Archived — read only")).toBeVisible()
-    expect(screen.getByText(right.content)).toBeVisible()
+    expect(
+      within(screen.getByTestId("conversation-pane")).getByText(right.content),
+    ).toBeVisible()
     expect(
       screen.getByRole("textbox", { name: "Message composer" }),
     ).toBeDisabled()
@@ -318,7 +449,7 @@ describe("ConversationWorkspace", () => {
     client.createConversation.mockResolvedValueOnce(rootOnlyTree)
     render(<ConversationWorkspace />)
 
-    await user.type(screen.getByLabelText("Title"), "New conversation")
+    await user.type(await screen.findByLabelText("Title"), "New conversation")
     await user.type(
       screen.getByLabelText("First message"),
       "ONE_USER_ROOT_SENTINEL",

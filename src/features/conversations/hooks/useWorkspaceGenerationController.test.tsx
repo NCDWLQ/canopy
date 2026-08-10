@@ -218,6 +218,9 @@ function createConversationClient() {
     appendNode: vi.fn<ConversationClient["appendNode"]>(),
     createBranch: vi.fn<ConversationClient["createBranch"]>(),
     editNodeAsBranch: vi.fn<ConversationClient["editNodeAsBranch"]>(),
+    listConversations: vi
+      .fn<ConversationClient["listConversations"]>()
+      .mockResolvedValue([]),
     loadConversationTree: vi
       .fn<ConversationClient["loadConversationTree"]>()
       .mockResolvedValue(tree),
@@ -251,6 +254,7 @@ function resetConversationStore() {
     status: "idle",
     error: null,
     generation: { phase: "idle" },
+    history: { status: "idle", summaries: [], error: null },
   })
 }
 

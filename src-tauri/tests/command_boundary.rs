@@ -11,8 +11,9 @@ use canopy_lib::{
     conversations::{
         commands::{
             ActivePathDto, AppendNodeRequest, ArchiveConversationRequest,
-            ConversationCommandService, ConversationDto, ConversationTreeDto, CreateBranchRequest,
-            CreateConversationRequest, EditNodeAsBranchRequest, IdentityTimeSource,
+            ConversationCommandService, ConversationDto, ConversationSummaryDto,
+            ConversationTreeDto, CreateBranchRequest, CreateConversationRequest,
+            EditNodeAsBranchRequest, IdentityTimeSource, ListConversationsRequest,
             LoadActivePathRequest, LoadConversationTreeRequest, NodeDto,
             CONVERSATION_COMMAND_NAMES,
         },
@@ -102,6 +103,7 @@ fn shared_fixture_round_trips_rust_requests_dtos_errors_and_exact_command_names(
     assert_request!("append_node", AppendNodeRequest);
     assert_request!("create_branch", CreateBranchRequest);
     assert_request!("edit_node_as_branch", EditNodeAsBranchRequest);
+    assert_request!("list_conversations", ListConversationsRequest);
     assert_request!("load_conversation_tree", LoadConversationTreeRequest);
     assert_request!("load_active_path", LoadActivePathRequest);
     assert_request!("archive_conversation", ArchiveConversationRequest);
@@ -112,6 +114,13 @@ fn shared_fixture_round_trips_rust_requests_dtos_errors_and_exact_command_names(
     assert_eq!(
         serde_json::to_value(conversation).expect("conversation DTO reserializes"),
         fixture["successes"]["conversation"]
+    );
+    let summaries: Vec<ConversationSummaryDto> =
+        serde_json::from_value(fixture["successes"]["conversation_summaries"].clone())
+            .expect("conversation summaries decode");
+    assert_eq!(
+        serde_json::to_value(summaries).expect("conversation summaries reserialize"),
+        fixture["successes"]["conversation_summaries"]
     );
     let tree: ConversationTreeDto =
         serde_json::from_value(fixture["successes"]["conversation_tree"].clone())
@@ -196,6 +205,16 @@ fn deterministic_command_service_assigns_identity_time_and_preserves_content() {
         assert_eq!(tree.nodes[0].model, None);
         assert_eq!(tree.nodes[0].created_at, 1_770_000_000_123);
         assert_eq!(tree.nodes[0].metadata, json!({}));
+
+        let summaries = service
+            .list_conversations(ListConversationsRequest {})
+            .await
+            .expect("conversation discovery command succeeds");
+        assert_eq!(summaries.len(), 1);
+        assert_eq!(summaries[0].id, "conversation-created");
+        assert_eq!(summaries[0].root_node_id, "root-created");
+        assert_eq!(summaries[0].updated_at, 1_770_000_000_123);
+        assert!(!summaries[0].is_archived);
 
         let stored_content: String =
             sqlx::query_scalar("SELECT content FROM nodes WHERE id = 'root-created'")

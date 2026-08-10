@@ -7,8 +7,8 @@ use tauri_plugin_sql::DbInstances;
 use uuid::Uuid;
 
 use super::{
-    Conversation, ConversationPersistenceService, ConversationTree, NewConversation, NewNode, Node,
-    Role, ValidatedPath,
+    Conversation, ConversationPersistenceService, ConversationSummary, ConversationTree,
+    NewConversation, NewNode, Node, Role, ValidatedPath,
 };
 use crate::{database::managed_sqlite_pool, error::CommandError};
 
@@ -20,6 +20,7 @@ pub const CONVERSATION_COMMAND_NAMES: &[&str] = &[
     "append_node",
     "create_branch",
     "edit_node_as_branch",
+    "list_conversations",
     "load_conversation_tree",
     "load_active_path",
     "archive_conversation",
@@ -62,6 +63,10 @@ pub struct LoadConversationTreeRequest {
     pub conversation_id: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct ListConversationsRequest {}
+
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct LoadActivePathRequest {
@@ -91,6 +96,16 @@ pub struct ConversationDto {
     pub title: String,
     pub root_node_id: String,
     pub is_archived: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct ConversationSummaryDto {
+    pub id: String,
+    pub title: String,
+    pub root_node_id: String,
+    pub is_archived: bool,
+    pub updated_at: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -259,6 +274,22 @@ impl<S: IdentityTimeSource> ConversationCommandService<S> {
             .map_err(CommandError::from)
     }
 
+    pub async fn list_conversations(
+        &self,
+        _request: ListConversationsRequest,
+    ) -> Result<Vec<ConversationSummaryDto>, CommandError> {
+        self.persistence
+            .list_conversations()
+            .await
+            .map(|summaries| {
+                summaries
+                    .into_iter()
+                    .map(ConversationSummaryDto::from)
+                    .collect()
+            })
+            .map_err(CommandError::from)
+    }
+
     pub async fn load_active_path(
         &self,
         request: LoadActivePathRequest,
@@ -342,6 +373,18 @@ impl From<Conversation> for ConversationDto {
             title: conversation.title,
             root_node_id: conversation.root_node_id,
             is_archived: conversation.is_archived,
+        }
+    }
+}
+
+impl From<ConversationSummary> for ConversationSummaryDto {
+    fn from(summary: ConversationSummary) -> Self {
+        Self {
+            id: summary.id,
+            title: summary.title,
+            root_node_id: summary.root_node_id,
+            is_archived: summary.is_archived,
+            updated_at: summary.updated_at,
         }
     }
 }
@@ -459,6 +502,17 @@ pub async fn load_conversation_tree(
 }
 
 #[tauri::command]
+pub async fn list_conversations(
+    request: ListConversationsRequest,
+    instances: State<'_, DbInstances>,
+) -> Result<Vec<ConversationSummaryDto>, CommandError> {
+    production_service(instances.inner())
+        .await?
+        .list_conversations(request)
+        .await
+}
+
+#[tauri::command]
 pub async fn load_active_path(
     request: LoadActivePathRequest,
     instances: State<'_, DbInstances>,
@@ -487,9 +541,9 @@ mod tests {
 
     #[test]
     fn command_names_are_frozen() {
-        assert_eq!(CONVERSATION_COMMAND_NAMES.len(), 7);
+        assert_eq!(CONVERSATION_COMMAND_NAMES.len(), 8);
         assert_eq!(CONVERSATION_COMMAND_NAMES[0], "create_conversation");
-        assert_eq!(CONVERSATION_COMMAND_NAMES[6], "archive_conversation");
+        assert_eq!(CONVERSATION_COMMAND_NAMES[7], "archive_conversation");
     }
 
     #[test]

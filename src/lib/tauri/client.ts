@@ -4,6 +4,7 @@ import type { z } from "zod"
 import type {
   ActivePathView,
   ConversationNodeView,
+  ConversationSummaryView,
   ConversationTreeView,
   ConversationView,
   PathMessageView,
@@ -18,15 +19,18 @@ import {
   archiveConversationRequestSchema,
   commandErrorSchema,
   conversationDtoSchema,
+  conversationSummariesDtoSchema,
   conversationTreeDtoSchema,
   createBranchRequestSchema,
   createConversationRequestSchema,
   editNodeAsBranchRequestSchema,
   loadActivePathRequestSchema,
+  listConversationsRequestSchema,
   loadConversationTreeRequestSchema,
   nodeDtoSchema,
   type ActivePathDto,
   type ConversationDto,
+  type ConversationSummaryDto,
   type ConversationTreeDto,
   type NodeDto,
 } from "./schemas"
@@ -36,6 +40,7 @@ export const CONVERSATION_COMMANDS = {
   appendNode: "append_node",
   createBranch: "create_branch",
   editNodeAsBranch: "edit_node_as_branch",
+  listConversations: "list_conversations",
   loadConversationTree: "load_conversation_tree",
   loadActivePath: "load_active_path",
   archiveConversation: "archive_conversation",
@@ -137,6 +142,17 @@ export function createConversationClient(
         },
         nodeDtoSchema,
         mapNode,
+      )
+    },
+
+    listConversations() {
+      return call(
+        transport,
+        CONVERSATION_COMMANDS.listConversations,
+        listConversationsRequestSchema,
+        {},
+        conversationSummariesDtoSchema,
+        (summaries) => summaries.map(mapConversationSummary),
       )
     },
 
@@ -246,6 +262,15 @@ function mapConversation(dto: ConversationDto): ConversationView {
     title: dto.title,
     rootNodeId: dto.root_node_id,
     isArchived: dto.is_archived,
+  }
+}
+
+function mapConversationSummary(
+  dto: ConversationSummaryDto,
+): ConversationSummaryView {
+  return {
+    ...mapConversation(dto),
+    updatedAt: dto.updated_at,
   }
 }
 
