@@ -189,12 +189,19 @@ owned by the main integration session. The frontend component agent imports
 them and may create component-local values that satisfy them; it must not copy
 or redefine the types or the IPC fixture payloads in component directories.
 
-Provider forms follow the same pattern: controlled, secret-masked fields emit a typed draft or submit intent and never call a provider directly.
+Provider forms follow the same pattern: controlled, secret-masked fields emit a
+typed store action and never call raw Tauri transport. Existing blank key input
+means `keep`, explicit removal means `remove`, and nonblank input means
+`replace`; a new keyless profile uses `remove`. Clear the key on close and
+after every save attempt, including failure.
 
 ### 3. Contracts
 
 - `OutlineTree` receives one normalized tree projection. It may derive visible rows for expansion but must not load or persist nodes.
 - `ConversationPane.path` is authoritative and already validated by the application layer. It must not append siblings or reconstruct ancestry.
+- A streaming assistant is a separate transient presentation after the durable
+  path. Label it as not saved, keep it out of the outline, and never assign it a
+  durable node identity before exact completion.
 - `MessageNode` displays capabilities supplied through `canBranch` / `canEdit`; it must not infer authorization from raw roles beyond visual presentation.
 - Branch and edit callbacks emit the source node ID. Editing is labeled as creating a branch and never mutates displayed history optimistically.
 - Unknown IPC payloads are decoded in `lib/tauri`, before they reach feature components.

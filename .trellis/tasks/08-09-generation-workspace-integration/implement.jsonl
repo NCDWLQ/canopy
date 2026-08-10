@@ -1,0 +1,10 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend package routing and implementation conventions."}
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Feature ownership and typed Tauri boundary placement."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Conversation component, capability, accessibility, and archive contracts."}
+{"file":".trellis/spec/frontend/hook-guidelines.md","reason":"Controller effect cleanup, injected clients, and narrow subscriptions."}
+{"file":".trellis/spec/frontend/state-management.md","reason":"Normalized non-persistent Zustand state, SQLite authority, and fail-closed projections."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Provider Channel event order, strict acknowledgement, and runtime decoding contracts."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Behavioral tests, sibling exclusion, and cross-layer quality expectations."}
+{"file":".trellis/spec/backend/provider-guidelines.md","reason":"Frozen profile, credential, generation, cancellation, acknowledgement, and persistence semantics consumed by the UI."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Trace UI state through typed bridge, Rust runtime, and SQLite authority."}
+{"file":".trellis/tasks/08-09-generation-workspace-integration/research/integration-design.md","reason":"Task-specific state ownership, shadcn integration, race, secret, and reconciliation research."}

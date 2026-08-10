@@ -1,0 +1,9 @@
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Audit provider/generation controls, semantic interaction, archive capability, focus, and reduced motion."}
+{"file":".trellis/spec/frontend/hook-guidelines.md","reason":"Audit lifecycle cleanup, stale callback handling, and controller ownership."}
+{"file":".trellis/spec/frontend/state-management.md","reason":"Audit transient/durable separation, authoritative merge, failure preservation, and no persistence middleware."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Audit strict Channel lifecycle, token handling, automatic acknowledgement boundary, and safe errors."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Audit meaningful store/component/integration coverage and required full gates."}
+{"file":".trellis/spec/backend/provider-guidelines.md","reason":"Cross-check UI capability, cancel, commit, timeout, ambiguity, and credential behavior against the frozen backend."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Audit component/store reuse and prevent parallel abstractions around the shared bridge."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Verify provider request and authoritative assistant data flow end to end."}
+{"file":".trellis/tasks/08-09-generation-workspace-integration/research/integration-design.md","reason":"Audit task-specific race, secret, shadcn, and reconciliation decisions."}

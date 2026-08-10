@@ -4,12 +4,11 @@
 
 ## Current State
 
-Canopy currently has no custom hooks. `src/App.tsx` is a pure scaffold
-component, while `src/main.tsx` owns only root creation and `StrictMode`. Do not
-create hooks merely to fill the reserved `@/hooks` alias in `components.json`.
-
-The first custom hooks should appear only when conversation state, Tauri
-actions, or reusable desktop behavior provides concrete extraction evidence.
+`useWorkspaceGenerationController` is the first feature hook. It coordinates
+the typed provider Channel with conversation selection, mutation locking,
+exact cancellation, automatic acknowledgement, and SQLite reconciliation.
+Keep this lifecycle under `features/conversations/hooks`; do not move it into a
+generic root hook or duplicate it in components.
 
 ## When to Create a Hook
 
@@ -64,6 +63,12 @@ redeclared inline in several components.
   `react-hooks` lint rules.
 - Effects that start asynchronous work must handle stale completion and
   cancellation explicitly.
+- Channel callbacks and the command promise may resolve in either order. Gate
+  both with the current UI run identity; a late command result for the exact
+  current/completed generation is not a cancellation condition.
+- After acknowledgement may have been accepted, cancellation is not rollback.
+  Keep a bounded terminal-delivery grace timer, then reload SQLite authority;
+  cleanup clears timers and triggers reconciliation for already-ambiguous work.
 - User cancellation returns the UI to an idle/cancelled state without an error
   toast, consistent with the shared error contract.
 - Do not use an effect to derive values that can be computed during render by

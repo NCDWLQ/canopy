@@ -209,7 +209,8 @@ All six calls reuse `InvokeTransport`; generation alone creates one
   generation-scoped capability. The bridge validates and projects it but never
   auto-acknowledges, persists, logs, or stores it. Later UI code calls
   `commitGeneration` once only after it has accepted the complete transient
-  stream as the current exact generation.
+  stream as the current exact generation. The token stays in that event
+  callback and is not added to Zustand or component props.
 - `started` conversation/active IDs must equal the request. `completed.node`
   must be an assistant in that conversation, parented by the active user, use
   the started model, and contain exactly the concatenated deltas. Cumulative
@@ -231,7 +232,7 @@ All six calls reuse `InvokeTransport`; generation alone creates one
 | Ready before started, duplicate ready, delta/completed before the required phase, or invalid UUID v4 token | one `internal`; exact cancel |
 | Completed role/parent/conversation/model/content mismatch | one `internal`; exact cancel |
 | Wrong/replayed/expired/not-ready commit pair | valid `{ accepted: false }`; no inferred persistence |
-| Commit transport result is ambiguous or terminal delivery is lost after accepted acknowledgement | reconcile by loading SQLite authority; do not invent a node |
+| Commit transport result is ambiguous or terminal delivery is lost after accepted acknowledgement | allow a bounded exact-terminal grace period, then reload SQLite authority; remain retryable if an early reload cannot prove the result, and do not invent a node |
 | Valid failed event | normalized shared `UiError` |
 | Valid cancelled event | terminal cancellation projection, not an error toast decision |
 
@@ -259,7 +260,9 @@ All six calls reuse `InvokeTransport`; generation alone creates one
   terminalizes locally and exact-cancels, and later channel values are ignored.
 - Assert the bridge never invokes `commit_generation` automatically. UI/store
   integration must explicitly acknowledge ready, handle `{ accepted: false }`,
-  and merge durable history only from `completed.node` or a fresh reload.
+  and merge durable history only from `completed.node` or a fresh reload. Cover
+  a command result arriving after exact Channel completion and exact completion
+  arriving before or after an ambiguity reload.
 - Run format, ESLint, strict TypeScript, Vitest, and the production Vite build.
 - Scan outside `src/lib/tauri` for raw `invoke`, provider HTTP, SQL, frontend
   credential persistence, and duplicated event decoders.
