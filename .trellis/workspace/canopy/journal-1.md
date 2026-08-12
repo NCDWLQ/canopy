@@ -210,3 +210,25 @@ Added SQLite-backed conversation discovery and startup rehydration, a history si
 ### Status
 
 [OK] **Completed**
+
+
+## Session 10: Core usability and async mutation safety
+
+**Date**: 2026-08-12
+**Task**: Core usability and async mutation safety
+**Branch**: `main`
+
+### Summary
+
+Added a blank Composer-first conversation flow with normalized prompt-derived titles and accessible history labels; guarded append, branch, and edit completions with unique request epochs and live selection checks so stale results cannot steal navigation or start generation; added comprehensive regressions and synchronized frontend specs.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d35f6b5` | (see git log) |
+| `c7cdaef` | (see git log) |
+
+### Status
+
+[OK] **Completed**
