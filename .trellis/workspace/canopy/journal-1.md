@@ -232,3 +232,25 @@ Added a blank Composer-first conversation flow with normalized prompt-derived ti
 ### Status
 
 [OK] **Completed**
+
+
+## Session 11: 生成体验产品化
+
+**Date**: 2026-08-12
+**Task**: 生成体验产品化
+**Branch**: `main`
+
+### Summary
+
+将 transient 生成投影产品化为普通助手消息，加入 1.5 秒静默恢复宽限、阶段派生失败、内容保留与真实恢复动作；补齐 ready 后取消、明确失败、歧义重载和卸载计时竞态测试，并同步前端可执行规范。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `654e076` | (see git log) |
+| `73ea3e7` | (see git log) |
+
+### Status
+
+[OK] **Completed**
