@@ -217,6 +217,11 @@ All six calls reuse `InvokeTransport`; generation alone creates one
   `commitGeneration` once only after it has accepted the complete transient
   stream as the current exact generation. The token stays in that event
   callback and is not added to Zustand or component props.
+- Failure presentation is derived from the consumer's validated lifecycle
+  phase, never from `UiError.message`: pre-ready `failed` is generation failure;
+  post-ready `failed` and `{ accepted: false }` are persistence failure. The
+  frozen client has no command for replaying a consumed commit token or
+  resubmitting the same transient content.
 - `started` conversation/active IDs must equal the request. `completed.node`
   must be an assistant in that conversation, parented by the active user, use
   the started model, and contain exactly the concatenated deltas. Cumulative
@@ -237,10 +242,11 @@ All six calls reuse `InvokeTransport`; generation alone creates one
 | Cumulative deltas above one MiB | one `internal`; exact cancel |
 | Ready before started, duplicate ready, delta/completed before the required phase, or invalid UUID v4 token | one `internal`; exact cancel |
 | Completed role/parent/conversation/model/content mismatch | one `internal`; exact cancel |
-| Wrong/replayed/expired/not-ready commit pair | valid `{ accepted: false }`; no inferred persistence |
-| Commit transport result is ambiguous or terminal delivery is lost after accepted acknowledgement | allow a bounded exact-terminal grace period, then reload SQLite authority; remain retryable if an early reload cannot prove the result, and do not invent a node |
-| Valid failed event | normalized shared `UiError` |
-| Valid cancelled event | terminal cancellation projection, not an error toast decision |
+| Wrong/replayed/expired/not-ready commit pair | valid `{ accepted: false }`; explicit persistence failure with no inferred node and no fake save retry |
+| Commit transport result is ambiguous or terminal delivery is lost after accepted acknowledgement | remain silently committing for the bounded exact-terminal grace period, then reload SQLite authority; remain reconciling if reload cannot prove the result, and do not invent a node |
+| Valid failed before ready | normalized shared `UiError`; generation-failure projection |
+| Valid failed after ready | normalized shared `UiError`; persistence-failure projection retaining complete content |
+| Valid exact cancelled before or after ready | terminal cancellation projection retaining available content, not an error toast decision |
 
 ### 5. Good / Base / Bad Cases
 
@@ -267,8 +273,9 @@ All six calls reuse `InvokeTransport`; generation alone creates one
 - Assert the bridge never invokes `commit_generation` automatically. UI/store
   integration must explicitly acknowledge ready, handle `{ accepted: false }`,
   and merge durable history only from `completed.node` or a fresh reload. Cover
-  a command result arriving after exact Channel completion and exact completion
-  arriving before or after an ambiguity reload.
+  a command result arriving after exact Channel completion, exact
+  completed/failed/cancelled terminals on both sides of the grace threshold,
+  completion/failure during an ambiguity reload, and timer cleanup on unmount.
 - Run format, ESLint, strict TypeScript, Vitest, and the production Vite build.
 - Scan outside `src/lib/tauri` for raw `invoke`, provider HTTP, SQL, frontend
   credential persistence, and duplicated event decoders.

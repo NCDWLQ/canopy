@@ -1,0 +1,8 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend review routing for the affected conversation feature."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Verify the normal assistant bubble, exact accessible copy/actions, and absence of engineering UI."}
+{"file":".trellis/spec/frontend/hook-guidelines.md","reason":"Verify grace timers, cleanup, exact terminal races, and authoritative reload behavior."}
+{"file":".trellis/spec/frontend/state-management.md","reason":"Verify terminal classification, retained transient content, durable map isolation, and authoritative merge."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Verify focused behavioral regressions and repository quality gates."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Verify no commit-token propagation and no event/IPC contract drift."}
+{"file":".trellis/spec/backend/provider-guidelines.md","reason":"Cross-check that frontend UX changes preserve the strict one-time commit protocol."}
+{"file":".trellis/tasks/08-12-generation-experience-productization/research/current-generation-experience.md","reason":"Review against confirmed implementation anchors and known coverage gaps."}

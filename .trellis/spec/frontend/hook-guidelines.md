@@ -67,10 +67,19 @@ redeclared inline in several components.
   both with the current UI run identity; a late command result for the exact
   current/completed generation is not a cancellation condition.
 - After acknowledgement may have been accepted, cancellation is not rollback.
-  Keep a bounded terminal-delivery grace timer, then reload SQLite authority;
-  cleanup clears timers and triggers reconciliation for already-ambiguous work.
-- User cancellation returns the UI to an idle/cancelled state without an error
-  toast, consistent with the shared error contract.
+  Keep the store in silent `committing` for the complete 1,500 millisecond
+  terminal-delivery grace period, then enter visible reconciliation and reload
+  SQLite authority. A thrown commit call schedules that same delayed path; it
+  does not enter `reconciling` immediately.
+- Cleanup clears timers and triggers exactly one immediate reconciliation for
+  already-ambiguous committing/reconciling work; a cleared grace timer must not
+  fire later.
+- User cancellation is permitted only before acknowledgement and returns a
+  cancelled state retaining partial content without an error toast. The Channel
+  may still deliver an exact backend `cancelled` after ready; accept that
+  terminal separately without exposing a post-ack user-cancel action.
+- Manual reconciliation retry first atomically clears its user-action flag,
+  then starts the reload. Ignore retries while automatic work is running.
 - Do not use an effect to derive values that can be computed during render by
   a pure selector.
 
@@ -79,6 +88,9 @@ redeclared inline in several components.
 - Prefer testing the pure selector/action behind a hook.
 - Test a hook directly when its subscription, cancellation, or lifecycle is
   the behavior under test.
+- Use fake timers for the exact 1,500 millisecond boundary and always restore
+  real timers in cleanup. Cover exact terminal delivery before the threshold,
+  during an in-flight reload, and after unmount cleanup.
 - Use deterministic typed bridge fakes; do not mock raw SQL or reach through
   the Tauri boundary.
 - Every active-path test includes two sibling branches and asserts that the
@@ -92,3 +104,5 @@ redeclared inline in several components.
 - Parsing unknown IPC errors inside a hook instead of the typed bridge.
 - Copying store state into local state and allowing the two trees to diverge.
 - Disabling hook lint rules to force an effect lifecycle.
+- Entering visible reconciliation inside a commit `catch`, which exposes an
+  ambiguous internal state before the terminal-delivery grace period expires.

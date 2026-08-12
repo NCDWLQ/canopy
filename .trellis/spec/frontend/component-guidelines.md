@@ -199,9 +199,19 @@ after every save attempt, including failure.
 
 - `OutlineTree` receives one normalized tree projection. It may derive visible rows for expansion but must not load or persist nodes.
 - `ConversationPane.path` is authoritative and already validated by the application layer. It must not append siblings or reconstruct ancestry.
-- A streaming assistant is a separate transient presentation after the durable
-  path. Label it as not saved, keep it out of the outline, and never assign it a
-  durable node identity before exact completion.
+- A transient assistant is projected after the durable path through the same
+  feature-local, identity-free message shell as a durable assistant. Keep it
+  out of the outline and never assign it a durable node identity before exact
+  completion. Do not label it as transient/not saved or expose commit,
+  database, or reconciliation implementation terms.
+- `starting` renders “正在思考”; `streaming` appends content in that assistant
+  slot; `committing` keeps the complete bubble silent. Visible recovery begins
+  only after the controller's grace period with “正在恢复这条回复…”.
+- Generation failure shows “回复失败” plus “重新生成” without retaining partial
+  output. Persistence failure retains the complete content and shows
+  “这条回复未能保存” plus “重新生成”. Cancellation retains received partial
+  content and shows “回复已停止”. A reconciliation retry appears only after an
+  automatic authoritative reload cannot prove completion.
 - `MessageNode` displays capabilities supplied through `canBranch` / `canEdit`; it must not infer authorization from raw roles beyond visual presentation.
 - Branch and edit callbacks emit the source node ID. Editing is labeled as creating a branch and never mutates displayed history optimistically.
 - Unknown IPC payloads are decoded in `lib/tauri`, before they reach feature components.
@@ -217,7 +227,10 @@ after every save attempt, including failure.
 | The conversation is archived | Keep history readable and disable all mutation capabilities |
 | Branch/edit capability is false | Hide or disable the action consistently and prevent keyboard activation |
 | Status is `error` | Show the safe error message; offer retry only when `retryable` is true |
-| User cancels streaming | Return to idle/cancelled state without an error toast |
+| User cancels streaming | Preserve received partial content and show “回复已停止” without an error toast |
+| Generation fails before acknowledgement | Discard partial output; show “回复失败” and “重新生成” |
+| Persistence explicitly fails after ready | Preserve complete output; show “这条回复未能保存” and “重新生成” |
+| Commit result is uncertain | Keep the full assistant bubble silent during the grace period; then show recovery without a button until automatic reload needs help |
 
 ### 5. Good / Base / Bad Cases
 
@@ -231,6 +244,12 @@ after every save attempt, including failure.
 - `ConversationPane`: exact root-to-active order and an explicit assertion that sibling content is absent.
 - `MessageNode`: branch/edit callbacks receive the source ID once; disabled actions cannot fire.
 - Loading, empty, provider-auth, retryable, non-retryable, streaming, and cancellation states.
+- Generation presentation covers starting, streaming, silent committing,
+  delayed reconciling, phase-derived failure kinds, retained cancellation
+  content, gated recovery retry, exact copy, and absence of engineering copy.
+- A successful streaming-to-authoritative transition uses the same assistant
+  article structure and list position without duplicate transient/durable
+  content in one render.
 - Blank-draft entry from empty, loaded, and all-archived history; first-send
   title derivation; complete prompt preservation; failure retry; and history
   selection exiting blank mode without clearing the preserved store projection.
@@ -284,3 +303,5 @@ The correct form is deterministic, fixture-driven, and independent of SQLite and
 - Mutating a historical message locally before the branch command succeeds.
 - Letting a separately assigned UI agent redefine shared DTOs to fit a component.
 - Testing only that ancestors appear without asserting that sibling content is absent.
+- Rendering transient output as a warning/status card or exposing `Not saved`,
+  commit, local-storage, or database vocabulary in the successful path.

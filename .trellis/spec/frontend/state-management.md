@@ -133,6 +133,15 @@ and `cancelled` phases. The workspace controller exposes `generate`, `cancel`,
 mutation wrappers, and `retryReconciliation`; its default terminal-delivery
 grace period is 1,500 milliseconds and is injectable in tests.
 
+Terminal state carries only transient presentation facts:
+
+- `failed` is phase-derived as `generation` or `persistence`; generation
+  failure drops partial output, while persistence failure retains the exact
+  completed stream content.
+- `cancelled` retains content received before cancellation.
+- `reconciling.needsUserAction` is false during automatic reload and becomes
+  true only when reload fails or cannot prove one exact completion.
+
 ### 3. Contracts
 
 - Provider profile state contains only `ProviderProfileView`, a safe `UiError`,
@@ -166,10 +175,18 @@ grace period is 1,500 milliseconds and is injectable in tests.
   result is accepted and must not trigger cancellation. A cancelled, replaced,
   stale, or mismatched run requests exact-ID cancellation.
 - A thrown commit call is ambiguous: the backend may already be committing.
-  Keep accepting the exact terminal event during a bounded grace period, then
-  reload SQLite. If the first reload has no matching durable result, remain in
-  a retryable `reconciling` state and continue accepting exact `completed`;
-  never infer failure or fabricate a node.
+  Keep the store in silent `committing` and accept exact terminal events during
+  the 1,500 millisecond grace period, then enter `reconciling` and automatically
+  reload SQLite. If the first reload fails or has no matching durable result,
+  set `needsUserAction`, remain `reconciling`, and continue accepting exact
+  `completed`; never infer failure or fabricate a node.
+- Classify a valid pre-ready `failed` event as generation failure and a valid
+  post-ready `failed` event or `{ accepted: false }` as persistence failure.
+  Branch on the prior phase, never the error message. There is no save-retry
+  protocol, so both failures recover through a new generation run.
+- User cancellation is allowed only while starting/streaming. A valid exact
+  backend `cancelled` terminal remains legal after ready and must terminalize
+  committing/reconciling without granting the user post-ack rollback.
 
 ### 4. Validation & Error Matrix
 
@@ -181,10 +198,14 @@ grace period is 1,500 milliseconds and is injectable in tests.
 | Persistence fails, target is replaced, controller unmounts, or provider becomes unavailable while awaiting | Keep any authoritative persisted state; do not auto-start generation |
 | Navigation/unmount before acknowledgement | Invalidate the run, discard transient content, best-effort exact cancel when the ID is known |
 | Exact ready for a current writable user path | Enter committing, pass the callback-local token once |
-| Commit returns `accepted: false` | Retryable failed state; no durable node |
+| Commit returns `accepted: false` | Persistence-failed state retaining complete transient content; regenerate is the real recovery; no durable node |
+| Valid failed before ready | Generation-failed state without partial output; regenerate; no durable node |
+| Valid failed after ready | Persistence-failed state retaining complete content; regenerate; no durable node |
+| Exact backend cancelled before or after ready | Cancelled projection retaining available content; no durable node |
 | Exact completed node matches every invariant | Merge authoritative node; preserve unrelated branches/history |
 | Completed node drifts or post-ack delivery is ambiguous | Reload SQLite authority; do not merge transient content |
-| Reconciliation load fails or sees no provable result | Preserve the last safe tree and expose retryable reconciliation |
+| Reconciliation load is in progress | Preserve the reply and show recovery without a user action |
+| Reconciliation load fails or sees no provable result | Preserve the last safe tree/reply and expose manual recovery retry |
 
 ### 5. Good / Base / Bad Cases
 
@@ -212,8 +233,10 @@ grace period is 1,500 milliseconds and is injectable in tests.
   after a generation-start failure.
 - Cover started-before-result and result-before-started, completed-before-
   commit-result, completed-before-start-result, cancel-before-start, stale
-  ready, commit rejection, commit transport ambiguity, and exact completion
-  before and after an early reconciliation reload.
+  ready, commit rejection, commit transport ambiguity, phase-derived failed,
+  exact backend cancellation after ready, and exact completion/failure before,
+  during, and after reconciliation. Fake-timer tests assert nothing is visible
+  or reloaded before 1,500 milliseconds and cleanup cannot fire twice.
 - Drift each completed-node invariant independently and assert no direct merge.
 - Assert API-key input and commit token are absent from store snapshots, DOM
   after submission/ready handling, logs, and browser persistence.
@@ -263,3 +286,6 @@ authority changes durable conversation records.
 - Treating a commit transport error as proof that acknowledgement was rejected.
 - Cancelling a current run merely because its command promise resolved after
   the Channel already advanced or completed that exact generation.
+- Clearing a reconciliation timer for post-ready `cancelled` without accepting
+  that exact backend terminal, which leaves a committing run permanently stuck.
+- Offering “retry save” when the one-time commit capability has no replay API.

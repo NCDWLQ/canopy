@@ -1,0 +1,8 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend guideline routing for the generation experience change."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Ordinary message surface, accessible status/action, and transient presentation contracts."}
+{"file":".trellis/spec/frontend/hook-guidelines.md","reason":"Generation callback ordering, timer cleanup, acknowledgement, and reconciliation lifecycle."}
+{"file":".trellis/spec/frontend/state-management.md","reason":"Transient-versus-durable state, terminal phase, authoritative merge, and token isolation invariants."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Behavioral test requirements and frontend validation gates."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Closed provider event protocol, callback-local commit token, and ambiguous commit handling."}
+{"file":".trellis/spec/backend/provider-guidelines.md","reason":"Frozen strict commit protocol and the pre/post-ready failure boundary that frontend behavior must preserve."}
+{"file":".trellis/tasks/08-12-generation-experience-productization/research/current-generation-experience.md","reason":"Current code anchors, capability findings, test gaps, and identified spec drift."}
