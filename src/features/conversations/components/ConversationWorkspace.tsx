@@ -3,6 +3,7 @@ import {
   Archive,
   PanelLeftClose,
   PanelLeftOpen,
+  Plus,
   Sparkles,
   Square,
 } from "lucide-react"
@@ -10,7 +11,6 @@ import { useShallow } from "zustand/react/shallow"
 
 import { Composer } from "./Composer"
 import { ConversationPane } from "./ConversationPane"
-import { NewConversationForm } from "./NewConversationForm"
 import { OutlineTree } from "./OutlineTree"
 import { useWorkspaceGenerationController } from "../hooks/useWorkspaceGenerationController"
 import {
@@ -22,6 +22,12 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { ProviderSettingsDialog } from "@/features/providers/components"
 import { useProviderProfileStore } from "@/features/providers/store"
 import {
@@ -54,6 +60,7 @@ export function ConversationWorkspace({
   const store = useConversationStore(
     useShallow((state) => ({
       conversationId: state.conversationId,
+      isCreatingConversation: state.isCreatingConversation,
       isArchived: state.isArchived,
       rootNodeId: state.rootNodeId,
       activeNodeId: state.activeNodeId,
@@ -68,6 +75,7 @@ export function ConversationWorkspace({
       clearError: state.clearError,
       retryHistory: state.retryHistory,
       selectConversation: state.selectConversation,
+      enterConversationCreation: state.enterConversationCreation,
     })),
   )
   const initializeHistory = useConversationStore(
@@ -92,6 +100,9 @@ export function ConversationWorkspace({
     pathProjection.kind === "error" ? pathProjection.error : null
   const visiblePath = pathProjection.kind === "ready" ? pathProjection.path : []
   const isProjectionValid = pathProjection.kind !== "error"
+  const isBlankConversation =
+    store.isCreatingConversation ||
+    (store.conversationId === null && store.history.status === "empty")
   const transientGeneration = (() => {
     const generation = store.generation
     switch (generation.phase) {
@@ -143,6 +154,7 @@ export function ConversationWorkspace({
     }
   })()
   const canMutate =
+    !isBlankConversation &&
     store.conversationId !== null &&
     !store.isArchived &&
     store.status === "ready" &&
@@ -185,8 +197,21 @@ export function ConversationWorkspace({
         aria-hidden={!isSidebarOpen}
         inert={!isSidebarOpen}
       >
-        <div className="flex h-12 shrink-0 items-center justify-between border-b px-4 text-sm font-semibold">
+        <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b px-2 text-sm font-semibold">
           <span>History</span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label="New conversation"
+            disabled={
+              store.status === "loading" || isGenerationActive(store.generation)
+            }
+            onClick={store.enterConversationCreation}
+          >
+            <Plus data-icon="inline-start" aria-hidden="true" />
+            New conversation
+          </Button>
         </div>
         <div className="max-h-64 shrink-0 overflow-y-auto p-2">
           {store.history.summaries.length > 0 && (
@@ -196,26 +221,40 @@ export function ConversationWorkspace({
             >
               {store.history.summaries.map((summary) => (
                 <li key={summary.id}>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="h-auto w-full justify-between px-2 py-2 text-left"
-                    aria-current={
-                      store.conversationId === summary.id ? "page" : undefined
-                    }
-                    disabled={
-                      store.status === "loading" ||
-                      isGenerationActive(store.generation)
-                    }
-                    onClick={() =>
-                      void store.selectConversation(client, summary.id)
-                    }
-                  >
-                    <span className="truncate">{summary.title}</span>
-                    {summary.isArchived && (
-                      <Badge variant="secondary">Archived</Badge>
-                    )}
-                  </Button>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="h-auto w-full min-w-0 justify-between px-2 py-2 text-left"
+                          aria-current={
+                            !isBlankConversation &&
+                            store.conversationId === summary.id
+                              ? "page"
+                              : undefined
+                          }
+                          disabled={
+                            store.status === "loading" ||
+                            isGenerationActive(store.generation)
+                          }
+                          onClick={() =>
+                            void store.selectConversation(client, summary.id)
+                          }
+                        >
+                          <span className="min-w-0 truncate">
+                            {summary.title}
+                          </span>
+                          {summary.isArchived && (
+                            <Badge className="shrink-0" variant="secondary">
+                              Archived
+                            </Badge>
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{summary.title}</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </li>
               ))}
             </ul>
@@ -293,7 +332,7 @@ export function ConversationWorkspace({
                 <PanelLeftOpen aria-hidden="true" />
               )}
             </Button>
-            {store.isArchived && (
+            {!isBlankConversation && store.isArchived && (
               <Badge variant="secondary">
                 <Archive data-icon="inline-start" />
                 Archived — read only
@@ -304,10 +343,11 @@ export function ConversationWorkspace({
           <div className="flex items-center gap-2">
             <ProviderSettingsDialog
               client={providerClient}
-              readOnly={store.isArchived}
+              readOnly={!isBlankConversation && store.isArchived}
               generationActive={isGenerationActive(store.generation)}
             />
-            {store.conversationId !== null &&
+            {!isBlankConversation &&
+              store.conversationId !== null &&
               !store.isArchived &&
               (controller.canCancel ? (
                 <Button variant="outline" size="sm" onClick={controller.cancel}>
@@ -339,9 +379,48 @@ export function ConversationWorkspace({
           </div>
         </header>
 
-        {store.conversationId === null &&
-        (store.history.status === "idle" ||
-          store.history.status === "loading") ? (
+        {isBlankConversation ? (
+          <>
+            <section
+              data-testid="blank-conversation-pane"
+              className="flex flex-1 flex-col items-center justify-center gap-3 overflow-y-auto p-6 text-center"
+              aria-labelledby="blank-conversation-title"
+            >
+              <h1
+                id="blank-conversation-title"
+                className="text-2xl font-semibold"
+              >
+                Start a conversation
+              </h1>
+              <p className="max-w-md text-sm text-muted-foreground">
+                Write your first message below. It will be saved only when you
+                send it.
+              </p>
+              {store.error !== null && (
+                <Alert variant="destructive" className="max-w-md text-left">
+                  <AlertDescription className="flex flex-col gap-3">
+                    <p>{store.error.message}</p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={store.clearError}
+                    >
+                      Dismiss
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              )}
+            </section>
+            <Composer
+              onSubmit={controller.createConversation}
+              disabled={store.status === "loading" || controller.mutationLocked}
+              placeholder="Write your first message…"
+            />
+          </>
+        ) : store.conversationId === null &&
+          (store.history.status === "idle" ||
+            store.history.status === "loading") ? (
           <div
             className="flex flex-1 items-center justify-center text-sm text-muted-foreground"
             role="status"
@@ -360,16 +439,7 @@ export function ConversationWorkspace({
               )}
             </AlertDescription>
           </Alert>
-        ) : store.conversationId === null ? (
-          <NewConversationForm
-            disabled={store.status === "loading"}
-            error={store.error}
-            onDismissError={store.clearError}
-            onSubmit={(title, content) =>
-              void controller.createConversation(title, content)
-            }
-          />
-        ) : (
+        ) : store.conversationId === null ? null : (
           <>
             <ConversationPane
               path={visiblePath}

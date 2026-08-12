@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend guideline routing for the conversation workspace change."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Workspace composition, accessibility, and tree UI boundaries."}
+{"file":".trellis/spec/frontend/hook-guidelines.md","reason":"Async lifecycle, stale completion, and controller ownership contracts."}
+{"file":".trellis/spec/frontend/state-management.md","reason":"Conversation projection, request epoch, authoritative merge, and generation target contracts."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Required implementation quality and validation conventions."}

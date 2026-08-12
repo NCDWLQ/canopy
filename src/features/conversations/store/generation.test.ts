@@ -140,6 +140,7 @@ function beginStreaming(content = "STREAMED_RESPONSE") {
 describe("conversation generation state", () => {
   beforeEach(() => {
     useConversationStore.setState({
+      isCreatingConversation: false,
       conversationId: null,
       isArchived: false,
       rootNodeId: null,

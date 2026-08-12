@@ -122,6 +122,7 @@ function createMockClient() {
 
 function resetStore() {
   useConversationStore.setState({
+    isCreatingConversation: false,
     conversationId: null,
     isArchived: false,
     rootNodeId: null,
@@ -134,6 +135,16 @@ function resetStore() {
     generation: { phase: "idle" },
     history: { status: "idle", summaries: [], error: null },
   })
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason: unknown) => void
+  const promise = new Promise<T>((complete, fail) => {
+    resolve = complete
+    reject = fail
+  })
+  return { promise, resolve, reject }
 }
 
 describe("conversation store", () => {
@@ -418,6 +429,316 @@ describe("conversation store", () => {
       status: "ready",
       summaries: [{ id: conversation.id, isArchived: true }],
     })
+  })
+
+  it("enters blank creation without replacing the loaded tree or history", async () => {
+    client.listConversations.mockResolvedValueOnce([summary])
+    await useConversationStore.getState().initializeHistory(client)
+    const before = useConversationStore.getState()
+
+    before.enterConversationCreation()
+
+    const creating = useConversationStore.getState()
+    expect(creating.isCreatingConversation).toBe(true)
+    expect(creating.conversationId).toBe(before.conversationId)
+    expect(creating.activeNodeId).toBe(before.activeNodeId)
+    expect(creating.nodesById).toBe(before.nodesById)
+    expect(creating.fullNodes).toBe(before.fullNodes)
+    expect(creating.history).toBe(before.history)
+
+    await creating.selectConversation(client, conversation.id)
+    expect(useConversationStore.getState().isCreatingConversation).toBe(false)
+  })
+
+  it("retains creation mode and its safe tree projection after create failure", async () => {
+    await useConversationStore
+      .getState()
+      .loadConversation(client, conversation.id)
+    const nodesBefore = useConversationStore.getState().nodesById
+    useConversationStore.getState().enterConversationCreation()
+    client.createConversation.mockRejectedValueOnce(
+      new ConversationCommandError({
+        code: "database_unavailable",
+        message: "Conversation could not be saved.",
+        retryable: true,
+      }),
+    )
+
+    await useConversationStore
+      .getState()
+      .createConversation(client, "Retry title", "Retry content")
+
+    expect(useConversationStore.getState()).toMatchObject({
+      isCreatingConversation: true,
+      conversationId: conversation.id,
+      activeNodeId: right.id,
+      status: "error",
+      error: { code: "database_unavailable", retryable: true },
+    })
+    expect(useConversationStore.getState().nodesById).toBe(nodesBefore)
+  })
+
+  it("merges deferred append, branch, and edit results without stealing newer selection", async () => {
+    const appendableTree: ConversationTreeView = {
+      ...tree,
+      nodes: [root, assistant],
+      nodesById: {
+        root: tree.nodesById.root!,
+        assistant: { ...tree.nodesById.assistant!, childIds: [] },
+      },
+    }
+    client.loadConversationTree.mockResolvedValueOnce(appendableTree)
+    await useConversationStore
+      .getState()
+      .loadConversation(client, conversation.id)
+    const appended: ConversationNodeView = {
+      ...right,
+      id: "deferred-append",
+      parentId: assistant.id,
+      content: "DEFERRED_APPEND_SENTINEL",
+      createdAt: 5,
+    }
+    const append = deferred<ConversationNodeView>()
+    client.appendNode.mockReturnValueOnce(append.promise)
+    const appendOperation = useConversationStore
+      .getState()
+      .appendNode(client, appended.content)
+    useConversationStore.getState().selectNode(root.id)
+    append.resolve(appended)
+    await appendOperation
+    expect(useConversationStore.getState().activeNodeId).toBe(root.id)
+    expect(useConversationStore.getState().fullNodes[appended.id]).toEqual(
+      appended,
+    )
+
+    client.loadConversationTree.mockResolvedValueOnce(tree)
+    await useConversationStore
+      .getState()
+      .loadConversation(client, conversation.id)
+    const branched: ConversationNodeView = {
+      ...right,
+      id: "deferred-branch",
+      content: "DEFERRED_BRANCH_SENTINEL",
+      createdAt: 6,
+    }
+    const branch = deferred<ConversationNodeView>()
+    client.createBranch.mockReturnValueOnce(branch.promise)
+    const branchOperation = useConversationStore
+      .getState()
+      .createBranch(client, assistant.id, branched.content)
+    useConversationStore.getState().selectNode(left.id)
+    branch.resolve(branched)
+    await branchOperation
+    expect(useConversationStore.getState().activeNodeId).toBe(left.id)
+    expect(useConversationStore.getState().fullNodes[branched.id]).toEqual(
+      branched,
+    )
+
+    client.loadConversationTree.mockResolvedValueOnce(tree)
+    await useConversationStore
+      .getState()
+      .loadConversation(client, conversation.id)
+    const edited: ConversationNodeView = {
+      ...right,
+      id: "deferred-edit",
+      content: "DEFERRED_EDIT_SENTINEL",
+      createdAt: 7,
+    }
+    const edit = deferred<ConversationNodeView>()
+    client.editNodeAsBranch.mockReturnValueOnce(edit.promise)
+    const editOperation = useConversationStore
+      .getState()
+      .editNodeAsBranch(client, right.id, edited.content)
+    useConversationStore.getState().selectNode(left.id)
+    edit.resolve(edited)
+    await editOperation
+    expect(useConversationStore.getState().activeNodeId).toBe(left.id)
+    expect(useConversationStore.getState().fullNodes[edited.id]).toEqual(edited)
+  })
+
+  it("rejects deferred mutation results and errors invalidated by blank mode", async () => {
+    const appendableTree: ConversationTreeView = {
+      ...tree,
+      nodes: [root, assistant],
+      nodesById: {
+        root: tree.nodesById.root!,
+        assistant: { ...tree.nodesById.assistant!, childIds: [] },
+      },
+    }
+    client.loadConversationTree.mockResolvedValue(appendableTree)
+    await useConversationStore
+      .getState()
+      .loadConversation(client, conversation.id)
+    const append = deferred<ConversationNodeView>()
+    client.appendNode.mockReturnValueOnce(append.promise)
+    const appendOperation = useConversationStore
+      .getState()
+      .appendNode(client, "STALE_APPEND_SENTINEL")
+    useConversationStore.getState().enterConversationCreation()
+    append.resolve({
+      ...right,
+      id: "stale-append",
+      parentId: assistant.id,
+      content: "STALE_APPEND_SENTINEL",
+    })
+    await appendOperation
+    expect(useConversationStore.getState()).toMatchObject({
+      isCreatingConversation: true,
+      status: "ready",
+      error: null,
+    })
+    expect(
+      useConversationStore.getState().fullNodes["stale-append"],
+    ).toBeUndefined()
+
+    await useConversationStore
+      .getState()
+      .loadConversation(client, conversation.id)
+    const failedAppend = deferred<ConversationNodeView>()
+    client.appendNode.mockReturnValueOnce(failedAppend.promise)
+    const failedOperation = useConversationStore
+      .getState()
+      .appendNode(client, "STALE_FAILURE_SENTINEL")
+    useConversationStore.getState().enterConversationCreation()
+    failedAppend.reject(
+      new ConversationCommandError({
+        code: "database_unavailable",
+        message: "Stale failure.",
+        retryable: true,
+      }),
+    )
+    await failedOperation
+    expect(useConversationStore.getState()).toMatchObject({
+      isCreatingConversation: true,
+      status: "ready",
+      error: null,
+    })
+  })
+
+  it("rejects a deferred mutation result after a newer conversation load", async () => {
+    const appendableTree: ConversationTreeView = {
+      ...tree,
+      nodes: [root, assistant],
+      nodesById: {
+        root: tree.nodesById.root!,
+        assistant: { ...tree.nodesById.assistant!, childIds: [] },
+      },
+    }
+    const replacementRoot: ConversationNodeView = {
+      id: "replacement-root",
+      conversationId: "conversation-2",
+      role: "user",
+      content: "REPLACEMENT_ROOT_SENTINEL",
+      createdAt: 10,
+      metadata: null,
+    }
+    const replacementTree: ConversationTreeView = {
+      conversation: {
+        id: replacementRoot.conversationId,
+        title: "Replacement",
+        rootNodeId: replacementRoot.id,
+        isArchived: false,
+      },
+      rootNodeId: replacementRoot.id,
+      nodes: [replacementRoot],
+      nodesById: {
+        [replacementRoot.id]: {
+          id: replacementRoot.id,
+          role: replacementRoot.role,
+          preview: replacementRoot.content,
+          childIds: [],
+        },
+      },
+    }
+    client.loadConversationTree
+      .mockResolvedValueOnce(appendableTree)
+      .mockResolvedValueOnce(replacementTree)
+    await useConversationStore
+      .getState()
+      .loadConversation(client, conversation.id)
+    const append = deferred<ConversationNodeView>()
+    client.appendNode.mockReturnValueOnce(append.promise)
+    const appendOperation = useConversationStore
+      .getState()
+      .appendNode(client, "STALE_AFTER_LOAD_SENTINEL")
+
+    await useConversationStore
+      .getState()
+      .loadConversation(client, replacementRoot.conversationId)
+    append.resolve({
+      ...right,
+      id: "stale-after-load",
+      parentId: assistant.id,
+      content: "STALE_AFTER_LOAD_SENTINEL",
+    })
+    await appendOperation
+
+    expect(useConversationStore.getState()).toMatchObject({
+      conversationId: replacementRoot.conversationId,
+      rootNodeId: replacementRoot.id,
+      activeNodeId: replacementRoot.id,
+      status: "ready",
+      error: null,
+    })
+    expect(
+      useConversationStore.getState().fullNodes["stale-after-load"],
+    ).toBeUndefined()
+  })
+
+  it("gives overlapping same-conversation mutations unique completion ownership", async () => {
+    const appendableTree: ConversationTreeView = {
+      ...tree,
+      nodes: [root, assistant],
+      nodesById: {
+        root: tree.nodesById.root!,
+        assistant: { ...tree.nodesById.assistant!, childIds: [] },
+      },
+    }
+    client.loadConversationTree.mockResolvedValueOnce(appendableTree)
+    await useConversationStore
+      .getState()
+      .loadConversation(client, conversation.id)
+    const first = deferred<ConversationNodeView>()
+    const second = deferred<ConversationNodeView>()
+    client.appendNode
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise)
+    const firstOperation = useConversationStore
+      .getState()
+      .appendNode(client, "FIRST_OVERLAP_SENTINEL")
+
+    // A normal UI cannot start a second mutation while loading. Force the
+    // overlap to prove request ownership remains safe if another caller does.
+    useConversationStore.setState({ status: "ready" })
+    const secondOperation = useConversationStore
+      .getState()
+      .appendNode(client, "SECOND_OVERLAP_SENTINEL")
+    const secondNode: ConversationNodeView = {
+      ...right,
+      id: "second-overlap",
+      parentId: assistant.id,
+      content: "SECOND_OVERLAP_SENTINEL",
+      createdAt: 6,
+    }
+    second.resolve(secondNode)
+    await secondOperation
+
+    first.resolve({
+      ...right,
+      id: "first-overlap",
+      parentId: assistant.id,
+      content: "FIRST_OVERLAP_SENTINEL",
+      createdAt: 5,
+    })
+    await firstOperation
+
+    expect(useConversationStore.getState().activeNodeId).toBe(secondNode.id)
+    expect(useConversationStore.getState().fullNodes[secondNode.id]).toEqual(
+      secondNode,
+    )
+    expect(
+      useConversationStore.getState().fullNodes["first-overlap"],
+    ).toBeUndefined()
   })
 
   it("merges an authoritative edit as a sibling without changing history", async () => {

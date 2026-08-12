@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend spec index for review scope."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Verify workspace accessibility, rendering boundaries, and component tests."}
+{"file":".trellis/spec/frontend/hook-guidelines.md","reason":"Verify stale async completion and generation lifecycle handling."}
+{"file":".trellis/spec/frontend/state-management.md","reason":"Verify request epoch ownership, authoritative merges, and store invariants."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Run and evaluate the repository frontend quality gates."}

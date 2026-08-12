@@ -24,7 +24,10 @@ describe("Canopy scaffold", () => {
       await screen.findByRole("heading", { name: "Start a conversation" }),
     ).toBeVisible()
     expect(
-      screen.getByText(/generate a response from the selected user message/i),
+      screen.getByRole("textbox", { name: "Message composer" }),
+    ).toBeEnabled()
+    expect(
+      screen.getByRole("button", { name: "New conversation" }),
     ).toBeVisible()
   })
 })

@@ -1,5 +1,6 @@
 import * as React from "react"
 
+import { deriveConversationTitle } from "../deriveConversationTitle"
 import {
   isGenerationActive,
   normalizeUiError,
@@ -42,7 +43,7 @@ export type WorkspaceGenerationController = {
   cancel: () => void
   selectNode: (nodeId: string) => void
   archiveConversation: () => Promise<void>
-  createConversation: (title: string, content: string) => Promise<void>
+  createConversation: (content: string) => Promise<boolean>
   loadConversation: (conversationId: string) => Promise<void>
   appendNode: (content: string) => Promise<void>
   createBranch: (parentNodeId: string, content: string) => Promise<void>
@@ -367,8 +368,8 @@ export function useWorkspaceGenerationController({
         .getState()
         .archiveConversation(conversationClient)
     },
-    createConversation: async (title, content) => {
-      if (!prepareMutation()) return
+    createConversation: async (content) => {
+      if (!prepareMutation()) return false
       let authoritativeTree: ConversationTreeView | undefined
       const trackingClient: ConversationClient = {
         ...conversationClient,
@@ -380,12 +381,24 @@ export function useWorkspaceGenerationController({
       }
       await useConversationStore
         .getState()
-        .createConversation(trackingClient, title, content)
-      if (authoritativeTree === undefined) return
+        .createConversation(
+          trackingClient,
+          deriveConversationTitle(content),
+          content,
+        )
+      if (authoritativeTree === undefined) return false
+      const current = useConversationStore.getState()
+      if (
+        current.conversationId !== authoritativeTree.conversation.id ||
+        current.activeNodeId !== authoritativeTree.rootNodeId
+      ) {
+        return false
+      }
       startGeneration({
         conversationId: authoritativeTree.conversation.id,
         parentNodeId: authoritativeTree.rootNodeId,
       })
+      return true
     },
     loadConversation: async (id) => {
       if (!prepareMutation()) return

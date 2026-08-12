@@ -3,7 +3,7 @@ import { SendHorizontal } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 export type ComposerProps = {
-  onSubmit: (content: string) => void
+  onSubmit: (content: string) => void | Promise<boolean | void>
   disabled: boolean
   placeholder?: string
 }
@@ -14,11 +14,21 @@ export function Composer({
   placeholder = "Type a message...",
 }: ComposerProps) {
   const [content, setContent] = React.useState("")
+  const [isSubmitting, setIsSubmitting] = React.useState(false)
   const textareaRef = React.useRef<HTMLTextAreaElement>(null)
 
-  const handleSubmit = () => {
-    if (content.trim() && !disabled) {
-      onSubmit(content)
+  const handleSubmit = async () => {
+    if (content.trim() && !disabled && !isSubmitting) {
+      setIsSubmitting(true)
+      let submitted: boolean | void
+      try {
+        submitted = await onSubmit(content)
+      } catch {
+        submitted = false
+      } finally {
+        setIsSubmitting(false)
+      }
+      if (submitted === false) return
       setContent("")
       // Reset height
       if (textareaRef.current) {
@@ -29,13 +39,13 @@ export function Composer({
 
   const handleFormSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    handleSubmit()
+    void handleSubmit()
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
-      handleSubmit()
+      void handleSubmit()
     }
   }
 
@@ -58,7 +68,7 @@ export function Composer({
           onChange={(e) => setContent(e.target.value)}
           onKeyDown={handleKeyDown}
           onInput={handleInput}
-          disabled={disabled}
+          disabled={disabled || isSubmitting}
           placeholder={placeholder}
           rows={1}
           className="max-h-[200px] w-full resize-none border-none bg-transparent px-3 py-2 text-sm text-foreground outline-none disabled:opacity-50"
@@ -66,7 +76,7 @@ export function Composer({
         <Button
           size="icon"
           className="size-8 shrink-0 rounded-full"
-          disabled={disabled || !content.trim()}
+          disabled={disabled || isSubmitting || !content.trim()}
           type="submit"
           title="Send message"
           aria-label="Send message"

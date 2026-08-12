@@ -51,6 +51,7 @@ export type GenerationState =
   | { phase: "cancelled"; runId: number }
 
 export type ConversationTreeState = {
+  isCreatingConversation: boolean
   conversationId: string | null
   isArchived: boolean
   rootNodeId: string | null
@@ -88,6 +89,7 @@ export type ConversationHistoryState =
 
 export type ConversationStore = ConversationTreeState & {
   history: ConversationHistoryState
+  enterConversationCreation: () => void
   initializeHistory: (client: ConversationClient) => Promise<void>
   retryHistory: (client: ConversationClient) => Promise<void>
   selectConversation: (client: ConversationClient, id: string) => Promise<void>
@@ -188,6 +190,7 @@ export function normalizeUiError(error: unknown): UiError {
 }
 
 const initialState: ConversationTreeState = {
+  isCreatingConversation: false,
   conversationId: null,
   isArchived: false,
   rootNodeId: null,
@@ -288,6 +291,7 @@ function loadedTreeState(
 ): ConversationTreeState {
   const activeNodeId = newestLeafId(tree)
   return {
+    isCreatingConversation: false,
     conversationId: tree.conversation.id,
     isArchived: tree.conversation.isArchived,
     rootNodeId: tree.rootNodeId,
@@ -305,6 +309,7 @@ function addAuthoritativeNode(
   state: ConversationTreeState,
   node: ConversationNodeView,
   expectedParentId: string,
+  selectNode = true,
 ): Partial<ConversationTreeState> | null {
   if (
     state.conversationId === null ||
@@ -342,7 +347,7 @@ function addAuthoritativeNode(
   return {
     nodesById,
     fullNodes,
-    activeNodeId: node.id,
+    activeNodeId: selectNode ? node.id : state.activeNodeId,
     expandedIds,
     status: "ready",
     error: null,
@@ -379,7 +384,11 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
     id: string,
     epoch: number,
   ): Promise<boolean> => {
-    set({ status: "loading", error: null })
+    set({
+      isCreatingConversation: false,
+      status: "loading",
+      error: null,
+    })
     try {
       const tree = await client.loadConversationTree(id)
       if (epoch !== requestEpoch) return false
@@ -408,6 +417,17 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
   return {
     ...initialState,
     history: initialHistoryState,
+
+    enterConversationCreation: () => {
+      const state = get()
+      if (isGenerationActive(state.generation)) return
+      requestEpoch += 1
+      set({
+        isCreatingConversation: true,
+        status: state.conversationId === null ? "idle" : "ready",
+        error: null,
+      })
+    },
 
     initializeHistory: async (client) => {
       const current = get().history
@@ -808,7 +828,7 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
       if (get().status === "loading" || isGenerationActive(get().generation))
         return
       const epoch = ++requestEpoch
-      set({ status: "loading", error: null })
+      set({ isCreatingConversation: true, status: "loading", error: null })
       try {
         const tree = await client.createConversation({ title, content })
         if (epoch !== requestEpoch) return
@@ -844,14 +864,30 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
         return
       }
 
+      const epoch = ++requestEpoch
+      const conversationId = state.conversationId
+      const targetNodeId = state.activeNodeId
+      const activeNodeId = state.activeNodeId
       set({ status: "loading", error: null })
       try {
         const node = await client.appendNode({
-          conversationId: state.conversationId,
-          parentNodeId: state.activeNodeId,
+          conversationId,
+          parentNodeId: targetNodeId,
           content,
         })
-        const update = addAuthoritativeNode(state, node, state.activeNodeId)
+        const liveState = get()
+        if (
+          epoch !== requestEpoch ||
+          liveState.conversationId !== conversationId
+        ) {
+          return
+        }
+        const update = addAuthoritativeNode(
+          liveState,
+          node,
+          targetNodeId,
+          liveState.activeNodeId === activeNodeId,
+        )
         if (update === null) {
           set({ status: "error", error: TREE_INTEGRITY_ERROR })
           return
@@ -859,12 +895,15 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
         set({
           ...update,
           history: updateSummaryActivity(
-            get().history,
-            state.conversationId,
+            liveState.history,
+            conversationId,
             node.createdAt,
           ),
         })
       } catch (error: unknown) {
+        if (epoch !== requestEpoch || get().conversationId !== conversationId) {
+          return
+        }
         set({ status: "error", error: normalizeUiError(error) })
       }
     },
@@ -883,14 +922,29 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
         return
       }
 
+      const epoch = ++requestEpoch
+      const conversationId = state.conversationId
+      const activeNodeId = state.activeNodeId
       set({ status: "loading", error: null })
       try {
         const node = await client.createBranch({
-          conversationId: state.conversationId,
+          conversationId,
           parentNodeId,
           content,
         })
-        const update = addAuthoritativeNode(state, node, parentNodeId)
+        const liveState = get()
+        if (
+          epoch !== requestEpoch ||
+          liveState.conversationId !== conversationId
+        ) {
+          return
+        }
+        const update = addAuthoritativeNode(
+          liveState,
+          node,
+          parentNodeId,
+          liveState.activeNodeId === activeNodeId,
+        )
         if (update === null) {
           set({ status: "error", error: TREE_INTEGRITY_ERROR })
           return
@@ -898,12 +952,15 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
         set({
           ...update,
           history: updateSummaryActivity(
-            get().history,
-            state.conversationId,
+            liveState.history,
+            conversationId,
             node.createdAt,
           ),
         })
       } catch (error: unknown) {
+        if (epoch !== requestEpoch || get().conversationId !== conversationId) {
+          return
+        }
         set({ status: "error", error: normalizeUiError(error) })
       }
     },
@@ -926,14 +983,30 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
         return
       }
 
+      const epoch = ++requestEpoch
+      const conversationId = state.conversationId
+      const activeNodeId = state.activeNodeId
+      const targetParentId = sourceNode.parentId
       set({ status: "loading", error: null })
       try {
         const node = await client.editNodeAsBranch({
-          conversationId: state.conversationId,
+          conversationId,
           sourceNodeId,
           content,
         })
-        const update = addAuthoritativeNode(state, node, sourceNode.parentId)
+        const liveState = get()
+        if (
+          epoch !== requestEpoch ||
+          liveState.conversationId !== conversationId
+        ) {
+          return
+        }
+        const update = addAuthoritativeNode(
+          liveState,
+          node,
+          targetParentId,
+          liveState.activeNodeId === activeNodeId,
+        )
         if (update === null) {
           set({ status: "error", error: TREE_INTEGRITY_ERROR })
           return
@@ -941,12 +1014,15 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
         set({
           ...update,
           history: updateSummaryActivity(
-            get().history,
-            state.conversationId,
+            liveState.history,
+            conversationId,
             node.createdAt,
           ),
         })
       } catch (error: unknown) {
+        if (epoch !== requestEpoch || get().conversationId !== conversationId) {
+          return
+        }
         set({ status: "error", error: normalizeUiError(error) })
       }
     },

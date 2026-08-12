@@ -143,7 +143,7 @@ const appendedUser: ConversationNodeView = {
 
 const createdConversation: ConversationView = {
   id: "created-conversation",
-  title: "Created conversation",
+  title: "CREATED_ROOT_SENTINEL",
   rootNodeId: "created-root",
   isArchived: false,
 }
@@ -244,6 +244,7 @@ function createProviderClient() {
 
 function resetConversationStore() {
   useConversationStore.setState({
+    isCreatingConversation: false,
     conversationId: null,
     isArchived: false,
     rootNodeId: null,
@@ -361,6 +362,40 @@ describe("workspace generation controller", () => {
     expect(providerClient.generateFromActivePath).toHaveBeenCalledTimes(1)
   })
 
+  it("does not auto-generate when navigation changes during append persistence", async () => {
+    conversationClient.loadConversationTree.mockResolvedValueOnce(
+      appendableTree,
+    )
+    await useConversationStore
+      .getState()
+      .loadConversation(conversationClient, conversation.id)
+    useConversationStore.getState().selectNode(assistant.id)
+    const append = deferred<ConversationNodeView>()
+    conversationClient.appendNode.mockReturnValueOnce(append.promise)
+    const { result } = renderHook(() =>
+      useWorkspaceGenerationController({ conversationClient, providerClient }),
+    )
+
+    let appendOperation!: Promise<void>
+    act(() => {
+      appendOperation = result.current.appendNode(appendedUser.content)
+    })
+    act(() => {
+      useConversationStore.getState().selectNode(root.id)
+    })
+
+    await act(async () => {
+      append.resolve(appendedUser)
+      await appendOperation
+    })
+
+    expect(useConversationStore.getState().activeNodeId).toBe(root.id)
+    expect(useConversationStore.getState().fullNodes[appendedUser.id]).toEqual(
+      appendedUser,
+    )
+    expect(providerClient.generateFromActivePath).not.toHaveBeenCalled()
+  })
+
   it("starts generation once from a created conversation only after persistence", async () => {
     resetConversationStore()
     const create = deferred<ConversationTreeView>()
@@ -371,12 +406,9 @@ describe("workspace generation controller", () => {
       useWorkspaceGenerationController({ conversationClient, providerClient }),
     )
 
-    let createOperation!: Promise<void>
+    let createOperation!: Promise<boolean>
     act(() => {
-      createOperation = result.current.createConversation(
-        createdConversation.title,
-        createdRoot.content,
-      )
+      createOperation = result.current.createConversation(createdRoot.content)
     })
     expect(conversationClient.createConversation).toHaveBeenCalledWith({
       title: createdConversation.title,
@@ -412,10 +444,7 @@ describe("workspace generation controller", () => {
     )
 
     await act(async () => {
-      await result.current.createConversation(
-        createdConversation.title,
-        createdRoot.content,
-      )
+      await result.current.createConversation(createdRoot.content)
     })
 
     expect(useConversationStore.getState()).toMatchObject({
@@ -542,6 +571,7 @@ describe("workspace generation controller", () => {
     const unsubscribe = useConversationStore.subscribe((state) => {
       if (state.conversationId === createdConversation.id) {
         useConversationStore.setState({
+          isCreatingConversation: false,
           conversationId: replacementConversation.id,
           isArchived: false,
           rootNodeId: replacementRoot.id,
@@ -560,10 +590,7 @@ describe("workspace generation controller", () => {
     )
 
     await act(async () => {
-      await result.current.createConversation(
-        createdConversation.title,
-        createdRoot.content,
-      )
+      await result.current.createConversation(createdRoot.content)
     })
     unsubscribe()
 
@@ -618,10 +645,7 @@ describe("workspace generation controller", () => {
     )
 
     await act(async () => {
-      await result.current.createConversation(
-        createdConversation.title,
-        createdRoot.content,
-      )
+      await result.current.createConversation(createdRoot.content)
     })
 
     expect(useConversationStore.getState().activeNodeId).toBe(createdRoot.id)

@@ -107,7 +107,7 @@ const tree: ConversationTreeView = {
 const rootOnlyTree: ConversationTreeView = {
   conversation: {
     id: "new-conversation",
-    title: "New conversation",
+    title: "ONE_USER_ROOT_SENTINEL",
     rootNodeId: "new-root",
     isArchived: false,
   },
@@ -170,6 +170,7 @@ function createMockProviderClient() {
 
 function resetStore() {
   useConversationStore.setState({
+    isCreatingConversation: false,
     conversationId: null,
     isArchived: false,
     rootNodeId: null,
@@ -190,6 +191,14 @@ describe("ConversationWorkspace", () => {
   let providerClient: ReturnType<typeof createMockProviderClient>
 
   beforeEach(() => {
+    vi.stubGlobal(
+      "ResizeObserver",
+      class ResizeObserverStub {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    )
     client = createMockClient()
     providerClient = createMockProviderClient()
     vi.mocked(createConversationClient).mockReturnValue(client)
@@ -386,6 +395,9 @@ describe("ConversationWorkspace", () => {
 
     render(<ConversationWorkspace />)
 
+    expect(
+      screen.getByRole("button", { name: "New conversation" }),
+    ).toBeVisible()
     expect(screen.getByText("Archived — read only")).toBeVisible()
     expect(
       within(screen.getByTestId("conversation-pane")).getByText(right.content),
@@ -449,14 +461,16 @@ describe("ConversationWorkspace", () => {
     client.createConversation.mockResolvedValueOnce(rootOnlyTree)
     render(<ConversationWorkspace />)
 
-    await user.type(await screen.findByLabelText("Title"), "New conversation")
-    await user.type(
-      screen.getByLabelText("First message"),
-      "ONE_USER_ROOT_SENTINEL",
-    )
-    await user.click(
-      screen.getByRole("button", { name: "Create conversation" }),
-    )
+    const composer = await screen.findByRole("textbox", {
+      name: "Message composer",
+    })
+    expect(
+      screen.getByRole("button", { name: "New conversation" }),
+    ).toBeVisible()
+    expect(screen.queryByLabelText("Title")).not.toBeInTheDocument()
+    expect(screen.queryByLabelText("First message")).not.toBeInTheDocument()
+    await user.type(composer, "ONE_USER_ROOT_SENTINEL")
+    await user.click(screen.getByRole("button", { name: "Send message" }))
 
     await waitFor(() => {
       expect(
@@ -466,7 +480,7 @@ describe("ConversationWorkspace", () => {
       ).toBeVisible()
     })
     expect(client.createConversation).toHaveBeenCalledWith({
-      title: "New conversation",
+      title: "ONE_USER_ROOT_SENTINEL",
       content: "ONE_USER_ROOT_SENTINEL",
     })
     expect(screen.queryByLabelText("assistant message")).not.toBeInTheDocument()
@@ -474,6 +488,148 @@ describe("ConversationWorkspace", () => {
     expect(
       screen.getByRole("textbox", { name: "Message composer" }),
     ).toBeDisabled()
+  })
+
+  it("switches a loaded conversation to a blank Composer without clearing its projection", async () => {
+    const user = userEvent.setup()
+    client.listConversations.mockResolvedValueOnce([
+      { ...tree.conversation, updatedAt: right.createdAt },
+    ])
+    render(<ConversationWorkspace />)
+    await within(await screen.findByTestId("conversation-pane")).findByText(
+      right.content,
+    )
+    const before = useConversationStore.getState()
+
+    await user.click(screen.getByRole("button", { name: "New conversation" }))
+
+    expect(screen.getByTestId("blank-conversation-pane")).toBeVisible()
+    expect(
+      screen.getByRole("textbox", { name: "Message composer" }),
+    ).toBeEnabled()
+    expect(screen.queryByLabelText("Title")).not.toBeInTheDocument()
+    const creating = useConversationStore.getState()
+    expect(creating.isCreatingConversation).toBe(true)
+    expect(creating.conversationId).toBe(before.conversationId)
+    expect(creating.activeNodeId).toBe(before.activeNodeId)
+    expect(creating.nodesById).toBe(before.nodesById)
+    expect(creating.history).toBe(before.history)
+
+    await user.click(screen.getByRole("button", { name: "Branch proof" }))
+    await waitFor(() => {
+      expect(screen.getByTestId("conversation-pane")).toBeVisible()
+      expect(useConversationStore.getState().isCreatingConversation).toBe(false)
+    })
+  })
+
+  it("derives a scalar-safe title while preserving the complete first prompt", async () => {
+    const user = userEvent.setup()
+    const prompt = `\u{3000}${"🙂".repeat(39)}界   full prompt tail\n`
+    const expectedTitle = `${"🙂".repeat(39)}界…`
+    client.createConversation.mockResolvedValueOnce({
+      ...rootOnlyTree,
+      conversation: { ...rootOnlyTree.conversation, title: expectedTitle },
+      nodes: [{ ...rootOnlyTree.nodes[0]!, content: prompt }],
+      nodesById: {
+        "new-root": {
+          ...rootOnlyTree.nodesById["new-root"]!,
+          preview: prompt,
+        },
+      },
+    })
+    render(<ConversationWorkspace />)
+    const composer = await screen.findByRole("textbox", {
+      name: "Message composer",
+    })
+
+    await user.type(composer, prompt)
+    await user.click(screen.getByRole("button", { name: "Send message" }))
+
+    await waitFor(() => {
+      expect(client.createConversation).toHaveBeenCalledWith({
+        title: expectedTitle,
+        content: prompt,
+      })
+    })
+  })
+
+  it("retains the first Composer draft for a safe retry after creation failure", async () => {
+    const user = userEvent.setup()
+    client.createConversation
+      .mockRejectedValueOnce(
+        new ConversationCommandError({
+          code: "database_unavailable",
+          message: "Conversation could not be saved.",
+          retryable: true,
+        }),
+      )
+      .mockResolvedValueOnce(rootOnlyTree)
+    render(<ConversationWorkspace />)
+    const composer = await screen.findByRole("textbox", {
+      name: "Message composer",
+    })
+    await user.type(composer, rootOnlyTree.nodes[0]!.content)
+
+    await user.click(screen.getByRole("button", { name: "Send message" }))
+
+    expect(
+      await screen.findByText("Conversation could not be saved."),
+    ).toBeVisible()
+    expect(composer).toHaveValue(rootOnlyTree.nodes[0]!.content)
+    expect(composer).toBeEnabled()
+    await user.click(screen.getByRole("button", { name: "Send message" }))
+    await waitFor(() => {
+      expect(client.createConversation).toHaveBeenCalledTimes(2)
+      expect(screen.getByTestId("conversation-pane")).toBeVisible()
+    })
+  })
+
+  it("keeps the New conversation action available for all-archived history", async () => {
+    client.listConversations.mockResolvedValueOnce([
+      {
+        ...tree.conversation,
+        isArchived: true,
+        updatedAt: right.createdAt,
+      },
+    ])
+    client.loadConversationTree.mockResolvedValueOnce({
+      ...tree,
+      conversation: { ...tree.conversation, isArchived: true },
+    })
+
+    render(<ConversationWorkspace />)
+
+    expect(
+      await screen.findByRole("button", { name: "New conversation" }),
+    ).toBeEnabled()
+    expect(await screen.findByText("Archived — read only")).toBeVisible()
+  })
+
+  it("visually truncates history titles and exposes the complete title on hover and focus", async () => {
+    const user = userEvent.setup()
+    const longTitle =
+      "A complete automatic conversation title that is wider than the sidebar"
+    client.listConversations.mockResolvedValueOnce([
+      { ...tree.conversation, title: longTitle, updatedAt: right.createdAt },
+    ])
+    client.loadConversationTree.mockResolvedValueOnce({
+      ...tree,
+      conversation: { ...tree.conversation, title: longTitle },
+    })
+    render(<ConversationWorkspace />)
+    const historyButton = await screen.findByRole("button", { name: longTitle })
+    const title = within(historyButton).getByText(longTitle)
+
+    expect(title).toHaveClass("truncate")
+    await user.hover(historyButton)
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(longTitle)
+    await user.unhover(historyButton)
+    await user.keyboard("{Escape}")
+    await waitFor(() => {
+      expect(screen.queryByRole("tooltip")).not.toBeInTheDocument()
+    })
+    act(() => historyButton.focus())
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(longTitle)
   })
 
   it("renders one transient response and merges only the authoritative completion", async () => {
