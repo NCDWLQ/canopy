@@ -60,6 +60,9 @@ pub struct CommandError {
 
 - `code` is stable control-flow data.
 - `message` is a concise, safe user-facing summary, not a source error dump.
+- `message` is Simplified Chinese because Canopy is currently a single-locale
+  Chinese product. Localization changes the safe summary only; it never changes
+  `code`, `retryable`, `details`, or the serialized field shape.
 - `retryable` is decided by the central mapper, not by individual components.
 - `details` is optional, structured, non-sensitive context such as an input
   field name, a safe resource identifier, or a provider retry delay. It is not
@@ -130,6 +133,25 @@ Presentation rules:
 - `cancelled` clears loading/streaming state and does not display an error toast.
 - UI text may add presentation context, but branching behavior depends on
   `code` and `retryable`, never message matching.
+- The UI does not expose a raw machine error code as user copy. Keep the code in
+  normalized state for control flow and diagnostics, and render the safe Chinese
+  `message` with a contextual Chinese heading.
+
+Example contract-preserving localization:
+
+```rust
+CommandError {
+    code: CommandErrorCode::DatabaseUnavailable,
+    message: "会话数据库当前不可用。".to_owned(),
+    retryable: true,
+    details: None,
+}
+```
+
+Rust mapping/serialization tests and any shared fixture that models real Rust
+output must assert the localized message together with the unchanged machine
+fields. Arbitrary fixture messages may remain non-Chinese only when the test is
+explicitly proving opaque message preservation rather than product copy.
 
 ## Common Mistakes
 

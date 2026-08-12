@@ -292,8 +292,29 @@ The correct form is deterministic, fixture-driven, and independent of SQLite and
 - Preserve shadcn primitives as upgradeable building blocks; wrap them instead of editing generated internals for domain behavior.
 - The outline uses tree/treeitem semantics or an equivalent tested Radix pattern, visible focus, correct expanded/selected state, and roving keyboard focus.
 - Every icon-only action has an accessible name. Menus, dialogs, and tooltips use Radix focus management.
+- Canopy is currently a single-locale Simplified Chinese product. User-visible
+  copy, placeholders, tooltips, live regions, and accessible names use Chinese;
+  set the document language to `zh-CN`. Do not introduce locale state or an
+  i18n runtime until the product requires a second locale.
+- Preserve brand and technical values such as `Canopy`, `OpenAI`, `API`, URLs,
+  and model identifiers. Never translate user-authored conversation content or
+  provider/model output.
 - Do not rely on color alone for active paths, roles, errors, or conversation archive state.
 - Respect reduced motion and keep the interface usable at desktop webview zoom levels.
+
+Role enums remain stable domain values and are mapped only for presentation:
+
+```ts
+const ROLE_LABELS: Record<PathMessageView["role"], string> = {
+  system: "系统",
+  user: "用户",
+  assistant: "助手",
+  tool: "工具",
+}
+```
+
+Tests query the Chinese accessible name while contract and state tests continue
+to assert the original enum value.
 
 ### Design Decision: Workspace-Global Settings Entry
 
