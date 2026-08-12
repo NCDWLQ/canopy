@@ -295,6 +295,41 @@ The correct form is deterministic, fixture-driven, and independent of SQLite and
 - Do not rely on color alone for active paths, roles, errors, or conversation archive state.
 - Respect reduced motion and keep the interface usable at desktop webview zoom levels.
 
+### Design Decision: Workspace-Global Settings Entry
+
+**Context**: Provider configuration applies to the workspace, not to the
+selected conversation. A conversation-header action therefore gives global
+configuration the wrong ownership and competes with conversation-scoped
+actions.
+
+**Decision**: Expose workspace-global Settings through one persistent footer
+action in the expanded conversation sidebar. Open a titled Radix/shadcn dialog
+and compose feature-owned settings content inside it; keep Provider state,
+secret handling, and typed client calls in the Provider feature. Low-frequency
+sidebar footer actions use the flat `ghost` treatment with muted default text
+and foreground hover emphasis so they remain subordinate to history and tree
+navigation.
+
+```tsx
+<footer>
+  <DialogTrigger asChild>
+    <Button
+      variant="ghost"
+      className="w-full justify-start text-muted-foreground hover:text-foreground"
+    >
+      Settings
+    </Button>
+  </DialogTrigger>
+</footer>
+```
+
+Do not duplicate the Provider trigger in the conversation header. Tests must
+assert that Settings has one accessible trigger in the sidebar footer, opens a
+titled dialog, restores focus when closed, and remains usable after the sidebar
+is collapsed and reopened. Provider tests continue to cover keyboard submit,
+secret clearing, save/delete, errors, read-only state, and generation/loading
+locks through the global settings surface.
+
 ## Common Mistakes
 
 - Rendering the entire conversation instead of the supplied active path.
