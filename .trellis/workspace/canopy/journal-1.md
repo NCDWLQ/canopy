@@ -298,3 +298,25 @@ Localized 113 approved UI and error messages to Simplified Chinese, preserved IP
 ### Status
 
 [OK] **Completed**
+
+
+## Session 14: Assistant Markdown rendering
+
+**Date**: 2026-08-12
+**Task**: Assistant Markdown rendering
+**Branch**: `main`
+
+### Summary
+
+Added safe GFM rendering for durable and streaming assistant messages with Shiki code highlighting and Chinese copy controls; pinned Streamdown 2.4.0 to exclude Mermaid and documented the rendering trust boundary.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `192fde6` | (see git log) |
+| `ac3464d` | (see git log) |
+
+### Status
+
+[OK] **Completed**
