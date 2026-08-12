@@ -254,3 +254,25 @@ Added a blank Composer-first conversation flow with normalized prompt-derived ti
 ### Status
 
 [OK] **Completed**
+
+
+## Session 12: Refactor sidebar global settings
+
+**Date**: 2026-08-12
+**Task**: Refactor sidebar global settings
+**Branch**: `main`
+
+### Summary
+
+Moved Provider configuration from the conversation header into a global Settings dialog opened from a low-emphasis sidebar footer action; preserved provider security and mutation behavior, expanded accessible interaction coverage, and documented the workspace-global settings contract.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `612dd7b` | (see git log) |
+| `29fcc46` | (see git log) |
+
+### Status
+
+[OK] **Completed**
