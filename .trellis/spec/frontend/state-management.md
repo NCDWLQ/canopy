@@ -30,6 +30,7 @@ Store a normalized projection keyed by node ID:
 
 ```ts
 type ConversationTreeState = {
+  isCreatingConversation: boolean
   conversationId: string | null
   isArchived: boolean
   rootNodeId: string | null
@@ -77,6 +78,34 @@ decoded and projected before entering the store.
   records a normalized `UiError`; it never substitutes another branch.
 - After a successful branch/edit command, merge the returned node and select
   it only according to the feature action contract.
+
+## Blank Draft and Mutation Completion Ownership
+
+- `isCreatingConversation` is store-owned transient workspace state because
+  History and the main pane must agree on whether the preserved tree is being
+  displayed. Entering it increments the request epoch and preserves the loaded
+  conversation ID, root, active node, normalized maps, expansion, generation
+  terminal state, and history summaries.
+- A blank draft has no durable conversation or fabricated root. Its first
+  Composer submit derives a local title and calls the existing atomic
+  conversation-plus-user-root command. Successful creation installs the
+  returned tree and exits creation mode; failure retains creation mode, the
+  complete Composer draft, and the previous safe projection for retry.
+- Deferred append, branch, and edit-as-branch actions each increment and capture
+  a unique request epoch together with the conversation, command target, and
+  active selection. Completion rereads the live store, rejects a changed
+  epoch/conversation, and merges backend authority into the live normalized
+  tree. The new node is selected only when the captured active selection is
+  still current; otherwise the newer selection is preserved.
+- Stale failures follow the same epoch/conversation ownership check. They must
+  not replace the status or error owned by a newer load or blank-draft
+  transition.
+
+Required regressions cover entering blank mode without changing projection
+identity, creation failure and retry, navigation during each deferred mutation,
+and both stale success and stale failure after an epoch change. The append
+controller regression must also prove that the durable returned node is merged
+without starting generation after navigation.
 
 ## Scenario: Provider Generation Workspace Projection
 

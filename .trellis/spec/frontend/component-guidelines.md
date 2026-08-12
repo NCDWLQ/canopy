@@ -211,6 +211,7 @@ after every save attempt, including failure.
 | Condition | Component behavior |
 |---|---|
 | Tree is loading | Render a stable-size skeleton; do not show a fake root |
+| Blank conversation draft | Render the existing enabled Composer without title/prompt form fields; do not fabricate or persist a root before send |
 | Root or active node is absent | Render the supplied integrity error/recovery action; do not choose another node |
 | Active path is empty for an existing conversation | Render an error/empty boundary supplied by the container |
 | The conversation is archived | Keep history readable and disable all mutation capabilities |
@@ -221,7 +222,7 @@ after every save attempt, including failure.
 ### 5. Good / Base / Bad Cases
 
 - **Good**: a branched fixture shows the active node and ancestors, sibling indicators in the outline, and only the active path in the message pane.
-- **Base**: a new conversation renders one root, an empty composer, and no branch action until the supplied capability allows it.
+- **Base**: a blank draft renders an empty Composer and no durable root; the first successful send installs the authoritative user root.
 - **Bad**: missing active-node data never falls back to rendering all conversation messages.
 
 ### 6. Tests Required
@@ -230,6 +231,11 @@ after every save attempt, including failure.
 - `ConversationPane`: exact root-to-active order and an explicit assertion that sibling content is absent.
 - `MessageNode`: branch/edit callbacks receive the source ID once; disabled actions cannot fire.
 - Loading, empty, provider-auth, retryable, non-retryable, streaming, and cancellation states.
+- Blank-draft entry from empty, loaded, and all-archived history; first-send
+  title derivation; complete prompt preservation; failure retry; and history
+  selection exiting blank mode without clearing the preserved store projection.
+- History titles remain single-line and width-truncated, with the complete title
+  exposed through a Radix tooltip on both pointer hover and keyboard focus.
 - Provider forms: labels, secret masking, keyboard submission, and no raw secret in rendered errors.
 
 ### 7. Wrong vs Correct
