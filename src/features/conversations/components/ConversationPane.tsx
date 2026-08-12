@@ -1,8 +1,7 @@
 import * as React from "react"
 import type { PathMessageView, UiError } from "../types"
+import { MessageBubble } from "./MessageBubble"
 import { MessageNode } from "./MessageNode"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { AlertCircle, RefreshCw, Loader2 } from "lucide-react"
 
@@ -16,20 +15,99 @@ export type ConversationPaneProps = {
   onCreateBranch: (nodeId: string, content: string) => void
   onEditAsBranch: (nodeId: string, content: string) => void
   transientGeneration: TransientGenerationView | null
+  onRegenerate: () => void
   onRetryReconciliation: () => void
 }
 
-export type TransientGenerationView = {
-  phase:
-    | "starting"
-    | "streaming"
-    | "committing"
-    | "reconciling"
-    | "failed"
-    | "cancelled"
-  content: string
-  status: string
-  retryable: boolean
+export type TransientGenerationView =
+  | { phase: "starting" }
+  | { phase: "streaming" | "committing"; content: string }
+  | {
+      phase: "reconciling"
+      content: string
+      needsUserAction: boolean
+    }
+  | {
+      phase: "failed"
+      failureKind: "generation"
+    }
+  | {
+      phase: "failed"
+      failureKind: "persistence"
+      content: string
+    }
+  | { phase: "cancelled"; content: string }
+
+type TransientGenerationMessageProps = {
+  generation: TransientGenerationView
+  onRegenerate: () => void
+  onRetryReconciliation: () => void
+}
+
+function TransientGenerationMessage({
+  generation,
+  onRegenerate,
+  onRetryReconciliation,
+}: TransientGenerationMessageProps) {
+  const content = "content" in generation ? generation.content : ""
+  let status: string | null = null
+  let action: React.ReactNode = null
+  const statusInContent = generation.phase === "starting"
+
+  if (generation.phase === "starting") {
+    status = "正在思考"
+  } else if (generation.phase === "reconciling") {
+    status = "正在恢复这条回复…"
+    if (generation.needsUserAction) {
+      action = (
+        <Button variant="ghost" size="xs" onClick={onRetryReconciliation}>
+          重试恢复
+        </Button>
+      )
+    }
+  } else if (generation.phase === "failed") {
+    status =
+      generation.failureKind === "generation" ? "回复失败" : "这条回复未能保存"
+    action = (
+      <Button variant="ghost" size="xs" onClick={onRegenerate}>
+        重新生成
+      </Button>
+    )
+  } else if (generation.phase === "cancelled") {
+    status = "回复已停止"
+  }
+
+  return (
+    <MessageBubble
+      role="assistant"
+      footer={
+        status === null || statusInContent ? null : (
+          <div
+            className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground"
+            role="status"
+            aria-live="polite"
+          >
+            <span>{status}</span>
+            {action}
+          </div>
+        )
+      }
+    >
+      {content.length > 0 ? (
+        <div className="whitespace-pre-wrap break-words text-sm text-foreground">
+          {content}
+        </div>
+      ) : statusInContent && status !== null ? (
+        <span
+          className="text-sm text-muted-foreground"
+          role="status"
+          aria-live="polite"
+        >
+          {status}
+        </span>
+      ) : null}
+    </MessageBubble>
+  )
 }
 
 export function ConversationPane({
@@ -42,9 +120,14 @@ export function ConversationPane({
   onCreateBranch,
   onEditAsBranch,
   transientGeneration,
+  onRegenerate,
   onRetryReconciliation,
 }: ConversationPaneProps) {
   const bottomRef = React.useRef<HTMLDivElement>(null)
+  const transientContent =
+    transientGeneration !== null && "content" in transientGeneration
+      ? transientGeneration.content
+      : ""
 
   React.useEffect(() => {
     if (status === "ready" || status === "streaming") {
@@ -55,7 +138,7 @@ export function ConversationPane({
         behavior: reducedMotion ? "auto" : "smooth",
       })
     }
-  }, [path, status, transientGeneration?.content, transientGeneration?.phase])
+  }, [path, status, transientContent, transientGeneration?.phase])
 
   if (status === "loading" && path.length === 0) {
     return (
@@ -115,61 +198,13 @@ export function ConversationPane({
             onEditAsBranch={onEditAsBranch}
           />
         ))}
-        {transientGeneration !== null &&
-          (transientGeneration.phase === "failed" ||
-          transientGeneration.phase === "cancelled" ? (
-            <Alert
-              className="my-4"
-              variant={
-                transientGeneration.phase === "failed"
-                  ? "destructive"
-                  : "default"
-              }
-            >
-              <AlertTitle>
-                {transientGeneration.phase === "failed"
-                  ? "Generation failed"
-                  : "Generation cancelled"}
-              </AlertTitle>
-              <AlertDescription>{transientGeneration.status}</AlertDescription>
-            </Alert>
-          ) : (
-            <article
-              className="my-4 rounded-xl border bg-card p-4 shadow-sm"
-              aria-label="Transient assistant response"
-            >
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <span className="text-sm font-medium">Assistant</span>
-                <Badge variant="outline">Not saved</Badge>
-              </div>
-              {transientGeneration.content.length > 0 ? (
-                <div className="whitespace-pre-wrap break-words text-sm text-foreground">
-                  {transientGeneration.content}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Waiting for the first response…
-                </p>
-              )}
-              <div
-                className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground"
-                role="status"
-                aria-live="polite"
-              >
-                <span>{transientGeneration.status}</span>
-                {transientGeneration.phase === "reconciling" &&
-                  transientGeneration.retryable && (
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      onClick={onRetryReconciliation}
-                    >
-                      Retry local reload
-                    </Button>
-                  )}
-              </div>
-            </article>
-          ))}
+        {transientGeneration !== null && (
+          <TransientGenerationMessage
+            generation={transientGeneration}
+            onRegenerate={onRegenerate}
+            onRetryReconciliation={onRetryReconciliation}
+          />
+        )}
         {status === "loading" && path.length > 0 && (
           <div className="flex justify-center p-4" aria-label="Saving message">
             <Loader2

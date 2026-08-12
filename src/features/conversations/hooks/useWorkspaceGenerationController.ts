@@ -24,7 +24,7 @@ const COMMIT_REJECTED_ERROR: UiError = {
 
 const RECONCILING_ERROR: UiError = {
   code: "internal",
-  message: "Confirming the saved response from local storage.",
+  message: "The response could not be confirmed yet.",
   retryable: true,
 }
 
@@ -119,7 +119,11 @@ export function useWorkspaceGenerationController({
   )
 
   const scheduleReconciliation = React.useCallback(
-    (runId: number) => {
+    (runId: number, error: UiError = RECONCILING_ERROR) => {
+      const generation = useConversationStore.getState().generation
+      if (generation.phase !== "committing" || generation.runId !== runId) {
+        return
+      }
       clearReconciliationTimer(runId)
       const timer = setTimeout(() => {
         let current = useConversationStore.getState().generation
@@ -128,7 +132,7 @@ export function useWorkspaceGenerationController({
           current.runId === runId &&
           useConversationStore
             .getState()
-            .beginGenerationReconciliation(runId, RECONCILING_ERROR)
+            .beginGenerationReconciliation(runId, error)
         ) {
           current = useConversationStore.getState().generation
         }
@@ -166,12 +170,7 @@ export function useWorkspaceGenerationController({
         }
         scheduleReconciliation(runId)
       } catch (error: unknown) {
-        const current = useConversationStore.getState()
-        if (
-          current.beginGenerationReconciliation(runId, normalizeUiError(error))
-        ) {
-          scheduleReconciliation(runId)
-        }
+        scheduleReconciliation(runId, normalizeUiError(error))
       }
     },
     [providerClient, scheduleReconciliation],
@@ -207,7 +206,9 @@ export function useWorkspaceGenerationController({
           .getState()
           .failGeneration(runId, event.error, event.generationId)
       } else {
-        useConversationStore.getState().cancelGenerationRun(runId)
+        useConversationStore
+          .getState()
+          .acceptGenerationCancelled(runId, event.generationId)
       }
     },
     [clearReconciliationTimer, handleReady, requestExactCancellation],
@@ -348,7 +349,7 @@ export function useWorkspaceGenerationController({
     } else if (activeNodeRole !== "user") {
       unavailableReason = "Select a user message to generate a response."
     } else if (mutationLocked) {
-      unavailableReason = "Confirming the saved response."
+      unavailableReason = "Please wait for the current response."
     }
   }
 
@@ -438,7 +439,14 @@ export function useWorkspaceGenerationController({
     },
     retryReconciliation: () => {
       const current = useConversationStore.getState().generation
-      if (current.phase === "reconciling") void reconcile(current.runId)
+      if (
+        current.phase === "reconciling" &&
+        useConversationStore
+          .getState()
+          .retryGenerationReconciliation(current.runId)
+      ) {
+        void reconcile(current.runId)
+      }
     },
   }
 }

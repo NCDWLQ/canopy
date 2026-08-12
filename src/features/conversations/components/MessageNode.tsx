@@ -1,5 +1,6 @@
 import * as React from "react"
 import { GitBranch, Edit2, X, Check } from "lucide-react"
+import { MessageBubble } from "./MessageBubble"
 import type { PathMessageView } from "../types"
 import { Button } from "@/components/ui/button"
 
@@ -49,17 +50,10 @@ export function MessageNode({
   }
 
   return (
-    <article
-      aria-label={`${message.role} message`}
-      className={`my-2 rounded-lg border p-4 shadow-sm ${
-        message.role === "user" ? "ml-8 bg-muted" : "mr-8 bg-card"
-      }`}
-    >
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-sm font-semibold capitalize text-muted-foreground">
-          {message.role}
-        </div>
-        <div className="flex items-center gap-2">
+    <MessageBubble
+      role={message.role}
+      actions={
+        <>
           {canEdit && !isEditing && !isBranching && (
             <Button
               variant="ghost"
@@ -87,9 +81,9 @@ export function MessageNode({
               <GitBranch aria-hidden="true" />
             </Button>
           )}
-        </div>
-      </div>
-
+        </>
+      }
+    >
       {isEditing && canEdit ? (
         <div className="mt-2">
           <textarea
@@ -148,6 +142,6 @@ export function MessageNode({
           {message.content}
         </div>
       )}
-    </article>
+    </MessageBubble>
   )
 }

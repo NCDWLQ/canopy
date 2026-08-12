@@ -107,46 +107,38 @@ export function ConversationWorkspace({
     const generation = store.generation
     switch (generation.phase) {
       case "starting":
-        return {
-          phase: "starting" as const,
-          content: "",
-          status: "Starting generation…",
-          retryable: false,
-        }
+        return { phase: "starting" as const }
       case "streaming":
         return {
           phase: "streaming" as const,
           content: generation.content,
-          status: "Streaming response. Not yet saved.",
-          retryable: false,
         }
       case "committing":
         return {
           phase: "committing" as const,
           content: generation.content,
-          status: "Saving the accepted response…",
-          retryable: false,
         }
       case "reconciling":
         return {
           phase: "reconciling" as const,
           content: generation.content,
-          status: generation.error.message,
-          retryable: generation.error.retryable,
+          needsUserAction: generation.needsUserAction,
         }
       case "failed":
-        return {
-          phase: "failed" as const,
-          content: "",
-          status: generation.error.message,
-          retryable: generation.error.retryable,
-        }
+        return generation.failureKind === "generation"
+          ? {
+              phase: "failed" as const,
+              failureKind: "generation" as const,
+            }
+          : {
+              phase: "failed" as const,
+              failureKind: "persistence" as const,
+              content: generation.content,
+            }
       case "cancelled":
         return {
           phase: "cancelled" as const,
-          content: "",
-          status: "The transient response was discarded.",
-          retryable: false,
+          content: generation.content,
         }
       case "idle":
       case "completed":
@@ -455,6 +447,7 @@ export function ConversationWorkspace({
                 void controller.editNodeAsBranch(nodeId, content)
               }
               transientGeneration={transientGeneration}
+              onRegenerate={controller.generate}
               onRetryReconciliation={controller.retryReconciliation}
             />
 

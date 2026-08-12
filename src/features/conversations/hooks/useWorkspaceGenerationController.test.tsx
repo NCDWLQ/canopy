@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { useWorkspaceGenerationController } from "./useWorkspaceGenerationController"
 import { selectActivePath, useConversationStore } from "../store"
@@ -306,6 +306,10 @@ describe("workspace generation controller", () => {
       .loadConversation(conversationClient, conversation.id)
     useConversationStore.getState().selectNode(right.id)
     conversationClient.loadConversationTree.mockClear()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it("starts generation once from an appended user only after persistence", async () => {
@@ -795,6 +799,56 @@ describe("workspace generation controller", () => {
     expect(providerClient.cancelGeneration).not.toHaveBeenCalled()
   })
 
+  it("accepts exact backend cancellation after ready and does not leave a reconciliation timer", async () => {
+    let onEvent: ((event: GenerationEventView) => void) | undefined
+    const commit = deferred<{ accepted: boolean }>()
+    providerClient.generateFromActivePath.mockImplementation(
+      (_conversationId, _activeNodeId, callback) => {
+        onEvent = callback
+        return Promise.resolve({ generationId })
+      },
+    )
+    providerClient.commitGeneration.mockReturnValueOnce(commit.promise)
+    const { result } = renderHook(() =>
+      useWorkspaceGenerationController({
+        conversationClient,
+        providerClient,
+        reconciliationDelayMs: 0,
+      }),
+    )
+
+    act(() => result.current.generate())
+    act(() => emitReadyPath(onEvent!))
+    await waitFor(() => {
+      expect(useConversationStore.getState().generation.phase).toBe(
+        "committing",
+      )
+    })
+    const committing = useConversationStore.getState().generation
+    if (committing.phase !== "committing") {
+      throw new Error("Expected committing generation")
+    }
+
+    act(() => {
+      onEvent!({ type: "cancelled", generationId })
+    })
+    expect(useConversationStore.getState().generation).toEqual({
+      phase: "cancelled",
+      runId: committing.runId,
+      content: streamedContent,
+    })
+
+    await act(async () => {
+      commit.resolve({ accepted: true })
+      await commit.promise
+    })
+    expect(useConversationStore.getState().generation).toMatchObject({
+      phase: "cancelled",
+      content: streamedContent,
+    })
+    expect(conversationClient.loadConversationTree).not.toHaveBeenCalled()
+  })
+
   it("cancels the exact command result when cancelled before started", async () => {
     const start = deferred<{ generationId: string }>()
     providerClient.generateFromActivePath.mockReturnValueOnce(start.promise)
@@ -906,7 +960,54 @@ describe("workspace generation controller", () => {
     )
   })
 
-  it("keeps the terminal channel authoritative during commit ambiguity", async () => {
+  it("waits for the full grace period before starting automatic reconciliation", async () => {
+    vi.useFakeTimers()
+    let onEvent: ((event: GenerationEventView) => void) | undefined
+    providerClient.generateFromActivePath.mockImplementation(
+      (_conversationId, _activeNodeId, callback) => {
+        onEvent = callback
+        return Promise.resolve({ generationId })
+      },
+    )
+    providerClient.commitGeneration.mockResolvedValueOnce({ accepted: true })
+    conversationClient.loadConversationTree.mockResolvedValueOnce(tree)
+    const { result } = renderHook(() =>
+      useWorkspaceGenerationController({
+        conversationClient,
+        providerClient,
+        reconciliationDelayMs: 1_500,
+      }),
+    )
+
+    act(() => result.current.generate())
+    act(() => emitReadyPath(onEvent!))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(useConversationStore.getState().generation.phase).toBe("committing")
+    expect(conversationClient.loadConversationTree).not.toHaveBeenCalled()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_499)
+    })
+    expect(useConversationStore.getState().generation.phase).toBe("committing")
+    expect(conversationClient.loadConversationTree).not.toHaveBeenCalled()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+    expect(conversationClient.loadConversationTree).toHaveBeenCalledWith(
+      conversation.id,
+    )
+    expect(useConversationStore.getState().generation).toMatchObject({
+      phase: "reconciling",
+      needsUserAction: true,
+    })
+    vi.useRealTimers()
+  })
+
+  it("keeps commit ambiguity silent and accepts exact completion during the grace period", async () => {
+    vi.useFakeTimers()
     let onEvent: ((event: GenerationEventView) => void) | undefined
     providerClient.generateFromActivePath.mockImplementation(
       (_conversationId, _activeNodeId, callback) => {
@@ -925,17 +1026,16 @@ describe("workspace generation controller", () => {
       useWorkspaceGenerationController({
         conversationClient,
         providerClient,
-        reconciliationDelayMs: 60_000,
+        reconciliationDelayMs: 1_500,
       }),
     )
 
     act(() => result.current.generate())
     act(() => emitReadyPath(onEvent!))
-    await waitFor(() => {
-      expect(useConversationStore.getState().generation.phase).toBe(
-        "reconciling",
-      )
+    await act(async () => {
+      await Promise.resolve()
     })
+    expect(useConversationStore.getState().generation.phase).toBe("committing")
     expect(conversationClient.loadConversationTree).not.toHaveBeenCalled()
 
     act(() => {
@@ -950,6 +1050,264 @@ describe("workspace generation controller", () => {
       phase: "completed",
       nodeId: completedNode().id,
     })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_500)
+    })
     expect(conversationClient.loadConversationTree).not.toHaveBeenCalled()
+  })
+
+  it("keeps an exact persistence failure authoritative before the grace period expires", async () => {
+    vi.useFakeTimers()
+    let onEvent: ((event: GenerationEventView) => void) | undefined
+    providerClient.generateFromActivePath.mockImplementation(
+      (_conversationId, _activeNodeId, callback) => {
+        onEvent = callback
+        return Promise.resolve({ generationId })
+      },
+    )
+    providerClient.commitGeneration.mockResolvedValueOnce({ accepted: true })
+    const { result } = renderHook(() =>
+      useWorkspaceGenerationController({
+        conversationClient,
+        providerClient,
+        reconciliationDelayMs: 1_500,
+      }),
+    )
+
+    act(() => result.current.generate())
+    act(() => emitReadyPath(onEvent!))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(useConversationStore.getState().generation.phase).toBe("committing")
+
+    act(() => {
+      onEvent!({
+        type: "failed",
+        generationId,
+        error: {
+          code: "database_unavailable",
+          message: "The authoritative insert failed.",
+          retryable: true,
+        },
+      })
+    })
+    expect(useConversationStore.getState().generation).toMatchObject({
+      phase: "failed",
+      failureKind: "persistence",
+      content: streamedContent,
+    })
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_500)
+    })
+    expect(conversationClient.loadConversationTree).not.toHaveBeenCalled()
+  })
+
+  it("does not let an in-flight reconciliation overwrite an exact persistence failure", async () => {
+    let onEvent: ((event: GenerationEventView) => void) | undefined
+    const reload = deferred<ConversationTreeView>()
+    providerClient.generateFromActivePath.mockImplementation(
+      (_conversationId, _activeNodeId, callback) => {
+        onEvent = callback
+        return Promise.resolve({ generationId })
+      },
+    )
+    providerClient.commitGeneration.mockResolvedValueOnce({ accepted: true })
+    conversationClient.loadConversationTree.mockReturnValueOnce(reload.promise)
+    const { result } = renderHook(() =>
+      useWorkspaceGenerationController({
+        conversationClient,
+        providerClient,
+        reconciliationDelayMs: 0,
+      }),
+    )
+
+    act(() => result.current.generate())
+    act(() => emitReadyPath(onEvent!))
+    await waitFor(() => {
+      expect(conversationClient.loadConversationTree).toHaveBeenCalledWith(
+        conversation.id,
+      )
+    })
+
+    act(() => {
+      onEvent!({
+        type: "failed",
+        generationId,
+        error: {
+          code: "database_unavailable",
+          message: "The authoritative insert failed.",
+          retryable: true,
+        },
+      })
+    })
+    expect(useConversationStore.getState().generation).toMatchObject({
+      phase: "failed",
+      failureKind: "persistence",
+      content: streamedContent,
+    })
+
+    await act(async () => {
+      reload.resolve(tree)
+      await reload.promise
+    })
+    expect(useConversationStore.getState().generation).toMatchObject({
+      phase: "failed",
+      failureKind: "persistence",
+      content: streamedContent,
+    })
+  })
+
+  it("clears the grace timer and starts one reconciliation on unmount", async () => {
+    vi.useFakeTimers()
+    let onEvent: ((event: GenerationEventView) => void) | undefined
+    providerClient.generateFromActivePath.mockImplementation(
+      (_conversationId, _activeNodeId, callback) => {
+        onEvent = callback
+        return Promise.resolve({ generationId })
+      },
+    )
+    providerClient.commitGeneration.mockResolvedValueOnce({ accepted: true })
+    conversationClient.loadConversationTree.mockReturnValueOnce(
+      new Promise(() => undefined),
+    )
+    const { result, unmount } = renderHook(() =>
+      useWorkspaceGenerationController({
+        conversationClient,
+        providerClient,
+        reconciliationDelayMs: 1_500,
+      }),
+    )
+
+    act(() => result.current.generate())
+    act(() => emitReadyPath(onEvent!))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(useConversationStore.getState().generation.phase).toBe("committing")
+    expect(conversationClient.loadConversationTree).not.toHaveBeenCalled()
+
+    unmount()
+    expect(conversationClient.loadConversationTree).toHaveBeenCalledTimes(1)
+    expect(useConversationStore.getState().generation).toMatchObject({
+      phase: "reconciling",
+      needsUserAction: false,
+    })
+
+    await vi.advanceTimersByTimeAsync(1_500)
+    expect(conversationClient.loadConversationTree).toHaveBeenCalledTimes(1)
+  })
+
+  it("classifies an explicitly rejected acknowledgement as persistence failure", async () => {
+    let onEvent: ((event: GenerationEventView) => void) | undefined
+    providerClient.generateFromActivePath.mockImplementation(
+      (_conversationId, _activeNodeId, callback) => {
+        onEvent = callback
+        return Promise.resolve({ generationId })
+      },
+    )
+    providerClient.commitGeneration.mockResolvedValueOnce({ accepted: false })
+    const { result } = renderHook(() =>
+      useWorkspaceGenerationController({ conversationClient, providerClient }),
+    )
+
+    act(() => result.current.generate())
+    act(() => emitReadyPath(onEvent!))
+
+    await waitFor(() => {
+      expect(useConversationStore.getState().generation).toMatchObject({
+        phase: "failed",
+        failureKind: "persistence",
+        content: streamedContent,
+      })
+    })
+    expect(conversationClient.loadConversationTree).not.toHaveBeenCalled()
+  })
+
+  it("gates manual reconciliation retry until the automatic reload needs help", async () => {
+    let onEvent: ((event: GenerationEventView) => void) | undefined
+    const retryLoad = deferred<ConversationTreeView>()
+    providerClient.generateFromActivePath.mockImplementation(
+      (_conversationId, _activeNodeId, callback) => {
+        onEvent = callback
+        return Promise.resolve({ generationId })
+      },
+    )
+    providerClient.commitGeneration.mockResolvedValueOnce({ accepted: true })
+    conversationClient.loadConversationTree
+      .mockResolvedValueOnce(tree)
+      .mockReturnValueOnce(retryLoad.promise)
+    const { result } = renderHook(() =>
+      useWorkspaceGenerationController({
+        conversationClient,
+        providerClient,
+        reconciliationDelayMs: 0,
+      }),
+    )
+
+    act(() => result.current.generate())
+    act(() => emitReadyPath(onEvent!))
+    await waitFor(() => {
+      expect(useConversationStore.getState().generation).toMatchObject({
+        phase: "reconciling",
+        needsUserAction: true,
+      })
+    })
+
+    act(() => result.current.retryReconciliation())
+    expect(useConversationStore.getState().generation).toMatchObject({
+      phase: "reconciling",
+      needsUserAction: false,
+    })
+    expect(conversationClient.loadConversationTree).toHaveBeenCalledTimes(2)
+
+    act(() => retryLoad.resolve(tree))
+    await waitFor(() => {
+      expect(useConversationStore.getState().generation).toMatchObject({
+        phase: "reconciling",
+        needsUserAction: true,
+      })
+    })
+  })
+
+  it("keeps accepting exact completion after an unresolved automatic reload", async () => {
+    let onEvent: ((event: GenerationEventView) => void) | undefined
+    providerClient.generateFromActivePath.mockImplementation(
+      (_conversationId, _activeNodeId, callback) => {
+        onEvent = callback
+        return Promise.resolve({ generationId })
+      },
+    )
+    providerClient.commitGeneration.mockResolvedValueOnce({ accepted: true })
+    conversationClient.loadConversationTree.mockResolvedValueOnce(tree)
+    const { result } = renderHook(() =>
+      useWorkspaceGenerationController({
+        conversationClient,
+        providerClient,
+        reconciliationDelayMs: 0,
+      }),
+    )
+
+    act(() => result.current.generate())
+    act(() => emitReadyPath(onEvent!))
+    await waitFor(() => {
+      expect(useConversationStore.getState().generation).toMatchObject({
+        phase: "reconciling",
+        needsUserAction: true,
+      })
+    })
+
+    act(() => {
+      onEvent!({
+        type: "completed",
+        generationId,
+        node: completedNode(),
+      })
+    })
+    expect(useConversationStore.getState().generation).toMatchObject({
+      phase: "completed",
+      nodeId: completedNode().id,
+    })
   })
 })

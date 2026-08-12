@@ -681,12 +681,17 @@ describe("ConversationWorkspace", () => {
     })
 
     const pane = screen.getByTestId("conversation-pane")
+    const transientArticle = within(pane)
+      .getByText(streamedContent)
+      .closest("article")
+    expect(transientArticle).toHaveAccessibleName("assistant message")
     expect(
-      within(pane).getByRole("article", {
-        name: "Transient assistant response",
-      }),
-    ).toHaveTextContent(streamedContent)
+      within(pane).getAllByRole("article", { name: "assistant message" }),
+    ).toHaveLength(2)
+    expect(transientArticle).toHaveClass("mr-8", "bg-card")
     expect(within(pane).queryByText(left.content)).not.toBeInTheDocument()
+    expect(pane).not.toHaveTextContent("Not saved")
+    expect(pane).not.toHaveTextContent("Saving the accepted response")
     expect(
       Object.values(useConversationStore.getState().fullNodes).some(
         (node) => node.content === streamedContent,
@@ -717,17 +722,169 @@ describe("ConversationWorkspace", () => {
     })
 
     await waitFor(() => {
-      expect(
-        within(pane).queryByRole("article", {
-          name: "Transient assistant response",
-        }),
-      ).not.toBeInTheDocument()
       expect(within(pane).getByText(streamedContent)).toBeVisible()
     })
+    const authoritativeArticle = within(pane)
+      .getByText(streamedContent)
+      .closest("article")
+    expect(authoritativeArticle).toHaveAccessibleName("assistant message")
+    expect(authoritativeArticle).toHaveClass("mr-8", "bg-card")
+    expect(
+      within(pane).getAllByRole("article", { name: "assistant message" }),
+    ).toHaveLength(2)
     expect(useConversationStore.getState().fullNodes[completed.id]).toEqual(
       completed,
     )
     expect(document.body).not.toHaveTextContent(commitToken)
+  })
+
+  it("projects every terminal phase through the ordinary assistant message surface", async () => {
+    const user = userEvent.setup()
+    const generationId = "11111111-1111-4111-8111-111111111111"
+    const run = {
+      runId: 41,
+      conversationId: root.conversationId,
+      parentNodeId: right.id,
+      generationId,
+      model: "fixture-model",
+    } as const
+    const recoveryError = {
+      code: "network_failure" as const,
+      message: "Internal recovery detail that must stay hidden.",
+      retryable: true,
+    }
+    const retryLoad = new Promise<ConversationTreeView>(() => undefined)
+
+    providerClient.loadProviderProfile.mockReset()
+    providerClient.loadProviderProfile.mockResolvedValue({
+      baseEndpoint: "http://127.0.0.1:7788/v1",
+      model: run.model,
+      hasApiKey: false,
+      updatedAt: 10,
+    })
+    providerClient.generateFromActivePath.mockReturnValue(
+      new Promise(() => undefined),
+    )
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(right.id)
+    render(<ConversationWorkspace />)
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Generate" })).toBeEnabled()
+    })
+    const pane = screen.getByTestId("conversation-pane")
+
+    act(() => {
+      useConversationStore.setState({
+        generation: { ...run, phase: "starting" },
+      })
+    })
+    expect(within(pane).getByText("正在思考")).toBeVisible()
+
+    act(() => {
+      useConversationStore.setState({
+        generation: { ...run, phase: "streaming", content: "PARTIAL_REPLY" },
+      })
+    })
+    expect(within(pane).getByText("PARTIAL_REPLY")).toBeVisible()
+    expect(within(pane).queryByText("正在思考")).not.toBeInTheDocument()
+
+    act(() => {
+      useConversationStore.setState({
+        generation: { ...run, phase: "committing", content: "FULL_REPLY" },
+      })
+    })
+    expect(within(pane).getByText("FULL_REPLY")).toBeVisible()
+    expect(within(pane).queryByRole("status")).not.toBeInTheDocument()
+
+    act(() => {
+      useConversationStore.setState({
+        generation: {
+          ...run,
+          phase: "reconciling",
+          content: "FULL_REPLY",
+          error: recoveryError,
+          needsUserAction: false,
+        },
+      })
+    })
+    expect(within(pane).getByText("正在恢复这条回复…")).toBeVisible()
+    expect(
+      within(pane).queryByRole("button", { name: "重试恢复" }),
+    ).not.toBeInTheDocument()
+
+    act(() => {
+      useConversationStore.setState({
+        generation: {
+          phase: "failed",
+          runId: run.runId,
+          failureKind: "generation",
+          error: recoveryError,
+        },
+      })
+    })
+    expect(within(pane).getByText("回复失败")).toBeVisible()
+    expect(within(pane).queryByText("FULL_REPLY")).not.toBeInTheDocument()
+    await user.click(within(pane).getByRole("button", { name: "重新生成" }))
+    expect(providerClient.generateFromActivePath).toHaveBeenCalledWith(
+      root.conversationId,
+      right.id,
+      expect.any(Function),
+    )
+
+    act(() => {
+      useConversationStore.setState({
+        generation: {
+          phase: "failed",
+          runId: run.runId,
+          failureKind: "persistence",
+          content: "FULL_REPLY",
+          error: recoveryError,
+        },
+      })
+    })
+    expect(within(pane).getByText("FULL_REPLY")).toBeVisible()
+    expect(within(pane).getByText("这条回复未能保存")).toBeVisible()
+    expect(within(pane).getByRole("button", { name: "重新生成" })).toBeEnabled()
+
+    act(() => {
+      useConversationStore.setState({
+        generation: {
+          phase: "cancelled",
+          runId: run.runId,
+          content: "PARTIAL_REPLY",
+        },
+      })
+    })
+    expect(within(pane).getByText("PARTIAL_REPLY")).toBeVisible()
+    expect(within(pane).getByText("回复已停止")).toBeVisible()
+
+    client.loadConversationTree.mockClear()
+    client.loadConversationTree.mockReturnValueOnce(retryLoad)
+    act(() => {
+      useConversationStore.setState({
+        generation: {
+          ...run,
+          phase: "reconciling",
+          content: "FULL_REPLY",
+          error: recoveryError,
+          needsUserAction: true,
+        },
+      })
+    })
+    await user.click(within(pane).getByRole("button", { name: "重试恢复" }))
+    expect(client.loadConversationTree).toHaveBeenCalledWith(
+      root.conversationId,
+    )
+    expect(
+      within(pane).queryByRole("button", { name: "重试恢复" }),
+    ).not.toBeInTheDocument()
+
+    expect(pane).not.toHaveTextContent(recoveryError.message)
+    expect(pane).not.toHaveTextContent("Not saved")
+    expect(pane).not.toHaveTextContent("database")
+    expect(document.body).not.toHaveTextContent(generationId)
   })
 
   it("renders an integrity recovery state without leaking any path", async () => {

@@ -219,6 +219,126 @@ describe("conversation generation state", () => {
     ).toBe(false)
   })
 
+  it("classifies generation failures from phase and discards partial content", async () => {
+    await loadActiveUser()
+    const runId = beginStreaming("PARTIAL_RESPONSE")
+    const nodesBefore = useConversationStore.getState().nodesById
+    const fullNodesBefore = useConversationStore.getState().fullNodes
+
+    expect(
+      useConversationStore.getState().failGeneration(runId, {
+        code: "provider_unavailable",
+        message: "Provider stopped.",
+        retryable: true,
+      }),
+    ).toBe(true)
+
+    expect(useConversationStore.getState().generation).toEqual({
+      phase: "failed",
+      runId,
+      failureKind: "generation",
+      error: {
+        code: "provider_unavailable",
+        message: "Provider stopped.",
+        retryable: true,
+      },
+    })
+    expect(useConversationStore.getState().nodesById).toBe(nodesBefore)
+    expect(useConversationStore.getState().fullNodes).toBe(fullNodesBefore)
+  })
+
+  it("preserves completed content for an explicit persistence failure", async () => {
+    await loadActiveUser()
+    const runId = beginStreaming("COMPLETE_RESPONSE")
+    const nodesBefore = useConversationStore.getState().nodesById
+    const fullNodesBefore = useConversationStore.getState().fullNodes
+    useConversationStore
+      .getState()
+      .markGenerationCommitting(runId, generationId)
+
+    expect(
+      useConversationStore.getState().failGeneration(runId, {
+        code: "database_unavailable",
+        message: "Commit failed.",
+        retryable: true,
+      }),
+    ).toBe(true)
+
+    expect(useConversationStore.getState().generation).toMatchObject({
+      phase: "failed",
+      failureKind: "persistence",
+      content: "COMPLETE_RESPONSE",
+    })
+    expect(useConversationStore.getState().nodesById).toBe(nodesBefore)
+    expect(useConversationStore.getState().fullNodes).toBe(fullNodesBefore)
+  })
+
+  it("preserves partial content when generation is cancelled", async () => {
+    await loadActiveUser()
+    const runId = beginStreaming("PARTIAL_RESPONSE")
+
+    expect(useConversationStore.getState().cancelGenerationRun(runId)).toBe(
+      true,
+    )
+    expect(useConversationStore.getState().generation).toEqual({
+      phase: "cancelled",
+      runId,
+      content: "PARTIAL_RESPONSE",
+    })
+  })
+
+  it("accepts exact backend cancellation after acknowledgement without enabling user cancellation", async () => {
+    await loadActiveUser()
+    const runId = beginStreaming("COMPLETE_RESPONSE")
+    useConversationStore
+      .getState()
+      .markGenerationCommitting(runId, generationId)
+
+    expect(useConversationStore.getState().cancelGenerationRun(runId)).toBe(
+      false,
+    )
+    expect(
+      useConversationStore
+        .getState()
+        .acceptGenerationCancelled(runId, "wrong-generation"),
+    ).toBe(false)
+    expect(useConversationStore.getState().generation.phase).toBe("committing")
+    expect(
+      useConversationStore
+        .getState()
+        .acceptGenerationCancelled(runId, generationId),
+    ).toBe(true)
+    expect(useConversationStore.getState().generation).toEqual({
+      phase: "cancelled",
+      runId,
+      content: "COMPLETE_RESPONSE",
+    })
+  })
+
+  it("preserves content when exact backend cancellation arrives during reconciliation", async () => {
+    await loadActiveUser()
+    const runId = beginStreaming("COMPLETE_RESPONSE")
+    useConversationStore
+      .getState()
+      .markGenerationCommitting(runId, generationId)
+    useConversationStore.getState().beginGenerationReconciliation(runId, {
+      code: "network_failure",
+      message: "Delivery is ambiguous.",
+      retryable: true,
+    })
+
+    expect(
+      useConversationStore
+        .getState()
+        .acceptGenerationCancelled(runId, generationId),
+    ).toBe(true)
+    expect(useConversationStore.getState().generation).toEqual({
+      phase: "cancelled",
+      runId,
+      content: "COMPLETE_RESPONSE",
+    })
+  })
+
   it("rejects authoritative content drift without modifying durable nodes", async () => {
     await loadActiveUser()
     const runId = beginStreaming()
@@ -307,6 +427,71 @@ describe("conversation generation state", () => {
     })
   })
 
+  it("does not guess when reconciliation finds multiple exact assistants", async () => {
+    await loadActiveUser()
+    const runId = beginStreaming()
+    useConversationStore
+      .getState()
+      .markGenerationCommitting(runId, generationId)
+    useConversationStore.getState().beginGenerationReconciliation(runId, {
+      code: "network_failure",
+      message: "Delivery was ambiguous.",
+      retryable: true,
+    })
+    const matches = ["reloaded-one", "reloaded-two"].map(
+      (id, index): ConversationNodeView => ({
+        id,
+        parentId: nodes.right.id,
+        conversationId: conversation.id,
+        role: "assistant",
+        content: "STREAMED_RESPONSE",
+        model,
+        createdAt: 5 + index,
+        metadata: null,
+      }),
+    )
+    const reloaded: ConversationTreeView = {
+      ...tree,
+      nodes: [...tree.nodes, ...matches],
+      nodesById: {
+        ...tree.nodesById,
+        right: {
+          ...tree.nodesById.right!,
+          childIds: matches.map((node) => node.id),
+        },
+        [matches[0]!.id]: {
+          id: matches[0]!.id,
+          parentId: nodes.right.id,
+          role: "assistant",
+          preview: matches[0]!.content,
+          childIds: [],
+        },
+        [matches[1]!.id]: {
+          id: matches[1]!.id,
+          parentId: nodes.right.id,
+          role: "assistant",
+          preview: matches[1]!.content,
+          childIds: [],
+        },
+      },
+    }
+
+    expect(
+      useConversationStore.getState().reconcileGeneration(runId, reloaded),
+    ).toBe(true)
+    expect(useConversationStore.getState().activeNodeId).toBe(nodes.right.id)
+    expect(useConversationStore.getState().generation).toMatchObject({
+      phase: "reconciling",
+      needsUserAction: true,
+    })
+    expect(useConversationStore.getState().fullNodes[matches[0]!.id]).toEqual(
+      matches[0],
+    )
+    expect(useConversationStore.getState().fullNodes[matches[1]!.id]).toEqual(
+      matches[1],
+    )
+  })
+
   it("keeps accepting an exact completed event after an early reload", async () => {
     await loadActiveUser()
     const runId = beginStreaming()
@@ -325,6 +510,28 @@ describe("conversation generation state", () => {
     expect(useConversationStore.getState().generation).toMatchObject({
       phase: "reconciling",
       error: { retryable: true },
+      needsUserAction: true,
+    })
+
+    expect(
+      useConversationStore.getState().retryGenerationReconciliation(runId),
+    ).toBe(true)
+    expect(useConversationStore.getState().generation).toMatchObject({
+      phase: "reconciling",
+      needsUserAction: false,
+    })
+    expect(
+      useConversationStore
+        .getState()
+        .markGenerationReconciliationFailed(runId, {
+          code: "database_unavailable",
+          message: "Reload failed.",
+          retryable: true,
+        }),
+    ).toBe(true)
+    expect(useConversationStore.getState().generation).toMatchObject({
+      phase: "reconciling",
+      needsUserAction: true,
     })
 
     const completed: ConversationNodeView = {

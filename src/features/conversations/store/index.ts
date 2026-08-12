@@ -39,6 +39,7 @@ export type GenerationState =
       model: string
       content: string
       error: UiError
+      needsUserAction: boolean
     })
   | {
       phase: "completed"
@@ -47,8 +48,20 @@ export type GenerationState =
       parentNodeId: string
       nodeId: string
     }
-  | { phase: "failed"; runId: number; error: UiError }
-  | { phase: "cancelled"; runId: number }
+  | {
+      phase: "failed"
+      runId: number
+      failureKind: "generation"
+      error: UiError
+    }
+  | {
+      phase: "failed"
+      runId: number
+      failureKind: "persistence"
+      content: string
+      error: UiError
+    }
+  | { phase: "cancelled"; runId: number; content: string }
 
 export type ConversationTreeState = {
   isCreatingConversation: boolean
@@ -133,7 +146,9 @@ export type ConversationStore = ConversationTreeState & {
     generationId?: string,
   ) => boolean
   cancelGenerationRun: (runId: number) => boolean
+  acceptGenerationCancelled: (runId: number, generationId: string) => boolean
   beginGenerationReconciliation: (runId: number, error: UiError) => boolean
+  retryGenerationReconciliation: (runId: number) => boolean
   reconcileGeneration: (runId: number, tree: ConversationTreeView) => boolean
   markGenerationReconciliationFailed: (runId: number, error: UiError) => boolean
 }
@@ -650,6 +665,8 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
           generation: {
             phase: "failed",
             runId,
+            failureKind: "persistence",
+            content: generation.content,
             error: TREE_INTEGRITY_ERROR,
           },
         })
@@ -684,7 +701,29 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
       ) {
         return false
       }
-      set({ generation: { phase: "failed", runId, error } })
+      if (
+        generation.phase === "committing" ||
+        generation.phase === "reconciling"
+      ) {
+        set({
+          generation: {
+            phase: "failed",
+            runId,
+            failureKind: "persistence",
+            content: generation.content,
+            error,
+          },
+        })
+      } else {
+        set({
+          generation: {
+            phase: "failed",
+            runId,
+            failureKind: "generation",
+            error,
+          },
+        })
+      }
       return true
     },
 
@@ -698,7 +737,32 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
       ) {
         return false
       }
-      set({ generation: { phase: "cancelled", runId } })
+      set({
+        generation: {
+          phase: "cancelled",
+          runId,
+          content: generation.phase === "streaming" ? generation.content : "",
+        },
+      })
+      return true
+    },
+
+    acceptGenerationCancelled: (runId, generationId) => {
+      const generation = get().generation
+      if (
+        !isGenerationActive(generation) ||
+        generation.runId !== runId ||
+        generation.generationId !== generationId
+      ) {
+        return false
+      }
+      set({
+        generation: {
+          phase: "cancelled",
+          runId,
+          content: generation.phase === "starting" ? "" : generation.content,
+        },
+      })
       return true
     },
 
@@ -707,7 +771,27 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
       if (generation.phase !== "committing" || generation.runId !== runId) {
         return false
       }
-      set({ generation: { ...generation, phase: "reconciling", error } })
+      set({
+        generation: {
+          ...generation,
+          phase: "reconciling",
+          error,
+          needsUserAction: false,
+        },
+      })
+      return true
+    },
+
+    retryGenerationReconciliation: (runId) => {
+      const generation = get().generation
+      if (
+        generation.phase !== "reconciling" ||
+        generation.runId !== runId ||
+        !generation.needsUserAction
+      ) {
+        return false
+      }
+      set({ generation: { ...generation, needsUserAction: false } })
       return true
     },
 
@@ -763,6 +847,7 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
             ? {
                 ...generation,
                 error: RECONCILIATION_PENDING_ERROR,
+                needsUserAction: true,
               }
             : {
                 phase: "completed",
@@ -780,7 +865,9 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
       if (generation.phase !== "reconciling" || generation.runId !== runId) {
         return false
       }
-      set({ generation: { ...generation, error } })
+      set({
+        generation: { ...generation, error, needsUserAction: true },
+      })
       return true
     },
 
