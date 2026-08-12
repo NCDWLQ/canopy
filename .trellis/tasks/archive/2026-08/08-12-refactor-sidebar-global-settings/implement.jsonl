@@ -1,0 +1,2 @@
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Defines the React/shadcn component boundary and Provider form contracts, including controlled secret handling and mutation states."}
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Defines feature ownership so the global settings shell and Provider feature remain in appropriate modules."}

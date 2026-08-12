@@ -1,0 +1,2 @@
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Requires accessible behavioral component tests and defines the frontend validation gates for component-only changes."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Provides the Provider behavior and accessibility contracts that must remain intact after relocation."}
