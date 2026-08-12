@@ -1,5 +1,6 @@
 import * as React from "react"
 import type { PathMessageView, UiError } from "../types"
+import { AssistantMarkdown } from "./AssistantMarkdown"
 import { MessageBubble } from "./MessageBubble"
 import { MessageNode } from "./MessageNode"
 import { Button } from "@/components/ui/button"
@@ -94,9 +95,10 @@ function TransientGenerationMessage({
       }
     >
       {content.length > 0 ? (
-        <div className="whitespace-pre-wrap break-words text-sm text-foreground">
-          {content}
-        </div>
+        <AssistantMarkdown
+          content={content}
+          isStreaming={generation.phase === "streaming"}
+        />
       ) : statusInContent && status !== null ? (
         <span
           className="text-sm text-muted-foreground"

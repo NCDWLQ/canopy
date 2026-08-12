@@ -382,6 +382,37 @@ describe("ConversationWorkspace", () => {
     expect(within(pane).queryByText(left.content)).not.toBeInTheDocument()
   })
 
+  it("renders Markdown only for durable assistant messages", async () => {
+    const markdownTree: ConversationTreeView = {
+      ...tree,
+      nodes: tree.nodes.map((node) => {
+        if (node.id === assistant.id) {
+          return { ...node, content: "## 助手富文本标题" }
+        }
+        if (node.id === root.id) {
+          return { ...node, content: "## 用户原始标记" }
+        }
+        return node
+      }),
+    }
+    client.loadConversationTree.mockResolvedValueOnce(markdownTree)
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(right.id)
+
+    render(<ConversationWorkspace />)
+
+    const pane = screen.getByTestId("conversation-pane")
+    expect(
+      within(pane).getByRole("heading", { name: "助手富文本标题" }),
+    ).toBeVisible()
+    expect(
+      within(pane).queryByRole("heading", { name: "用户原始标记" }),
+    ).not.toBeInTheDocument()
+    expect(within(pane).getByText("## 用户原始标记")).toBeVisible()
+  })
+
   it("supports roving tree focus and arrow-key parent/child navigation", async () => {
     const user = userEvent.setup()
     await useConversationStore
@@ -659,7 +690,8 @@ describe("ConversationWorkspace", () => {
     const user = userEvent.setup()
     const generationId = "11111111-1111-4111-8111-111111111111"
     const commitToken = "22222222-2222-4222-8222-222222222222"
-    const streamedContent = "WORKSPACE_STREAM_SENTINEL"
+    const visibleStreamedContent = "WORKSPACE_STREAM_SENTINEL"
+    const streamedContent = `## ${visibleStreamedContent}`
     let onEvent: ((event: GenerationEventView) => void) | undefined
     providerClient.loadProviderProfile.mockReset()
     providerClient.loadProviderProfile.mockResolvedValue({
@@ -705,7 +737,7 @@ describe("ConversationWorkspace", () => {
 
     const pane = screen.getByTestId("conversation-pane")
     const transientArticle = within(pane)
-      .getByText(streamedContent)
+      .getByRole("heading", { name: visibleStreamedContent })
       .closest("article")
     expect(transientArticle).toHaveAccessibleName("助手消息")
     expect(
@@ -745,10 +777,12 @@ describe("ConversationWorkspace", () => {
     })
 
     await waitFor(() => {
-      expect(within(pane).getByText(streamedContent)).toBeVisible()
+      expect(
+        within(pane).getByRole("heading", { name: visibleStreamedContent }),
+      ).toBeVisible()
     })
     const authoritativeArticle = within(pane)
-      .getByText(streamedContent)
+      .getByRole("heading", { name: visibleStreamedContent })
       .closest("article")
     expect(authoritativeArticle).toHaveAccessibleName("助手消息")
     expect(authoritativeArticle).toHaveClass("mr-8", "bg-card")

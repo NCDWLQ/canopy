@@ -1,5 +1,6 @@
 import * as React from "react"
 import { GitBranch, Edit2, X, Check } from "lucide-react"
+import { AssistantMarkdown } from "./AssistantMarkdown"
 import { MessageBubble } from "./MessageBubble"
 import type { PathMessageView } from "../types"
 import { Button } from "@/components/ui/button"
@@ -137,6 +138,8 @@ export function MessageNode({
             </Button>
           </div>
         </div>
+      ) : message.role === "assistant" ? (
+        <AssistantMarkdown content={message.content} />
       ) : (
         <div className="whitespace-pre-wrap break-words text-sm text-foreground">
           {message.content}
