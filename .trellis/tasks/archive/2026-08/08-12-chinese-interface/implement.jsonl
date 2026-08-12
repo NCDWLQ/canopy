@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Defines product-copy ownership, accessibility, conversation UI and generation presentation contracts."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Requires stable typed IPC errors and forbids using localized messages for control flow."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Owns the safe CommandError taxonomy, redaction boundary and cross-layer presentation contract."}
+{"file":".trellis/tasks/08-12-chinese-interface/research/ui-copy-audit.md","reason":"Provides the evidence-backed inventory of user-facing surfaces, error flow and allowed untranslated values."}
+{"file":".trellis/tasks/08-12-chinese-interface/research/copy-catalog.md","reason":"Provides the user-reviewed source of truth for every English-to-Chinese product-copy replacement."}

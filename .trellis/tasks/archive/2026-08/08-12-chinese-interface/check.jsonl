@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Defines behavior-first frontend verification and the required quality gates."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Provides accessibility, conversation-state and settings contracts for review."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Provides the invariant error codes, retryability, details and redaction checks."}
+{"file":".trellis/tasks/08-12-chinese-interface/research/ui-copy-audit.md","reason":"Defines the English-residual audit scope and approved exceptions."}
+{"file":".trellis/tasks/08-12-chinese-interface/research/copy-catalog.md","reason":"Defines the exact approved Chinese copy that review must verify."}
