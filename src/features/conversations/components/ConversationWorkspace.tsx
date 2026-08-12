@@ -28,7 +28,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { ProviderSettingsDialog } from "@/features/providers/components"
+import { GlobalSettingsDialog } from "@/features/providers/components"
 import { useProviderProfileStore } from "@/features/providers/store"
 import {
   createConversationClient,
@@ -303,6 +303,14 @@ export function ConversationWorkspace({
             </div>
           )}
         </div>
+        <Separator />
+        <footer className="shrink-0 p-2">
+          <GlobalSettingsDialog
+            client={providerClient}
+            readOnly={!isBlankConversation && store.isArchived}
+            generationActive={isGenerationActive(store.generation)}
+          />
+        </footer>
       </aside>
 
       <div className="relative flex min-w-0 flex-1 flex-col bg-background">
@@ -333,11 +341,6 @@ export function ConversationWorkspace({
           </div>
 
           <div className="flex items-center gap-2">
-            <ProviderSettingsDialog
-              client={providerClient}
-              readOnly={!isBlankConversation && store.isArchived}
-              generationActive={isGenerationActive(store.generation)}
-            />
             {!isBlankConversation &&
               store.conversationId !== null &&
               !store.isArchived &&

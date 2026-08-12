@@ -1,1 +1,1 @@
-export { ProviderSettingsDialog } from "./ProviderSettingsDialog"
+export { GlobalSettingsDialog } from "./GlobalSettingsDialog"

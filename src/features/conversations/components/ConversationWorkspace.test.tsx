@@ -253,6 +253,38 @@ describe("ConversationWorkspace", () => {
     ).not.toBeInTheDocument()
   })
 
+  it("opens global Settings from the persistent sidebar footer only", async () => {
+    const user = userEvent.setup()
+    render(<ConversationWorkspace />)
+    const sidebar = screen.getByRole("complementary", {
+      name: "Conversation tree sidebar",
+    })
+
+    const settingsButton = within(sidebar).getByRole("button", {
+      name: "Settings",
+    })
+    expect(settingsButton).toBeVisible()
+    expect(settingsButton.closest("footer")).not.toBeNull()
+    expect(screen.getAllByRole("button", { name: "Settings" })).toHaveLength(1)
+    expect(
+      screen.queryByRole("button", { name: "Provider" }),
+    ).not.toBeInTheDocument()
+
+    await user.click(settingsButton)
+    expect(screen.getByRole("dialog")).toHaveAccessibleName("Settings")
+    expect(screen.getByRole("heading", { name: "Provider" })).toBeVisible()
+    await user.click(screen.getByRole("button", { name: "Close" }))
+
+    await user.click(screen.getByRole("button", { name: "Close sidebar" }))
+    expect(
+      within(sidebar).queryByRole("button", { name: "Settings" }),
+    ).not.toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Open sidebar" }))
+    expect(
+      within(sidebar).getByRole("button", { name: "Settings" }),
+    ).toBeVisible()
+  })
+
   it("switches history without leaking nodes from the prior conversation", async () => {
     const user = userEvent.setup()
     const otherRoot: ConversationNodeView = {

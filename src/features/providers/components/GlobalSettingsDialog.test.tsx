@@ -1,9 +1,9 @@
-import { render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { resolveApiKeyAction } from "./apiKeyAction"
-import { ProviderSettingsDialog } from "./ProviderSettingsDialog"
+import { GlobalSettingsDialog } from "./GlobalSettingsDialog"
 import { useProviderProfileStore } from "../store"
 import type { ProviderProfileView } from "../types"
 import { ConversationCommandError, type ProviderClient } from "@/lib/tauri"
@@ -26,7 +26,7 @@ function createClient() {
   } satisfies ProviderClient
 }
 
-describe("ProviderSettingsDialog", () => {
+describe("GlobalSettingsDialog", () => {
   let client: ReturnType<typeof createClient>
 
   beforeEach(() => {
@@ -54,7 +54,7 @@ describe("ProviderSettingsDialog", () => {
     expect(resolveApiKeyAction(null, "", false)).toEqual({ action: "remove" })
   })
 
-  it("submits a replacement once and clears it from the DOM and store", async () => {
+  it("submits a replacement by keyboard and clears it from the DOM and store", async () => {
     const user = userEvent.setup()
     const secret = "DIALOG_SECRET_SENTINEL"
     client.saveProviderProfile.mockResolvedValueOnce({
@@ -62,19 +62,21 @@ describe("ProviderSettingsDialog", () => {
       updatedAt: 11,
     })
     render(
-      <ProviderSettingsDialog
+      <GlobalSettingsDialog
         client={client}
         readOnly={false}
         generationActive={false}
       />,
     )
 
-    await user.click(screen.getByRole("button", { name: "Provider" }))
+    await user.click(screen.getByRole("button", { name: "Settings" }))
+    expect(screen.getByRole("dialog")).toHaveAccessibleName("Settings")
+    expect(screen.getByRole("heading", { name: "Provider" })).toBeVisible()
     const keyInput = screen.getByLabelText("API key")
     expect(keyInput).toHaveAttribute("type", "password")
     expect(keyInput).toHaveAttribute("autocomplete", "new-password")
     await user.type(keyInput, secret)
-    await user.click(screen.getByRole("button", { name: "Save provider" }))
+    await user.keyboard("{Enter}")
 
     await waitFor(() => {
       expect(client.saveProviderProfile).toHaveBeenCalledWith({
@@ -90,6 +92,32 @@ describe("ProviderSettingsDialog", () => {
     )
   })
 
+  it("opens by keyboard, clears an unsaved secret on close, and restores focus", async () => {
+    const user = userEvent.setup()
+    const secret = "UNSAVED_SECRET_SENTINEL"
+    render(
+      <GlobalSettingsDialog
+        client={client}
+        readOnly={false}
+        generationActive={false}
+      />,
+    )
+
+    const settingsButton = screen.getByRole("button", { name: "Settings" })
+    await user.tab()
+    expect(settingsButton).toHaveFocus()
+    await user.keyboard("{Enter}")
+
+    await user.type(screen.getByLabelText("API key"), secret)
+    await user.click(screen.getByRole("button", { name: "Close" }))
+
+    await waitFor(() => expect(settingsButton).toHaveFocus())
+    expect(document.body).not.toHaveTextContent(secret)
+
+    await user.keyboard("{Enter}")
+    expect(screen.getByLabelText("API key")).toHaveValue("")
+  })
+
   it("clears a secret after a safe mutation error without echoing it", async () => {
     const user = userEvent.setup()
     const secret = "FAILED_SECRET_SENTINEL"
@@ -101,14 +129,14 @@ describe("ProviderSettingsDialog", () => {
       }),
     )
     render(
-      <ProviderSettingsDialog
+      <GlobalSettingsDialog
         client={client}
         readOnly={false}
         generationActive={false}
       />,
     )
 
-    await user.click(screen.getByRole("button", { name: "Provider" }))
+    await user.click(screen.getByRole("button", { name: "Settings" }))
     const keyInput = screen.getByLabelText("API key")
     await user.type(keyInput, secret)
     await user.click(screen.getByRole("button", { name: "Save provider" }))
@@ -125,19 +153,101 @@ describe("ProviderSettingsDialog", () => {
     )
   })
 
+  it("removes a stored key and deletes the provider through Settings", async () => {
+    const user = userEvent.setup()
+    client.saveProviderProfile.mockResolvedValueOnce({
+      ...profile,
+      hasApiKey: false,
+      updatedAt: 11,
+    })
+    client.deleteProviderProfile.mockResolvedValueOnce(true)
+    render(
+      <GlobalSettingsDialog
+        client={client}
+        readOnly={false}
+        generationActive={false}
+      />,
+    )
+
+    await user.click(screen.getByRole("button", { name: "Settings" }))
+    await user.click(screen.getByLabelText("Remove the stored API key"))
+    await user.click(screen.getByRole("button", { name: "Save provider" }))
+
+    await waitFor(() => {
+      expect(client.saveProviderProfile).toHaveBeenCalledWith({
+        baseEndpoint: profile.baseEndpoint,
+        model: profile.model,
+        apiKey: { action: "remove" },
+      })
+    })
+    await user.click(screen.getByRole("button", { name: "Delete profile" }))
+    const confirmation = screen.getByRole("alertdialog")
+    await user.click(
+      within(confirmation).getByRole("button", { name: "Delete profile" }),
+    )
+
+    await waitFor(() => {
+      expect(client.deleteProviderProfile).toHaveBeenCalledOnce()
+      expect(screen.queryByText(profile.model)).not.toBeInTheDocument()
+    })
+  })
+
   it("keeps settings viewable but disables mutations for an archive", async () => {
     const user = userEvent.setup()
     render(
-      <ProviderSettingsDialog
+      <GlobalSettingsDialog
         client={client}
         readOnly
         generationActive={false}
       />,
     )
 
-    await user.click(screen.getByRole("button", { name: "Provider" }))
+    await user.click(screen.getByRole("button", { name: "Settings" }))
 
     expect(screen.getByText("Read only")).toBeVisible()
+    expect(screen.getByLabelText("Base endpoint")).toBeDisabled()
+    expect(screen.getByLabelText("Model")).toBeDisabled()
+    expect(screen.getByLabelText("API key")).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Save provider" })).toBeDisabled()
+    expect(
+      screen.getByRole("button", { name: "Delete profile" }),
+    ).toBeDisabled()
+  })
+
+  it("locks provider mutations while generation is active", async () => {
+    const user = userEvent.setup()
+    render(
+      <GlobalSettingsDialog
+        client={client}
+        readOnly={false}
+        generationActive
+      />,
+    )
+
+    await user.click(screen.getByRole("button", { name: "Settings" }))
+
+    expect(screen.getByText("Generation in progress")).toBeVisible()
+    expect(screen.getByLabelText("Base endpoint")).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Save provider" })).toBeDisabled()
+    expect(
+      screen.getByRole("button", { name: "Delete profile" }),
+    ).toBeDisabled()
+  })
+
+  it("shows loading progress and locks every provider mutation", async () => {
+    const user = userEvent.setup()
+    useProviderProfileStore.setState({ phase: "loading", profile })
+    render(
+      <GlobalSettingsDialog
+        client={client}
+        readOnly={false}
+        generationActive={false}
+      />,
+    )
+
+    await user.click(screen.getByRole("button", { name: "Settings" }))
+
+    expect(screen.getByRole("status", { name: "Loading" })).toBeVisible()
     expect(screen.getByLabelText("Base endpoint")).toBeDisabled()
     expect(screen.getByLabelText("Model")).toBeDisabled()
     expect(screen.getByLabelText("API key")).toBeDisabled()
