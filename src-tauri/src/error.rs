@@ -33,7 +33,7 @@ impl CommandError {
     pub fn invalid_input(field: &'static str, reason: &'static str) -> Self {
         Self {
             code: CommandErrorCode::InvalidInput,
-            message: "The request contains invalid input.".to_owned(),
+            message: "请求包含无效输入。".to_owned(),
             retryable: false,
             details: Some(json!({ "field": field, "reason": reason })),
         }
@@ -42,7 +42,7 @@ impl CommandError {
     pub fn internal() -> Self {
         Self {
             code: CommandErrorCode::Internal,
-            message: "An unexpected error occurred.".to_owned(),
+            message: "发生意外错误。".to_owned(),
             retryable: false,
             details: None,
         }
@@ -51,7 +51,7 @@ impl CommandError {
     pub fn cancelled() -> Self {
         Self {
             code: CommandErrorCode::Cancelled,
-            message: "The generation was cancelled.".to_owned(),
+            message: "生成已取消。".to_owned(),
             retryable: false,
             details: None,
         }
@@ -64,19 +64,19 @@ impl From<ProviderError> for CommandError {
             ProviderError::InvalidInput { field, reason } => Self::invalid_input(field, reason),
             ProviderError::ProfileNotFound => Self {
                 code: CommandErrorCode::NotFound,
-                message: "The provider profile was not found.".to_owned(),
+                message: "未找到服务提供商配置。".to_owned(),
                 retryable: false,
                 details: Some(json!({ "entity": "provider_profile" })),
             },
             ProviderError::CredentialMissing | ProviderError::Authentication => Self {
                 code: CommandErrorCode::ProviderAuthentication,
-                message: "Provider authentication is required.".to_owned(),
+                message: "需要服务提供商身份验证。".to_owned(),
                 retryable: false,
                 details: None,
             },
             ProviderError::CredentialUnavailable => Self {
                 code: CommandErrorCode::ProviderUnavailable,
-                message: "Secure credential storage is currently unavailable.".to_owned(),
+                message: "安全凭据存储当前不可用。".to_owned(),
                 retryable: true,
                 details: None,
             },
@@ -85,19 +85,19 @@ impl From<ProviderError> for CommandError {
             }
             ProviderError::RateLimited { retry_after_ms } => Self {
                 code: CommandErrorCode::RateLimited,
-                message: "The provider rate limit was reached.".to_owned(),
+                message: "已达到服务提供商的速率限制。".to_owned(),
                 retryable: true,
                 details: retry_after_ms.map(|value| json!({ "retry_after_ms": value })),
             },
             ProviderError::Unavailable | ProviderError::Protocol => Self {
                 code: CommandErrorCode::ProviderUnavailable,
-                message: "The provider is currently unavailable.".to_owned(),
+                message: "服务提供商当前不可用。".to_owned(),
                 retryable: true,
                 details: None,
             },
             ProviderError::Network => Self {
                 code: CommandErrorCode::NetworkFailure,
-                message: "The provider network request failed.".to_owned(),
+                message: "服务提供商网络请求失败。".to_owned(),
                 retryable: true,
                 details: None,
             },
@@ -106,7 +106,7 @@ impl From<ProviderError> for CommandError {
             ProviderError::Persistence(error) => Self::from(error),
             ProviderError::Storage(error) if is_transient_storage_error(&error) => Self {
                 code: CommandErrorCode::DatabaseUnavailable,
-                message: "The provider database is currently unavailable.".to_owned(),
+                message: "服务提供商数据库当前不可用。".to_owned(),
                 retryable: true,
                 details: None,
             },
@@ -120,37 +120,37 @@ impl From<PersistenceError> for CommandError {
         match error {
             PersistenceError::NotFound { entity } => Self {
                 code: CommandErrorCode::NotFound,
-                message: "The requested resource was not found.".to_owned(),
+                message: "未找到请求的资源。".to_owned(),
                 retryable: false,
                 details: Some(json!({ "entity": entity })),
             },
             PersistenceError::InvalidInput { operation, .. } => Self {
                 code: CommandErrorCode::InvalidInput,
-                message: "The requested operation is not allowed.".to_owned(),
+                message: "不允许执行请求的操作。".to_owned(),
                 retryable: false,
                 details: Some(json!({ "reason": operation })),
             },
             PersistenceError::TreeIntegrity { reason } => Self {
                 code: CommandErrorCode::TreeIntegrity,
-                message: "The conversation tree could not be validated.".to_owned(),
+                message: "无法验证会话树。".to_owned(),
                 retryable: false,
                 details: Some(json!({ "reason": reason })),
             },
             PersistenceError::InvalidStoredData { field } => Self {
                 code: CommandErrorCode::TreeIntegrity,
-                message: "The conversation tree contains invalid stored data.".to_owned(),
+                message: "会话树包含无效的存储数据。".to_owned(),
                 retryable: false,
                 details: Some(json!({ "field": field })),
             },
             PersistenceError::DatabaseUnavailable => Self {
                 code: CommandErrorCode::DatabaseUnavailable,
-                message: "The conversation database is currently unavailable.".to_owned(),
+                message: "会话数据库当前不可用。".to_owned(),
                 retryable: true,
                 details: None,
             },
             PersistenceError::Storage(error) if is_transient_storage_error(&error) => Self {
                 code: CommandErrorCode::DatabaseUnavailable,
-                message: "The conversation database is currently unavailable.".to_owned(),
+                message: "会话数据库当前不可用。".to_owned(),
                 retryable: true,
                 details: None,
             },
@@ -181,15 +181,18 @@ mod tests {
     fn persistence_errors_map_to_safe_closed_codes() {
         let missing = CommandError::from(PersistenceError::NotFound { entity: "node" });
         assert_eq!(missing.code, CommandErrorCode::NotFound);
+        assert_eq!(missing.message, "未找到请求的资源。");
         assert!(!missing.retryable);
         assert_eq!(missing.details, Some(json!({ "entity": "node" })));
 
         let unavailable = CommandError::from(PersistenceError::DatabaseUnavailable);
         assert_eq!(unavailable.code, CommandErrorCode::DatabaseUnavailable);
+        assert_eq!(unavailable.message, "会话数据库当前不可用。");
         assert!(unavailable.retryable);
 
         let corrupt = CommandError::from(PersistenceError::InvalidStoredData { field: "role" });
         assert_eq!(corrupt.code, CommandErrorCode::TreeIntegrity);
+        assert_eq!(corrupt.message, "会话树包含无效的存储数据。");
     }
 
     #[test]
@@ -198,7 +201,7 @@ mod tests {
             serde_json::to_value(CommandError::internal()).expect("error serializes"),
             json!({
                 "code": "internal",
-                "message": "An unexpected error occurred.",
+                "message": "发生意外错误。",
                 "retryable": false
             })
         );

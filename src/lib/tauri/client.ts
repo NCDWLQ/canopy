@@ -243,7 +243,7 @@ export function normalizeCommandError(
 function invalidInputError(): ConversationCommandError {
   return new ConversationCommandError({
     code: "invalid_input",
-    message: "The request contains invalid input.",
+    message: "请求包含无效输入。",
     retryable: false,
   })
 }
@@ -251,7 +251,7 @@ function invalidInputError(): ConversationCommandError {
 export function internalError(): ConversationCommandError {
   return new ConversationCommandError({
     code: "internal",
-    message: "An unexpected error occurred.",
+    message: "发生意外错误。",
     retryable: false,
   })
 }

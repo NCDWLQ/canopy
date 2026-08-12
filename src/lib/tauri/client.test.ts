@@ -210,7 +210,7 @@ describe("conversation Tauri contract", () => {
     for (const malformed of fixture.malformed_errors) {
       expect(normalizeCommandError(malformed)).toMatchObject({
         code: "internal",
-        message: "An unexpected error occurred.",
+        message: "发生意外错误。",
         retryable: false,
       })
     }
@@ -222,7 +222,7 @@ describe("conversation Tauri contract", () => {
       client.loadConversationTree("conversation-fixture"),
     ).rejects.toMatchObject({
       code: "internal",
-      message: "An unexpected error occurred.",
+      message: "发生意外错误。",
       retryable: false,
     })
   })

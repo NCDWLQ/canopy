@@ -25,7 +25,7 @@ export type ProviderProfileStore = ProviderProfileState & {
 
 const INTERNAL_ERROR: UiError = {
   code: "internal",
-  message: "An unexpected error occurred.",
+  message: "发生意外错误。",
   retryable: false,
 }
 

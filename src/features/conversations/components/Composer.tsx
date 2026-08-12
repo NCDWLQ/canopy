@@ -11,7 +11,7 @@ export type ComposerProps = {
 export function Composer({
   onSubmit,
   disabled,
-  placeholder = "Type a message...",
+  placeholder = "输入消息…",
 }: ComposerProps) {
   const [content, setContent] = React.useState("")
   const [isSubmitting, setIsSubmitting] = React.useState(false)
@@ -59,7 +59,7 @@ export function Composer({
     <form className="border-t bg-background p-4" onSubmit={handleFormSubmit}>
       <div className="relative mx-auto flex max-w-4xl items-end gap-2 rounded-2xl border bg-muted p-2 focus-within:ring-2 focus-within:ring-ring">
         <label className="sr-only" htmlFor="message-composer">
-          Message composer
+          消息输入框
         </label>
         <textarea
           id="message-composer"
@@ -78,8 +78,8 @@ export function Composer({
           className="size-8 shrink-0 rounded-full"
           disabled={disabled || isSubmitting || !content.trim()}
           type="submit"
-          title="Send message"
-          aria-label="Send message"
+          title="发送消息"
+          aria-label="发送消息"
         >
           <SendHorizontal aria-hidden="true" />
         </Button>

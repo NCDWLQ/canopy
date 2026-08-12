@@ -377,7 +377,7 @@ function mapGenerationEvent(dto: GenerationEventDto): GenerationEventView {
 function invalidInputError(): ConversationCommandError {
   return new ConversationCommandError({
     code: "invalid_input",
-    message: "The request contains invalid input.",
+    message: "请求包含无效输入。",
     retryable: false,
   })
 }

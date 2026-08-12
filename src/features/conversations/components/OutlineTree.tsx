@@ -101,7 +101,7 @@ export function OutlineTree({
   if (rows === null) {
     return (
       <div className="p-4 text-sm text-destructive" role="alert">
-        The conversation tree could not be displayed safely.
+        无法安全显示会话树。
       </div>
     )
   }
@@ -179,7 +179,7 @@ export function OutlineTree({
     <div
       className="h-full w-full overflow-y-auto p-1"
       role="tree"
-      aria-label="Conversation outline"
+      aria-label="会话树"
     >
       {rows.map((row, rowIndex) => {
         const { node } = row
@@ -223,8 +223,8 @@ export function OutlineTree({
               tabIndex={-1}
               aria-label={
                 hasChildren
-                  ? `${isExpanded ? "Collapse" : "Expand"} ${node.preview || "message"}`
-                  : "Message has no replies"
+                  ? `${isExpanded ? "收起" : "展开"} ${node.preview || "消息"}`
+                  : "该消息暂无回复"
               }
             >
               {hasChildren ? (
@@ -239,7 +239,7 @@ export function OutlineTree({
             </button>
             <span className="flex-1 truncate" title={node.preview}>
               {node.preview || (
-                <span className="italic text-muted-foreground">Empty</span>
+                <span className="italic text-muted-foreground">无内容</span>
               )}
             </span>
           </div>

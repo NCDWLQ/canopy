@@ -59,8 +59,8 @@ export function MessageNode({
               variant="ghost"
               size="icon"
               className="size-7"
-              title="Edit as new branch"
-              aria-label="Edit as new branch"
+              title="编辑为新分支"
+              aria-label="编辑为新分支"
               onClick={() => {
                 setEditContent(message.content)
                 setIsEditing(true)
@@ -74,8 +74,8 @@ export function MessageNode({
               variant="ghost"
               size="icon"
               className="size-7"
-              title="Create branch from here"
-              aria-label="Create branch from here"
+              title="从此处创建分支"
+              aria-label="从此处创建分支"
               onClick={() => setIsBranching(true)}
             >
               <GitBranch aria-hidden="true" />
@@ -91,7 +91,7 @@ export function MessageNode({
             className="min-h-[100px] w-full resize-y rounded-md border bg-background p-2 text-sm outline-none focus:ring-2 focus:ring-ring"
             value={editContent}
             onChange={(e) => setEditContent(e.target.value)}
-            aria-label="Edit message content"
+            aria-label="编辑消息内容"
           />
           <div className="flex justify-end gap-2 mt-2">
             <Button
@@ -99,14 +99,14 @@ export function MessageNode({
               size="sm"
               onClick={() => setIsEditing(false)}
             >
-              <X aria-hidden="true" /> Cancel
+              <X aria-hidden="true" /> 取消
             </Button>
             <Button
               size="sm"
               onClick={handleEditSubmit}
               disabled={!editContent.trim()}
             >
-              <Check aria-hidden="true" /> Save as Branch
+              <Check aria-hidden="true" /> 保存为新分支
             </Button>
           </div>
         </div>
@@ -115,10 +115,10 @@ export function MessageNode({
           <textarea
             ref={branchInputRef}
             className="min-h-[100px] w-full resize-y rounded-md border bg-background p-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-            placeholder="Type your branched message..."
+            placeholder="输入分支消息…"
             value={branchContent}
             onChange={(e) => setBranchContent(e.target.value)}
-            aria-label="Branch message content"
+            aria-label="分支消息内容"
           />
           <div className="flex justify-end gap-2 mt-2">
             <Button
@@ -126,14 +126,14 @@ export function MessageNode({
               size="sm"
               onClick={() => setIsBranching(false)}
             >
-              <X aria-hidden="true" /> Cancel
+              <X aria-hidden="true" /> 取消
             </Button>
             <Button
               size="sm"
               onClick={handleBranchSubmit}
               disabled={!branchContent.trim()}
             >
-              <Check aria-hidden="true" /> Create Branch
+              <Check aria-hidden="true" /> 创建分支
             </Button>
           </div>
         </div>

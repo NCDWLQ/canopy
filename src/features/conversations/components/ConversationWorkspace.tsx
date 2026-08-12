@@ -182,7 +182,7 @@ export function ConversationWorkspace({
     <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
       <aside
         id="conversation-tree-sidebar"
-        aria-label="Conversation tree sidebar"
+        aria-label="会话树侧栏"
         className={`flex shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground transition-[width] duration-300 motion-reduce:transition-none ${
           isSidebarOpen ? "w-64 md:w-80" : "w-0 overflow-hidden border-none"
         }`}
@@ -190,27 +190,24 @@ export function ConversationWorkspace({
         inert={!isSidebarOpen}
       >
         <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b px-2 text-sm font-semibold">
-          <span>History</span>
+          <span>历史记录</span>
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            aria-label="New conversation"
+            aria-label="新建会话"
             disabled={
               store.status === "loading" || isGenerationActive(store.generation)
             }
             onClick={store.enterConversationCreation}
           >
             <Plus data-icon="inline-start" aria-hidden="true" />
-            New conversation
+            新建会话
           </Button>
         </div>
         <div className="max-h-64 shrink-0 overflow-y-auto p-2">
           {store.history.summaries.length > 0 && (
-            <ul
-              aria-label="Conversation history"
-              className="flex flex-col gap-1"
-            >
+            <ul aria-label="会话历史记录" className="flex flex-col gap-1">
               {store.history.summaries.map((summary) => (
                 <li key={summary.id}>
                   <TooltipProvider>
@@ -239,7 +236,7 @@ export function ConversationWorkspace({
                           </span>
                           {summary.isArchived && (
                             <Badge className="shrink-0" variant="secondary">
-                              Archived
+                              已归档
                             </Badge>
                           )}
                         </Button>
@@ -254,12 +251,12 @@ export function ConversationWorkspace({
           {store.history.status === "loading" &&
             store.history.summaries.length === 0 && (
               <p className="px-2 py-3 text-sm text-muted-foreground">
-                Loading history…
+                正在加载历史记录…
               </p>
             )}
           {store.history.status === "empty" && (
             <p className="px-2 py-3 text-sm text-muted-foreground">
-              No saved conversations.
+              暂无已保存的会话。
             </p>
           )}
           {store.history.status === "error" && (
@@ -272,7 +269,7 @@ export function ConversationWorkspace({
                     size="sm"
                     onClick={() => void store.retryHistory(client)}
                   >
-                    Retry history
+                    重试加载历史记录
                   </Button>
                 )}
               </AlertDescription>
@@ -281,7 +278,7 @@ export function ConversationWorkspace({
         </div>
         <Separator />
         <div className="flex h-10 shrink-0 items-center px-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Conversation tree
+          会话树
         </div>
         <div className="flex-1 overflow-hidden pb-2">
           {store.rootNodeId !== null && isProjectionValid ? (
@@ -299,7 +296,7 @@ export function ConversationWorkspace({
             </div>
           ) : (
             <div className="p-4 text-sm text-muted-foreground">
-              No conversation loaded.
+              尚未加载会话。
             </div>
           )}
         </div>
@@ -321,8 +318,8 @@ export function ConversationWorkspace({
               size="icon"
               className="size-8"
               onClick={() => setIsSidebarOpen((isOpen) => !isOpen)}
-              title={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
-              aria-label={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
+              title={isSidebarOpen ? "收起侧栏" : "展开侧栏"}
+              aria-label={isSidebarOpen ? "收起侧栏" : "展开侧栏"}
               aria-expanded={isSidebarOpen}
               aria-controls="conversation-tree-sidebar"
             >
@@ -335,7 +332,7 @@ export function ConversationWorkspace({
             {!isBlankConversation && store.isArchived && (
               <Badge variant="secondary">
                 <Archive data-icon="inline-start" />
-                Archived — read only
+                已归档 — 只读
               </Badge>
             )}
           </div>
@@ -347,7 +344,7 @@ export function ConversationWorkspace({
               (controller.canCancel ? (
                 <Button variant="outline" size="sm" onClick={controller.cancel}>
                   <Square data-icon="inline-start" />
-                  Cancel generation
+                  取消生成
                 </Button>
               ) : (
                 <Button
@@ -355,10 +352,10 @@ export function ConversationWorkspace({
                   size="sm"
                   onClick={controller.generate}
                   disabled={!controller.canGenerate}
-                  title={controller.unavailableReason ?? "Generate response"}
+                  title={controller.unavailableReason ?? "生成回复"}
                 >
                   <Sparkles data-icon="inline-start" />
-                  Generate
+                  生成
                 </Button>
               ))}
             {canMutate && (
@@ -368,7 +365,7 @@ export function ConversationWorkspace({
                 onClick={() => void controller.archiveConversation()}
               >
                 <Archive data-icon="inline-start" />
-                Archive
+                归档
               </Button>
             )}
           </div>
@@ -385,11 +382,10 @@ export function ConversationWorkspace({
                 id="blank-conversation-title"
                 className="text-2xl font-semibold"
               >
-                Start a conversation
+                开始新会话
               </h1>
               <p className="max-w-md text-sm text-muted-foreground">
-                Write your first message below. It will be saved only when you
-                send it.
+                在下方输入第一条消息。发送后才会保存。
               </p>
               {store.error !== null && (
                 <Alert variant="destructive" className="max-w-md text-left">
@@ -401,7 +397,7 @@ export function ConversationWorkspace({
                       size="sm"
                       onClick={store.clearError}
                     >
-                      Dismiss
+                      关闭
                     </Button>
                   </AlertDescription>
                 </Alert>
@@ -410,7 +406,7 @@ export function ConversationWorkspace({
             <Composer
               onSubmit={controller.createConversation}
               disabled={store.status === "loading" || controller.mutationLocked}
-              placeholder="Write your first message…"
+              placeholder="输入第一条消息…"
             />
           </>
         ) : store.conversationId === null &&
@@ -420,7 +416,7 @@ export function ConversationWorkspace({
             className="flex flex-1 items-center justify-center text-sm text-muted-foreground"
             role="status"
           >
-            Loading conversation history…
+            正在加载会话历史记录…
           </div>
         ) : store.conversationId === null &&
           store.history.status === "error" ? (
@@ -429,7 +425,7 @@ export function ConversationWorkspace({
               <p>{store.history.error.message}</p>
               {store.history.error.retryable && (
                 <Button onClick={() => void store.retryHistory(client)}>
-                  Retry loading history
+                  重试加载历史记录
                 </Button>
               )}
             </AlertDescription>
@@ -459,10 +455,10 @@ export function ConversationWorkspace({
               disabled={!canAppend}
               placeholder={
                 store.isArchived
-                  ? "Conversation is archived and cannot be modified."
+                  ? "会话已归档，无法修改。"
                   : canAppend
-                    ? "Write the next user message…"
-                    : "Assistant generation is unavailable; select an assistant leaf to continue."
+                    ? "输入下一条用户消息…"
+                    : "暂时无法输入；请选择末端的助手回复以继续。"
               }
             />
           </>

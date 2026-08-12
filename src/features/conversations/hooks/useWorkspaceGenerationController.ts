@@ -18,13 +18,13 @@ import type { ConversationClient, ProviderClient } from "@/lib/tauri"
 
 const COMMIT_REJECTED_ERROR: UiError = {
   code: "internal",
-  message: "The response could not be saved. Please generate it again.",
+  message: "回复未能保存，请重新生成。",
   retryable: true,
 }
 
 const RECONCILING_ERROR: UiError = {
   code: "internal",
-  message: "The response could not be confirmed yet.",
+  message: "暂时无法确认回复是否已保存。",
   retryable: true,
 }
 
@@ -339,17 +339,17 @@ export function useWorkspaceGenerationController({
   let unavailableReason: string | null = null
   if (!canGenerate && !canCancel) {
     if (providerPhase !== "ready") {
-      unavailableReason = "Configure a provider to generate."
+      unavailableReason = "请先配置服务提供商。"
     } else if (conversationId === null) {
-      unavailableReason = "Create or load a conversation to generate."
+      unavailableReason = "请先新建或加载会话。"
     } else if (isArchived) {
-      unavailableReason = "Archived conversations are read-only."
+      unavailableReason = "已归档的会话为只读。"
     } else if (pathProjection.kind === "error") {
-      unavailableReason = "The active path is not safe to generate."
+      unavailableReason = "当前会话路径异常，无法生成回复。"
     } else if (activeNodeRole !== "user") {
-      unavailableReason = "Select a user message to generate a response."
+      unavailableReason = "请选择一条用户消息以生成回复。"
     } else if (mutationLocked) {
-      unavailableReason = "Please wait for the current response."
+      unavailableReason = "请等待当前回复完成。"
     }
   }
 

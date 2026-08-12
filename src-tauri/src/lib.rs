@@ -159,7 +159,7 @@ mod tests {
                 response,
                 json!({
                     "code": "database_unavailable",
-                    "message": "The conversation database is currently unavailable.",
+                    "message": "会话数据库当前不可用。",
                     "retryable": true
                 })
             );

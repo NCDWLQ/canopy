@@ -106,15 +106,13 @@ export function GlobalSettingsDialog({
           className="w-full justify-start text-muted-foreground hover:text-foreground"
         >
           <Settings2 data-icon="inline-start" />
-          Settings
+          设置
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Settings</DialogTitle>
-          <DialogDescription>
-            Manage configuration that applies across this workspace.
-          </DialogDescription>
+          <DialogTitle>设置</DialogTitle>
+          <DialogDescription>管理应用于整个工作区的配置。</DialogDescription>
         </DialogHeader>
 
         <section
@@ -123,11 +121,11 @@ export function GlobalSettingsDialog({
         >
           <div className="flex flex-col gap-1">
             <h2 id="provider-settings-title" className="font-medium">
-              Provider
+              服务提供商
             </h2>
             <p className="text-sm text-muted-foreground">
-              Configure the single OpenAI-compatible provider used for this
-              workspace. Credentials remain in the native credential store.
+              配置此工作区使用的单个 OpenAI
+              兼容服务提供商。凭据将保存在系统凭据存储中。
             </p>
           </div>
 
@@ -140,43 +138,39 @@ export function GlobalSettingsDialog({
                 <Badge variant="secondary">{profile.model}</Badge>
                 <Badge variant="outline">
                   <KeyRound data-icon="inline-start" />
-                  {profile.hasApiKey ? "API key stored" : "No API key"}
+                  {profile.hasApiKey ? "已保存 API 密钥" : "未保存 API 密钥"}
                 </Badge>
               </div>
             )}
 
             {error !== null && (
               <Alert variant="destructive">
-                <AlertTitle>Provider unavailable</AlertTitle>
+                <AlertTitle>服务提供商不可用</AlertTitle>
                 <AlertDescription>{error.message}</AlertDescription>
               </Alert>
             )}
 
             {readOnly && (
               <Alert>
-                <AlertTitle>Read only</AlertTitle>
+                <AlertTitle>只读</AlertTitle>
                 <AlertDescription>
-                  Provider settings cannot be changed while viewing an archived
-                  conversation.
+                  查看已归档会话时无法修改服务提供商设置。
                 </AlertDescription>
               </Alert>
             )}
 
             {generationActive && !readOnly && (
               <Alert>
-                <AlertTitle>Generation in progress</AlertTitle>
+                <AlertTitle>正在生成回复</AlertTitle>
                 <AlertDescription>
-                  Provider settings are available after the current response is
-                  resolved.
+                  当前回复处理完成后即可修改服务提供商设置。
                 </AlertDescription>
               </Alert>
             )}
 
             <FieldGroup>
               <Field data-disabled={mutationDisabled}>
-                <FieldLabel htmlFor="provider-endpoint">
-                  Base endpoint
-                </FieldLabel>
+                <FieldLabel htmlFor="provider-endpoint">基础端点</FieldLabel>
                 <Input
                   id="provider-endpoint"
                   type="url"
@@ -189,32 +183,30 @@ export function GlobalSettingsDialog({
               </Field>
 
               <Field data-disabled={mutationDisabled}>
-                <FieldLabel htmlFor="provider-model">Model</FieldLabel>
+                <FieldLabel htmlFor="provider-model">模型</FieldLabel>
                 <Input
                   id="provider-model"
                   value={model}
                   onChange={(event) => setModel(event.target.value)}
-                  placeholder="model-name"
+                  placeholder="例如：gpt-5"
                   disabled={mutationDisabled}
                   required
                 />
               </Field>
 
               <Field data-disabled={mutationDisabled || removeKey}>
-                <FieldLabel htmlFor="provider-api-key">API key</FieldLabel>
+                <FieldLabel htmlFor="provider-api-key">API 密钥</FieldLabel>
                 <Input
                   id="provider-api-key"
                   type="password"
                   autoComplete="new-password"
                   value={apiKey}
                   onChange={(event) => setApiKey(event.target.value)}
-                  placeholder={
-                    profile === null ? "Optional" : "Leave blank to keep"
-                  }
+                  placeholder={profile === null ? "可选" : "留空以保留现有密钥"}
                   disabled={mutationDisabled || removeKey}
                 />
                 <FieldDescription>
-                  The key is cleared from this dialog after every save attempt.
+                  每次尝试保存后，此对话框中的密钥都会被清空。
                 </FieldDescription>
               </Field>
 
@@ -232,7 +224,7 @@ export function GlobalSettingsDialog({
                     disabled={mutationDisabled}
                   />
                   <FieldLabel htmlFor="provider-remove-key">
-                    Remove the stored API key
+                    删除已保存的 API 密钥
                   </FieldLabel>
                 </Field>
               )}
@@ -248,26 +240,23 @@ export function GlobalSettingsDialog({
                       disabled={mutationDisabled}
                     >
                       <Trash2 data-icon="inline-start" />
-                      Delete profile
+                      删除配置
                     </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>
-                        Delete provider profile?
-                      </AlertDialogTitle>
+                      <AlertDialogTitle>删除服务提供商配置？</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Generation will remain unavailable until a provider is
-                        configured again.
+                        重新配置服务提供商之前，将无法生成回复。
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogCancel>取消</AlertDialogCancel>
                       <AlertDialogAction
                         variant="destructive"
                         onClick={() => void handleDelete()}
                       >
-                        Delete profile
+                        删除配置
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
@@ -275,11 +264,11 @@ export function GlobalSettingsDialog({
               )}
               <Button
                 type="submit"
-                aria-label="Save provider"
+                aria-label="保存服务提供商配置"
                 disabled={mutationDisabled}
               >
                 {phase === "loading" && <Spinner data-icon="inline-start" />}
-                Save provider
+                保存配置
               </Button>
             </DialogFooter>
           </form>

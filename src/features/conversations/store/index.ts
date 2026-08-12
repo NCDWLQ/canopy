@@ -155,20 +155,19 @@ export type ConversationStore = ConversationTreeState & {
 
 const TREE_INTEGRITY_ERROR: UiError = {
   code: "tree_integrity",
-  message: "The conversation tree could not be displayed safely.",
+  message: "无法安全显示会话树。",
   retryable: true,
 }
 
 const INTERNAL_ERROR: UiError = {
   code: "internal",
-  message: "An unexpected error occurred.",
+  message: "发生意外错误。",
   retryable: false,
 }
 
 const RECONCILIATION_PENDING_ERROR: UiError = {
   code: "internal",
-  message:
-    "The conversation was reloaded, but the saved response has not been observed yet.",
+  message: "会话已重新加载，但尚未发现已保存的回复。",
   retryable: true,
 }
 

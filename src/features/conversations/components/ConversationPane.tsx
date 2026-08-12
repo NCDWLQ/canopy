@@ -147,7 +147,7 @@ export function ConversationPane({
           className="mb-4 size-8 animate-spin motion-reduce:animate-none"
           aria-hidden="true"
         />
-        <p>Loading conversation...</p>
+        <p>正在加载会话…</p>
       </div>
     )
   }
@@ -164,7 +164,7 @@ export function ConversationPane({
         >
           <AlertCircle className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
           <div className="flex-1">
-            <h3 className="font-medium text-sm">Error: {error.code}</h3>
+            <h3 className="font-medium text-sm">出错了</h3>
             <p className="text-sm mt-1 opacity-90">{error.message}</p>
           </div>
           {error.retryable && onRetry !== undefined && (
@@ -175,7 +175,7 @@ export function ConversationPane({
               className="shrink-0"
             >
               <RefreshCw aria-hidden="true" />
-              Retry
+              重试
             </Button>
           )}
         </div>
@@ -183,7 +183,7 @@ export function ConversationPane({
 
       {path.length === 0 && status !== "loading" && !error && (
         <div className="flex flex-1 items-center justify-center text-muted-foreground">
-          <p>No messages selected.</p>
+          <p>尚未选择消息。</p>
         </div>
       )}
 
@@ -206,7 +206,7 @@ export function ConversationPane({
           />
         )}
         {status === "loading" && path.length > 0 && (
-          <div className="flex justify-center p-4" aria-label="Saving message">
+          <div className="flex justify-center p-4" aria-label="正在保存消息">
             <Loader2
               className="size-6 animate-spin text-muted-foreground motion-reduce:animate-none"
               aria-hidden="true"

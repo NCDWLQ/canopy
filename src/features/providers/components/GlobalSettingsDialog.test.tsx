@@ -69,10 +69,10 @@ describe("GlobalSettingsDialog", () => {
       />,
     )
 
-    await user.click(screen.getByRole("button", { name: "Settings" }))
-    expect(screen.getByRole("dialog")).toHaveAccessibleName("Settings")
-    expect(screen.getByRole("heading", { name: "Provider" })).toBeVisible()
-    const keyInput = screen.getByLabelText("API key")
+    await user.click(screen.getByRole("button", { name: "设置" }))
+    expect(screen.getByRole("dialog")).toHaveAccessibleName("设置")
+    expect(screen.getByRole("heading", { name: "服务提供商" })).toBeVisible()
+    const keyInput = screen.getByLabelText("API 密钥")
     expect(keyInput).toHaveAttribute("type", "password")
     expect(keyInput).toHaveAttribute("autocomplete", "new-password")
     await user.type(keyInput, secret)
@@ -103,19 +103,19 @@ describe("GlobalSettingsDialog", () => {
       />,
     )
 
-    const settingsButton = screen.getByRole("button", { name: "Settings" })
+    const settingsButton = screen.getByRole("button", { name: "设置" })
     await user.tab()
     expect(settingsButton).toHaveFocus()
     await user.keyboard("{Enter}")
 
-    await user.type(screen.getByLabelText("API key"), secret)
-    await user.click(screen.getByRole("button", { name: "Close" }))
+    await user.type(screen.getByLabelText("API 密钥"), secret)
+    await user.click(screen.getByRole("button", { name: "关闭" }))
 
     await waitFor(() => expect(settingsButton).toHaveFocus())
     expect(document.body).not.toHaveTextContent(secret)
 
     await user.keyboard("{Enter}")
-    expect(screen.getByLabelText("API key")).toHaveValue("")
+    expect(screen.getByLabelText("API 密钥")).toHaveValue("")
   })
 
   it("clears a secret after a safe mutation error without echoing it", async () => {
@@ -136,10 +136,10 @@ describe("GlobalSettingsDialog", () => {
       />,
     )
 
-    await user.click(screen.getByRole("button", { name: "Settings" }))
-    const keyInput = screen.getByLabelText("API key")
+    await user.click(screen.getByRole("button", { name: "设置" }))
+    const keyInput = screen.getByLabelText("API 密钥")
     await user.type(keyInput, secret)
-    await user.click(screen.getByRole("button", { name: "Save provider" }))
+    await user.click(screen.getByRole("button", { name: "保存服务提供商配置" }))
 
     await waitFor(() => {
       expect(screen.getByRole("alert")).toHaveTextContent(
@@ -169,9 +169,9 @@ describe("GlobalSettingsDialog", () => {
       />,
     )
 
-    await user.click(screen.getByRole("button", { name: "Settings" }))
-    await user.click(screen.getByLabelText("Remove the stored API key"))
-    await user.click(screen.getByRole("button", { name: "Save provider" }))
+    await user.click(screen.getByRole("button", { name: "设置" }))
+    await user.click(screen.getByLabelText("删除已保存的 API 密钥"))
+    await user.click(screen.getByRole("button", { name: "保存服务提供商配置" }))
 
     await waitFor(() => {
       expect(client.saveProviderProfile).toHaveBeenCalledWith({
@@ -180,10 +180,10 @@ describe("GlobalSettingsDialog", () => {
         apiKey: { action: "remove" },
       })
     })
-    await user.click(screen.getByRole("button", { name: "Delete profile" }))
+    await user.click(screen.getByRole("button", { name: "删除配置" }))
     const confirmation = screen.getByRole("alertdialog")
     await user.click(
-      within(confirmation).getByRole("button", { name: "Delete profile" }),
+      within(confirmation).getByRole("button", { name: "删除配置" }),
     )
 
     await waitFor(() => {
@@ -202,16 +202,16 @@ describe("GlobalSettingsDialog", () => {
       />,
     )
 
-    await user.click(screen.getByRole("button", { name: "Settings" }))
+    await user.click(screen.getByRole("button", { name: "设置" }))
 
-    expect(screen.getByText("Read only")).toBeVisible()
-    expect(screen.getByLabelText("Base endpoint")).toBeDisabled()
-    expect(screen.getByLabelText("Model")).toBeDisabled()
-    expect(screen.getByLabelText("API key")).toBeDisabled()
-    expect(screen.getByRole("button", { name: "Save provider" })).toBeDisabled()
+    expect(screen.getByText("只读")).toBeVisible()
+    expect(screen.getByLabelText("基础端点")).toBeDisabled()
+    expect(screen.getByLabelText("模型")).toBeDisabled()
+    expect(screen.getByLabelText("API 密钥")).toBeDisabled()
     expect(
-      screen.getByRole("button", { name: "Delete profile" }),
+      screen.getByRole("button", { name: "保存服务提供商配置" }),
     ).toBeDisabled()
+    expect(screen.getByRole("button", { name: "删除配置" })).toBeDisabled()
   })
 
   it("locks provider mutations while generation is active", async () => {
@@ -224,14 +224,14 @@ describe("GlobalSettingsDialog", () => {
       />,
     )
 
-    await user.click(screen.getByRole("button", { name: "Settings" }))
+    await user.click(screen.getByRole("button", { name: "设置" }))
 
-    expect(screen.getByText("Generation in progress")).toBeVisible()
-    expect(screen.getByLabelText("Base endpoint")).toBeDisabled()
-    expect(screen.getByRole("button", { name: "Save provider" })).toBeDisabled()
+    expect(screen.getByText("正在生成回复")).toBeVisible()
+    expect(screen.getByLabelText("基础端点")).toBeDisabled()
     expect(
-      screen.getByRole("button", { name: "Delete profile" }),
+      screen.getByRole("button", { name: "保存服务提供商配置" }),
     ).toBeDisabled()
+    expect(screen.getByRole("button", { name: "删除配置" })).toBeDisabled()
   })
 
   it("shows loading progress and locks every provider mutation", async () => {
@@ -245,15 +245,15 @@ describe("GlobalSettingsDialog", () => {
       />,
     )
 
-    await user.click(screen.getByRole("button", { name: "Settings" }))
+    await user.click(screen.getByRole("button", { name: "设置" }))
 
-    expect(screen.getByRole("status", { name: "Loading" })).toBeVisible()
-    expect(screen.getByLabelText("Base endpoint")).toBeDisabled()
-    expect(screen.getByLabelText("Model")).toBeDisabled()
-    expect(screen.getByLabelText("API key")).toBeDisabled()
-    expect(screen.getByRole("button", { name: "Save provider" })).toBeDisabled()
+    expect(screen.getByRole("status", { name: "正在加载" })).toBeVisible()
+    expect(screen.getByLabelText("基础端点")).toBeDisabled()
+    expect(screen.getByLabelText("模型")).toBeDisabled()
+    expect(screen.getByLabelText("API 密钥")).toBeDisabled()
     expect(
-      screen.getByRole("button", { name: "Delete profile" }),
+      screen.getByRole("button", { name: "保存服务提供商配置" }),
     ).toBeDisabled()
+    expect(screen.getByRole("button", { name: "删除配置" })).toBeDisabled()
   })
 })

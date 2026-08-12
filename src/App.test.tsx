@@ -21,13 +21,9 @@ describe("Canopy scaffold", () => {
   it("renders the ConversationWorkspace", async () => {
     render(<App />)
     expect(
-      await screen.findByRole("heading", { name: "Start a conversation" }),
+      await screen.findByRole("heading", { name: "开始新会话" }),
     ).toBeVisible()
-    expect(
-      screen.getByRole("textbox", { name: "Message composer" }),
-    ).toBeEnabled()
-    expect(
-      screen.getByRole("button", { name: "New conversation" }),
-    ).toBeVisible()
+    expect(screen.getByRole("textbox", { name: "消息输入框" })).toBeEnabled()
+    expect(screen.getByRole("button", { name: "新建会话" })).toBeVisible()
   })
 })

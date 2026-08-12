@@ -9,14 +9,14 @@ describe("Composer", () => {
     const user = userEvent.setup()
     const onSubmit = vi.fn().mockRejectedValue(new Error("unexpected failure"))
     render(<Composer disabled={false} onSubmit={onSubmit} />)
-    const composer = screen.getByRole("textbox", { name: "Message composer" })
+    const composer = screen.getByRole("textbox", { name: "消息输入框" })
 
     await user.type(composer, "RETRY_DRAFT_SENTINEL")
-    await user.click(screen.getByRole("button", { name: "Send message" }))
+    await user.click(screen.getByRole("button", { name: "发送消息" }))
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1))
     expect(composer).toHaveValue("RETRY_DRAFT_SENTINEL")
     expect(composer).toBeEnabled()
-    expect(screen.getByRole("button", { name: "Send message" })).toBeEnabled()
+    expect(screen.getByRole("button", { name: "发送消息" })).toBeEnabled()
   })
 })

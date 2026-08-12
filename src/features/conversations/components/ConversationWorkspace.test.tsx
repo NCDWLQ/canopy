@@ -226,7 +226,7 @@ describe("ConversationWorkspace", () => {
       </StrictMode>,
     )
 
-    expect(screen.getByText("Loading conversation history…")).toBeVisible()
+    expect(screen.getByText("正在加载会话历史记录…")).toBeVisible()
     await waitFor(() => {
       expect(client.listConversations).toHaveBeenCalledTimes(1)
       expect(client.loadConversationTree).toHaveBeenCalledTimes(1)
@@ -234,9 +234,9 @@ describe("ConversationWorkspace", () => {
         tree.conversation.id,
       )
     })
-    expect(screen.getByText("Loading conversation history…")).toBeVisible()
+    expect(screen.getByText("正在加载会话历史记录…")).toBeVisible()
     expect(
-      screen.queryByRole("heading", { name: "Start a conversation" }),
+      screen.queryByRole("heading", { name: "开始新会话" }),
     ).not.toBeInTheDocument()
 
     act(() => {
@@ -249,7 +249,7 @@ describe("ConversationWorkspace", () => {
     expect(within(pane).getByText(right.content)).toBeVisible()
     expect(within(pane).queryByText(left.content)).not.toBeInTheDocument()
     expect(
-      screen.queryByRole("heading", { name: "Start a conversation" }),
+      screen.queryByRole("heading", { name: "开始新会话" }),
     ).not.toBeInTheDocument()
   })
 
@@ -257,32 +257,30 @@ describe("ConversationWorkspace", () => {
     const user = userEvent.setup()
     render(<ConversationWorkspace />)
     const sidebar = screen.getByRole("complementary", {
-      name: "Conversation tree sidebar",
+      name: "会话树侧栏",
     })
 
     const settingsButton = within(sidebar).getByRole("button", {
-      name: "Settings",
+      name: "设置",
     })
     expect(settingsButton).toBeVisible()
     expect(settingsButton.closest("footer")).not.toBeNull()
-    expect(screen.getAllByRole("button", { name: "Settings" })).toHaveLength(1)
+    expect(screen.getAllByRole("button", { name: "设置" })).toHaveLength(1)
     expect(
-      screen.queryByRole("button", { name: "Provider" }),
+      screen.queryByRole("button", { name: "服务提供商" }),
     ).not.toBeInTheDocument()
 
     await user.click(settingsButton)
-    expect(screen.getByRole("dialog")).toHaveAccessibleName("Settings")
-    expect(screen.getByRole("heading", { name: "Provider" })).toBeVisible()
-    await user.click(screen.getByRole("button", { name: "Close" }))
+    expect(screen.getByRole("dialog")).toHaveAccessibleName("设置")
+    expect(screen.getByRole("heading", { name: "服务提供商" })).toBeVisible()
+    await user.click(screen.getByRole("button", { name: "关闭" }))
 
-    await user.click(screen.getByRole("button", { name: "Close sidebar" }))
+    await user.click(screen.getByRole("button", { name: "收起侧栏" }))
     expect(
-      within(sidebar).queryByRole("button", { name: "Settings" }),
+      within(sidebar).queryByRole("button", { name: "设置" }),
     ).not.toBeInTheDocument()
-    await user.click(screen.getByRole("button", { name: "Open sidebar" }))
-    expect(
-      within(sidebar).getByRole("button", { name: "Settings" }),
-    ).toBeVisible()
+    await user.click(screen.getByRole("button", { name: "展开侧栏" }))
+    expect(within(sidebar).getByRole("button", { name: "设置" })).toBeVisible()
   })
 
   it("switches history without leaking nodes from the prior conversation", async () => {
@@ -332,7 +330,7 @@ describe("ConversationWorkspace", () => {
     })
     expect(within(pane).queryByText(root.content)).not.toBeInTheDocument()
     expect(within(pane).queryByText(left.content)).not.toBeInTheDocument()
-    expect(screen.getByText("Archived — read only")).toBeVisible()
+    expect(screen.getByText("已归档 — 只读")).toBeVisible()
   })
 
   it("shows a retryable discovery error instead of the empty form", async () => {
@@ -346,19 +344,22 @@ describe("ConversationWorkspace", () => {
     )
     render(<ConversationWorkspace />)
 
+    const sidebar = screen.getByLabelText("会话树侧栏")
     expect(
-      await screen.findByRole("button", { name: "Retry loading history" }),
+      await within(sidebar).findByRole("button", {
+        name: "重试加载历史记录",
+      }),
     ).toBeVisible()
     expect(
-      screen.queryByRole("heading", { name: "Start a conversation" }),
+      screen.queryByRole("heading", { name: "开始新会话" }),
     ).not.toBeInTheDocument()
 
     client.listConversations.mockResolvedValueOnce([])
     await user.click(
-      screen.getByRole("button", { name: "Retry loading history" }),
+      within(sidebar).getByRole("button", { name: "重试加载历史记录" }),
     )
     expect(
-      await screen.findByRole("heading", { name: "Start a conversation" }),
+      await screen.findByRole("heading", { name: "开始新会话" }),
     ).toBeVisible()
   })
 
@@ -427,24 +428,20 @@ describe("ConversationWorkspace", () => {
 
     render(<ConversationWorkspace />)
 
-    expect(
-      screen.getByRole("button", { name: "New conversation" }),
-    ).toBeVisible()
-    expect(screen.getByText("Archived — read only")).toBeVisible()
+    expect(screen.getByRole("button", { name: "新建会话" })).toBeVisible()
+    expect(screen.getByText("已归档 — 只读")).toBeVisible()
     expect(
       within(screen.getByTestId("conversation-pane")).getByText(right.content),
     ).toBeVisible()
+    expect(screen.getByRole("textbox", { name: "消息输入框" })).toBeDisabled()
     expect(
-      screen.getByRole("textbox", { name: "Message composer" }),
-    ).toBeDisabled()
-    expect(
-      screen.queryByRole("button", { name: "Archive" }),
+      screen.queryByRole("button", { name: "归档" }),
     ).not.toBeInTheDocument()
     expect(
-      screen.queryByRole("button", { name: "Edit as new branch" }),
+      screen.queryByRole("button", { name: "编辑为新分支" }),
     ).not.toBeInTheDocument()
     expect(
-      screen.queryByRole("button", { name: /Create branch from here/ }),
+      screen.queryByRole("button", { name: /从此处创建分支/ }),
     ).not.toBeInTheDocument()
   })
 
@@ -463,14 +460,14 @@ describe("ConversationWorkspace", () => {
     useConversationStore.getState().selectNode(right.id)
     render(<ConversationWorkspace />)
 
-    await user.click(screen.getByRole("button", { name: "Edit as new branch" }))
+    await user.click(screen.getByRole("button", { name: "编辑为新分支" }))
     const input = screen.getByRole("textbox", {
-      name: "Edit message content",
+      name: "编辑消息内容",
     })
     expect(input).toHaveFocus()
     await user.clear(input)
     await user.type(input, edited.content)
-    await user.click(screen.getByRole("button", { name: "Save as Branch" }))
+    await user.click(screen.getByRole("button", { name: "保存为新分支" }))
 
     await waitFor(() => {
       expect(
@@ -494,15 +491,13 @@ describe("ConversationWorkspace", () => {
     render(<ConversationWorkspace />)
 
     const composer = await screen.findByRole("textbox", {
-      name: "Message composer",
+      name: "消息输入框",
     })
-    expect(
-      screen.getByRole("button", { name: "New conversation" }),
-    ).toBeVisible()
+    expect(screen.getByRole("button", { name: "新建会话" })).toBeVisible()
     expect(screen.queryByLabelText("Title")).not.toBeInTheDocument()
     expect(screen.queryByLabelText("First message")).not.toBeInTheDocument()
     await user.type(composer, "ONE_USER_ROOT_SENTINEL")
-    await user.click(screen.getByRole("button", { name: "Send message" }))
+    await user.click(screen.getByRole("button", { name: "发送消息" }))
 
     await waitFor(() => {
       expect(
@@ -515,11 +510,9 @@ describe("ConversationWorkspace", () => {
       title: "ONE_USER_ROOT_SENTINEL",
       content: "ONE_USER_ROOT_SENTINEL",
     })
-    expect(screen.queryByLabelText("assistant message")).not.toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Generate" })).toBeDisabled()
-    expect(
-      screen.getByRole("textbox", { name: "Message composer" }),
-    ).toBeDisabled()
+    expect(screen.queryByLabelText("助手消息")).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "生成" })).toBeDisabled()
+    expect(screen.getByRole("textbox", { name: "消息输入框" })).toBeDisabled()
   })
 
   it("switches a loaded conversation to a blank Composer without clearing its projection", async () => {
@@ -533,12 +526,10 @@ describe("ConversationWorkspace", () => {
     )
     const before = useConversationStore.getState()
 
-    await user.click(screen.getByRole("button", { name: "New conversation" }))
+    await user.click(screen.getByRole("button", { name: "新建会话" }))
 
     expect(screen.getByTestId("blank-conversation-pane")).toBeVisible()
-    expect(
-      screen.getByRole("textbox", { name: "Message composer" }),
-    ).toBeEnabled()
+    expect(screen.getByRole("textbox", { name: "消息输入框" })).toBeEnabled()
     expect(screen.queryByLabelText("Title")).not.toBeInTheDocument()
     const creating = useConversationStore.getState()
     expect(creating.isCreatingConversation).toBe(true)
@@ -571,11 +562,11 @@ describe("ConversationWorkspace", () => {
     })
     render(<ConversationWorkspace />)
     const composer = await screen.findByRole("textbox", {
-      name: "Message composer",
+      name: "消息输入框",
     })
 
     await user.type(composer, prompt)
-    await user.click(screen.getByRole("button", { name: "Send message" }))
+    await user.click(screen.getByRole("button", { name: "发送消息" }))
 
     await waitFor(() => {
       expect(client.createConversation).toHaveBeenCalledWith({
@@ -598,18 +589,18 @@ describe("ConversationWorkspace", () => {
       .mockResolvedValueOnce(rootOnlyTree)
     render(<ConversationWorkspace />)
     const composer = await screen.findByRole("textbox", {
-      name: "Message composer",
+      name: "消息输入框",
     })
     await user.type(composer, rootOnlyTree.nodes[0]!.content)
 
-    await user.click(screen.getByRole("button", { name: "Send message" }))
+    await user.click(screen.getByRole("button", { name: "发送消息" }))
 
     expect(
       await screen.findByText("Conversation could not be saved."),
     ).toBeVisible()
     expect(composer).toHaveValue(rootOnlyTree.nodes[0]!.content)
     expect(composer).toBeEnabled()
-    await user.click(screen.getByRole("button", { name: "Send message" }))
+    await user.click(screen.getByRole("button", { name: "发送消息" }))
     await waitFor(() => {
       expect(client.createConversation).toHaveBeenCalledTimes(2)
       expect(screen.getByTestId("conversation-pane")).toBeVisible()
@@ -632,9 +623,9 @@ describe("ConversationWorkspace", () => {
     render(<ConversationWorkspace />)
 
     expect(
-      await screen.findByRole("button", { name: "New conversation" }),
+      await screen.findByRole("button", { name: "新建会话" }),
     ).toBeEnabled()
-    expect(await screen.findByText("Archived — read only")).toBeVisible()
+    expect(await screen.findByText("已归档 — 只读")).toBeVisible()
   })
 
   it("visually truncates history titles and exposes the complete title on hover and focus", async () => {
@@ -691,7 +682,7 @@ describe("ConversationWorkspace", () => {
     render(<ConversationWorkspace />)
 
     const generateButton = await screen.findByRole("button", {
-      name: "Generate",
+      name: "生成",
     })
     await waitFor(() => expect(generateButton).toBeEnabled())
     await user.click(generateButton)
@@ -716,9 +707,9 @@ describe("ConversationWorkspace", () => {
     const transientArticle = within(pane)
       .getByText(streamedContent)
       .closest("article")
-    expect(transientArticle).toHaveAccessibleName("assistant message")
+    expect(transientArticle).toHaveAccessibleName("助手消息")
     expect(
-      within(pane).getAllByRole("article", { name: "assistant message" }),
+      within(pane).getAllByRole("article", { name: "助手消息" }),
     ).toHaveLength(2)
     expect(transientArticle).toHaveClass("mr-8", "bg-card")
     expect(within(pane).queryByText(left.content)).not.toBeInTheDocument()
@@ -759,10 +750,10 @@ describe("ConversationWorkspace", () => {
     const authoritativeArticle = within(pane)
       .getByText(streamedContent)
       .closest("article")
-    expect(authoritativeArticle).toHaveAccessibleName("assistant message")
+    expect(authoritativeArticle).toHaveAccessibleName("助手消息")
     expect(authoritativeArticle).toHaveClass("mr-8", "bg-card")
     expect(
-      within(pane).getAllByRole("article", { name: "assistant message" }),
+      within(pane).getAllByRole("article", { name: "助手消息" }),
     ).toHaveLength(2)
     expect(useConversationStore.getState().fullNodes[completed.id]).toEqual(
       completed,
@@ -803,7 +794,7 @@ describe("ConversationWorkspace", () => {
     useConversationStore.getState().selectNode(right.id)
     render(<ConversationWorkspace />)
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Generate" })).toBeEnabled()
+      expect(screen.getByRole("button", { name: "生成" })).toBeEnabled()
     })
     const pane = screen.getByTestId("conversation-pane")
 
@@ -932,18 +923,13 @@ describe("ConversationWorkspace", () => {
 
     render(<ConversationWorkspace />)
 
-    expect(
-      screen.getAllByText(
-        "The conversation tree could not be displayed safely.",
-      ),
-    ).toHaveLength(2)
+    expect(screen.getAllByText("无法安全显示会话树。")).toHaveLength(2)
     const pane = screen.getByTestId("conversation-pane")
     expect(within(pane).queryByText(root.content)).not.toBeInTheDocument()
     expect(within(pane).queryByText(left.content)).not.toBeInTheDocument()
     expect(within(pane).queryByText(right.content)).not.toBeInTheDocument()
-    expect(
-      screen.getByRole("textbox", { name: "Message composer" }),
-    ).toBeDisabled()
+    expect(pane).not.toHaveTextContent("tree_integrity")
+    expect(screen.getByRole("textbox", { name: "消息输入框" })).toBeDisabled()
   })
 
   it("uses instant scrolling when reduced motion is requested", async () => {
