@@ -316,6 +316,60 @@ const ROLE_LABELS: Record<PathMessageView["role"], string> = {
 Tests query the Chinese accessible name while contract and state tests continue
 to assert the original enum value.
 
+### Design Decision: Assistant Markdown Rendering Boundary
+
+**Context**: Assistant content is untrusted provider output and appears through
+both durable path nodes and an identity-free transient generation slot. If each
+surface configures Markdown independently, syntax, streaming, security, and
+controls drift. User, system, and tool messages must continue to display their
+original text rather than unexpectedly interpreting Markdown markers.
+
+**Decision**: Render non-editing assistant content through one feature-owned
+`AssistantMarkdown` component. Durable content uses static mode; only the live
+`streaming` generation phase uses streaming mode. The wrapper owns the renderer,
+GFM/code plugins, Chinese controls, semantic styling, and the complete trust
+boundary. `MessageNode` and transient generation presentation pass only the raw
+content string and streaming state; they do not duplicate renderer options.
+
+```tsx
+type AssistantMarkdownProps = {
+  content: string
+  isStreaming?: boolean
+}
+
+return message.role === "assistant" ? (
+  <AssistantMarkdown content={message.content} />
+) : (
+  <div className="whitespace-pre-wrap break-words">{message.content}</div>
+)
+```
+
+The wrapper must:
+
+- omit raw-HTML parsing and never use `dangerouslySetInnerHTML`;
+- keep sanitization and URL hardening enabled, with an absolute-URL transform
+  restricted to `http:`, `https:`, and `mailto:`;
+- render blocked links as readable non-links and images as alt text without an
+  `img` element or network request;
+- add `target="_blank"` plus `rel="noopener noreferrer"` to allowed links;
+- enable code copy but disable it while streaming, and omit code download and
+  table export controls;
+- keep long code/table content horizontally scrollable within the message and
+  use semantic theme/focus tokens rather than raw colors;
+- preserve CommonMark soft-break behavior instead of converting every newline
+  into `<br>`.
+
+Canopy pins `streamdown` exactly to `2.4.0`: version `2.5.0` directly declares
+Mermaid even when the Mermaid plugin is not selected. Any renderer upgrade must
+inspect the resolved dependency graph and production Vite bundle before changing
+that pin. Asset names or Shiki grammars containing `mermaid` do not prove that
+the Mermaid runtime is installed; check the lockfile/package graph.
+
+Required tests assert GFM semantics, incomplete streamed emphasis/link/code,
+code-copy disabled state, safe and unsafe URL protocols, raw-HTML/image
+blocking, Chinese accessible controls, all three non-assistant roles remaining
+plain text, and transient-to-durable rendering without duplicate content.
+
 ### Design Decision: Workspace-Global Settings Entry
 
 **Context**: Provider configuration applies to the workspace, not to the

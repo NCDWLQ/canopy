@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Check role-specific rendering, transient/durable consistency, localization, accessibility, and unchanged generation presentation."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Check observable behavior, regression coverage, and the required lint/type/test/build gates."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Check strict TypeScript integration and ensure no contract or trust-boundary weakening is introduced."}
+{"file":".trellis/tasks/08-12-assistant-markdown-rendering/research/tech-selection.md","reason":"Check implementation against selected syntax, streaming, security, dependency, and out-of-scope decisions."}

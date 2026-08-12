@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Conversation component ownership, assistant/transient presentation contracts, Simplified Chinese accessibility, and required generation tests."}
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Places the product-specific renderer in the conversation feature and preserves src/index.css as the only global style entry."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Defines behavioral testing, accessible queries, full frontend gates, and forbidden implementation patterns."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Requires one shared rendering boundary for durable and transient assistant content instead of duplicated configuration."}
+{"file":".trellis/tasks/08-12-assistant-markdown-rendering/research/tech-selection.md","reason":"Records candidate comparison, official source evidence, security caveats, and the selected Streamdown approach."}
