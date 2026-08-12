@@ -276,3 +276,25 @@ Moved Provider configuration from the conversation header into a global Settings
 ### Status
 
 [OK] **Completed**
+
+
+## Session 13: Localize Canopy interface to Simplified Chinese
+
+**Date**: 2026-08-12
+**Task**: Localize Canopy interface to Simplified Chinese
+**Branch**: `main`
+
+### Summary
+
+Localized 113 approved UI and error messages to Simplified Chinese, preserved IPC and machine error contracts, updated tests and specs, and verified 110 frontend plus 52 Rust tests.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `95b4cd4` | (see git log) |
+| `011e905` | (see git log) |
+
+### Status
+
+[OK] **Completed**
