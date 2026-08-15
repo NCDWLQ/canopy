@@ -60,10 +60,10 @@ export function Composer({
 
   return (
     <form
-      className="pointer-events-none relative w-full bg-gradient-to-t from-background/90 via-background/60 to-transparent px-4 pb-6 pt-6 backdrop-blur-md md:px-8"
+      className="pointer-events-none relative w-full bg-gradient-to-t from-background via-background/80 to-transparent px-4 pb-6 pt-6 md:px-8"
       onSubmit={handleFormSubmit}
     >
-      <div className="pointer-events-auto relative mx-auto flex max-w-4xl items-end gap-2 rounded-2xl border border-border/80 bg-card/75 p-2 shadow-sm backdrop-blur-lg transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 dark:border-border/60 dark:bg-card/70">
+      <div className="pointer-events-auto relative mx-auto flex max-w-4xl items-end gap-2 rounded-2xl border border-border/80 bg-card/95 p-2 shadow-sm backdrop-blur-xl transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 dark:border-border/60 dark:bg-card/90">
         <label className="sr-only" htmlFor="message-composer">
           消息输入框
         </label>
