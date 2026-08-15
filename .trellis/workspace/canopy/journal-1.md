@@ -404,3 +404,24 @@ Integrated Composer Send/Stop behavior, preserved editable drafts and keyboard s
 ### Status
 
 [OK] **Completed**
+
+
+## Session 19: Simplify generation commit protocol
+
+**Date**: 2026-08-15
+**Task**: Simplify generation commit protocol
+**Branch**: `main`
+
+### Summary
+
+Moved generation finalization and authoritative assistant persistence into the long-lived Rust command; removed the frontend acknowledgement handshake; aligned IPC schemas, store/controller behavior, recovery logic, tests, and executable specs. Full frontend and Rust quality gates passed.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `88067cc` | (see git log) |
+
+### Status
+
+[OK] **Completed**
