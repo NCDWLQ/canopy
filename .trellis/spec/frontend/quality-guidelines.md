@@ -10,6 +10,36 @@ Frontend verification protects two product invariants: the UI navigates a first-
 
 The initial toolchain is Vitest, React Testing Library, `@testing-library/user-event`, and `jest-dom`, configured by the application scaffold task. Type-check, lint, unit/component tests, and Rust tests are separate required gates.
 
+## Large-Window Scroll Compositing
+
+The conversation pane is a real WebKitGTK scroll surface in the desktop
+release build. When a large-window regression is reported, validate the
+release binary at both the default and large window sizes before changing the
+message data path or adding list virtualization.
+
+- Keep the scroll element's flex sizing, `overflow-y-auto`, native scrollbar,
+  focus outlines, and descendant horizontal scrolling intact.
+- Prefer removing paint work that is not visually required (for example,
+  backdrop filters on non-overlay siblings or repeated message shadows) before
+  adding compositor hints.
+- If the issue follows the current painted area and reproduces with short plain
+  text, test one narrow CSS containment change at a time. Do not combine
+  `will-change`, forced transforms, or strict containment without release A/B
+  evidence.
+- Record the manual release result for wheel/trackpad and scrollbar dragging;
+  browser/jsdom tests cannot establish GPU frame performance.
+
+```tsx
+<div className="relative flex h-full flex-1 flex-col overflow-y-auto [contain:paint]">
+  {messages}
+</div>
+```
+
+The containment declaration must remain a local scroll-surface optimization;
+it must not change message ordering, branch isolation, generation state, or
+accessibility semantics. WebKitGTK environment flags are diagnostics only and
+must not become default startup behavior without cross-machine evidence.
+
 ## Forbidden Patterns
 
 - Raw Tauri `invoke`, SQL, or provider HTTP calls inside React components.

@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Check conversation semantics, generation presentation, edit/branch behavior, focus, and accessibility remain unchanged."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Check regression coverage, meaningful assertions, and lint/type/test/build gates."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Confirm no unsafe runtime/config plumbing is introduced if diagnosis reaches WebKitGTK integration."}
+{"file":".trellis/tasks/08-15-virtualize-conversation-messages/research/webkitgtk-scroll-performance.md","reason":"Check that retained changes match the recorded single-variable production evidence and no speculative workaround was committed."}

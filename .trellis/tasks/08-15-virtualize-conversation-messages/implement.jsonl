@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Preserve ConversationPane, MessageBubble, generation, edit/branch, active-path, and accessibility contracts while changing paint-related classes."}
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Keep the performance fix inside existing conversation feature components and avoid backend/store scope drift."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Defines behavioral regression coverage and the complete frontend validation gates."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Requires searching shared style values before changing repeated message surfaces and avoids duplicate performance workarounds."}
+{"file":".trellis/tasks/08-15-virtualize-conversation-messages/research/webkitgtk-scroll-performance.md","reason":"Contains the observed production symptom, local WebKitGTK environment, upstream evidence, and staged A/B constraints."}

@@ -311,7 +311,7 @@ export function ConversationWorkspace({
       </aside>
 
       <div className="relative flex min-w-0 flex-1 flex-col bg-background">
-        <header className="z-10 flex h-12 shrink-0 items-center justify-between border-b bg-background/90 px-4 backdrop-blur-sm">
+        <header className="z-10 flex h-12 shrink-0 items-center justify-between border-b bg-background px-4">
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"

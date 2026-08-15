@@ -29,7 +29,7 @@ export function MessageBubble({
     <article
       aria-label={`${roleLabel}消息`}
       className={cn(
-        "my-2 rounded-lg border p-4 shadow-sm",
+        "my-2 rounded-lg border p-4",
         role === "user" ? "ml-8 bg-muted" : "mr-8 bg-card",
       )}
     >

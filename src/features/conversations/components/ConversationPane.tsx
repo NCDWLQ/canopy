@@ -157,7 +157,7 @@ export function ConversationPane({
   return (
     <div
       data-testid="conversation-pane"
-      className="relative flex h-full flex-1 flex-col overflow-y-auto px-4 py-6 md:px-8"
+      className="relative flex h-full flex-1 flex-col overflow-y-auto px-4 py-6 md:px-8 [contain:paint]"
     >
       {error && (
         <div
