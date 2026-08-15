@@ -320,3 +320,24 @@ Added safe GFM rendering for durable and streaming assistant messages with Shiki
 ### Status
 
 [OK] **Completed**
+
+
+## Session 15: 优化大窗口右侧会话滚动
+
+**Date**: 2026-08-15
+**Task**: 优化大窗口右侧会话滚动
+**Branch**: `main`
+
+### Summary
+
+通过 release A/B 定位并修复大窗口右侧会话滚动卡顿：移除标题栏 backdrop blur、消息阴影，并在 ConversationPane 滚动表面加入 [contain:paint]。最终用户确认接近 800x600 流畅度；保留行为不变，未接入虚拟化或新增 WebKit 运行时开关。ESLint、TypeScript、120 项 Vitest、Vite build 和 Tauri release build 全部通过。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `46164bf` | (see git log) |
+
+### Status
+
+[OK] **Completed**

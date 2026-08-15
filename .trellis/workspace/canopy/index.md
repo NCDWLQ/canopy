@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 14
-- **Last Active**: 2026-08-12
+- **Total Sessions**: 15
+- **Last Active**: 2026-08-15
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~322 | Active |
+| `journal-1.md` | ~343 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 15 | 2026-08-15 | 优化大窗口右侧会话滚动 | `46164bf` | `main` |
 | 14 | 2026-08-12 | Assistant Markdown rendering | `192fde6`, `ac3464d` | `main` |
 | 13 | 2026-08-12 | Localize Canopy interface to Simplified Chinese | `95b4cd4`, `011e905` | `main` |
 | 12 | 2026-08-12 | Refactor sidebar global settings | `612dd7b`, `29fcc46` | `main` |
