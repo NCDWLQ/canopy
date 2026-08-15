@@ -3,6 +3,7 @@ import fixture from "../../../contract-fixtures/provider-ipc.json"
 import type { GenerationEventView } from "@/features/providers/types"
 
 import {
+  GenerationBridgeError,
   PROVIDER_COMMANDS,
   createProviderClient,
   type ChannelFactory,
@@ -11,8 +12,7 @@ import {
 
 type RecordedCall = { command: string; args: Record<string, unknown> }
 
-const generationId = fixture.successes.generation_start.generation_id
-const commitToken = fixture.requests.commit_generation.commit_token
+const generationId = fixture.successes.generation_completed.generation_id
 
 class FakeChannelFactory implements ChannelFactory {
   onMessage?: (value: unknown) => void
@@ -42,14 +42,13 @@ function recordingTransport(
 }
 
 describe("provider Tauri contract", () => {
-  it("uses the shared exact command list and redacted profile shapes", async () => {
+  it("uses the reduced command list and redacted profile shapes", async () => {
     expect(Object.values(PROVIDER_COMMANDS)).toEqual(fixture.command_names)
     const transport = recordingTransport({
       save_provider_profile: fixture.successes.profile_without_key,
       load_provider_profile: fixture.successes.profile_with_key,
       delete_provider_profile: fixture.successes.delete,
       cancel_generation: fixture.successes.cancel,
-      commit_generation: fixture.successes.commit_rejected,
     })
     const client = createProviderClient(transport, new FakeChannelFactory())
 
@@ -70,31 +69,11 @@ describe("provider Tauri contract", () => {
     await expect(client.cancelGeneration(generationId)).resolves.toEqual({
       accepted: true,
     })
-    await expect(
-      client.commitGeneration(generationId, commitToken),
-    ).resolves.toEqual({ accepted: false })
-
-    expect(transport.calls).toEqual([
-      {
-        command: "save_provider_profile",
-        args: { request: fixture.requests.save_provider_profile },
-      },
-      {
-        command: "load_provider_profile",
-        args: { request: fixture.requests.load_provider_profile },
-      },
-      {
-        command: "delete_provider_profile",
-        args: { request: fixture.requests.delete_provider_profile },
-      },
-      {
-        command: "cancel_generation",
-        args: { request: fixture.requests.cancel_generation },
-      },
-      {
-        command: "commit_generation",
-        args: { request: fixture.requests.commit_generation },
-      },
+    expect(transport.calls.map((call) => call.command)).toEqual([
+      "save_provider_profile",
+      "load_provider_profile",
+      "delete_provider_profile",
+      "cancel_generation",
     ])
   })
 
@@ -134,8 +113,7 @@ describe("provider Tauri contract", () => {
     ).rejects.toMatchObject({ code: "internal", retryable: false })
   })
 
-  it("constructs one channel, validates ordered events, and projects the committed node", async () => {
-    expect(fixture.channel_argument).toBe("onEvent")
+  it("streams started and deltas, then returns one authoritative terminal result", async () => {
     const factory = new FakeChannelFactory()
     const calls: RecordedCall[] = []
     const transport: InvokeTransport = {
@@ -143,42 +121,26 @@ describe("provider Tauri contract", () => {
         calls.push({ command, args })
         if (command === "generate_from_active_path") {
           for (const event of fixture.events) factory.emit(event)
-          return Promise.resolve(fixture.successes.generation_start)
+          return Promise.resolve(fixture.successes.generation_completed)
         }
         return Promise.resolve(fixture.successes.cancel)
       },
     }
     const events: GenerationEventView[] = []
-    const client = createProviderClient(transport, factory)
+    const result = await createProviderClient(
+      transport,
+      factory,
+    ).generateFromActivePath("conversation-fixture", "user-right", (event) =>
+      events.push(event),
+    )
 
-    await expect(
-      client.generateFromActivePath(
-        "conversation-fixture",
-        "user-right",
-        (event) => events.push(event),
-      ),
-    ).resolves.toEqual({ generationId })
-
-    expect(calls).toEqual([
-      {
-        command: "generate_from_active_path",
-        args: {
-          request: fixture.requests.generate_from_active_path,
-          onEvent: factory.channel,
-        },
-      },
-    ])
+    expect(result).toMatchObject({ type: "completed", generationId })
     expect(events.map((event) => event.type)).toEqual([
       "started",
       "delta",
       "delta",
-      "ready_to_commit",
-      "completed",
     ])
-    const completed = events.at(-1)
-    expect(completed).toMatchObject({
-      type: "completed",
-      generationId,
+    expect(result).toMatchObject({
       node: {
         id: "assistant-generated",
         parentId: "user-right",
@@ -186,88 +148,265 @@ describe("provider Tauri contract", () => {
         model: "fixture-model",
       },
     })
-    expect(events.at(-2)).toEqual({
-      type: "ready_to_commit",
-      generationId,
-      commitToken,
-    })
-    expect(calls.some((call) => call.command === "commit_generation")).toBe(
+    expect(calls.some((call) => call.command === "cancel_generation")).toBe(
       false,
     )
   })
 
-  it("turns malformed or out-of-order events into one safe failure and exact cancellation", async () => {
+  it("accepts a result before delayed channel callbacks and ignores later values", async () => {
     const factory = new FakeChannelFactory()
-    const calls: RecordedCall[] = []
-    const transport: InvokeTransport = {
-      invoke(command, args) {
-        calls.push({ command, args })
-        if (command === "generate_from_active_path") {
-          factory.emit(fixture.events[0])
-          factory.emit(fixture.malformed_events[1])
-          factory.emit(fixture.events[1])
-          return Promise.resolve(fixture.successes.generation_start)
-        }
-        return Promise.resolve({ accepted: true })
-      },
-    }
-    const events: GenerationEventView[] = []
-    const client = createProviderClient(transport, factory)
-    await client.generateFromActivePath(
-      "conversation-fixture",
-      "user-right",
-      (event) => events.push(event),
+    const client = createProviderClient(
+      recordingTransport({
+        generate_from_active_path: fixture.successes.generation_completed,
+      }),
+      factory,
     )
-    await Promise.resolve()
-
-    expect(events).toHaveLength(2)
-    expect(events[0]?.type).toBe("started")
-    expect(events[1]).toMatchObject({
-      type: "failed",
-      generationId,
-      error: { code: "internal", retryable: false },
-    })
-    expect(calls.at(-1)).toEqual({
-      command: "cancel_generation",
-      args: { request: { generation_id: generationId } },
-    })
-  })
-
-  it("cancels the exact generation when invoke rejects after started", async () => {
-    const factory = new FakeChannelFactory()
-    const calls: RecordedCall[] = []
-    const transport: InvokeTransport = {
-      invoke(command, args) {
-        calls.push({ command, args })
-        if (command === "generate_from_active_path") {
-          factory.emit(fixture.events[0])
-          return Promise.reject(new Error("ambiguous transport failure"))
-        }
-        return Promise.resolve(fixture.successes.cancel)
-      },
-    }
     const events: GenerationEventView[] = []
     await expect(
-      createProviderClient(transport, factory).generateFromActivePath(
+      client.generateFromActivePath(
         "conversation-fixture",
         "user-right",
         (event) => events.push(event),
       ),
+    ).resolves.toMatchObject({ type: "completed", generationId })
+
+    factory.emit(fixture.events[0])
+    factory.emit(fixture.events[1])
+    expect(events).toEqual([])
+  })
+
+  it("fails closed on malformed channel data and cancels only the known generation", async () => {
+    const factory = new FakeChannelFactory()
+    const calls: RecordedCall[] = []
+    const transport: InvokeTransport = {
+      invoke(command, args) {
+        calls.push({ command, args })
+        if (command === "generate_from_active_path") {
+          factory.emit(fixture.events[0])
+          factory.emit(fixture.malformed_events[0])
+          return Promise.resolve(fixture.successes.generation_completed)
+        }
+        return Promise.resolve(fixture.successes.cancel)
+      },
+    }
+    await expect(
+      createProviderClient(transport, factory).generateFromActivePath(
+        "conversation-fixture",
+        "user-right",
+        () => undefined,
+      ),
+    ).rejects.toMatchObject({
+      code: "internal",
+      retryable: false,
+      generationId,
+    })
+    await Promise.resolve()
+    expect(calls.at(-1)).toEqual({
+      command: "cancel_generation",
+      args: { request: { generation_id: generationId } },
+    })
+    await expect(
+      createProviderClient(
+        recordingTransport({
+          generate_from_active_path: {
+            ...fixture.successes.generation_completed,
+            node: {
+              ...fixture.successes.generation_completed.node,
+              parent_id: "other-parent",
+            },
+          },
+        }),
+        new FakeChannelFactory(),
+      ).generateFromActivePath(
+        "conversation-fixture",
+        "user-right",
+        () => undefined,
+      ),
+    ).rejects.toBeInstanceOf(GenerationBridgeError)
+  })
+
+  it("preserves a channel protocol failure when invoke later rejects", async () => {
+    const factory = new FakeChannelFactory()
+    const calls: RecordedCall[] = []
+    const transport: InvokeTransport = {
+      invoke(command, args) {
+        calls.push({ command, args })
+        if (command === "generate_from_active_path") {
+          factory.emit(fixture.events[0])
+          factory.emit(fixture.malformed_events[0])
+          return Promise.reject(new Error("wrong failure"))
+        }
+        return Promise.resolve(fixture.successes.cancel)
+      },
+    }
+
+    await expect(
+      createProviderClient(transport, factory).generateFromActivePath(
+        "conversation-fixture",
+        "user-right",
+        () => undefined,
+      ),
     ).rejects.toMatchObject({ code: "internal", retryable: false })
     await Promise.resolve()
+    expect(
+      calls.filter((call) => call.command === "cancel_generation"),
+    ).toEqual([
+      {
+        command: "cancel_generation",
+        args: { request: { generation_id: generationId } },
+      },
+    ])
+  })
 
-    expect(events.map((event) => event.type)).toEqual(["started", "failed"])
-    expect(events.at(-1)).toMatchObject({
-      generationId,
-      error: { code: "internal", retryable: false },
-    })
+  it("fails closed on a mismatched started event", async () => {
+    const factory = new FakeChannelFactory()
+    const calls: RecordedCall[] = []
+    const transport: InvokeTransport = {
+      invoke(command, args) {
+        calls.push({ command, args })
+        if (command === "generate_from_active_path") {
+          factory.emit(fixture.events[0])
+          factory.emit(fixture.mismatched_events[0])
+          return Promise.resolve(fixture.successes.generation_completed)
+        }
+        return Promise.resolve(fixture.successes.cancel)
+      },
+    }
+    await expect(
+      createProviderClient(transport, factory).generateFromActivePath(
+        "conversation-fixture",
+        "user-right",
+        () => undefined,
+      ),
+    ).rejects.toMatchObject({ code: "internal", retryable: false })
+    await Promise.resolve()
     expect(calls.at(-1)).toEqual({
       command: "cancel_generation",
       args: { request: { generation_id: generationId } },
     })
   })
 
-  it("rejects invalid local endpoint and generation identifiers without invoke", async () => {
+  it("maps terminal failure stage and cancels an ambiguous invoke rejection", async () => {
+    const factory = new FakeChannelFactory()
+    const calls: RecordedCall[] = []
+    const transport: InvokeTransport = {
+      invoke(command, args) {
+        calls.push({ command, args })
+        if (command === "generate_from_active_path") {
+          factory.emit(fixture.events[0])
+          return Promise.reject(new Error("ambiguous delivery"))
+        }
+        return Promise.resolve(fixture.successes.cancel)
+      },
+    }
+    await expect(
+      createProviderClient(transport, factory).generateFromActivePath(
+        "conversation-fixture",
+        "user-right",
+        () => undefined,
+      ),
+    ).rejects.toMatchObject({ code: "internal" })
+    await Promise.resolve()
+    expect(calls.at(-1)).toEqual({
+      command: "cancel_generation",
+      args: { request: { generation_id: generationId } },
+    })
+
+    const failedClient = createProviderClient(
+      recordingTransport({
+        generate_from_active_path: fixture.terminal_results.persistence_failed,
+      }),
+      new FakeChannelFactory(),
+    )
+    await expect(
+      failedClient.generateFromActivePath(
+        "conversation-fixture",
+        "user-right",
+        () => undefined,
+      ),
+    ).resolves.toMatchObject({
+      type: "failed",
+      stage: "persistence",
+      error: { code: "database_unavailable" },
+    })
+  })
+
+  it("cancels the exact result generation when terminal identity is malformed", async () => {
+    const factory = new FakeChannelFactory()
+    const calls: RecordedCall[] = []
+    const transport: InvokeTransport = {
+      invoke(command, args) {
+        calls.push({ command, args })
+        if (command === "generate_from_active_path") {
+          return Promise.resolve({
+            ...fixture.successes.generation_completed,
+            node: {
+              ...fixture.successes.generation_completed.node,
+              conversation_id: "other-conversation",
+            },
+          })
+        }
+        return Promise.resolve(fixture.successes.cancel)
+      },
+    }
+
+    await expect(
+      createProviderClient(transport, factory).generateFromActivePath(
+        "conversation-fixture",
+        "user-right",
+        () => undefined,
+      ),
+    ).rejects.toMatchObject({ code: "internal", retryable: false })
+    await Promise.resolve()
+    expect(calls.at(-1)).toEqual({
+      command: "cancel_generation",
+      args: { request: { generation_id: generationId } },
+    })
+  })
+
+  it.each([
+    ["missing model", { model: null }],
+    ["wrong role", { role: "user" }],
+    ["missing parent", { parent_id: null }],
+    ["blank content", { content: " \n" }],
+    ["invalid content Unicode", { content: "\ud800" }],
+    ["invalid model Unicode", { model: "\ud800" }],
+  ])("rejects completed assistant drift: %s", async (_name, nodeDrift) => {
+    const calls: RecordedCall[] = []
+    const transport: InvokeTransport = {
+      invoke(command, args) {
+        calls.push({ command, args })
+        if (command === "generate_from_active_path") {
+          return Promise.resolve({
+            ...fixture.successes.generation_completed,
+            node: {
+              ...fixture.successes.generation_completed.node,
+              ...nodeDrift,
+            },
+          })
+        }
+        return Promise.resolve(fixture.successes.cancel)
+      },
+    }
+
+    await expect(
+      createProviderClient(
+        transport,
+        new FakeChannelFactory(),
+      ).generateFromActivePath(
+        "conversation-fixture",
+        "user-right",
+        () => undefined,
+      ),
+    ).rejects.toMatchObject({ code: "internal", retryable: false })
+    await Promise.resolve()
+    expect(calls.at(-1)).toEqual({
+      command: "cancel_generation",
+      args: { request: { generation_id: generationId } },
+    })
+  })
+
+  it("rejects invalid local inputs, node drift, and cumulative overflow", async () => {
     const transport = recordingTransport({})
     const client = createProviderClient(transport, new FakeChannelFactory())
     for (const baseEndpoint of [
@@ -287,54 +426,41 @@ describe("provider Tauri contract", () => {
     await expect(
       client.generateFromActivePath(" ", "active", () => undefined),
     ).rejects.toMatchObject({ code: "invalid_input" })
-    await expect(
-      client.commitGeneration(generationId, "not-a-uuid"),
-    ).rejects.toMatchObject({ code: "invalid_input" })
+    await expect(client.cancelGeneration("not-a-uuid")).rejects.toMatchObject({
+      code: "invalid_input",
+    })
     expect(transport.calls).toEqual([])
-  })
 
-  it("rejects completion before readiness and deltas after readiness", async () => {
-    const illegalSequences = [
-      [fixture.events[0], fixture.events[1], fixture.events[4]],
-      [
-        fixture.events[0],
-        fixture.events[1],
-        fixture.events[3],
-        fixture.events[2],
-      ],
-    ]
-
-    for (const sequence of illegalSequences) {
-      const factory = new FakeChannelFactory()
-      const calls: RecordedCall[] = []
-      const transport: InvokeTransport = {
-        invoke(command, args) {
-          calls.push({ command, args })
-          if (command === "generate_from_active_path") {
-            for (const event of sequence) factory.emit(event)
-            return Promise.resolve(fixture.successes.generation_start)
-          }
-          return Promise.resolve(fixture.successes.cancel)
-        },
-      }
-      const events: GenerationEventView[] = []
-      await createProviderClient(transport, factory).generateFromActivePath(
+    const factory = new FakeChannelFactory()
+    const calls: RecordedCall[] = []
+    const driftTransport: InvokeTransport = {
+      invoke(command, args) {
+        calls.push({ command, args })
+        if (command === "generate_from_active_path") {
+          factory.emit(fixture.events[0])
+          factory.emit({
+            type: "delta",
+            generation_id: generationId,
+            content: "x".repeat(1024 * 1024),
+          })
+          factory.emit({
+            ...fixture.events[1],
+            content: "y",
+          })
+          return Promise.resolve(fixture.successes.generation_completed)
+        }
+        return Promise.resolve(fixture.successes.cancel)
+      },
+    }
+    await expect(
+      createProviderClient(driftTransport, factory).generateFromActivePath(
         "conversation-fixture",
         "user-right",
-        (event) => events.push(event),
-      )
-      await Promise.resolve()
-
-      expect(events.at(-1)).toMatchObject({
-        type: "failed",
-        generationId,
-        error: { code: "internal" },
-      })
-      expect(calls.at(-1)).toEqual({
-        command: "cancel_generation",
-        args: { request: { generation_id: generationId } },
-      })
-    }
+        () => undefined,
+      ),
+    ).rejects.toMatchObject({ code: "internal" })
+    await Promise.resolve()
+    expect(calls.at(-1)?.command).toBe("cancel_generation")
   })
 
   it("matches Rust whitespace rules for model and replacement secrets", async () => {
@@ -370,116 +496,6 @@ describe("provider Tauri contract", () => {
         model: "model",
         api_key: { action: "replace", value: "\ufeff" },
       },
-    })
-  })
-
-  it("fails closed when started identity or committed node parity drifts", async () => {
-    const startedFactory = new FakeChannelFactory()
-    const startedTransport = recordingTransport({
-      generate_from_active_path: fixture.successes.generation_start,
-      cancel_generation: fixture.successes.cancel,
-    })
-    const startedEvents: GenerationEventView[] = []
-    const startedClient = createProviderClient(startedTransport, startedFactory)
-    await startedClient.generateFromActivePath(
-      "conversation-fixture",
-      "user-right",
-      (event) => startedEvents.push(event),
-    )
-    startedFactory.emit({
-      ...fixture.events[0],
-      generation_id: "33333333-3333-4333-8333-333333333333",
-    })
-    await Promise.resolve()
-    expect(startedEvents).toHaveLength(1)
-    expect(startedEvents[0]).toMatchObject({
-      type: "failed",
-      generationId,
-      error: { code: "internal" },
-    })
-    expect(startedTransport.calls.at(-1)).toEqual({
-      command: "cancel_generation",
-      args: { request: { generation_id: generationId } },
-    })
-
-    const completedFactory = new FakeChannelFactory()
-    const completedCalls: RecordedCall[] = []
-    const completedTransport: InvokeTransport = {
-      invoke(command, args) {
-        completedCalls.push({ command, args })
-        if (command === "generate_from_active_path") {
-          completedFactory.emit(fixture.events[0])
-          completedFactory.emit(fixture.events[1])
-          completedFactory.emit(fixture.events[2])
-          completedFactory.emit(fixture.events[3])
-          completedFactory.emit({
-            ...fixture.events[4],
-            node: { ...fixture.successes.assistant_node, parent_id: "wrong" },
-          })
-          return Promise.resolve(fixture.successes.generation_start)
-        }
-        return Promise.resolve(fixture.successes.cancel)
-      },
-    }
-    const completedEvents: GenerationEventView[] = []
-    await createProviderClient(
-      completedTransport,
-      completedFactory,
-    ).generateFromActivePath("conversation-fixture", "user-right", (event) =>
-      completedEvents.push(event),
-    )
-    await Promise.resolve()
-    expect(completedEvents.map((event) => event.type)).toEqual([
-      "started",
-      "delta",
-      "delta",
-      "ready_to_commit",
-      "failed",
-    ])
-    expect(completedCalls.at(-1)).toEqual({
-      command: "cancel_generation",
-      args: { request: { generation_id: generationId } },
-    })
-  })
-
-  it("bounds cumulative channel deltas and requests exact cancellation", async () => {
-    const factory = new FakeChannelFactory()
-    const calls: RecordedCall[] = []
-    const transport: InvokeTransport = {
-      invoke(command, args) {
-        calls.push({ command, args })
-        if (command === "generate_from_active_path") {
-          factory.emit(fixture.events[0])
-          factory.emit({
-            type: "delta",
-            generation_id: generationId,
-            content: "x".repeat(1024 * 1024),
-          })
-          factory.emit({
-            type: "delta",
-            generation_id: generationId,
-            content: "y",
-          })
-          return Promise.resolve(fixture.successes.generation_start)
-        }
-        return Promise.resolve(fixture.successes.cancel)
-      },
-    }
-    const events: GenerationEventView[] = []
-    await createProviderClient(transport, factory).generateFromActivePath(
-      "conversation-fixture",
-      "user-right",
-      (event) => events.push(event),
-    )
-    await Promise.resolve()
-    expect(events.map((event) => event.type)).toEqual([
-      "started",
-      "delta",
-      "failed",
-    ])
-    expect(calls.at(-1)).toEqual({
-      command: "cancel_generation",
-      args: { request: { generation_id: generationId } },
     })
   })
 })

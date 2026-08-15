@@ -222,24 +222,24 @@ after every save attempt, including failure.
 - `ConversationPane.path` is authoritative and already validated by the application layer. It must not append siblings or reconstruct ancestry.
 - A transient assistant is projected after the durable path through the same
   feature-local, identity-free message shell as a durable assistant. Keep it
-  out of the outline and never assign it a durable node identity before exact
-  completion. Do not label it as transient/not saved or expose commit,
-  database, or reconciliation implementation terms.
+  out of the outline and never assign it a durable node identity before the
+  authoritative terminal result. Do not label it as transient/not saved or
+  expose database implementation terms.
 - `starting` renders “正在思考”; `streaming` appends content in that assistant
-  slot; `committing` keeps the complete bubble silent. Visible recovery begins
-  only after the controller's grace period with “正在恢复这条回复…”.
+  slot. A valid completed terminal result swaps the transient shell for the
+  authoritative assistant without duplicating content.
 - Generation failure shows “回复失败” plus “重新生成” without retaining partial
   output. Persistence failure retains the complete content and shows
   “这条回复未能保存” plus “重新生成”. Cancellation retains received partial
-  content and shows “回复已停止” plus an always-visible “重新生成”. A
-  reconciliation retry appears only after an automatic authoritative reload
-  cannot prove completion.
+  content and shows “回复已停止” plus an always-visible “重新生成”. An
+  ambiguous invoke failure may trigger one silent authoritative reload; expose
+  only the normal safe failure when that reload cannot prove completion.
 - The Composer circular action is `send` when no cancellable run is active and
   `cancel` only during `starting` or `streaming`. Draft editability is controlled
   independently through `inputDisabled`: a valid writable conversation keeps
-  the textarea editable while Send is unavailable, generation is active, or a
-  transient response awaits recovery. `committing` and `reconciling` expose a
-  disabled Send action, never Cancel.
+  the textarea editable while Send is unavailable or generation is active. No
+  post-terminal recovery phase is rendered; any ambiguous invoke failure is
+  handled by the controller's one-shot reload.
 - Plain Enter submits only an enabled Send action. When Send is disabled or the
   action is Cancel, prevent the newline but do not submit, cancel, or clear the
   draft. Shift+Enter remains a newline and IME composition remains guarded.
@@ -274,15 +274,15 @@ after every save attempt, including failure.
 | Status is `error` | Show the safe error message; offer retry only when `retryable` is true |
 | User cancels streaming | Preserve received partial content and show “回复已停止” without an error toast |
 | Generation is `starting` or `streaming` | Show one enabled Composer `取消生成`; only clicking it invokes exact cancellation |
-| Generation is `committing` or `reconciling` | Keep the draft editable, hide Cancel, and keep Send disabled |
+| Generation has reached a terminal result | Keep the draft editable, hide Cancel, and expose only terminal copy |
 | Enter while Send is unavailable or Cancel is shown | Preserve the draft and perform no submit/cancel/newline action |
 | Writable unanswered user leaf, Provider ready | Show always-visible `生成回复` beneath that user message |
 | Writable unanswered user leaf, Provider not ready | Show `配置服务提供商以生成`; open Settings and require a later explicit Generate click |
 | Final durable assistant, Provider ready, no active/recovery run | Show icon-only `重新生成` in the existing hover/focus action bar |
 | Earlier assistant, user leaf, archived/invalid/loading, Provider not ready, or active/recovery run | Do not show durable assistant `重新生成` |
-| Generation fails before acknowledgement | Discard partial output; show “回复失败” and “重新生成” |
-| Persistence explicitly fails after ready | Preserve complete output; show “这条回复未能保存” and “重新生成” |
-| Commit result is uncertain | Keep the full assistant bubble silent during the grace period; then show recovery without a button until automatic reload needs help |
+| Generation fails | Discard partial output; show “回复失败” and “重新生成” |
+| Persistence explicitly fails | Preserve complete output; show “这条回复未能保存” and “重新生成” |
+| Invoke result is uncertain | Keep the existing projection while the controller performs one silent reload; then show safe terminal copy if no result is proven |
 
 ### 5. Good / Base / Bad Cases
 
@@ -296,13 +296,12 @@ after every save attempt, including failure.
 - `ConversationPane`: exact root-to-active order and an explicit assertion that sibling content is absent.
 - `MessageNode`: branch/edit callbacks receive the source ID once; disabled actions cannot fire.
 - Loading, empty, provider-auth, retryable, non-retryable, streaming, and cancellation states.
-- Generation presentation covers starting, streaming, silent committing,
-  delayed reconciling, phase-derived failure kinds, retained cancellation
-  content, always-visible cancelled regeneration, gated recovery retry, exact
-  copy, and absence of engineering copy.
+- Generation presentation covers starting, streaming, phase-derived failure
+  kinds, retained cancellation content, authoritative terminal replacement,
+  exact copy, and absence of engineering copy.
 - Composer tests cover the Send/Cancel union, exact cancel click count, draft
   preservation across action transitions, disabled plain Enter, Shift+Enter,
-  IME composition, and non-cancellable committing/reconciling phases.
+  IME composition, and terminal-state draft behavior.
 - Contextual generation tests cover Provider-ready and not-ready unanswered
   user leaves, controlled Settings opening, readiness after save without
   automatic generation, and absence for answered/assistant/archived/transient

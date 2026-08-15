@@ -54,8 +54,7 @@ function resolveAssistantRegenerationTarget(
     state.conversationId === null ||
     state.isArchived ||
     state.status !== "ready" ||
-    (state.generation.phase !== "idle" &&
-      state.generation.phase !== "completed")
+    state.generation.phase !== "idle"
   ) {
     return null
   }
@@ -167,17 +166,6 @@ export function ConversationWorkspace({
           phase: "streaming" as const,
           content: generation.content,
         }
-      case "committing":
-        return {
-          phase: "committing" as const,
-          content: generation.content,
-        }
-      case "reconciling":
-        return {
-          phase: "reconciling" as const,
-          content: generation.content,
-          needsUserAction: generation.needsUserAction,
-        }
       case "failed":
         return generation.failureKind === "generation"
           ? {
@@ -195,7 +183,6 @@ export function ConversationWorkspace({
           content: generation.content,
         }
       case "idle":
-      case "completed":
         return null
     }
   })()
@@ -551,7 +538,6 @@ export function ConversationWorkspace({
               }
               transientGeneration={transientGeneration}
               onRegenerate={controller.generate}
-              onRetryReconciliation={controller.retryReconciliation}
               userGenerationAction={userGenerationAction}
               assistantRegenerationAction={assistantRegenerationAction}
             />

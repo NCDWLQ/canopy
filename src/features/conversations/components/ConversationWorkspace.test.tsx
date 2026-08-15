@@ -166,7 +166,6 @@ function createMockProviderClient() {
     cancelGeneration: vi
       .fn<ProviderClient["cancelGeneration"]>()
       .mockResolvedValue({ accepted: true }),
-    commitGeneration: vi.fn<ProviderClient["commitGeneration"]>(),
   } satisfies ProviderClient
 }
 
@@ -703,10 +702,19 @@ describe("ConversationWorkspace", () => {
   it("renders one transient response and merges only the authoritative completion", async () => {
     const user = userEvent.setup()
     const generationId = "11111111-1111-4111-8111-111111111111"
-    const commitToken = "22222222-2222-4222-8222-222222222222"
     const visibleStreamedContent = "WORKSPACE_STREAM_SENTINEL"
     const streamedContent = `## ${visibleStreamedContent}`
     let onEvent: ((event: GenerationEventView) => void) | undefined
+    let completeGeneration:
+      | ((
+          value: Awaited<ReturnType<ProviderClient["generateFromActivePath"]>>,
+        ) => void)
+      | undefined
+    const generationResult = new Promise<
+      Awaited<ReturnType<ProviderClient["generateFromActivePath"]>>
+    >((resolve) => {
+      completeGeneration = resolve
+    })
     providerClient.loadProviderProfile.mockReset()
     providerClient.loadProviderProfile.mockResolvedValue({
       baseEndpoint: "http://127.0.0.1:7788/v1",
@@ -717,10 +725,9 @@ describe("ConversationWorkspace", () => {
     providerClient.generateFromActivePath.mockImplementation(
       (_conversationId, _activeNodeId, callback) => {
         onEvent = callback
-        return Promise.resolve({ generationId })
+        return generationResult
       },
     )
-    providerClient.commitGeneration.mockResolvedValue({ accepted: true })
     await useConversationStore
       .getState()
       .loadConversation(client, root.conversationId)
@@ -778,16 +785,7 @@ describe("ConversationWorkspace", () => {
       metadata: null,
     }
     act(() => {
-      onEvent!({ type: "ready_to_commit", generationId, commitToken })
-    })
-    await waitFor(() => {
-      expect(providerClient.commitGeneration).toHaveBeenCalledWith(
-        generationId,
-        commitToken,
-      )
-    })
-    act(() => {
-      onEvent!({ type: "completed", generationId, node: completed })
+      completeGeneration?.({ type: "completed", generationId, node: completed })
     })
 
     await waitFor(() => {
@@ -806,7 +804,6 @@ describe("ConversationWorkspace", () => {
     expect(useConversationStore.getState().fullNodes[completed.id]).toEqual(
       completed,
     )
-    expect(document.body).not.toHaveTextContent(commitToken)
   })
 
   it("projects every terminal phase through the ordinary assistant message surface", async () => {
@@ -824,8 +821,6 @@ describe("ConversationWorkspace", () => {
       message: "Internal recovery detail that must stay hidden.",
       retryable: true,
     }
-    const retryLoad = new Promise<ConversationTreeView>(() => undefined)
-
     providerClient.loadProviderProfile.mockReset()
     providerClient.loadProviderProfile.mockResolvedValue({
       baseEndpoint: "http://127.0.0.1:7788/v1",
@@ -865,30 +860,6 @@ describe("ConversationWorkspace", () => {
 
     act(() => {
       useConversationStore.setState({
-        generation: { ...run, phase: "committing", content: "FULL_REPLY" },
-      })
-    })
-    expect(within(pane).getByText("FULL_REPLY")).toBeVisible()
-    expect(within(pane).queryByRole("status")).not.toBeInTheDocument()
-
-    act(() => {
-      useConversationStore.setState({
-        generation: {
-          ...run,
-          phase: "reconciling",
-          content: "FULL_REPLY",
-          error: recoveryError,
-          needsUserAction: false,
-        },
-      })
-    })
-    expect(within(pane).getByText("正在恢复这条回复…")).toBeVisible()
-    expect(
-      within(pane).queryByRole("button", { name: "重试恢复" }),
-    ).not.toBeInTheDocument()
-
-    act(() => {
-      useConversationStore.setState({
         generation: {
           phase: "failed",
           runId: run.runId,
@@ -924,8 +895,8 @@ describe("ConversationWorkspace", () => {
     act(() => {
       useConversationStore.setState({
         generation: {
+          ...run,
           phase: "cancelled",
-          runId: run.runId,
           content: "PARTIAL_REPLY",
         },
       })
@@ -933,27 +904,6 @@ describe("ConversationWorkspace", () => {
     expect(within(pane).getByText("PARTIAL_REPLY")).toBeVisible()
     expect(within(pane).getByText("回复已停止")).toBeVisible()
     expect(within(pane).getByRole("button", { name: "重新生成" })).toBeEnabled()
-
-    client.loadConversationTree.mockClear()
-    client.loadConversationTree.mockReturnValueOnce(retryLoad)
-    act(() => {
-      useConversationStore.setState({
-        generation: {
-          ...run,
-          phase: "reconciling",
-          content: "FULL_REPLY",
-          error: recoveryError,
-          needsUserAction: true,
-        },
-      })
-    })
-    await user.click(within(pane).getByRole("button", { name: "重试恢复" }))
-    expect(client.loadConversationTree).toHaveBeenCalledWith(
-      root.conversationId,
-    )
-    expect(
-      within(pane).queryByRole("button", { name: "重试恢复" }),
-    ).not.toBeInTheDocument()
 
     expect(pane).not.toHaveTextContent(recoveryError.message)
     expect(pane).not.toHaveTextContent("Not saved")
@@ -1010,7 +960,7 @@ describe("ConversationWorkspace", () => {
     providerClient.generateFromActivePath.mockImplementation(
       (_conversationId, _activeNodeId, callback) => {
         onEvent = callback
-        return Promise.resolve({ generationId })
+        return new Promise(() => undefined)
       },
     )
     providerClient.cancelGeneration.mockResolvedValue({ accepted: true })
@@ -1102,7 +1052,7 @@ describe("ConversationWorkspace", () => {
     expect(providerClient.generateFromActivePath).not.toHaveBeenCalled()
   })
 
-  it("keeps Composer draft editable during streaming/reconciling/cancelled while Send is gated by assistant leaf", async () => {
+  it("keeps Composer draft editable during streaming, persistence failure, and cancellation while Send is gated by assistant leaf", async () => {
     const user = userEvent.setup()
     const run = {
       runId: 99,
@@ -1139,30 +1089,17 @@ describe("ConversationWorkspace", () => {
     await user.type(composer, "MY_PERSISTENT_DRAFT")
     expect(composer).toHaveValue("MY_PERSISTENT_DRAFT")
 
-    // 2. During committing: textarea editable, Cancel absent, Send disabled
-    act(() => {
-      useConversationStore.setState({
-        generation: { ...run, phase: "committing", content: "FULL_TEXT" },
-      })
-    })
-    expect(composer).toBeEnabled()
-    expect(composer).toHaveValue("MY_PERSISTENT_DRAFT")
-    expect(
-      screen.queryByRole("button", { name: "取消生成" }),
-    ).not.toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "发送消息" })).toBeDisabled()
-
-    // 3. During reconciling: textarea editable, Cancel absent, Send disabled, draft editable
+    // 2. After persistence failure: textarea editable, Cancel absent, Send disabled
     act(() => {
       useConversationStore.setState({
         generation: {
-          ...run,
-          phase: "reconciling",
+          phase: "failed",
+          runId: run.runId,
+          failureKind: "persistence",
           content: "FULL_TEXT",
-          needsUserAction: true,
           error: {
-            code: "internal",
-            message: "Reconciling",
+            code: "database_unavailable",
+            message: "Unable to save reply.",
             retryable: true,
           },
         },
@@ -1174,10 +1111,11 @@ describe("ConversationWorkspace", () => {
       screen.queryByRole("button", { name: "取消生成" }),
     ).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "发送消息" })).toBeDisabled()
+
     await user.type(composer, "_APPEND")
     expect(composer).toHaveValue("MY_PERSISTENT_DRAFT_APPEND")
 
-    // 4. During cancelled: textarea editable, Cancel absent, Send disabled
+    // 3. During cancelled: textarea editable, Cancel absent, Send disabled
     act(() => {
       useConversationStore.setState({
         generation: { ...run, phase: "cancelled", content: "PARTIAL" },
@@ -1276,6 +1214,9 @@ describe("ConversationWorkspace", () => {
         generation: {
           phase: "cancelled",
           runId: 101,
+          conversationId: root.conversationId,
+          parentNodeId: right.id,
+          generationId: "transient-gen-id",
           content: "CANCELLED_STREAM",
         },
       })
@@ -1291,8 +1232,6 @@ describe("ConversationWorkspace", () => {
 
   it("renders durable '重新生成' on final assistant node, selects user parent and triggers generateFromActivePath with parent ID on click while preserving old assistant and draft", async () => {
     const user = userEvent.setup()
-    const generationId = "33333333-3333-4333-8333-333333333333"
-
     providerClient.loadProviderProfile.mockResolvedValue({
       baseEndpoint: "http://127.0.0.1:7788/v1",
       model: "fixture-model",
@@ -1300,7 +1239,7 @@ describe("ConversationWorkspace", () => {
       updatedAt: 10,
     })
     providerClient.generateFromActivePath.mockReturnValue(
-      Promise.resolve({ generationId }),
+      new Promise(() => undefined),
     )
 
     await useConversationStore
@@ -1519,6 +1458,9 @@ describe("ConversationWorkspace", () => {
         generation: {
           phase: "cancelled",
           runId: 203,
+          conversationId: root.conversationId,
+          parentNodeId: root.id,
+          generationId: "gen-cancelled",
           content: "CANCELLED_RECOVERY_CONTENT",
         },
       })

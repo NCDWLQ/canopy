@@ -2,6 +2,7 @@ import { Channel } from "@tauri-apps/api/core"
 
 import type {
   GenerationEventView,
+  GenerationTerminalView,
   ProviderProfileView,
   SaveProviderProfileInput,
 } from "@/features/providers/types"
@@ -17,17 +18,16 @@ import {
 import {
   cancelGenerationRequestSchema,
   cancelGenerationResultSchema,
-  commitGenerationRequestSchema,
-  commitGenerationResultSchema,
   deleteProviderProfileResultSchema,
   emptyProviderRequestSchema,
   generateFromActivePathRequestSchema,
   generationEventDtoSchema,
   generationIdProbeSchema,
-  generationStartResultSchema,
+  generationTerminalDtoSchema,
   providerProfileDtoSchema,
   saveProviderProfileRequestSchema,
   type GenerationEventDto,
+  type GenerationTerminalDto,
   type ProviderProfileDto,
 } from "./provider-schemas"
 
@@ -37,7 +37,6 @@ export const PROVIDER_COMMANDS = {
   deleteProviderProfile: "delete_provider_profile",
   generateFromActivePath: "generate_from_active_path",
   cancelGeneration: "cancel_generation",
-  commitGeneration: "commit_generation",
 } as const
 
 export type ChannelLike = object
@@ -53,6 +52,22 @@ const defaultChannelFactory: ChannelFactory = {
 }
 
 export type ProviderClient = ReturnType<typeof createProviderClient>
+
+export class GenerationBridgeError extends ConversationCommandError {
+  readonly generationId: string
+
+  constructor(generationId: string) {
+    super(internalError())
+    this.name = "GenerationBridgeError"
+    this.generationId = generationId
+  }
+}
+
+export function generationIdFromBridgeError(
+  error: unknown,
+): string | undefined {
+  return error instanceof GenerationBridgeError ? error.generationId : undefined
+}
 
 const MAX_GENERATED_CONTENT_BYTES = 1024 * 1024
 
@@ -105,7 +120,7 @@ export function createProviderClient(
       conversationId: string,
       activeNodeId: string,
       onEvent: (event: GenerationEventView) => void,
-    ): Promise<{ generationId: string }> {
+    ): Promise<GenerationTerminalView> {
       const request = generateFromActivePathRequestSchema.safeParse({
         conversation_id: conversationId,
         active_node_id: activeNodeId,
@@ -114,70 +129,63 @@ export function createProviderClient(
 
       let generationId: string | undefined
       let startedModel: string | undefined
-      let streamedContent = ""
       let streamedBytes = 0
-      let phase: "waiting" | "streaming" | "awaiting_commit" | "terminal" =
-        "waiting"
-      const failClosed = (value: unknown) => {
-        if (phase === "terminal") return
-        const rawGenerationId = readGenerationId(value)
-        const cancellationId = generationId ?? rawGenerationId
-        phase = "terminal"
-        if (cancellationId !== undefined) {
-          void requestCancellation(transport, cancellationId)
-        }
-        onEvent({
-          type: "failed",
-          ...(cancellationId === undefined
-            ? {}
-            : { generationId: cancellationId }),
-          error: internalError(),
-        })
+      let phase: "waiting" | "streaming" | "terminal" = "waiting"
+      let channelFailure: ConversationCommandError | undefined
+      let cancellationRequested = false
+
+      const cancelKnownGeneration = (candidate?: string) => {
+        const cancellationId = generationId ?? candidate
+        if (cancellationId === undefined || cancellationRequested) return
+        cancellationRequested = true
+        void requestCancellation(transport, cancellationId)
       }
+
+      const failClosed = (candidate?: string) => {
+        if (phase === "terminal") return
+        const failureGenerationId = generationId ?? candidate
+        phase = "terminal"
+        channelFailure =
+          failureGenerationId === undefined
+            ? internalError()
+            : new GenerationBridgeError(failureGenerationId)
+        cancelKnownGeneration(candidate)
+      }
+
       const onMessage = (value: unknown) => {
+        if (phase === "terminal") return
         const parsed = generationEventDtoSchema.safeParse(value)
         if (
           !parsed.success ||
-          !isValidTransition(
+          !isValidEventTransition(
             parsed.data,
             phase,
             generationId,
             conversationId,
             activeNodeId,
-            startedModel,
-            streamedContent,
           )
         ) {
-          failClosed(value)
+          failClosed(parsed.success ? parsed.data.generation_id : undefined)
           return
         }
         if (parsed.data.type === "started") {
           generationId = parsed.data.generation_id
           startedModel = parsed.data.model
           phase = "streaming"
-        } else if (parsed.data.type === "delta") {
+        } else {
           const deltaBytes = new TextEncoder().encode(
             parsed.data.content,
           ).byteLength
           if (streamedBytes + deltaBytes > MAX_GENERATED_CONTENT_BYTES) {
-            failClosed(value)
+            failClosed()
             return
           }
           streamedBytes += deltaBytes
-          streamedContent += parsed.data.content
-        } else if (parsed.data.type === "ready_to_commit") {
-          phase = "awaiting_commit"
-        } else if (
-          parsed.data.type === "completed" ||
-          parsed.data.type === "failed" ||
-          parsed.data.type === "cancelled"
-        ) {
-          phase = "terminal"
         }
         onEvent(mapGenerationEvent(parsed.data))
       }
-      const onEventChannel = channelFactory.create(onMessage)
 
+      const onEventChannel = channelFactory.create(onMessage)
       let value: unknown
       try {
         value = await transport.invoke(
@@ -188,23 +196,31 @@ export function createProviderClient(
           },
         )
       } catch (error: unknown) {
-        if (generationId !== undefined) failClosed(error)
-        throw normalizeCommandError(error)
+        phase = "terminal"
+        cancelKnownGeneration()
+        throw channelFailure ?? normalizeCommandError(error)
       }
-      const result = generationStartResultSchema.safeParse(value)
-      if (!result.success) {
-        failClosed(value)
-        throw internalError()
-      }
+
+      if (channelFailure !== undefined) throw channelFailure
+      const result = generationTerminalDtoSchema.safeParse(value)
       if (
-        generationId !== undefined &&
-        generationId !== result.data.generation_id
+        !result.success ||
+        !isValidTerminal(
+          result.data,
+          generationId,
+          conversationId,
+          activeNodeId,
+          startedModel,
+        )
       ) {
-        failClosed(result.data)
-        throw internalError()
+        failClosed(
+          result.success ? result.data.generation_id : readGenerationId(value),
+        )
+        throw channelFailure ?? internalError()
       }
-      generationId = result.data.generation_id
-      return { generationId }
+
+      phase = "terminal"
+      return mapGenerationTerminal(result.data)
     },
 
     async cancelGeneration(
@@ -216,20 +232,6 @@ export function createProviderClient(
         cancelGenerationRequestSchema,
         { generation_id: generationId },
         cancelGenerationResultSchema,
-        (value) => value,
-      )
-    },
-
-    async commitGeneration(
-      generationId: string,
-      commitToken: string,
-    ): Promise<{ accepted: boolean }> {
-      return providerCall(
-        transport,
-        PROVIDER_COMMANDS.commitGeneration,
-        commitGenerationRequestSchema,
-        { generation_id: generationId, commit_token: commitToken },
-        commitGenerationResultSchema,
         (value) => value,
       )
     },
@@ -274,18 +276,16 @@ async function requestCancellation(
       request: { generation_id: generationId },
     })
   } catch {
-    // The malformed event is already represented by one local terminal failure.
+    // The original protocol failure is already represented by the rejected call.
   }
 }
 
-function isValidTransition(
+function isValidEventTransition(
   event: GenerationEventDto,
-  phase: "waiting" | "streaming" | "awaiting_commit" | "terminal",
+  phase: "waiting" | "streaming" | "terminal",
   generationId: string | undefined,
   conversationId: string,
   activeNodeId: string,
-  startedModel: string | undefined,
-  streamedContent: string,
 ): boolean {
   if (phase === "terminal") return false
   if (event.type === "started") {
@@ -296,29 +296,29 @@ function isValidTransition(
       event.active_node_id === activeNodeId
     )
   }
-  if (
-    (phase !== "streaming" && phase !== "awaiting_commit") ||
-    event.generation_id !== generationId
-  ) {
+  return phase === "streaming" && event.generation_id === generationId
+}
+
+function isValidTerminal(
+  terminal: GenerationTerminalDto,
+  generationId: string | undefined,
+  conversationId: string,
+  activeNodeId: string,
+  startedModel: string | undefined,
+): boolean {
+  if (generationId !== undefined && terminal.generation_id !== generationId) {
     return false
   }
-  switch (event.type) {
-    case "delta":
-    case "ready_to_commit":
-      return phase === "streaming"
-    case "completed":
-      return (
-        phase === "awaiting_commit" &&
-        event.node.conversation_id === conversationId &&
-        event.node.parent_id === activeNodeId &&
-        event.node.role === "assistant" &&
-        event.node.model === startedModel &&
-        event.node.content === streamedContent
-      )
-    case "failed":
-    case "cancelled":
-      return true
-  }
+  if (terminal.type !== "completed") return true
+
+  const node = terminal.node
+  return (
+    node.conversation_id === conversationId &&
+    node.parent_id === activeNodeId &&
+    (startedModel === undefined || node.model === startedModel) &&
+    new TextEncoder().encode(node.content).byteLength <=
+      MAX_GENERATED_CONTENT_BYTES
+  )
 }
 
 function readGenerationId(value: unknown): string | undefined {
@@ -351,26 +351,28 @@ function mapGenerationEvent(dto: GenerationEventDto): GenerationEventView {
         generationId: dto.generation_id,
         content: dto.content,
       }
-    case "ready_to_commit":
-      return {
-        type: "ready_to_commit",
-        generationId: dto.generation_id,
-        commitToken: dto.commit_token,
-      }
+  }
+}
+
+function mapGenerationTerminal(
+  dto: GenerationTerminalDto,
+): GenerationTerminalView {
+  switch (dto.type) {
     case "completed":
       return {
         type: "completed",
         generationId: dto.generation_id,
         node: mapNode(dto.node),
       }
+    case "cancelled":
+      return { type: "cancelled", generationId: dto.generation_id }
     case "failed":
       return {
         type: "failed",
         generationId: dto.generation_id,
+        stage: dto.stage,
         error: new ConversationCommandError(dto.error),
       }
-    case "cancelled":
-      return { type: "cancelled", generationId: dto.generation_id }
   }
 }
 

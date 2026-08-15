@@ -50,7 +50,6 @@ describe("ConversationPane", () => {
         onEditAsBranch={vi.fn()}
         transientGeneration={null}
         onRegenerate={vi.fn()}
-        onRetryReconciliation={vi.fn()}
         userGenerationAction={{ kind: "generate", onSelect }}
       />,
     )
@@ -86,7 +85,6 @@ describe("ConversationPane", () => {
           content: "CANCELLED_PARTIAL_CONTENT",
         }}
         onRegenerate={onRegenerate}
-        onRetryReconciliation={vi.fn()}
       />,
     )
 
@@ -128,7 +126,6 @@ describe("ConversationPane", () => {
           failureKind: "generation",
         }}
         onRegenerate={onRegenerate}
-        onRetryReconciliation={vi.fn()}
       />,
     )
 
@@ -165,7 +162,6 @@ describe("ConversationPane", () => {
         onEditAsBranch={vi.fn()}
         transientGeneration={null}
         onRegenerate={vi.fn()}
-        onRetryReconciliation={vi.fn()}
         assistantRegenerationAction={{
           assistantNodeId: assistant2.id,
           onSelect,
@@ -205,7 +201,6 @@ describe("ConversationPane", () => {
       onCreateBranch: vi.fn(),
       onEditAsBranch: vi.fn(),
       onRegenerate: vi.fn(),
-      onRetryReconciliation: vi.fn(),
     }
     const { rerender } = render(
       <ConversationPane

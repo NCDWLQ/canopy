@@ -6,9 +6,9 @@
 
 The conversation feature owns a normalized Zustand projection of one loaded
 SQLite conversation plus one transient generation lifecycle. The provider
-feature owns a separate redacted-profile Zustand store. Neither store uses
-persist middleware; SQLite and the native credential store remain the durable
-sources of truth.
+feature owns a separate redacted-profile store. Neither store uses persist
+middleware; SQLite and the native credential store remain the durable sources
+of truth.
 
 ## State Categories
 
@@ -21,8 +21,8 @@ sources of truth.
 | Provider secrets | native/provider boundary | never persisted in Zustand or browser storage |
 
 Do not mirror every local input into Zustand. Promote state only when multiple
-feature components coordinate through it or when a stable action/selector owns
-a domain projection.
+feature components coordinate through it or when a stable action/selector owns a
+domain projection.
 
 ## Conversation Store Shape
 
@@ -50,16 +50,15 @@ decoded and projected before entering the store.
 
 - Actions describe user/domain intent: load a conversation, select a node,
   toggle expansion, append, create a branch, edit as a branch, and archive.
-- Persistence actions call the typed Tauri bridge, then reconcile the returned
+- Persistence actions call the typed Tauri bridge, then merge the returned
   authoritative DTO. They do not mutate durable history optimistically.
 - Selectors are pure, narrow, and exported from the store module.
 - Keep one owner for root-to-active projection. It must preserve order and
   exclude siblings; malformed state returns an explicit integrity state rather
   than falling back to all nodes.
 - Preserve object identity for unchanged nodes so narrow subscriptions remain
-  useful.
-- Use immutable updates. Historical node content, parent IDs, and conversation
-  IDs are never changed in client state.
+  useful. Use immutable updates; historical node content, parent IDs, and
+  conversation IDs are never changed in client state.
 
 ## Durable State and Rehydration
 
@@ -67,145 +66,106 @@ decoded and projected before entering the store.
   records. Reload durable state from SQLite through typed commands.
 - Do not issue SQL from the webview even though the Tauri SQL plugin is
   installed.
-- On startup, discover summaries through the typed client, prefer the first
-  unarchived summary in durable activity order (falling back to the first
-  archived summary), and keep discovery `loading` until its tree is installed.
 - Use a monotonic request epoch so StrictMode initialization and stale
   list/tree responses cannot replace a later selection or newly created tree.
-- A loaded tree selects the greatest leaf by `(createdAt, id)`; this restores a
-  deterministic latest path without claiming to persist the prior UI cursor.
+- A loaded tree selects a deterministic latest leaf by `(createdAt, id)`.
 - A failed load preserves the last safe visible projection when possible and
   records a normalized `UiError`; it never substitutes another branch.
-- After a successful branch/edit command, merge the returned node and select
-  it only according to the feature action contract.
+- After a successful branch/edit command, merge the returned node and select it
+  only according to the feature action contract.
 
 ## Blank Draft and Mutation Completion Ownership
 
 - `isCreatingConversation` is store-owned transient workspace state because
   History and the main pane must agree on whether the preserved tree is being
   displayed. Entering it increments the request epoch and preserves the loaded
-  conversation ID, root, active node, normalized maps, expansion, generation
-  terminal state, and history summaries.
+  projection and history summaries.
 - A blank draft has no durable conversation or fabricated root. Its first
   Composer submit derives a local title and calls the existing atomic
   conversation-plus-user-root command. Successful creation installs the
-  returned tree and exits creation mode; failure retains creation mode, the
-  complete Composer draft, and the previous safe projection for retry.
-- Deferred append, branch, and edit-as-branch actions each increment and capture
-  a unique request epoch together with the conversation, command target, and
-  active selection. Completion rereads the live store, rejects a changed
-  epoch/conversation, and merges backend authority into the live normalized
-  tree. The new node is selected only when the captured active selection is
-  still current; otherwise the newer selection is preserved.
-- Stale failures follow the same epoch/conversation ownership check. They must
-  not replace the status or error owned by a newer load or blank-draft
-  transition.
-
-Required regressions cover entering blank mode without changing projection
-identity, creation failure and retry, navigation during each deferred mutation,
-and both stale success and stale failure after an epoch change. The append
-controller regression must also prove that the durable returned node is merged
-without starting generation after navigation.
+  returned tree; failure retains the draft and previous safe projection.
+- Deferred append, branch, and edit-as-branch actions capture a unique request
+  epoch with the conversation, command target, and active selection. Completion
+  rereads the live store, rejects a changed epoch/conversation, and merges
+  backend authority into the live normalized tree.
+- Stale failures must not replace the status or error owned by a newer load or
+  blank-draft transition.
 
 ## Scenario: Provider Generation Workspace Projection
 
 ### 1. Scope / Trigger
 
 Use this contract when a workspace action consumes the typed provider client,
-renders streamed assistant content, automatically acknowledges
-`ready_to_commit`, starts generation after authoritative user-message
-persistence, cancels generation during navigation, or reconciles an ambiguous
-acknowledged commit.
+renders streamed assistant content, starts generation after authoritative
+user-message persistence, or cancels generation during navigation/unmount.
 
-### 2. Signatures
+### 2. State Shape
 
-The provider store accepts an injected client but stores only redacted state:
+The conversation store has a closed generation union:
 
 ```ts
-loadProfile(client: ProviderClient): Promise<void>
-saveProfile(client: ProviderClient, input: SaveProviderProfileInput): Promise<void>
-deleteProfile(client: ProviderClient): Promise<void>
+type GenerationState =
+  | { phase: "idle" }
+  | { phase: "starting"; runId: string; target: GenerationTarget }
+  | { phase: "streaming"; runId: string; target: GenerationTarget; generationId: string; model: string; content: string }
+  | { phase: "cancelled"; runId: string; target: GenerationTarget; generationId?: string; content: string }
+  | { phase: "failed"; runId: string; target: GenerationTarget; kind: "generation" | "persistence"; error: UiError; content?: string }
 ```
 
-The conversation store exposes a closed `GenerationState` with `idle`,
-`starting`, `streaming`, `committing`, `reconciling`, `completed`, `failed`,
-and `cancelled` phases. The workspace controller exposes `generate`, `cancel`,
-mutation wrappers, and `retryReconciliation`; its default terminal-delivery
-grace period is 1,500 milliseconds and is injectable in tests.
-
-Terminal state carries only transient presentation facts:
-
-- `failed` is phase-derived as `generation` or `persistence`; generation
-  failure drops partial output, while persistence failure retains the exact
-  completed stream content.
-- `cancelled` retains content received before cancellation.
-- `reconciling.needsUserAction` is false during automatic reload and becomes
-  true only when reload fails or cannot prove one exact completion.
+There are no stored finalization, retry-window, or duplicate terminal phases.
+Streamed content is transient. Only the terminal `completed.node` or a fresh
+authoritative tree reload can change normalized durable records.
 
 ### 3. Contracts
 
 - Provider profile state contains only `ProviderProfileView`, a safe `UiError`,
-  and request status. An API-key field may exist in local dialog state while
-  the user edits it, but it is cleared on close and after every save attempt.
-  The key may pass through the one-way save action argument; it never becomes a
-  Zustand field, response, error, log, or browser-persisted value.
-- Generation deltas live only in `GenerationState.content`. They never enter
-  `nodesById`, `fullNodes`, the durable active path, or the outline.
+  and request status. API-key text may exist in local dialog state while
+  editing, but it is cleared on close and after every save attempt.
+- Deltas live only in `GenerationState.content`. They never enter
+  `nodesById`, the active path, or the outline.
 - Creating a conversation or appending a user message starts generation only
-  after the corresponding typed persistence call returns authoritative data and
-  the store accepts that exact conversation/user node as the current target.
-  Capture the target IDs from that persistence result, then re-read the live
-  conversation and provider stores; never infer success from mutable post-await
-  state or a changed object reference. A replaced target, unmounted controller,
-  unavailable provider, unsafe path, or active run suppresses auto-start while
-  leaving the persisted user message intact. Manual Generate remains the retry
-  path.
+  after typed persistence returns authoritative data and the store accepts that
+  exact conversation/user node as the current target. A replaced target,
+  unmounted controller, unavailable provider, or unsafe path suppresses
+  auto-start while leaving the persisted user message intact.
 - A monotonically changing UI `runId` rejects stale callbacks. Conversation,
-  selected user parent, generation ID, model, and current safe path must still
-  match before `ready_to_commit` changes the phase to `committing`.
-- The commit token remains callback-local and is passed directly to
-  `commitGeneration` exactly once. It is never stored, rendered, logged, or
-  copied into a prop.
-- Only an exact `completed.node` or an authoritative
-  `loadConversationTree` result may change durable normalized records. Direct
-  completion merge verifies conversation, user parent, assistant role, model,
-  content, unique ID, writability, and complete tree integrity.
-- A generation command result may resolve after Channel events. If the Channel
-  already recorded the same generation and advanced the current run, the late
-  result is accepted and must not trigger cancellation. A cancelled, replaced,
-  stale, or mismatched run requests exact-ID cancellation.
-- A thrown commit call is ambiguous: the backend may already be committing.
-  Keep the store in silent `committing` and accept exact terminal events during
-  the 1,500 millisecond grace period, then enter `reconciling` and automatically
-  reload SQLite. If the first reload fails or has no matching durable result,
-  set `needsUserAction`, remain `reconciling`, and continue accepting exact
-  `completed`; never infer failure or fabricate a node.
-- Classify a valid pre-ready `failed` event as generation failure and a valid
-  post-ready `failed` event or `{ accepted: false }` as persistence failure.
-  Branch on the prior phase, never the error message. There is no save-retry
-  protocol, so both failures recover through a new generation run.
-- User cancellation is allowed only while starting/streaming. A valid exact
-  backend `cancelled` terminal remains legal after ready and must terminalize
-  committing/reconciling without granting the user post-ack rollback.
+  selected user parent, generation ID, model, and current path must still match
+  before accepting events or terminal results.
+- The controller may receive the terminal invoke result before delayed Channel
+  callbacks. It accepts a result for the exact current run and ignores late
+  callbacks after terminalization.
+- A persistence-stage terminal result remains a persistence failure even when
+  it wins the result-before-`started` callback race; its retained content is
+  empty until any streamed content has been accepted.
+- `starting` and `streaming` are the only user-cancellable phases. Exact
+  backend `cancelled` terminal results are accepted even after the user has
+  clicked Cancel and retain received content.
+- A valid pre-finalization `failed` result is a generation failure and drops
+  partial output. A persistence failure retains the complete streamed content.
+  Branch on the validated terminal stage, never an error message.
+- A completed node is merged only after identity, role, parent, model,
+  writability, uniqueness, and tree-integrity checks. If it cannot be merged,
+  reload the conversation once; never guess a node from transient content.
+- If an invoke rejects after a known generation has started, request exact
+  cancellation and perform at most one authoritative reload. If the reload
+  cannot prove a result, expose a normal safe generation/persistence failure.
 
 ### 4. Validation & Error Matrix
 
 | Condition | Store/controller result |
 |---|---|
-| Provider missing/loading/error | Generation disabled; local conversation actions retain their normal capability |
+| Provider missing/loading/error | Generation disabled; ordinary conversation actions remain available |
 | Archived conversation, unsafe path, non-user selection, or active run | Generation rejected locally |
-| Create/append returns and the exact authoritative user target remains active | Start one generation from that target |
-| Persistence fails, target is replaced, controller unmounts, or provider becomes unavailable while awaiting | Keep any authoritative persisted state; do not auto-start generation |
-| Navigation/unmount before acknowledgement | Invalidate the run, discard transient content, best-effort exact cancel when the ID is known |
-| Exact ready for a current writable user path | Enter committing, pass the callback-local token once |
-| Commit returns `accepted: false` | Persistence-failed state retaining complete transient content; regenerate is the real recovery; no durable node |
-| Valid failed before ready | Generation-failed state without partial output; regenerate; no durable node |
-| Valid failed after ready | Persistence-failed state retaining complete content; regenerate; no durable node |
-| Exact backend cancelled before or after ready | Cancelled projection retaining available content; no durable node |
-| Exact completed node matches every invariant | Merge authoritative node; preserve unrelated branches/history |
-| Completed node drifts or post-ack delivery is ambiguous | Reload SQLite authority; do not merge transient content |
-| Reconciliation load is in progress | Preserve the reply and show recovery without a user action |
-| Reconciliation load fails or sees no provable result | Preserve the last safe tree/reply and expose manual recovery retry |
+| Exact persisted user target remains active | Start one generation from that target |
+| Persistence fails or target is replaced while awaiting | Keep authoritative persisted state; do not auto-start |
+| Navigation/unmount while running | Invalidate the run and best-effort exact-cancel the known ID |
+| Valid delta for the current run | Update transient content only |
+| Valid generation failure | Failed generation state without partial output |
+| Valid persistence failure | Failed persistence state retaining complete content |
+| Valid exact cancellation | Cancelled state retaining available content; no durable node |
+| Exact completed node matches invariants | Merge authoritative node and return to idle |
+| Completed node drifts or invoke delivery is ambiguous | Reload once; do not merge transient content |
+| Reload cannot prove one result | Safe failed state with regeneration available |
 
 ### 5. Good / Base / Bad Cases
 
@@ -213,61 +173,53 @@ Terminal state carries only transient presentation facts:
   path, transient content appears outside the tree, and the exact completed
   assistant becomes one new child without changing its sibling.
 - **Base**: no provider profile disables Generate but still permits creating,
-  appending, loading, navigating, and reading local conversations; saved user
-  messages remain available without automatic generation.
-- **Bad**: inserting deltas optimistically, saving a commit token in Zustand,
-  starting generation from whichever node happens to be active after an awaited
-  persistence call, cancelling because the start promise resolved after an
-  exact completed event, or declaring failure because an early reconciliation
-  reload did not yet observe the commit.
+  appending, loading, navigating, and reading local conversations.
+- **Bad**: inserting deltas optimistically, starting from a mutable post-await
+  selection, cancelling because a promise resolves after an exact result, or
+  inventing a node when reload does not prove completion.
 
 ### 6. Tests Required
 
-- Assert pre-ready deltas change transient content while both normalized maps
-  remain unchanged; assert the sibling sentinel is absent from the request and
-  rendered path.
-- For create and append, assert persistence resolves before generation, the
-  exact returned conversation/user IDs are used, and generation occurs once.
-  Cover persistence failure, invalid authoritative data, provider changes while
-  awaiting, target replacement, unmount, an already-active run, and manual retry
-  after a generation-start failure.
-- Cover started-before-result and result-before-started, completed-before-
-  commit-result, completed-before-start-result, cancel-before-start, stale
-  ready, commit rejection, commit transport ambiguity, phase-derived failed,
-  exact backend cancellation after ready, and exact completion/failure before,
-  during, and after reconciliation. Fake-timer tests assert nothing is visible
-  or reloaded before 1,500 milliseconds and cleanup cannot fire twice.
+- Assert pre-terminal deltas change transient content while normalized maps stay
+  unchanged; assert inactive sibling content is absent from the active path.
+- For create and append, assert persistence resolves before generation, exact
+  returned conversation/user IDs are used, and generation occurs once.
+- Cover result-before-callback, persistence failure before `started`,
+  cancel-before-started, stale events, terminal stage classification, exact
+  cancellation, invoke rejection, one-shot reload, target replacement, unmount,
+  provider changes, and manual regeneration.
 - Drift each completed-node invariant independently and assert no direct merge.
-- Assert API-key input and commit token are absent from store snapshots, DOM
-  after submission/ready handling, logs, and browser persistence.
-- Run the typed bridge tests, store/controller/component tests, production
-  frontend build, Rust generation tests, and Tauri debug build together for
-  integration changes.
+- Assert API-key input is absent from store snapshots, logs, and browser
+  persistence. Run bridge, store/controller/component, build, and Rust tests.
 
 ### 7. Wrong vs Correct
 
 #### Wrong
 
 ```ts
-set({ nodesById: addAssistantFromDeltas(content), commitToken })
-await providerClient.commitGeneration(generationId, commitToken)
+set({ nodesById: addAssistantFromDeltas(content) })
+await providerClient.generateFromActivePath(conversationId, activeNodeId, onEvent)
 ```
 
 #### Correct
 
 ```ts
-set({ generation: { ...currentRun, phase: "committing", content } })
-const result = await providerClient.commitGeneration(generationId, event.commitToken)
-// Merge only a later exact completed.node, or replace from a SQLite reload.
+set({ generation: { ...currentRun, phase: "streaming", content } })
+const terminal = await providerClient.generateFromActivePath(
+  conversationId,
+  activeNodeId,
+  onEvent,
+)
+// Merge only terminal.node after all invariants pass, or reload authority once.
 ```
 
-Transient presentation is accepted before acknowledgement, but only backend
-authority changes durable conversation records.
+Transient presentation is allowed before terminal authority, but only the
+backend result or a durable reload changes conversation records.
 
 ## Testing
 
 - Test store actions and selectors without React when possible.
-- Use stable IDs and explicit timestamps/order.
+- Use stable IDs and explicit timestamps.
 - Verify original inputs and unaffected nodes remain unchanged.
 - For every path-sensitive test, build two sibling branches and assert the
   inactive sentinel is absent.
@@ -283,9 +235,5 @@ authority changes durable conversation records.
 - Using one global store for unrelated provider-form and conversation-tree
   state.
 - Clearing valid visible state after a retryable command failure.
-- Treating a commit transport error as proof that acknowledgement was rejected.
-- Cancelling a current run merely because its command promise resolved after
-  the Channel already advanced or completed that exact generation.
-- Clearing a reconciliation timer for post-ready `cancelled` without accepting
-  that exact backend terminal, which leaves a committing run permanently stuck.
-- Offering “retry save” when the one-time commit capability has no replay API.
+- Treating an invoke transport error as proof that durable persistence failed;
+  use the one-shot authoritative reload when a generation may have started.

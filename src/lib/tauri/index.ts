@@ -13,7 +13,9 @@ export {
 
 export {
   PROVIDER_COMMANDS,
+  GenerationBridgeError,
   createProviderClient,
+  generationIdFromBridgeError,
   type ChannelFactory,
   type ChannelLike,
   type ProviderClient,

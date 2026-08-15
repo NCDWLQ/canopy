@@ -19,6 +19,7 @@ type ActiveGeneration = {
   conversationId: string
   parentNodeId: string
   generationId?: string
+  model?: string
 }
 
 export type GenerationState =
@@ -29,25 +30,7 @@ export type GenerationState =
       model: string
       content: string
     })
-  | (Required<ActiveGeneration> & {
-      phase: "committing"
-      model: string
-      content: string
-    })
-  | (Required<ActiveGeneration> & {
-      phase: "reconciling"
-      model: string
-      content: string
-      error: UiError
-      needsUserAction: boolean
-    })
-  | {
-      phase: "completed"
-      runId: number
-      conversationId: string
-      parentNodeId: string
-      nodeId: string
-    }
+  | (ActiveGeneration & { phase: "cancelled"; content: string })
   | {
       phase: "failed"
       runId: number
@@ -61,7 +44,6 @@ export type GenerationState =
       content: string
       error: UiError
     }
-  | { phase: "cancelled"; runId: number; content: string }
 
 export type ConversationTreeState = {
   isCreatingConversation: boolean
@@ -128,13 +110,11 @@ export type ConversationStore = ConversationTreeState & {
   archiveConversation: (client: ConversationClient) => Promise<void>
   clearError: () => void
   beginGeneration: () => number | null
-  recordGenerationId: (runId: number, generationId: string) => boolean
   acceptGenerationStarted: (
     runId: number,
     event: StartedGenerationEvent,
   ) => boolean
   appendGenerationDelta: (runId: number, event: DeltaGenerationEvent) => boolean
-  markGenerationCommitting: (runId: number, generationId: string) => boolean
   completeGeneration: (
     runId: number,
     generationId: string,
@@ -144,13 +124,12 @@ export type ConversationStore = ConversationTreeState & {
     runId: number,
     error: UiError,
     generationId?: string,
+    failureKind?: "generation" | "persistence",
   ) => boolean
+  failGenerationRecovery: (runId: number, error: UiError) => boolean
   cancelGenerationRun: (runId: number) => boolean
   acceptGenerationCancelled: (runId: number, generationId: string) => boolean
-  beginGenerationReconciliation: (runId: number, error: UiError) => boolean
-  retryGenerationReconciliation: (runId: number) => boolean
-  reconcileGeneration: (runId: number, tree: ConversationTreeView) => boolean
-  markGenerationReconciliationFailed: (runId: number, error: UiError) => boolean
+  recoverGeneration: (runId: number, tree: ConversationTreeView) => boolean
 }
 
 const TREE_INTEGRITY_ERROR: UiError = {
@@ -163,12 +142,6 @@ const INTERNAL_ERROR: UiError = {
   code: "internal",
   message: "发生意外错误。",
   retryable: false,
-}
-
-const RECONCILIATION_PENDING_ERROR: UiError = {
-  code: "internal",
-  message: "会话已重新加载，但尚未发现已保存的回复。",
-  retryable: true,
 }
 
 function emptyRecord<T>(): Record<string, T> {
@@ -370,7 +343,10 @@ function addAuthoritativeNode(
 
 function addAuthoritativeAssistantNode(
   state: ConversationTreeState,
-  generation: Extract<GenerationState, { phase: "committing" | "reconciling" }>,
+  generation: Extract<
+    GenerationState,
+    { phase: "starting" | "streaming" | "cancelled" }
+  >,
   node: ConversationNodeView,
 ): Partial<ConversationTreeState> | null {
   const parent = state.fullNodes[generation.parentNodeId]
@@ -380,8 +356,8 @@ function addAuthoritativeAssistantNode(
     state.activeNodeId !== generation.parentNodeId ||
     parent?.role !== "user" ||
     node.role !== "assistant" ||
-    node.model !== generation.model ||
-    node.content !== generation.content ||
+    (generation.model !== undefined && node.model !== generation.model) ||
+    node.model === undefined ||
     !hasValidTreeShape(state)
   ) {
     return null
@@ -559,20 +535,6 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
       return runId
     },
 
-    recordGenerationId: (runId, generationId) => {
-      const generation = get().generation
-      if (
-        generation.phase !== "starting" ||
-        generation.runId !== runId ||
-        (generation.generationId !== undefined &&
-          generation.generationId !== generationId)
-      ) {
-        return false
-      }
-      set({ generation: { ...generation, generationId } })
-      return true
-    },
-
     acceptGenerationStarted: (runId, event) => {
       const state = get()
       const generation = state.generation
@@ -625,52 +587,21 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
       return true
     },
 
-    markGenerationCommitting: (runId, generationId) => {
-      const state = get()
-      const generation = state.generation
-      const projection = selectActivePath(state)
-      if (
-        generation.phase !== "streaming" ||
-        generation.runId !== runId ||
-        generation.generationId !== generationId ||
-        state.conversationId !== generation.conversationId ||
-        state.activeNodeId !== generation.parentNodeId ||
-        state.isArchived ||
-        state.status !== "ready" ||
-        state.fullNodes[generation.parentNodeId]?.role !== "user" ||
-        projection.kind !== "ready" ||
-        projection.path.at(-1)?.id !== generation.parentNodeId
-      ) {
-        return false
-      }
-      set({ generation: { ...generation, phase: "committing" } })
-      return true
-    },
-
     completeGeneration: (runId, generationId, node) => {
       const state = get()
       const generation = state.generation
       if (
-        (generation.phase !== "committing" &&
-          generation.phase !== "reconciling") ||
+        (generation.phase !== "starting" &&
+          generation.phase !== "streaming" &&
+          generation.phase !== "cancelled") ||
         generation.runId !== runId ||
-        generation.generationId !== generationId
+        (generation.generationId !== undefined &&
+          generation.generationId !== generationId)
       ) {
         return false
       }
       const update = addAuthoritativeAssistantNode(state, generation, node)
-      if (update === null) {
-        set({
-          generation: {
-            phase: "failed",
-            runId,
-            failureKind: "persistence",
-            content: generation.content,
-            error: TREE_INTEGRITY_ERROR,
-          },
-        })
-        return false
-      }
+      if (update === null) return false
       set({
         ...update,
         history: updateSummaryActivity(
@@ -678,21 +609,22 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
           generation.conversationId,
           node.createdAt,
         ),
-        generation: {
-          phase: "completed",
-          runId,
-          conversationId: generation.conversationId,
-          parentNodeId: generation.parentNodeId,
-          nodeId: node.id,
-        },
+        generation: { phase: "idle" },
       })
       return true
     },
 
-    failGeneration: (runId, error, generationId) => {
+    failGeneration: (
+      runId,
+      error,
+      generationId,
+      failureKind = "generation",
+    ) => {
       const generation = get().generation
       if (
-        !isGenerationActive(generation) ||
+        (generation.phase !== "starting" &&
+          generation.phase !== "streaming" &&
+          generation.phase !== "cancelled") ||
         generation.runId !== runId ||
         (generationId !== undefined &&
           generation.generationId !== undefined &&
@@ -700,16 +632,17 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
       ) {
         return false
       }
-      if (
-        generation.phase === "committing" ||
-        generation.phase === "reconciling"
-      ) {
+      if (failureKind === "persistence") {
         set({
           generation: {
             phase: "failed",
             runId,
             failureKind: "persistence",
-            content: generation.content,
+            content:
+              generation.phase === "streaming" ||
+              generation.phase === "cancelled"
+                ? generation.content
+                : "",
             error,
           },
         })
@@ -726,20 +659,41 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
       return true
     },
 
-    cancelGenerationRun: (runId) => {
+    failGenerationRecovery: (runId, error) => {
       const generation = get().generation
       if (
-        !isGenerationActive(generation) ||
-        generation.runId !== runId ||
-        generation.phase === "committing" ||
-        generation.phase === "reconciling"
+        (generation.phase !== "starting" &&
+          generation.phase !== "streaming" &&
+          generation.phase !== "cancelled") ||
+        generation.runId !== runId
       ) {
         return false
       }
       set({
+        status: "error",
+        error,
+        generation:
+          generation.phase === "cancelled"
+            ? generation
+            : {
+                phase: "failed",
+                runId,
+                failureKind: "generation",
+                error,
+              },
+      })
+      return true
+    },
+
+    cancelGenerationRun: (runId) => {
+      const generation = get().generation
+      if (!isGenerationActive(generation) || generation.runId !== runId) {
+        return false
+      }
+      set({
         generation: {
+          ...generation,
           phase: "cancelled",
-          runId,
           content: generation.phase === "streaming" ? generation.content : "",
         },
       })
@@ -749,56 +703,32 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
     acceptGenerationCancelled: (runId, generationId) => {
       const generation = get().generation
       if (
-        !isGenerationActive(generation) ||
+        (generation.phase !== "starting" &&
+          generation.phase !== "streaming" &&
+          generation.phase !== "cancelled") ||
         generation.runId !== runId ||
-        generation.generationId !== generationId
+        (generation.generationId !== undefined &&
+          generation.generationId !== generationId)
       ) {
         return false
       }
       set({
         generation: {
+          ...generation,
           phase: "cancelled",
-          runId,
           content: generation.phase === "starting" ? "" : generation.content,
         },
       })
       return true
     },
 
-    beginGenerationReconciliation: (runId, error) => {
-      const generation = get().generation
-      if (generation.phase !== "committing" || generation.runId !== runId) {
-        return false
-      }
-      set({
-        generation: {
-          ...generation,
-          phase: "reconciling",
-          error,
-          needsUserAction: false,
-        },
-      })
-      return true
-    },
-
-    retryGenerationReconciliation: (runId) => {
-      const generation = get().generation
-      if (
-        generation.phase !== "reconciling" ||
-        generation.runId !== runId ||
-        !generation.needsUserAction
-      ) {
-        return false
-      }
-      set({ generation: { ...generation, needsUserAction: false } })
-      return true
-    },
-
-    reconcileGeneration: (runId, tree) => {
+    recoverGeneration: (runId, tree) => {
       const state = get()
       const generation = state.generation
       if (
-        generation.phase !== "reconciling" ||
+        (generation.phase !== "starting" &&
+          generation.phase !== "streaming" &&
+          generation.phase !== "cancelled") ||
         generation.runId !== runId ||
         tree.conversation.id !== generation.conversationId
       ) {
@@ -815,8 +745,8 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
           node.conversationId === generation.conversationId &&
           node.parentId === generation.parentNodeId &&
           node.role === "assistant" &&
-          node.model === generation.model &&
-          node.content === generation.content,
+          node.model !== undefined &&
+          (generation.model === undefined || node.model === generation.model),
       )
       const match = matches.length === 1 ? matches[0] : undefined
       const preservedActiveId =
@@ -841,33 +771,9 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
           generation.conversationId,
           summaryFromTree(tree).updatedAt,
         ),
-        generation:
-          match === undefined
-            ? {
-                ...generation,
-                error: RECONCILIATION_PENDING_ERROR,
-                needsUserAction: true,
-              }
-            : {
-                phase: "completed",
-                runId,
-                conversationId: generation.conversationId,
-                parentNodeId: generation.parentNodeId,
-                nodeId: match.id,
-              },
+        generation: match === undefined ? generation : { phase: "idle" },
       })
-      return true
-    },
-
-    markGenerationReconciliationFailed: (runId, error) => {
-      const generation = get().generation
-      if (generation.phase !== "reconciling" || generation.runId !== runId) {
-        return false
-      }
-      set({
-        generation: { ...generation, error, needsUserAction: true },
-      })
-      return true
+      return match !== undefined
     },
 
     clearError: () => {
@@ -1166,16 +1072,8 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
 
 export function isGenerationActive(
   generation: GenerationState,
-): generation is Extract<
-  GenerationState,
-  { phase: "starting" | "streaming" | "committing" | "reconciling" }
-> {
-  return (
-    generation.phase === "starting" ||
-    generation.phase === "streaming" ||
-    generation.phase === "committing" ||
-    generation.phase === "reconciling"
-  )
+): generation is Extract<GenerationState, { phase: "starting" | "streaming" }> {
+  return generation.phase === "starting" || generation.phase === "streaming"
 }
 
 function hasValidTreeShape(state: ConversationTreeState): boolean {

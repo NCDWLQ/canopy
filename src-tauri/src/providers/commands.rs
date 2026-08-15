@@ -13,7 +13,7 @@ use crate::{
 };
 
 use super::{
-    generation::{prepare_generation, GenerationOutcome},
+    generation::{prepare_generation, GenerationOutcome, GenerationStage},
     ApiKeyAction, GenerationRuntime, NativeCredentialStore, ProviderError, ProviderProfileInput,
     ProviderProfileService, RedactedProviderProfile,
 };
@@ -24,7 +24,6 @@ pub const PROVIDER_COMMAND_NAMES: &[&str] = &[
     "delete_provider_profile",
     "generate_from_active_path",
     "cancel_generation",
-    "commit_generation",
 ];
 
 #[derive(Deserialize, Serialize)]
@@ -79,20 +78,6 @@ pub struct CancelGenerationRequest {
     pub generation_id: String,
 }
 
-#[derive(Clone, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct CommitGenerationRequest {
-    pub generation_id: String,
-    pub commit_token: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct GenerationStartResult {
-    #[serde(deserialize_with = "deserialize_uuid_v4")]
-    pub generation_id: String,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct CancelGenerationResult {
@@ -101,11 +86,12 @@ pub struct CancelGenerationResult {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct CommitGenerationResult {
-    pub accepted: bool,
+pub enum GenerationFailureStage {
+    Generation,
+    Persistence,
 }
 
-#[derive(Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum GenerationEventDto {
     Started {
@@ -120,25 +106,25 @@ pub enum GenerationEventDto {
         generation_id: String,
         content: String,
     },
-    ReadyToCommit {
-        #[serde(deserialize_with = "deserialize_uuid_v4")]
-        generation_id: String,
-        #[serde(deserialize_with = "deserialize_uuid_v4")]
-        commit_token: String,
-    },
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+pub enum GenerationTerminalDto {
     Completed {
         #[serde(deserialize_with = "deserialize_uuid_v4")]
         generation_id: String,
         node: NodeDto,
     },
-    Failed {
-        #[serde(deserialize_with = "deserialize_uuid_v4")]
-        generation_id: String,
-        error: CommandError,
-    },
     Cancelled {
         #[serde(deserialize_with = "deserialize_uuid_v4")]
         generation_id: String,
+    },
+    Failed {
+        #[serde(deserialize_with = "deserialize_uuid_v4")]
+        generation_id: String,
+        stage: GenerationFailureStage,
+        error: CommandError,
     },
 }
 
@@ -223,7 +209,7 @@ pub async fn generate_from_active_path(
     on_event: Channel<GenerationEventDto>,
     instances: State<'_, DbInstances>,
     runtime: State<'_, GenerationRuntime>,
-) -> Result<GenerationStartResult, CommandError> {
+) -> Result<GenerationTerminalDto, CommandError> {
     validate_id("conversation_id", &request.conversation_id)?;
     validate_id("active_node_id", &request.active_node_id)?;
     let pool = managed_sqlite_pool(instances.inner())
@@ -242,67 +228,45 @@ pub async fn generate_from_active_path(
     .await
     .map_err(CommandError::from)?;
 
-    let result = GenerationStartResult {
-        generation_id: generation_id.clone(),
-    };
     let started = GenerationEventDto::Started {
         generation_id: generation_id.clone(),
         conversation_id: prepared.conversation_id().to_owned(),
         active_node_id: prepared.active_node_id().to_owned(),
         model: prepared.model().to_owned(),
     };
-    let (started_sender, started_receiver) = tokio::sync::oneshot::channel();
-    tauri::async_runtime::spawn(async move {
-        if on_event.send(started).is_err() {
-            let _ignored_receiver = started_sender.send(false);
-            return;
-        }
-        let _ignored_receiver = started_sender.send(true);
-
-        let delta_channel = on_event.clone();
-        let ready_channel = on_event.clone();
-        let delta_generation_id = generation_id.clone();
-        let ready_generation_id = generation_id.clone();
-        let outcome = prepared
-            .run(
-                move |content| {
-                    delta_channel
-                        .send(GenerationEventDto::Delta {
-                            generation_id: delta_generation_id.clone(),
-                            content: content.to_owned(),
-                        })
-                        .map_err(|_| ProviderError::Cancelled)
-                },
-                move |commit_token| {
-                    ready_channel
-                        .send(GenerationEventDto::ReadyToCommit {
-                            generation_id: ready_generation_id,
-                            commit_token: commit_token.to_owned(),
-                        })
-                        .map_err(|_| ProviderError::Cancelled)
-                },
-            )
-            .await;
-
-        let terminal = match outcome {
-            GenerationOutcome::Completed(node) => GenerationEventDto::Completed {
-                generation_id: generation_id.clone(),
-                node: node.into(),
-            },
-            GenerationOutcome::Failed(error) => GenerationEventDto::Failed {
-                generation_id: generation_id.clone(),
-                error: CommandError::from(error),
-            },
-            GenerationOutcome::Cancelled => GenerationEventDto::Cancelled {
-                generation_id: generation_id.clone(),
-            },
-        };
-        let _terminal_send = on_event.send(terminal);
-    });
-    match started_receiver.await {
-        Ok(true) => Ok(result),
-        Ok(false) | Err(_) => Err(CommandError::cancelled()),
+    if on_event.send(started).is_err() {
+        let _ = runtime.inner().cancel(&generation_id);
+        return Ok(GenerationTerminalDto::Cancelled { generation_id });
     }
+
+    let delta_channel = on_event.clone();
+    let delta_generation_id = generation_id.clone();
+    let run_result = prepared
+        .run(move |content| {
+            delta_channel
+                .send(GenerationEventDto::Delta {
+                    generation_id: delta_generation_id.clone(),
+                    content: content.to_owned(),
+                })
+                .map_err(|_| ProviderError::Cancelled)
+        })
+        .await;
+
+    Ok(match run_result.outcome {
+        GenerationOutcome::Completed(node) => GenerationTerminalDto::Completed {
+            generation_id,
+            node: node.into(),
+        },
+        GenerationOutcome::Failed { stage, error } => GenerationTerminalDto::Failed {
+            generation_id,
+            stage: match stage {
+                GenerationStage::Generation => GenerationFailureStage::Generation,
+                GenerationStage::Persistence => GenerationFailureStage::Persistence,
+            },
+            error: CommandError::from(error),
+        },
+        GenerationOutcome::Cancelled => GenerationTerminalDto::Cancelled { generation_id },
+    })
 }
 
 #[tauri::command]
@@ -314,19 +278,6 @@ pub fn cancel_generation(
     runtime
         .cancel(&request.generation_id)
         .map(|accepted| CancelGenerationResult { accepted })
-        .map_err(CommandError::from)
-}
-
-#[tauri::command]
-pub fn commit_generation(
-    request: CommitGenerationRequest,
-    runtime: State<'_, GenerationRuntime>,
-) -> Result<CommitGenerationResult, CommandError> {
-    validate_uuid_v4("generation_id", &request.generation_id)?;
-    validate_uuid_v4("commit_token", &request.commit_token)?;
-    runtime
-        .commit(&request.generation_id, &request.commit_token)
-        .map(|accepted| CommitGenerationResult { accepted })
         .map_err(CommandError::from)
 }
 
@@ -371,7 +322,7 @@ mod tests {
     use super::validate_uuid_v4;
 
     #[test]
-    fn generation_acknowledgement_ids_require_canonical_uuid_v4() {
+    fn generation_ids_require_canonical_uuid_v4() {
         assert!(validate_uuid_v4("generation_id", "11111111-1111-4111-8111-111111111111").is_ok());
         for invalid in [
             "",
@@ -380,7 +331,7 @@ mod tests {
             "11111111-1111-4111-7111-111111111111",
             "11111111-1111-4111-8111-11111111111A",
         ] {
-            assert!(validate_uuid_v4("commit_token", invalid).is_err());
+            assert!(validate_uuid_v4("generation_id", invalid).is_err());
         }
     }
 }

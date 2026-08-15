@@ -1,0 +1,7 @@
+{"file":".trellis/spec/backend/provider-guidelines.md","reason":"Defines provider streaming, cancellation, generation ownership, completed-assistant persistence, and the current acknowledgement contracts being deliberately replaced."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Preserve SQLite authority, transaction ownership, validated paths, archive checks, and authoritative assistant readback without adding a second pool or migration."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Owns provider IPC schemas, Channel unknown-value validation, command/result identity, bounds, and fail-closed cancellation."}
+{"file":".trellis/spec/frontend/state-management.md","reason":"Owns transient generation phases, authoritative tree merges, mutation locks, cancellation presentation, and recovery behavior."}
+{"file":".trellis/spec/frontend/hook-guidelines.md","reason":"Owns workspace controller lifecycle, stale-run suppression, cleanup, cancellation, and removal of acknowledgement/reconciliation timers."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Preserve visible streaming, stop, failure, regenerate, archive, branch/edit, and accessibility behavior while reducing transient props."}
+{"file":".trellis/tasks/08-15-simplify-generation-commit-protocol/research/streaming-command-simplification.md","reason":"Records the long-lived Tauri async command decision, runtime linearization boundary, result/channel ordering, and disconnect recovery policy."}

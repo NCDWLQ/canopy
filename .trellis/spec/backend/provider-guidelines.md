@@ -1,6 +1,6 @@
 # Provider Guidelines
 
-> Executable contracts for Canopy's OpenAI-compatible generation boundary.
+> Executable contracts for Canopy's provider profile and generation boundary.
 
 ## Scenario: Secure Profile and Validated-Path Generation
 
@@ -21,9 +21,16 @@ save_provider_profile({ base_endpoint, model, api_key }) -> ProviderProfileDto
 load_provider_profile({}) -> ProviderProfileDto
 delete_provider_profile({}) -> { deleted }
 generate_from_active_path({ conversation_id, active_node_id }, on_event)
-  -> { generation_id }
+  -> GenerationTerminalDto
 cancel_generation({ generation_id }) -> { accepted }
-commit_generation({ generation_id, commit_token }) -> { accepted }
+```
+
+The generation terminal result is a tagged union:
+
+```text
+completed { generation_id, node }
+cancelled { generation_id }
+failed { generation_id, stage: generation|persistence, error }
 ```
 
 The provider request boundary is deliberately closed:
@@ -32,8 +39,8 @@ The provider request boundary is deliberately closed:
 build_request(&ValidatedPath, &str) -> Result<ChatCompletionRequest, ProviderError>
 ValidatedEndpoint::parse(&str) -> Result<ValidatedEndpoint, ProviderError>
 GenerationRuntime::reserve(conversation_id, generation_id) -> GenerationLease
-GenerationRuntime::commit(generation_id, commit_token) -> Result<bool, ProviderError>
-GenerationLease::await_commit(send_ready) -> Result<bool, ProviderError>
+GenerationRuntime::cancel(generation_id) -> Result<bool, ProviderError>
+GenerationLease::begin_finalizing() -> Result<bool, ProviderError>
 ```
 
 Migration 4 owns the singleton `provider_profiles` table and the append/delete
@@ -58,37 +65,30 @@ API key, authorization header, encrypted secret, or secret-derived verifier.
   system proxy settings. Provider credentials must never transit an
   unconfigured environment proxy, especially for loopback HTTP endpoints.
 - Provider requests accept only `ValidatedPath`, preserve ordered
-  system/user/assistant content byte-for-byte, reject tool nodes, and require a
-  terminal user node.
+  system/user/assistant content byte-for-byte, reject tool nodes, and require
+  a terminal user node.
 - SSE accepts choice index zero, bounded string deltas, exactly one normal
   `stop` finish, then `[DONE]`. EOF, other finish reasons, data after finish,
   malformed JSON, provider errors, multiple choices, or content above one MiB
   fail without persistence.
 - One generation slot exists per conversation. Cancellation is exact by
-  generation ID. After successful SSE the worker creates a fresh UUID v4
-  capability token, stores it only in the in-memory `AwaitingCommit` phase,
-  sends `ready_to_commit`, and waits at most 30 seconds. Token-bearing runtime,
-  request, and event types must not expose `Debug`, and tokens must never enter
-  SQLite, logs, frontend persistence, or component props beyond the transient
-  acknowledgement flow.
-- `commit_generation` accepts only an exact, unexpired generation/token pair
-  once. Commit, cancel, and timeout transitions are linearized under the same
-  registry mutex: an acknowledgement winner moves to `Committing` and makes
-  later cancellation return `accepted: false`; cancellation or expiry wins by
-  preventing persistence and making commit return `accepted: false`. Wrong,
-  replayed, stale, or not-ready pairs do not disturb another operation.
-- The worker owns the Channel from `started` through the single terminal send.
-  Legal order is `started -> delta* -> ready_to_commit -> completed|failed|
-  cancelled`, or a pre-ready `failed|cancelled`. A ready send failure, channel
-  failure before acknowledgement, pre-acknowledgement cancellation or timeout,
-  or process exit before acknowledgement persists no assistant.
-- A completed assistant is inserted only after acknowledgement acceptance,
-  with the selected model and active user as parent. Conversation writability
-  and parent role are rechecked in the insert transaction. `completed` contains
-  the authoritative readback and is sent only after commit. Acknowledgement is
-  the authorization/linearization point: a later disconnect cannot atomically
-  roll back a committing or committed SQLite transaction, and callers must
-  reconcile durable state by reload if terminal delivery is lost.
+  generation ID. A successful provider stream enters `Finalizing` under the
+  runtime mutex before SQLite persistence; the lease and slot remain held until
+  the authoritative assistant row has been read back or persistence fails.
+- The runtime has only `Running`, `Finalizing`, and `Cancelling` phases.
+  Cancellation changes `Running` to `Cancelling` and cannot interrupt
+  `Finalizing`. The finalization transition wins the cancel race and is the
+  only point at which the assistant may be persisted.
+- The worker owns the Channel from `started` through the transient `delta`
+  events. The command returns one terminal result after the worker finishes;
+  it does not send a terminal Channel event. Legal channel order is
+  `started -> delta*`. A Channel failure before finalization cancels the run
+  and persists no assistant. A Channel failure after finalization does not
+  roll back persistence.
+- `completed.node` is the authoritative readback and is emitted only after
+  the assistant transaction succeeds. Generation/provider failures use stage
+  `generation`; archive, transaction, or readback failures use stage
+  `persistence`; cancellation returns no assistant.
 
 ### 4. Validation & Error Matrix
 
@@ -104,26 +104,23 @@ API key, authorization header, encrypted secret, or secret-derived verifier.
 | Connect/DNS/TLS/read timeout or early peer disconnect | retryable `network_failure` |
 | Invalid path, archive, or non-user terminal | existing typed path/input error; no HTTP |
 | Malformed/truncated/non-normal SSE | safe `provider_unavailable`; no assistant |
-| Invalid generation ID or commit token syntax | `invalid_input`; no state change |
-| Wrong/replayed/stale/not-ready commit pair | `{ accepted: false }`; no generation state change |
-| Expired commit pair | `{ accepted: false }`; the exact awaiting generation may linearize its mandatory timeout to `Cancelling` |
-| Exact cancellation or 30-second timeout before acknowledgement | `cancelled`; no assistant |
-| Exact acknowledgement wins commit/cancel race | commit `{ accepted: true }`; later cancel `{ accepted: false }` |
-| Archive/database failure after acknowledgement | typed `failed`; no partial assistant |
+| Invalid generation ID syntax or unknown generation | `invalid_input` or `{ accepted: false }`; no other state change |
+| Exact cancellation while `Running` | `{ accepted: true }`; terminal `cancelled`; no assistant |
+| Cancellation after `Finalizing` starts | `{ accepted: false }`; persistence continues |
+| Channel failure before finalization | terminal `cancelled`; no assistant |
+| Channel failure after finalization | persistence result remains authoritative |
+| Archive/database/readback failure during finalization | terminal `failed` with `stage: persistence` |
 
 ### 5. Good / Base / Bad Cases
 
-- **Good**: a real migrated two-sibling path sends only the selected sentinel,
-  streams ordered deltas, emits one transient ready token, commits one
-  assistant sibling only after the exact acknowledgement, and returns that
-  node in `completed`.
-- **Base**: an exact loopback HTTP provider with no API key can generate from a
-  user root.
+- **Good**: a real two-sibling path sends only the selected sentinel, streams
+  ordered deltas, persists one assistant child after finalization wins, and
+  returns that node in `completed`.
+- **Base**: an exact loopback HTTP provider with no API key can generate from
+  a user root.
 - **Bad**: building messages from `ConversationTree.nodes`, following a 302
-  with a bearer header, accepting `finish_reason: "length"`, or reporting a
-  keyring/SQLite partial operation as success. Persisting immediately after
-  `[DONE]`, logging a commit token, or treating Channel send success as frontend
-  acknowledgement is also forbidden.
+  with a bearer header, accepting `finish_reason: "length"`, persisting each
+  delta, or reporting a Channel send as durable success.
 
 ### 6. Tests Required
 
@@ -131,18 +128,16 @@ API key, authorization header, encrypted secret, or secret-derived verifier.
   secret columns/values, and leave conversation constraints unchanged.
 - Inject the credential store and cover keep/replace/remove/delete, unavailable
   and missing stores, unwritten and written intents, promoted cleanup, delete
-  replay, and concurrent service instances. Assert failed `keep` does not
-  mutate non-secret profile fields.
+  replay, and concurrent service instances.
 - Use a loopback HTTP fixture to assert exact request path/body/header,
   arbitrary SSE chunking, status mapping, malformed/truncated/non-normal
   streams, post-finish rejection, one-MiB bound, midstream cancellation,
   redirect refusal, ambient-proxy bypass, and network failure.
 - Exercise generation registry linearization, same-conversation exclusion,
-  cross-conversation independence, no row before acknowledgement, exact
-  one-time UUID v4 acknowledgement, wrong/replay/stale/not-ready pairs,
-  commit-versus-cancel and commit-versus-deadline winners, timeout cleanup,
-  ready send failure, archive recheck, authoritative assistant readback,
-  terminal-send failure after commit, and slot release on every outcome.
+  cross-conversation independence, no row before finalization, cancellation
+  before and during persistence, Channel failure before and after finalization,
+  archive recheck, authoritative assistant readback, persistence failure, and
+  slot release on every outcome.
 - Scan source, fixtures, serialized errors, and logs for credential/prompt/body
   leakage; fixture keys are sentinels only and never live credentials.
 
@@ -165,11 +160,10 @@ durable history.
 let (_, path) = persistence.load_generation_context(conversation_id, active_id).await?;
 let request = build_request(&path, &profile.model)?;
 let content = client.stream(&endpoint, &path, &profile.model, secret, token, on_delta).await?;
-if lease.await_commit(send_ready).await? {
-    persistence.append_completed_assistant(assistant_node(content)).await?;
-}
+lease.begin_finalizing()?;
+let node = persistence.append_completed_assistant(assistant_node(content)).await?;
 ```
 
-Only a validated branch reaches HTTP, deltas remain transient, and
-cancellation/timeout compete with an explicit one-time acknowledgement before
-the immutable assistant transaction begins.
+Only a validated branch reaches HTTP, deltas remain transient, and the
+finalization transition protects the immutable assistant transaction from a
+late cancellation.

@@ -1,0 +1,7 @@
+{"file":".trellis/spec/backend/provider-guidelines.md","reason":"Verify acknowledgement/token contracts are fully replaced by backend-owned finalization without weakening provider, secret, path, SSE, cancellation, or persistence safety."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Verify final assistant insertion stays atomic, authority remains SQLite, and no unnecessary schema or production pool is introduced."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Verify Rust DTOs, shared fixtures, Zod schemas, event/result races, malformed data, and cancellation remain aligned and fail closed."}
+{"file":".trellis/spec/frontend/state-management.md","reason":"Verify the reduced state machine still enforces exact run/target identity, authoritative-only merges, failure presentation, mutation locks, and safe reload."}
+{"file":".trellis/spec/frontend/hook-guidelines.md","reason":"Verify acknowledgement, commit timer, persistent reconciliation state and manual reconciliation retry are removed without stale callback or cleanup regressions."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Verify user-visible streaming, stop, failure, regeneration, tree, edit/branch, archive and accessibility behavior remains intact."}
+{"file":".trellis/tasks/08-15-simplify-generation-commit-protocol/research/streaming-command-simplification.md","reason":"Verify the implementation matches the researched async-command, finalization, disconnect, and unordered result/Channel delivery decisions."}

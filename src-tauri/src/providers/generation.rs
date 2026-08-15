@@ -1,16 +1,12 @@
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
-    time::Duration,
 };
 
-use futures_util::{future::select, FutureExt};
 use secrecy::SecretString;
 use serde_json::json;
 use sqlx::SqlitePool;
-use tokio::{sync::oneshot, time::Instant};
 use tokio_util::sync::CancellationToken;
-use uuid::Uuid;
 
 use crate::conversations::{
     commands::{IdentityTimeSource, SystemIdentityTimeSource},
@@ -22,8 +18,6 @@ use super::{
     ProviderError, ProviderProfileService, ValidatedEndpoint,
 };
 
-const DEFAULT_COMMIT_TIMEOUT: Duration = Duration::from_secs(30);
-
 struct GenerationEntry {
     generation_id: String,
     cancellation: CancellationToken,
@@ -32,26 +26,19 @@ struct GenerationEntry {
 
 enum GenerationPhase {
     Running,
-    AwaitingCommit {
-        commit_token: String,
-        deadline: Instant,
-        acknowledgement: oneshot::Sender<()>,
-    },
-    Committing,
+    Finalizing,
     Cancelling,
 }
 
 #[derive(Clone)]
 pub struct GenerationRuntime {
     entries: Arc<Mutex<HashMap<String, GenerationEntry>>>,
-    commit_timeout: Duration,
 }
 
 impl Default for GenerationRuntime {
     fn default() -> Self {
         Self {
             entries: Arc::new(Mutex::new(HashMap::new())),
-            commit_timeout: DEFAULT_COMMIT_TIMEOUT,
         }
     }
 }
@@ -75,6 +62,7 @@ impl GenerationRuntime {
         {
             return Err(ProviderError::RuntimeInvariant);
         }
+
         let cancellation = CancellationToken::new();
         entries.insert(
             conversation_id.clone(),
@@ -103,10 +91,7 @@ impl GenerationRuntime {
         else {
             return Ok(false);
         };
-        if !matches!(
-            entry.phase,
-            GenerationPhase::Running | GenerationPhase::AwaitingCommit { .. }
-        ) {
+        if !matches!(entry.phase, GenerationPhase::Running) {
             return Ok(false);
         }
         entry.phase = GenerationPhase::Cancelling;
@@ -114,7 +99,7 @@ impl GenerationRuntime {
         Ok(true)
     }
 
-    pub fn commit(&self, generation_id: &str, commit_token: &str) -> Result<bool, ProviderError> {
+    pub fn begin_finalizing(&self, generation_id: &str) -> Result<bool, ProviderError> {
         let mut entries = self
             .entries
             .lock()
@@ -125,58 +110,10 @@ impl GenerationRuntime {
         else {
             return Ok(false);
         };
-
-        let expired = matches!(
-            &entry.phase,
-            GenerationPhase::AwaitingCommit { deadline, .. } if Instant::now() >= *deadline
-        );
-        if expired {
-            entry.phase = GenerationPhase::Cancelling;
-            entry.cancellation.cancel();
+        if !matches!(entry.phase, GenerationPhase::Running) || entry.cancellation.is_cancelled() {
             return Ok(false);
         }
-        let exact = matches!(
-            &entry.phase,
-            GenerationPhase::AwaitingCommit {
-                commit_token: expected,
-                ..
-            } if expected == commit_token
-        );
-        if !exact {
-            return Ok(false);
-        }
-
-        let previous = std::mem::replace(&mut entry.phase, GenerationPhase::Committing);
-        let GenerationPhase::AwaitingCommit {
-            acknowledgement, ..
-        } = previous
-        else {
-            return Err(ProviderError::RuntimeInvariant);
-        };
-        let _worker_wakeup = acknowledgement.send(());
-        Ok(true)
-    }
-
-    fn expire(&self, generation_id: &str) -> Result<bool, ProviderError> {
-        let mut entries = self
-            .entries
-            .lock()
-            .map_err(|_| ProviderError::RuntimeInvariant)?;
-        let Some(entry) = entries
-            .values_mut()
-            .find(|entry| entry.generation_id == generation_id)
-        else {
-            return Ok(false);
-        };
-        let expired = matches!(
-            &entry.phase,
-            GenerationPhase::AwaitingCommit { deadline, .. } if Instant::now() >= *deadline
-        );
-        if !expired {
-            return Ok(false);
-        }
-        entry.phase = GenerationPhase::Cancelling;
-        entry.cancellation.cancel();
+        entry.phase = GenerationPhase::Finalizing;
         Ok(true)
     }
 
@@ -186,11 +123,13 @@ impl GenerationRuntime {
     }
 
     #[cfg(test)]
-    fn with_commit_timeout(commit_timeout: Duration) -> Self {
-        Self {
-            commit_timeout,
-            ..Self::default()
-        }
+    fn is_finalizing(&self, generation_id: &str) -> bool {
+        self.entries.lock().is_ok_and(|entries| {
+            entries.values().any(|entry| {
+                entry.generation_id == generation_id
+                    && matches!(entry.phase, GenerationPhase::Finalizing)
+            })
+        })
     }
 }
 
@@ -206,53 +145,8 @@ impl GenerationLease {
         &self.cancellation
     }
 
-    async fn await_commit<F>(&self, send_ready: F) -> Result<bool, ProviderError>
-    where
-        F: FnOnce(&str) -> Result<(), ProviderError>,
-    {
-        let commit_token = Uuid::new_v4().to_string();
-        let deadline = Instant::now() + self.runtime.commit_timeout;
-        let (acknowledgement, receiver) = oneshot::channel();
-
-        {
-            let mut entries = self
-                .runtime
-                .entries
-                .lock()
-                .map_err(|_| ProviderError::RuntimeInvariant)?;
-            let Some(entry) = entries.get_mut(&self.conversation_id) else {
-                return Err(ProviderError::RuntimeInvariant);
-            };
-            if entry.generation_id != self.generation_id
-                || !matches!(entry.phase, GenerationPhase::Running)
-                || entry.cancellation.is_cancelled()
-            {
-                return Ok(false);
-            }
-            entry.phase = GenerationPhase::AwaitingCommit {
-                commit_token: commit_token.clone(),
-                deadline,
-                acknowledgement,
-            };
-            if let Err(error) = send_ready(&commit_token) {
-                entry.phase = GenerationPhase::Cancelling;
-                entry.cancellation.cancel();
-                return match error {
-                    ProviderError::Cancelled => Ok(false),
-                    other => Err(other),
-                };
-            }
-        }
-
-        match select(receiver.boxed(), tokio::time::sleep_until(deadline).boxed()).await {
-            futures_util::future::Either::Left((acknowledgement, _)) => Ok(acknowledgement.is_ok()),
-            futures_util::future::Either::Right(((), receiver)) => {
-                if self.runtime.expire(&self.generation_id)? {
-                    return Ok(false);
-                }
-                Ok(receiver.await.is_ok())
-            }
-        }
+    fn begin_finalizing(&self) -> Result<bool, ProviderError> {
+        self.runtime.begin_finalizing(&self.generation_id)
     }
 }
 
@@ -294,10 +188,9 @@ impl PreparedGeneration {
         &self.model
     }
 
-    pub(crate) async fn run<F, R>(self, on_delta: F, on_ready: R) -> GenerationOutcome
+    pub(crate) async fn run<F>(self, on_delta: F) -> GenerationRunResult
     where
         F: FnMut(&str) -> Result<(), ProviderError>,
-        R: FnOnce(&str) -> Result<(), ProviderError>,
     {
         let cancellation = self.lease.cancellation().clone();
         let streamed = self
@@ -311,18 +204,21 @@ impl PreparedGeneration {
                 on_delta,
             )
             .await;
-        finish_generation(
+        let outcome = finish_generation(
             &self.persistence,
-            self.lease,
+            &self.lease,
             streamed,
             PendingAssistant {
                 parent_id: self.active_node_id,
                 conversation_id: self.conversation_id,
                 model: self.model,
             },
-            on_ready,
         )
-        .await
+        .await;
+        GenerationRunResult {
+            outcome,
+            _lease: self.lease,
+        }
     }
 }
 
@@ -334,22 +230,32 @@ struct PendingAssistant {
 
 pub(crate) enum GenerationOutcome {
     Completed(Node),
-    Failed(ProviderError),
+    Failed {
+        stage: GenerationStage,
+        error: ProviderError,
+    },
     Cancelled,
 }
 
-async fn finish_generation<F>(
+pub(crate) struct GenerationRunResult {
+    pub(crate) outcome: GenerationOutcome,
+    _lease: GenerationLease,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GenerationStage {
+    Generation,
+    Persistence,
+}
+
+async fn finish_generation(
     persistence: &ConversationPersistenceService,
-    lease: GenerationLease,
+    lease: &GenerationLease,
     streamed: Result<String, ProviderError>,
     pending: PendingAssistant,
-    on_ready: F,
-) -> GenerationOutcome
-where
-    F: FnOnce(&str) -> Result<(), ProviderError>,
-{
+) -> GenerationOutcome {
     match streamed {
-        Ok(content) => match lease.await_commit(on_ready).await {
+        Ok(content) => match lease.begin_finalizing() {
             Ok(true) => {
                 let source = SystemIdentityTimeSource;
                 match persistence
@@ -366,14 +272,23 @@ where
                     .await
                 {
                     Ok(node) => GenerationOutcome::Completed(node),
-                    Err(error) => GenerationOutcome::Failed(error.into()),
+                    Err(error) => GenerationOutcome::Failed {
+                        stage: GenerationStage::Persistence,
+                        error: error.into(),
+                    },
                 }
             }
             Ok(false) => GenerationOutcome::Cancelled,
-            Err(error) => GenerationOutcome::Failed(error),
+            Err(error) => GenerationOutcome::Failed {
+                stage: GenerationStage::Persistence,
+                error,
+            },
         },
         Err(ProviderError::Cancelled) => GenerationOutcome::Cancelled,
-        Err(error) => GenerationOutcome::Failed(error),
+        Err(error) => GenerationOutcome::Failed {
+            stage: GenerationStage::Generation,
+            error,
+        },
     }
 }
 
@@ -393,7 +308,7 @@ pub(crate) async fn prepare_generation(
     let endpoint = ValidatedEndpoint::parse(&profile.base_endpoint)?;
     build_request(&path, &profile.model)?;
     let client = OpenAiCompatibleClient::new()?;
-    let lease = runtime.reserve(conversation_id.clone(), generation_id.clone())?;
+    let lease = runtime.reserve(conversation_id.clone(), generation_id)?;
 
     Ok(PreparedGeneration {
         conversation_id,
@@ -410,12 +325,10 @@ pub(crate) async fn prepare_generation(
 
 #[cfg(test)]
 mod tests {
-    use std::{str::FromStr, time::Duration};
+    use std::str::FromStr;
 
     use serde_json::json;
     use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-    use tokio::sync::oneshot;
-    use uuid::{Uuid, Version};
 
     use crate::{
         conversations::{ConversationPersistenceService, NewConversation, NewNode, Role},
@@ -486,7 +399,7 @@ mod tests {
     }
 
     #[test]
-    fn registry_is_per_conversation_and_exact_cancel_is_one_shot() {
+    fn runtime_is_per_conversation_and_cancel_is_exact_and_one_shot() {
         let runtime = GenerationRuntime::default();
         let first = runtime
             .reserve("conversation-a".to_owned(), GENERATION_A.to_owned())
@@ -500,9 +413,7 @@ mod tests {
         assert!(runtime
             .reserve("conversation-c".to_owned(), GENERATION_B.to_owned())
             .is_err());
-        assert!(!runtime
-            .cancel("00000000-0000-4000-8000-000000000000")
-            .unwrap());
+        assert!(!runtime.cancel("unknown").unwrap());
         assert!(runtime.cancel(GENERATION_A).unwrap());
         assert!(!runtime.cancel(GENERATION_A).unwrap());
         assert!(first.cancellation().is_cancelled());
@@ -513,273 +424,157 @@ mod tests {
     }
 
     #[test]
-    fn not_ready_and_stale_controls_do_not_disturb_the_live_generation() {
+    fn finalization_wins_cancel_race_and_holds_the_slot() {
         let runtime = GenerationRuntime::default();
-        let first = runtime
-            .reserve("conversation-a".to_owned(), GENERATION_A.to_owned())
+        let lease = runtime
+            .reserve("conversation".to_owned(), GENERATION_A.to_owned())
             .unwrap();
-        assert!(!runtime.commit(GENERATION_A, GENERATION_B).unwrap());
-        assert!(!first.cancellation().is_cancelled());
-        assert!(runtime.cancel(GENERATION_A).unwrap());
-        drop(first);
-
-        let second = runtime
-            .reserve("conversation-a".to_owned(), GENERATION_B.to_owned())
-            .unwrap();
-        assert!(!runtime.commit(GENERATION_A, GENERATION_B).unwrap());
+        assert!(runtime.begin_finalizing(GENERATION_A).unwrap());
         assert!(!runtime.cancel(GENERATION_A).unwrap());
-        assert!(!second.cancellation().is_cancelled());
-        assert!(runtime.cancel(GENERATION_B).unwrap());
+        assert!(runtime
+            .reserve("conversation".to_owned(), GENERATION_B.to_owned())
+            .is_err());
+        drop(lease);
+        assert!(runtime
+            .reserve("conversation".to_owned(), GENERATION_B.to_owned())
+            .is_ok());
     }
 
     #[test]
-    fn exact_ack_is_one_shot_and_no_row_exists_before_it() {
+    fn successful_provider_result_is_persisted_once_after_finalization() {
         test_runtime().block_on(async {
             let (pool, persistence) = seeded_persistence().await;
             let runtime = GenerationRuntime::default();
             let lease = runtime
                 .reserve("conversation".to_owned(), GENERATION_A.to_owned())
                 .unwrap();
-            let (ready_tx, ready_rx) = oneshot::channel();
-            let worker_persistence = persistence.clone();
-            let worker = tokio::spawn(async move {
-                finish_generation(
-                    &worker_persistence,
-                    lease,
-                    Ok("persisted answer".to_owned()),
-                    pending(),
-                    move |token| {
-                        ready_tx
-                            .send(token.to_owned())
-                            .map_err(|_| super::ProviderError::RuntimeInvariant)
-                    },
-                )
-                .await
-            });
-
-            let token = ready_rx.await.unwrap();
-            let parsed = Uuid::parse_str(&token).unwrap();
-            assert_eq!(parsed.get_version(), Some(Version::Random));
-            assert_eq!(assistant_count(&pool).await, 0);
-            assert!(runtime
-                .reserve("conversation".to_owned(), GENERATION_B.to_owned())
-                .is_err());
-            assert!(!runtime.commit(GENERATION_A, GENERATION_B).unwrap());
-            assert!(runtime.commit(GENERATION_A, &token).unwrap());
-            assert!(!runtime.commit(GENERATION_A, &token).unwrap());
-            assert!(!runtime.cancel(GENERATION_A).unwrap());
-
-            let node = match worker.await.unwrap() {
-                GenerationOutcome::Completed(node) => node,
-                _ => panic!("accepted acknowledgement must permit commit"),
+            let outcome = finish_generation(
+                &persistence,
+                &lease,
+                Ok("persisted answer".to_owned()),
+                pending(),
+            )
+            .await;
+            let GenerationOutcome::Completed(node) = outcome else {
+                panic!("completed provider result must persist");
             };
             assert_eq!(node.content, "persisted answer");
             assert_eq!(assistant_count(&pool).await, 1);
+            assert_eq!(runtime.active_count(), 1);
+            drop(lease);
             assert_eq!(runtime.active_count(), 0);
-            assert!(!runtime.cancel(GENERATION_A).unwrap());
         });
     }
 
     #[test]
-    fn cancel_wins_before_ack_and_ready_send_failure_persist_nothing() {
+    fn finalization_rejects_late_cancel_and_holds_the_slot_through_persistence() {
+        test_runtime().block_on(async {
+            let (pool, persistence) = seeded_persistence().await;
+            let mut blocker = pool.acquire().await.unwrap();
+            let runtime = GenerationRuntime::default();
+            let lease = runtime
+                .reserve("conversation".to_owned(), GENERATION_A.to_owned())
+                .unwrap();
+            let worker = tokio::spawn(async move {
+                let outcome = finish_generation(
+                    &persistence,
+                    &lease,
+                    Ok("persist despite late cancel".to_owned()),
+                    pending(),
+                )
+                .await;
+                (outcome, lease)
+            });
+
+            for _ in 0..100 {
+                if runtime.is_finalizing(GENERATION_A) {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+            assert!(runtime.is_finalizing(GENERATION_A));
+            assert!(!runtime.cancel(GENERATION_A).unwrap());
+            assert!(runtime
+                .reserve("conversation".to_owned(), GENERATION_B.to_owned())
+                .is_err());
+            let count: i64 =
+                sqlx::query_scalar("SELECT count(*) FROM nodes WHERE role = 'assistant'")
+                    .fetch_one(&mut *blocker)
+                    .await
+                    .unwrap();
+            assert_eq!(count, 0);
+
+            drop(blocker);
+            let (outcome, lease) = worker.await.unwrap();
+            assert!(matches!(outcome, GenerationOutcome::Completed(_)));
+            assert_eq!(assistant_count(&pool).await, 1);
+            assert_eq!(runtime.active_count(), 1);
+            drop(lease);
+            assert_eq!(runtime.active_count(), 0);
+        });
+    }
+
+    #[test]
+    fn cancellation_or_channel_failure_before_finalization_persists_nothing() {
         test_runtime().block_on(async {
             let (pool, persistence) = seeded_persistence().await;
             let runtime = GenerationRuntime::default();
             let lease = runtime
                 .reserve("conversation".to_owned(), GENERATION_A.to_owned())
                 .unwrap();
-            let (ready_tx, ready_rx) = oneshot::channel();
-            let worker_persistence = persistence.clone();
-            let worker = tokio::spawn(async move {
+            assert!(runtime.cancel(GENERATION_A).unwrap());
+            assert!(matches!(
                 finish_generation(
-                    &worker_persistence,
-                    lease,
+                    &persistence,
+                    &lease,
                     Ok("cancelled answer".to_owned()),
                     pending(),
-                    move |token| {
-                        ready_tx
-                            .send(token.to_owned())
-                            .map_err(|_| super::ProviderError::RuntimeInvariant)
-                    },
                 )
-                .await
-            });
-            let token = ready_rx.await.unwrap();
-            assert!(runtime.cancel(GENERATION_A).unwrap());
-            assert!(!runtime.commit(GENERATION_A, &token).unwrap());
-            assert!(matches!(
-                worker.await.unwrap(),
+                .await,
                 GenerationOutcome::Cancelled
             ));
-            assert_eq!(assistant_count(&pool).await, 0);
-            assert_eq!(runtime.active_count(), 0);
+            drop(lease);
 
-            let failed_ready = runtime
+            let lease = runtime
                 .reserve("conversation".to_owned(), GENERATION_B.to_owned())
                 .unwrap();
             assert!(matches!(
                 finish_generation(
                     &persistence,
-                    failed_ready,
-                    Ok("undelivered".to_owned()),
+                    &lease,
+                    Err(super::ProviderError::Cancelled),
                     pending(),
-                    |_| Err(super::ProviderError::Cancelled),
                 )
                 .await,
                 GenerationOutcome::Cancelled
             ));
             assert_eq!(assistant_count(&pool).await, 0);
-            assert_eq!(runtime.active_count(), 0);
+            drop(lease);
         });
     }
 
     #[test]
-    fn timeout_wins_under_paused_time_and_releases_the_slot() {
+    fn persistence_failure_is_typed_and_releases_the_slot() {
         test_runtime().block_on(async {
             let (pool, persistence) = seeded_persistence().await;
-            tokio::time::pause();
-            let runtime = GenerationRuntime::with_commit_timeout(Duration::from_secs(30));
-            let lease = runtime
-                .reserve("conversation".to_owned(), GENERATION_A.to_owned())
-                .unwrap();
-            let (ready_tx, ready_rx) = oneshot::channel();
-            let worker = tokio::spawn(async move {
-                finish_generation(
-                    &persistence,
-                    lease,
-                    Ok("expired".to_owned()),
-                    pending(),
-                    move |token| {
-                        ready_tx
-                            .send(token.to_owned())
-                            .map_err(|_| super::ProviderError::RuntimeInvariant)
-                    },
-                )
-                .await
-            });
-            let token = ready_rx.await.unwrap();
-            tokio::time::advance(Duration::from_secs(31)).await;
-            assert!(matches!(
-                worker.await.unwrap(),
-                GenerationOutcome::Cancelled
-            ));
-            assert!(!runtime.commit(GENERATION_A, &token).unwrap());
-            assert_eq!(assistant_count(&pool).await, 0);
-            assert_eq!(runtime.active_count(), 0);
-        });
-    }
-
-    #[test]
-    fn commit_before_the_monotonic_deadline_wins_over_the_timer() {
-        test_runtime().block_on(async {
-            let (pool, persistence) = seeded_persistence().await;
-            tokio::time::pause();
-            let runtime = GenerationRuntime::with_commit_timeout(Duration::from_secs(30));
-            let lease = runtime
-                .reserve("conversation".to_owned(), GENERATION_A.to_owned())
-                .unwrap();
-            let (ready_tx, ready_rx) = oneshot::channel();
-            let worker = tokio::spawn(async move {
-                finish_generation(
-                    &persistence,
-                    lease,
-                    Ok("committed before deadline".to_owned()),
-                    pending(),
-                    move |token| {
-                        ready_tx
-                            .send(token.to_owned())
-                            .map_err(|_| super::ProviderError::RuntimeInvariant)
-                    },
-                )
-                .await
-            });
-            let token = ready_rx.await.unwrap();
-            tokio::time::advance(Duration::from_secs(29)).await;
-            assert!(runtime.commit(GENERATION_A, &token).unwrap());
-            tokio::time::advance(Duration::from_secs(2)).await;
-            assert!(matches!(
-                worker.await.unwrap(),
-                GenerationOutcome::Completed(_)
-            ));
-            assert_eq!(assistant_count(&pool).await, 1);
-            assert_eq!(runtime.active_count(), 0);
-        });
-    }
-
-    #[test]
-    fn archive_failure_after_ack_writes_nothing_and_releases_the_slot() {
-        test_runtime().block_on(async {
-            let (pool, persistence) = seeded_persistence().await;
-            let runtime = GenerationRuntime::with_commit_timeout(Duration::from_secs(30));
-            let lease = runtime
-                .reserve("conversation".to_owned(), GENERATION_A.to_owned())
-                .unwrap();
-            let (ready_tx, ready_rx) = oneshot::channel();
-            let worker_persistence = persistence.clone();
-            let worker = tokio::spawn(async move {
-                finish_generation(
-                    &worker_persistence,
-                    lease,
-                    Ok("late archived answer".to_owned()),
-                    pending(),
-                    move |token| {
-                        ready_tx
-                            .send(token.to_owned())
-                            .map_err(|_| super::ProviderError::RuntimeInvariant)
-                    },
-                )
-                .await
-            });
-            let token = ready_rx.await.unwrap();
-            let mut blocker = pool.acquire().await.unwrap();
-            assert!(runtime.commit(GENERATION_A, &token).unwrap());
-            assert!(runtime
-                .reserve("conversation".to_owned(), GENERATION_B.to_owned())
-                .is_err());
-            sqlx::query("UPDATE conversations SET is_archived = 1 WHERE id = 'conversation'")
-                .execute(&mut *blocker)
+            persistence
+                .archive_conversation("conversation")
                 .await
                 .unwrap();
-            drop(blocker);
-            assert!(matches!(
-                worker.await.unwrap(),
-                GenerationOutcome::Failed(super::ProviderError::Persistence(_))
-            ));
-            assert_eq!(assistant_count(&pool).await, 0);
-            assert_eq!(runtime.active_count(), 0);
-        });
-    }
-
-    #[test]
-    fn database_failure_after_ack_is_failed_and_releases_the_slot() {
-        test_runtime().block_on(async {
-            let (pool, persistence) = seeded_persistence().await;
             let runtime = GenerationRuntime::default();
             let lease = runtime
                 .reserve("conversation".to_owned(), GENERATION_A.to_owned())
                 .unwrap();
-            let (ready_tx, ready_rx) = oneshot::channel();
-            let worker = tokio::spawn(async move {
-                finish_generation(
-                    &persistence,
-                    lease,
-                    Ok("database unavailable".to_owned()),
-                    pending(),
-                    move |token| {
-                        ready_tx
-                            .send(token.to_owned())
-                            .map_err(|_| super::ProviderError::RuntimeInvariant)
-                    },
-                )
-                .await
-            });
-            let token = ready_rx.await.unwrap();
-            pool.close().await;
-            assert!(runtime.commit(GENERATION_A, &token).unwrap());
             assert!(matches!(
-                worker.await.unwrap(),
-                GenerationOutcome::Failed(super::ProviderError::Persistence(_))
+                finish_generation(&persistence, &lease, Ok("late".to_owned()), pending()).await,
+                GenerationOutcome::Failed {
+                    stage: super::GenerationStage::Persistence,
+                    ..
+                }
             ));
+            assert_eq!(assistant_count(&pool).await, 0);
+            assert_eq!(runtime.active_count(), 1);
+            drop(lease);
             assert_eq!(runtime.active_count(), 0);
         });
     }

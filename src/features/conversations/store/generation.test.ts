@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it } from "vitest"
 
 import { selectActivePath, useConversationStore } from "./index"
 import type {
@@ -91,16 +91,19 @@ const tree: ConversationTreeView = {
 
 function createClient() {
   return {
-    createConversation: vi.fn<ConversationClient["createConversation"]>(),
-    appendNode: vi.fn<ConversationClient["appendNode"]>(),
-    createBranch: vi.fn<ConversationClient["createBranch"]>(),
-    editNodeAsBranch: vi.fn<ConversationClient["editNodeAsBranch"]>(),
-    listConversations: vi.fn<ConversationClient["listConversations"]>(),
-    loadConversationTree: vi
-      .fn<ConversationClient["loadConversationTree"]>()
-      .mockResolvedValue(tree),
-    loadActivePath: vi.fn<ConversationClient["loadActivePath"]>(),
-    archiveConversation: vi.fn<ConversationClient["archiveConversation"]>(),
+    createConversation: () => Promise.resolve(tree),
+    appendNode: () => Promise.resolve(nodes.right),
+    createBranch: () => Promise.resolve(nodes.right),
+    editNodeAsBranch: () => Promise.resolve(nodes.right),
+    listConversations: () => Promise.resolve([]),
+    loadConversationTree: () => Promise.resolve(tree),
+    loadActivePath: () =>
+      Promise.resolve({
+        conversationId: conversation.id,
+        activeNodeId: nodes.right.id,
+        path: [],
+      }),
+    archiveConversation: () => Promise.resolve(conversation),
   } satisfies ConversationClient
 }
 
@@ -137,6 +140,19 @@ function beginStreaming(content = "STREAMED_RESPONSE") {
   return runId
 }
 
+function completedNode(content = "STREAMED_RESPONSE"): ConversationNodeView {
+  return {
+    id: "completed-assistant",
+    parentId: nodes.right.id,
+    conversationId: conversation.id,
+    role: "assistant",
+    content,
+    model,
+    createdAt: 5,
+    metadata: null,
+  }
+}
+
 describe("conversation generation state", () => {
   beforeEach(() => {
     useConversationStore.setState({
@@ -155,403 +171,256 @@ describe("conversation generation state", () => {
     })
   })
 
-  it("keeps streamed content transient until exact authoritative completion", async () => {
+  it("keeps streamed content transient until the authoritative result merges", async () => {
     await loadActiveUser()
     const nodesBefore = useConversationStore.getState().nodesById
     const runId = beginStreaming()
 
     expect(useConversationStore.getState().nodesById).toBe(nodesBefore)
-    expect(Object.keys(useConversationStore.getState().fullNodes)).toHaveLength(
-      4,
-    )
-    const projection = selectActivePath(useConversationStore.getState())
-    expect(projection.kind).toBe("ready")
-    expect(projection.path.map((message) => message.content)).not.toContain(
-      nodes.left.content,
-    )
-
+    expect(
+      selectActivePath(useConversationStore.getState()).path,
+    ).not.toContain(completedNode())
     expect(
       useConversationStore
         .getState()
-        .markGenerationCommitting(runId, generationId),
+        .completeGeneration(runId, generationId, completedNode()),
     ).toBe(true)
-    expect(Object.keys(useConversationStore.getState().fullNodes)).toHaveLength(
-      4,
-    )
-
-    const completed: ConversationNodeView = {
-      id: "completed-assistant",
-      parentId: nodes.right.id,
-      conversationId: conversation.id,
-      role: "assistant",
-      content: "STREAMED_RESPONSE",
-      model,
-      createdAt: 5,
-      metadata: null,
-    }
     expect(
-      useConversationStore
-        .getState()
-        .completeGeneration(runId, generationId, completed),
-    ).toBe(true)
-    expect(useConversationStore.getState().fullNodes[completed.id]).toEqual(
-      completed,
-    )
-    expect(useConversationStore.getState().generation).toMatchObject({
-      phase: "completed",
-      nodeId: completed.id,
+      useConversationStore.getState().fullNodes["completed-assistant"],
+    ).toEqual(completedNode())
+    expect(useConversationStore.getState().generation).toEqual({
+      phase: "idle",
     })
   })
 
-  it("invalidates a cancelled run before a path change can acknowledge", async () => {
+  it("accepts a completed result before started callbacks when the target is still current", async () => {
     await loadActiveUser()
-    const runId = beginStreaming()
-    expect(useConversationStore.getState().cancelGenerationRun(runId)).toBe(
-      true,
-    )
-    useConversationStore.getState().selectNode(nodes.left.id)
-
-    expect(useConversationStore.getState().activeNodeId).toBe(nodes.left.id)
+    const runId = useConversationStore.getState().beginGeneration()
+    expect(runId).not.toBeNull()
+    if (runId === null) return
     expect(
       useConversationStore
         .getState()
-        .markGenerationCommitting(runId, generationId),
-    ).toBe(false)
+        .completeGeneration(runId, generationId, completedNode()),
+    ).toBe(true)
+    expect(useConversationStore.getState().generation).toEqual({
+      phase: "idle",
+    })
   })
 
-  it("classifies generation failures from phase and discards partial content", async () => {
+  it("cancels exact runs while preserving displayed partial content", async () => {
     await loadActiveUser()
     const runId = beginStreaming("PARTIAL_RESPONSE")
-    const nodesBefore = useConversationStore.getState().nodesById
-    const fullNodesBefore = useConversationStore.getState().fullNodes
-
+    expect(useConversationStore.getState().cancelGenerationRun(runId)).toBe(
+      true,
+    )
+    expect(useConversationStore.getState().generation).toMatchObject({
+      phase: "cancelled",
+      conversationId: conversation.id,
+      parentNodeId: nodes.right.id,
+      content: "PARTIAL_RESPONSE",
+    })
     expect(
-      useConversationStore.getState().failGeneration(runId, {
-        code: "provider_unavailable",
-        message: "Provider stopped.",
-        retryable: true,
-      }),
+      useConversationStore
+        .getState()
+        .completeGeneration(runId, generationId, completedNode("FINAL")),
     ).toBe(true)
+  })
 
+  it("classifies persistence failures without inserting a partial node", async () => {
+    await loadActiveUser()
+    const runId = beginStreaming("COMPLETE_RESPONSE")
+    expect(
+      useConversationStore.getState().failGeneration(
+        runId,
+        {
+          code: "database_unavailable",
+          message: "保存失败。",
+          retryable: true,
+        },
+        generationId,
+        "persistence",
+      ),
+    ).toBe(true)
+    expect(useConversationStore.getState().generation).toMatchObject({
+      phase: "failed",
+      failureKind: "persistence",
+      content: "COMPLETE_RESPONSE",
+    })
+    expect(
+      useConversationStore.getState().fullNodes["completed-assistant"],
+    ).toBeUndefined()
+  })
+
+  it("classifies generation failures and discards partial content", async () => {
+    await loadActiveUser()
+    const runId = beginStreaming("PARTIAL_THAT_MUST_BE_DISCARDED")
+    expect(
+      useConversationStore.getState().failGeneration(
+        runId,
+        {
+          code: "provider_unavailable",
+          message: "生成失败。",
+          retryable: true,
+        },
+        generationId,
+        "generation",
+      ),
+    ).toBe(true)
     expect(useConversationStore.getState().generation).toEqual({
       phase: "failed",
       runId,
       failureKind: "generation",
       error: {
         code: "provider_unavailable",
-        message: "Provider stopped.",
+        message: "生成失败。",
         retryable: true,
       },
     })
-    expect(useConversationStore.getState().nodesById).toBe(nodesBefore)
-    expect(useConversationStore.getState().fullNodes).toBe(fullNodesBefore)
   })
 
-  it("preserves completed content for an explicit persistence failure", async () => {
+  it("preserves a persistence failure when the terminal result beats started", async () => {
     await loadActiveUser()
-    const runId = beginStreaming("COMPLETE_RESPONSE")
-    const nodesBefore = useConversationStore.getState().nodesById
-    const fullNodesBefore = useConversationStore.getState().fullNodes
-    useConversationStore
-      .getState()
-      .markGenerationCommitting(runId, generationId)
+    const runId = useConversationStore.getState().beginGeneration()
+    expect(runId).not.toBeNull()
+    if (runId === null) return
 
     expect(
-      useConversationStore.getState().failGeneration(runId, {
-        code: "database_unavailable",
-        message: "Commit failed.",
-        retryable: true,
-      }),
+      useConversationStore.getState().failGeneration(
+        runId,
+        {
+          code: "database_unavailable",
+          message: "保存失败。",
+          retryable: true,
+        },
+        generationId,
+        "persistence",
+      ),
     ).toBe(true)
-
     expect(useConversationStore.getState().generation).toMatchObject({
       phase: "failed",
       failureKind: "persistence",
-      content: "COMPLETE_RESPONSE",
+      content: "",
     })
-    expect(useConversationStore.getState().nodesById).toBe(nodesBefore)
-    expect(useConversationStore.getState().fullNodes).toBe(fullNodesBefore)
   })
 
-  it("preserves partial content when generation is cancelled", async () => {
+  it("retains complete content when persistence loses a race with local cancellation", async () => {
     await loadActiveUser()
-    const runId = beginStreaming("PARTIAL_RESPONSE")
-
+    const runId = beginStreaming("COMPLETE_BEFORE_CANCEL")
     expect(useConversationStore.getState().cancelGenerationRun(runId)).toBe(
       true,
     )
-    expect(useConversationStore.getState().generation).toEqual({
-      phase: "cancelled",
-      runId,
-      content: "PARTIAL_RESPONSE",
-    })
-  })
-
-  it("accepts exact backend cancellation after acknowledgement without enabling user cancellation", async () => {
-    await loadActiveUser()
-    const runId = beginStreaming("COMPLETE_RESPONSE")
-    useConversationStore
-      .getState()
-      .markGenerationCommitting(runId, generationId)
-
-    expect(useConversationStore.getState().cancelGenerationRun(runId)).toBe(
-      false,
-    )
     expect(
-      useConversationStore
-        .getState()
-        .acceptGenerationCancelled(runId, "wrong-generation"),
-    ).toBe(false)
-    expect(useConversationStore.getState().generation.phase).toBe("committing")
-    expect(
-      useConversationStore
-        .getState()
-        .acceptGenerationCancelled(runId, generationId),
+      useConversationStore.getState().failGeneration(
+        runId,
+        {
+          code: "database_unavailable",
+          message: "保存失败。",
+          retryable: true,
+        },
+        generationId,
+        "persistence",
+      ),
     ).toBe(true)
-    expect(useConversationStore.getState().generation).toEqual({
-      phase: "cancelled",
-      runId,
-      content: "COMPLETE_RESPONSE",
-    })
-  })
-
-  it("preserves content when exact backend cancellation arrives during reconciliation", async () => {
-    await loadActiveUser()
-    const runId = beginStreaming("COMPLETE_RESPONSE")
-    useConversationStore
-      .getState()
-      .markGenerationCommitting(runId, generationId)
-    useConversationStore.getState().beginGenerationReconciliation(runId, {
-      code: "network_failure",
-      message: "Delivery is ambiguous.",
-      retryable: true,
-    })
-
-    expect(
-      useConversationStore
-        .getState()
-        .acceptGenerationCancelled(runId, generationId),
-    ).toBe(true)
-    expect(useConversationStore.getState().generation).toEqual({
-      phase: "cancelled",
-      runId,
-      content: "COMPLETE_RESPONSE",
-    })
-  })
-
-  it("rejects authoritative content drift without modifying durable nodes", async () => {
-    await loadActiveUser()
-    const runId = beginStreaming()
-    useConversationStore
-      .getState()
-      .markGenerationCommitting(runId, generationId)
-    const durableBefore = useConversationStore.getState().nodesById
-
-    expect(
-      useConversationStore.getState().completeGeneration(runId, generationId, {
-        id: "drifted",
-        parentId: nodes.right.id,
-        conversationId: conversation.id,
-        role: "assistant",
-        content: "DRIFTED_CONTENT",
-        model,
-        createdAt: 5,
-        metadata: null,
-      }),
-    ).toBe(false)
-    expect(useConversationStore.getState().nodesById).toBe(durableBefore)
     expect(useConversationStore.getState().generation).toMatchObject({
       phase: "failed",
-      error: { code: "tree_integrity" },
+      failureKind: "persistence",
+      content: "COMPLETE_BEFORE_CANCEL",
     })
   })
 
-  it("reconciles one exact unseen assistant from SQLite authority", async () => {
+  it("reloads exactly one new assistant as authority and never guesses among duplicates", async () => {
     await loadActiveUser()
-    useConversationStore.setState({
-      history: {
-        status: "ready",
-        summaries: [{ ...conversation, updatedAt: nodes.right.createdAt }],
-        error: null,
-      },
-    })
     const runId = beginStreaming()
-    useConversationStore
-      .getState()
-      .markGenerationCommitting(runId, generationId)
-    useConversationStore.getState().beginGenerationReconciliation(runId, {
-      code: "network_failure",
-      message: "Delivery was ambiguous.",
-      retryable: true,
-    })
-    const completed: ConversationNodeView = {
-      id: "reloaded-assistant",
-      parentId: nodes.right.id,
-      conversationId: conversation.id,
-      role: "assistant",
-      content: "STREAMED_RESPONSE",
-      model,
-      createdAt: 5,
-      metadata: null,
-    }
+    const reloadedNode = { ...completedNode(), id: "reloaded-assistant" }
     const reloaded: ConversationTreeView = {
       ...tree,
-      nodes: [...tree.nodes, completed],
+      nodes: [...tree.nodes, reloadedNode],
       nodesById: {
         ...tree.nodesById,
-        right: {
-          ...tree.nodesById.right!,
-          childIds: [completed.id],
-        },
-        [completed.id]: {
-          id: completed.id,
+        right: { ...tree.nodesById.right!, childIds: [reloadedNode.id] },
+        [reloadedNode.id]: {
+          id: reloadedNode.id,
           parentId: nodes.right.id,
           role: "assistant",
-          preview: completed.content,
+          preview: reloadedNode.content,
           childIds: [],
         },
       },
     }
-
     expect(
-      useConversationStore.getState().reconcileGeneration(runId, reloaded),
+      useConversationStore.getState().recoverGeneration(runId, reloaded),
     ).toBe(true)
-    expect(useConversationStore.getState().activeNodeId).toBe(completed.id)
-    expect(useConversationStore.getState().generation).toMatchObject({
-      phase: "completed",
-      nodeId: completed.id,
+    expect(useConversationStore.getState().generation).toEqual({
+      phase: "idle",
     })
-    expect(useConversationStore.getState().history).toMatchObject({
-      status: "ready",
-      summaries: [{ id: conversation.id, updatedAt: completed.createdAt }],
-    })
-  })
 
-  it("does not guess when reconciliation finds multiple exact assistants", async () => {
-    await loadActiveUser()
-    const runId = beginStreaming()
-    useConversationStore
-      .getState()
-      .markGenerationCommitting(runId, generationId)
-    useConversationStore.getState().beginGenerationReconciliation(runId, {
-      code: "network_failure",
-      message: "Delivery was ambiguous.",
-      retryable: true,
-    })
-    const matches = ["reloaded-one", "reloaded-two"].map(
-      (id, index): ConversationNodeView => ({
-        id,
-        parentId: nodes.right.id,
-        conversationId: conversation.id,
-        role: "assistant",
-        content: "STREAMED_RESPONSE",
-        model,
-        createdAt: 5 + index,
-        metadata: null,
-      }),
-    )
-    const reloaded: ConversationTreeView = {
-      ...tree,
-      nodes: [...tree.nodes, ...matches],
+    useConversationStore.getState().selectNode(nodes.right.id)
+    const secondRun = beginStreaming()
+    const duplicate = { ...reloadedNode, id: "reloaded-two" }
+    const secondNewNode = { ...reloadedNode, id: "reloaded-three" }
+    const duplicateTree: ConversationTreeView = {
+      ...reloaded,
+      nodes: [...reloaded.nodes, duplicate, secondNewNode],
       nodesById: {
-        ...tree.nodesById,
+        ...reloaded.nodesById,
         right: {
-          ...tree.nodesById.right!,
-          childIds: matches.map((node) => node.id),
+          ...reloaded.nodesById.right!,
+          childIds: [reloadedNode.id, duplicate.id, secondNewNode.id],
         },
-        [matches[0]!.id]: {
-          id: matches[0]!.id,
+        [duplicate.id]: {
+          id: duplicate.id,
           parentId: nodes.right.id,
           role: "assistant",
-          preview: matches[0]!.content,
+          preview: duplicate.content,
           childIds: [],
         },
-        [matches[1]!.id]: {
-          id: matches[1]!.id,
+        [secondNewNode.id]: {
+          id: secondNewNode.id,
           parentId: nodes.right.id,
           role: "assistant",
-          preview: matches[1]!.content,
+          preview: secondNewNode.content,
           childIds: [],
         },
       },
-    }
-
-    expect(
-      useConversationStore.getState().reconcileGeneration(runId, reloaded),
-    ).toBe(true)
-    expect(useConversationStore.getState().activeNodeId).toBe(nodes.right.id)
-    expect(useConversationStore.getState().generation).toMatchObject({
-      phase: "reconciling",
-      needsUserAction: true,
-    })
-    expect(useConversationStore.getState().fullNodes[matches[0]!.id]).toEqual(
-      matches[0],
-    )
-    expect(useConversationStore.getState().fullNodes[matches[1]!.id]).toEqual(
-      matches[1],
-    )
-  })
-
-  it("keeps accepting an exact completed event after an early reload", async () => {
-    await loadActiveUser()
-    const runId = beginStreaming()
-    useConversationStore
-      .getState()
-      .markGenerationCommitting(runId, generationId)
-    useConversationStore.getState().beginGenerationReconciliation(runId, {
-      code: "network_failure",
-      message: "Delivery was ambiguous.",
-      retryable: true,
-    })
-
-    expect(
-      useConversationStore.getState().reconcileGeneration(runId, tree),
-    ).toBe(true)
-    expect(useConversationStore.getState().generation).toMatchObject({
-      phase: "reconciling",
-      error: { retryable: true },
-      needsUserAction: true,
-    })
-
-    expect(
-      useConversationStore.getState().retryGenerationReconciliation(runId),
-    ).toBe(true)
-    expect(useConversationStore.getState().generation).toMatchObject({
-      phase: "reconciling",
-      needsUserAction: false,
-    })
-    expect(
-      useConversationStore
-        .getState()
-        .markGenerationReconciliationFailed(runId, {
-          code: "database_unavailable",
-          message: "Reload failed.",
-          retryable: true,
-        }),
-    ).toBe(true)
-    expect(useConversationStore.getState().generation).toMatchObject({
-      phase: "reconciling",
-      needsUserAction: true,
-    })
-
-    const completed: ConversationNodeView = {
-      id: "late-completed-assistant",
-      parentId: nodes.right.id,
-      conversationId: conversation.id,
-      role: "assistant",
-      content: "STREAMED_RESPONSE",
-      model,
-      createdAt: 5,
-      metadata: null,
     }
     expect(
       useConversationStore
         .getState()
-        .completeGeneration(runId, generationId, completed),
-    ).toBe(true)
-    expect(useConversationStore.getState().generation).toMatchObject({
-      phase: "completed",
-      nodeId: completed.id,
-    })
+        .recoverGeneration(secondRun, duplicateTree),
+    ).toBe(false)
+    expect(useConversationStore.getState().generation.phase).toBe("streaming")
+  })
+
+  it("does not recover from a model-less assistant", async () => {
+    await loadActiveUser()
+    const runId = useConversationStore.getState().beginGeneration()
+    expect(runId).not.toBeNull()
+    if (runId === null) return
+    const modelLess = {
+      ...completedNode(),
+      id: "model-less-assistant",
+      model: undefined,
+    }
+    const reloaded: ConversationTreeView = {
+      ...tree,
+      nodes: [...tree.nodes, modelLess],
+      nodesById: {
+        ...tree.nodesById,
+        right: { ...tree.nodesById.right!, childIds: [modelLess.id] },
+        [modelLess.id]: {
+          id: modelLess.id,
+          parentId: nodes.right.id,
+          role: "assistant",
+          preview: modelLess.content,
+          childIds: [],
+        },
+      },
+    }
+
+    expect(
+      useConversationStore.getState().recoverGeneration(runId, reloaded),
+    ).toBe(false)
+    expect(useConversationStore.getState().generation.phase).toBe("starting")
   })
 })

@@ -23,19 +23,13 @@ export type ConversationPaneProps = {
   onEditAsBranch: (nodeId: string, content: string) => void
   transientGeneration: TransientGenerationView | null
   onRegenerate: () => void
-  onRetryReconciliation: () => void
   userGenerationAction?: UserGenerationAction | null
   assistantRegenerationAction?: AssistantRegenerationAction | null
 }
 
 export type TransientGenerationView =
   | { phase: "starting" }
-  | { phase: "streaming" | "committing"; content: string }
-  | {
-      phase: "reconciling"
-      content: string
-      needsUserAction: boolean
-    }
+  | { phase: "streaming"; content: string }
   | {
       phase: "failed"
       failureKind: "generation"
@@ -50,13 +44,11 @@ export type TransientGenerationView =
 type TransientGenerationMessageProps = {
   generation: TransientGenerationView
   onRegenerate: () => void
-  onRetryReconciliation: () => void
 }
 
 function TransientGenerationMessage({
   generation,
   onRegenerate,
-  onRetryReconciliation,
 }: TransientGenerationMessageProps) {
   const content = "content" in generation ? generation.content : ""
   let status: string | null = null
@@ -65,15 +57,6 @@ function TransientGenerationMessage({
 
   if (generation.phase === "starting") {
     status = "正在思考"
-  } else if (generation.phase === "reconciling") {
-    status = "正在恢复这条回复…"
-    if (generation.needsUserAction) {
-      action = (
-        <Button variant="ghost" size="xs" onClick={onRetryReconciliation}>
-          重试恢复
-        </Button>
-      )
-    }
   } else if (generation.phase === "failed") {
     status =
       generation.failureKind === "generation" ? "回复失败" : "这条回复未能保存"
@@ -154,7 +137,6 @@ export function ConversationPane({
   onEditAsBranch,
   transientGeneration,
   onRegenerate,
-  onRetryReconciliation,
   userGenerationAction,
   assistantRegenerationAction,
 }: ConversationPaneProps) {
@@ -257,7 +239,6 @@ export function ConversationPane({
           <TransientGenerationMessage
             generation={transientGeneration}
             onRegenerate={onRegenerate}
-            onRetryReconciliation={onRetryReconciliation}
           />
         )}
         {status === "loading" && path.length > 0 && (

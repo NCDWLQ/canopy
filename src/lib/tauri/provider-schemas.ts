@@ -69,12 +69,6 @@ export const generateFromActivePathRequestSchema = z
 export const cancelGenerationRequestSchema = z
   .object({ generation_id: generationUuidSchema })
   .strict()
-export const commitGenerationRequestSchema = z
-  .object({
-    generation_id: generationUuidSchema,
-    commit_token: generationUuidSchema,
-  })
-  .strict()
 
 export const providerProfileDtoSchema = z
   .object({
@@ -87,17 +81,12 @@ export const providerProfileDtoSchema = z
 export const deleteProviderProfileResultSchema = z
   .object({ deleted: z.boolean() })
   .strict()
-export const generationStartResultSchema = z
-  .object({ generation_id: generationUuidSchema })
-  .strict()
 export const cancelGenerationResultSchema = z
   .object({ accepted: z.boolean() })
   .strict()
-export const commitGenerationResultSchema = cancelGenerationResultSchema
 export const generationIdProbeSchema = z
   .object({ generation_id: generationUuidSchema })
   .passthrough()
-
 const startedEventSchema = z
   .object({
     type: z.literal("started"),
@@ -118,43 +107,58 @@ const deltaEventSchema = z
     ),
   })
   .strict()
-const completedEventSchema = z
+export const generationEventDtoSchema = z.discriminatedUnion("type", [
+  startedEventSchema,
+  deltaEventSchema,
+])
+
+const generationFailureStageSchema = z.enum(["generation", "persistence"])
+const generatedContentSchema = unicodeScalarStringSchema
+  .refine(containsNonRustWhitespace)
+  .refine(
+    (value) =>
+      new TextEncoder().encode(value).byteLength <= MAX_GENERATED_CONTENT_BYTES,
+  )
+const generatedModelSchema = unicodeScalarStringSchema.refine(
+  (value) =>
+    value === trimRustWhitespace(value) &&
+    value.length > 0 &&
+    new TextEncoder().encode(value).byteLength <= 200,
+)
+const generatedAssistantNodeDtoSchema = nodeDtoSchema.extend({
+  parent_id: idSchema,
+  role: z.literal("assistant"),
+  content: generatedContentSchema,
+  model: generatedModelSchema,
+})
+const completedTerminalSchema = z
   .object({
     type: z.literal("completed"),
     generation_id: generationUuidSchema,
-    node: nodeDtoSchema,
+    node: generatedAssistantNodeDtoSchema,
   })
   .strict()
-const failedEventSchema = z
-  .object({
-    type: z.literal("failed"),
-    generation_id: generationUuidSchema,
-    error: commandErrorSchema,
-  })
-  .strict()
-const cancelledEventSchema = z
+const cancelledTerminalSchema = z
   .object({
     type: z.literal("cancelled"),
     generation_id: generationUuidSchema,
   })
   .strict()
-
-const readyToCommitEventSchema = z
+const failedTerminalSchema = z
   .object({
-    type: z.literal("ready_to_commit"),
+    type: z.literal("failed"),
     generation_id: generationUuidSchema,
-    commit_token: generationUuidSchema,
+    stage: generationFailureStageSchema,
+    error: commandErrorSchema,
   })
   .strict()
 
-export const generationEventDtoSchema = z.discriminatedUnion("type", [
-  startedEventSchema,
-  deltaEventSchema,
-  readyToCommitEventSchema,
-  completedEventSchema,
-  failedEventSchema,
-  cancelledEventSchema,
+export const generationTerminalDtoSchema = z.discriminatedUnion("type", [
+  completedTerminalSchema,
+  cancelledTerminalSchema,
+  failedTerminalSchema,
 ])
 
 export type ProviderProfileDto = z.infer<typeof providerProfileDtoSchema>
 export type GenerationEventDto = z.infer<typeof generationEventDtoSchema>
+export type GenerationTerminalDto = z.infer<typeof generationTerminalDtoSchema>

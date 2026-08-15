@@ -4,11 +4,11 @@
 
 ## Current State
 
-`useWorkspaceGenerationController` is the first feature hook. It coordinates
-the typed provider Channel with conversation selection, mutation locking,
-exact cancellation, automatic acknowledgement, and SQLite reconciliation.
-Keep this lifecycle under `features/conversations/hooks`; do not move it into a
-generic root hook or duplicate it in components.
+`useWorkspaceGenerationController` coordinates the typed provider Channel,
+conversation selection, mutation locking, exact cancellation, terminal result
+handling, and one-shot authoritative reloads. Keep this lifecycle under
+`features/conversations/hooks`; do not move it into a generic root hook or
+duplicate it in components.
 
 ## When to Create a Hook
 
@@ -28,8 +28,7 @@ without React.
 
 - Feature hooks live with their feature, for example
   `src/features/conversations/hooks/useActiveConversation.ts`.
-- `src/hooks` is only for behavior shared across features, such as a proven
-  reusable desktop-media hook.
+- `src/hooks` is only for behavior shared across features.
 - Hook names and filenames start with `use` and describe the returned concept,
   not the implementation mechanism.
 - Export an explicit result type when the hook crosses a feature boundary or
@@ -42,67 +41,56 @@ without React.
 - Keep selectors pure and exported from the store module; a hook may compose
   them but must not duplicate traversal logic.
 - Do not construct a second conversation tree inside component-local state.
-- The visible active path must come from the single validated
-  application/store projection and must preserve root-to-active ordering.
-
-Conceptual shape:
+- The visible active path must come from the single validated store projection
+  and preserve root-to-active ordering.
 
 ```ts
 const activeNodeId = useConversationStore(selectActiveNodeId)
 const activePath = useConversationStore(selectActivePath)
 ```
 
-The selectors above must be imported from the owning store module rather than
-redeclared inline in several components.
-
 ## Effects and Tauri Calls
 
-- Hooks never call raw `invoke`; they call a typed action or `lib/tauri` bridge
-  function that validates unknown results.
-- Include every effect dependency. Do not suppress the configured
-  `react-hooks` lint rules.
-- Effects that start asynchronous work must handle stale completion and
+- Hooks never call raw `invoke`; they call typed bridge functions that validate
+  unknown results.
+- Include every effect dependency. Do not suppress configured hook lint rules.
+- Effects that start asynchronous work must handle stale completion and exact
   cancellation explicitly.
-- Channel callbacks and the command promise may resolve in either order. Gate
-  both with the current UI run identity; a late command result for the exact
-  current/completed generation is not a cancellation condition.
-- After acknowledgement may have been accepted, cancellation is not rollback.
-  Keep the store in silent `committing` for the complete 1,500 millisecond
-  terminal-delivery grace period, then enter visible reconciliation and reload
-  SQLite authority. A thrown commit call schedules that same delayed path; it
-  does not enter `reconciling` immediately.
-- Cleanup clears timers and triggers exactly one immediate reconciliation for
-  already-ambiguous committing/reconciling work; a cleared grace timer must not
-  fire later.
-- User cancellation is permitted only before acknowledgement and returns a
-  cancelled state retaining partial content without an error toast. The Channel
-  may still deliver an exact backend `cancelled` after ready; accept that
-  terminal separately without exposing a post-ack user-cancel action.
-- Manual reconciliation retry first atomically clears its user-action flag,
-  then starts the reload. Ignore retries while automatic work is running.
-- Do not use an effect to derive values that can be computed during render by
-  a pure selector.
+- Channel callbacks and the long-lived command promise may resolve in either
+  order. Gate both with the current `runId`; a late terminal result for the
+  exact current generation is valid, not a cancellation condition.
+- The hook accepts only `started`/`delta` Channel events and a separate
+  `completed`/`cancelled`/`failed` terminal result. It never invents a durable
+  assistant from deltas.
+- User cancellation is permitted only in `starting` or `streaming`. Cleanup
+  invalidates the run and best-effort exact-cancels a known generation ID.
+- A malformed callback or terminal result fails closed. If a known exact ID is
+  available, cancel it; never cancel an ID taken from an unvalidated payload.
+- An invoke rejection after `started` is ambiguous. Reload authoritative
+  conversation state at most once for that run, and preserve a safe existing
+  projection if reload cannot prove one exact assistant.
+- Do not use an effect to derive values that can be computed during render by a
+  pure selector.
 
 ## Testing
 
 - Prefer testing the pure selector/action behind a hook.
 - Test a hook directly when its subscription, cancellation, or lifecycle is
   the behavior under test.
-- Use fake timers for the exact 1,500 millisecond boundary and always restore
-  real timers in cleanup. Cover exact terminal delivery before the threshold,
-  during an in-flight reload, and after unmount cleanup.
 - Use deterministic typed bridge fakes; do not mock raw SQL or reach through
   the Tauri boundary.
+- Cover result-before-callback, malformed event, exact cancellation, stale
+  run, unmount, terminal-stage handling, and one-shot reload behavior.
 - Every active-path test includes two sibling branches and asserts that the
   inactive sibling is absent.
 
 ## Common Mistakes
 
-- Wrapping every bridge call in an ad hoc `useEffect` data-fetching hook.
+- Wrapping every bridge call in an ad-hoc `useEffect` data-fetching hook.
 - Returning a broad Zustand store object and causing unrelated rerenders.
 - Hiding product mutations inside a generic hook under `src/hooks`.
 - Parsing unknown IPC errors inside a hook instead of the typed bridge.
 - Copying store state into local state and allowing the two trees to diverge.
 - Disabling hook lint rules to force an effect lifecycle.
-- Entering visible reconciliation inside a commit `catch`, which exposes an
-  ambiguous internal state before the terminal-delivery grace period expires.
+- Treating a transport rejection as proof of either success or failure before
+  the controller has performed its one-shot durable reload.

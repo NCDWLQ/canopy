@@ -7,31 +7,21 @@ import {
   selectActivePath,
   useConversationStore,
 } from "../store"
-import type {
-  ConversationNodeView,
-  ConversationTreeView,
-  UiError,
-} from "../types"
+import type { ConversationNodeView, ConversationTreeView } from "../types"
 import { useProviderProfileStore } from "@/features/providers/store"
-import type { GenerationEventView } from "@/features/providers/types"
-import type { ConversationClient, ProviderClient } from "@/lib/tauri"
-
-const COMMIT_REJECTED_ERROR: UiError = {
-  code: "internal",
-  message: "回复未能保存，请重新生成。",
-  retryable: true,
-}
-
-const RECONCILING_ERROR: UiError = {
-  code: "internal",
-  message: "暂时无法确认回复是否已保存。",
-  retryable: true,
-}
+import type {
+  GenerationEventView,
+  GenerationTerminalView,
+} from "@/features/providers/types"
+import {
+  generationIdFromBridgeError,
+  type ConversationClient,
+  type ProviderClient,
+} from "@/lib/tauri"
 
 export type WorkspaceGenerationControllerOptions = {
   conversationClient: ConversationClient
   providerClient: ProviderClient
-  reconciliationDelayMs?: number
 }
 
 export type WorkspaceGenerationController = {
@@ -48,7 +38,6 @@ export type WorkspaceGenerationController = {
   appendNode: (content: string) => Promise<void>
   createBranch: (parentNodeId: string, content: string) => Promise<void>
   editNodeAsBranch: (sourceNodeId: string, content: string) => Promise<void>
-  retryReconciliation: () => void
 }
 
 type GenerationTarget = {
@@ -59,7 +48,6 @@ type GenerationTarget = {
 export function useWorkspaceGenerationController({
   conversationClient,
   providerClient,
-  reconciliationDelayMs = 1_500,
 }: WorkspaceGenerationControllerOptions): WorkspaceGenerationController {
   const providerPhase = useProviderProfileStore((state) => state.phase)
   const conversationId = useConversationStore((state) => state.conversationId)
@@ -75,16 +63,8 @@ export function useWorkspaceGenerationController({
   const cancelRequestedRuns = React.useRef(new Set<number>())
   const cancelSentIds = React.useRef(new Set<string>())
   const generationIds = React.useRef(new Map<number, string>())
+  const recoveryRuns = React.useRef(new Set<number>())
   const isMounted = React.useRef(false)
-  const reconciliationTimers = React.useRef(
-    new Map<number, ReturnType<typeof setTimeout>>(),
-  )
-
-  const clearReconciliationTimer = React.useCallback((runId: number) => {
-    const timer = reconciliationTimers.current.get(runId)
-    if (timer !== undefined) clearTimeout(timer)
-    reconciliationTimers.current.delete(runId)
-  }, [])
 
   const requestExactCancellation = React.useCallback(
     (generationId: string) => {
@@ -95,85 +75,73 @@ export function useWorkspaceGenerationController({
     [providerClient],
   )
 
-  const reconcile = React.useCallback(
-    async (runId: number) => {
-      clearReconciliationTimer(runId)
-      const current = useConversationStore.getState().generation
-      if (current.phase !== "reconciling" || current.runId !== runId) return
-      try {
-        const tree = await conversationClient.loadConversationTree(
-          current.conversationId,
-        )
-        if (!useConversationStore.getState().reconcileGeneration(runId, tree)) {
-          useConversationStore
-            .getState()
-            .markGenerationReconciliationFailed(runId, RECONCILING_ERROR)
-        }
-      } catch (error: unknown) {
-        useConversationStore
-          .getState()
-          .markGenerationReconciliationFailed(runId, normalizeUiError(error))
-      }
-    },
-    [clearReconciliationTimer, conversationClient],
-  )
-
-  const scheduleReconciliation = React.useCallback(
-    (runId: number, error: UiError = RECONCILING_ERROR) => {
-      const generation = useConversationStore.getState().generation
-      if (generation.phase !== "committing" || generation.runId !== runId) {
-        return
-      }
-      clearReconciliationTimer(runId)
-      const timer = setTimeout(() => {
-        let current = useConversationStore.getState().generation
-        if (
-          current.phase === "committing" &&
-          current.runId === runId &&
-          useConversationStore
-            .getState()
-            .beginGenerationReconciliation(runId, error)
-        ) {
-          current = useConversationStore.getState().generation
-        }
-        if (current.phase === "reconciling" && current.runId === runId) {
-          void reconcile(runId)
-        }
-      }, reconciliationDelayMs)
-      reconciliationTimers.current.set(runId, timer)
-    },
-    [clearReconciliationTimer, reconcile, reconciliationDelayMs],
-  )
-
-  const handleReady = React.useCallback(
-    async (
-      runId: number,
-      event: Extract<GenerationEventView, { type: "ready_to_commit" }>,
-    ) => {
+  const recoverAmbiguousRun = React.useCallback(
+    async (runId: number, target: GenerationTarget, fallback: unknown) => {
+      if (recoveryRuns.current.has(runId)) return
+      recoveryRuns.current.add(runId)
+      const beforeReload = useConversationStore.getState().generation
       if (
-        !useConversationStore
-          .getState()
-          .markGenerationCommitting(runId, event.generationId)
+        beforeReload.phase === "idle" ||
+        beforeReload.phase === "failed" ||
+        beforeReload.runId !== runId
       ) {
         return
       }
       try {
-        const result = await providerClient.commitGeneration(
-          event.generationId,
-          event.commitToken,
+        const tree = await conversationClient.loadConversationTree(
+          target.conversationId,
         )
-        if (!result.accepted) {
-          useConversationStore
-            .getState()
-            .failGeneration(runId, COMMIT_REJECTED_ERROR, event.generationId)
-          return
+        if (!useConversationStore.getState().recoverGeneration(runId, tree)) {
+          const current = useConversationStore.getState().generation
+          if (isGenerationActive(current)) {
+            useConversationStore
+              .getState()
+              .failGeneration(runId, normalizeUiError(fallback))
+          }
         }
-        scheduleReconciliation(runId)
       } catch (error: unknown) {
-        scheduleReconciliation(runId, normalizeUiError(error))
+        useConversationStore
+          .getState()
+          .failGenerationRecovery(runId, normalizeUiError(error))
       }
     },
-    [providerClient, scheduleReconciliation],
+    [conversationClient],
+  )
+
+  const handleTerminal = React.useCallback(
+    async (
+      runId: number,
+      target: GenerationTarget,
+      terminal: GenerationTerminalView,
+    ) => {
+      generationIds.current.set(runId, terminal.generationId)
+      const current = useConversationStore.getState().generation
+      if (current.phase === "idle" || current.runId !== runId) return
+
+      if (terminal.type === "completed") {
+        if (
+          !useConversationStore
+            .getState()
+            .completeGeneration(runId, terminal.generationId, terminal.node)
+        ) {
+          await recoverAmbiguousRun(runId, target, terminal)
+        }
+      } else if (terminal.type === "cancelled") {
+        useConversationStore
+          .getState()
+          .acceptGenerationCancelled(runId, terminal.generationId)
+      } else {
+        useConversationStore
+          .getState()
+          .failGeneration(
+            runId,
+            terminal.error,
+            terminal.generationId,
+            terminal.stage,
+          )
+      }
+    },
+    [recoverAmbiguousRun],
   )
 
   const handleEvent = React.useCallback(
@@ -184,34 +152,20 @@ export function useWorkspaceGenerationController({
           requestExactCancellation(event.generationId)
           return
         }
-        useConversationStore.getState().acceptGenerationStarted(runId, event)
+        if (
+          !useConversationStore.getState().acceptGenerationStarted(runId, event)
+        ) {
+          requestExactCancellation(event.generationId)
+        }
         return
       }
-      if (event.type === "delta") {
-        useConversationStore.getState().appendGenerationDelta(runId, event)
-        return
-      }
-      if (event.type === "ready_to_commit") {
-        void handleReady(runId, event)
-        return
-      }
-
-      clearReconciliationTimer(runId)
-      if (event.type === "completed") {
-        useConversationStore
-          .getState()
-          .completeGeneration(runId, event.generationId, event.node)
-      } else if (event.type === "failed") {
-        useConversationStore
-          .getState()
-          .failGeneration(runId, event.error, event.generationId)
-      } else {
-        useConversationStore
-          .getState()
-          .acceptGenerationCancelled(runId, event.generationId)
+      if (
+        !useConversationStore.getState().appendGenerationDelta(runId, event)
+      ) {
+        requestExactCancellation(event.generationId)
       }
     },
-    [clearReconciliationTimer, handleReady, requestExactCancellation],
+    [requestExactCancellation],
   )
 
   const cancel = React.useCallback(() => {
@@ -240,48 +194,40 @@ export function useWorkspaceGenerationController({
       if (runId === null) return
       const current = useConversationStore.getState().generation
       if (current.phase !== "starting" || current.runId !== runId) return
+      const target = {
+        conversationId: current.conversationId,
+        parentNodeId: current.parentNodeId,
+      }
 
       void providerClient
         .generateFromActivePath(
-          current.conversationId,
-          current.parentNodeId,
+          target.conversationId,
+          target.parentNodeId,
           (event) => handleEvent(runId, event),
         )
-        .then(({ generationId }) => {
-          generationIds.current.set(runId, generationId)
-          const store = useConversationStore.getState()
-          const current = store.generation
-          if (
-            cancelRequestedRuns.current.has(runId) ||
-            current.phase === "idle" ||
-            current.runId !== runId ||
-            current.phase === "cancelled"
-          ) {
-            requestExactCancellation(generationId)
-            return
-          }
-          if (
-            current.phase === "starting" &&
-            !store.recordGenerationId(runId, generationId)
-          ) {
-            requestExactCancellation(generationId)
-            return
-          }
-          if (
-            isGenerationActive(current) &&
-            current.generationId !== undefined &&
-            current.generationId !== generationId
-          ) {
-            requestExactCancellation(generationId)
-          }
-        })
+        .then((terminal) => handleTerminal(runId, target, terminal))
         .catch((error: unknown) => {
-          useConversationStore
-            .getState()
-            .failGeneration(runId, normalizeUiError(error))
+          const currentGeneration = useConversationStore.getState().generation
+          const normalizedError = normalizeUiError(error)
+          const knownGenerationId =
+            ("generationId" in currentGeneration
+              ? currentGeneration.generationId
+              : undefined) ??
+            generationIds.current.get(runId) ??
+            generationIdFromBridgeError(error)
+          if (
+            knownGenerationId !== undefined ||
+            normalizedError.code === "internal"
+          ) {
+            void recoverAmbiguousRun(runId, target, error)
+          } else {
+            useConversationStore
+              .getState()
+              .failGeneration(runId, normalizedError)
+          }
         })
     },
-    [handleEvent, providerClient, requestExactCancellation],
+    [handleEvent, handleTerminal, providerClient, recoverAmbiguousRun],
   )
 
   const generate = React.useCallback(() => {
@@ -289,42 +235,20 @@ export function useWorkspaceGenerationController({
   }, [startGeneration])
 
   const prepareMutation = React.useCallback(() => {
-    const current = useConversationStore.getState().generation
-    if (current.phase === "committing" || current.phase === "reconciling") {
-      return false
-    }
-    if (current.phase === "starting" || current.phase === "streaming") cancel()
+    if (isGenerationActive(useConversationStore.getState().generation)) cancel()
     return true
   }, [cancel])
 
   React.useEffect(() => {
     isMounted.current = true
-    const timers = reconciliationTimers.current
     return () => {
       isMounted.current = false
-      const current = useConversationStore.getState().generation
-      if (current.phase === "starting" || current.phase === "streaming") {
+      if (isGenerationActive(useConversationStore.getState().generation))
         cancel()
-      } else if (current.phase === "committing") {
-        if (
-          useConversationStore
-            .getState()
-            .beginGenerationReconciliation(current.runId, RECONCILING_ERROR)
-        ) {
-          void reconcile(current.runId)
-        }
-      } else if (current.phase === "reconciling") {
-        void reconcile(current.runId)
-      }
-      for (const timer of timers.values()) {
-        clearTimeout(timer)
-      }
-      timers.clear()
     }
-  }, [cancel, reconcile])
+  }, [cancel])
 
-  const mutationLocked =
-    generation.phase === "committing" || generation.phase === "reconciling"
+  const mutationLocked = isGenerationActive(generation)
   const canCancel =
     generation.phase === "starting" || generation.phase === "streaming"
   const canGenerate =
@@ -436,17 +360,6 @@ export function useWorkspaceGenerationController({
       await useConversationStore
         .getState()
         .editNodeAsBranch(conversationClient, sourceNodeId, content)
-    },
-    retryReconciliation: () => {
-      const current = useConversationStore.getState().generation
-      if (
-        current.phase === "reconciling" &&
-        useConversationStore
-          .getState()
-          .retryGenerationReconciliation(current.runId)
-      ) {
-        void reconcile(current.runId)
-      }
     },
   }
 }

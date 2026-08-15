@@ -21,9 +21,7 @@ export type SaveProviderProfileInput = {
   apiKey: ApiKeyInputAction
 }
 
-export type GenerationStartView = { generationId: string }
 export type CancelGenerationView = { accepted: boolean }
-export type CommitGenerationView = { accepted: boolean }
 
 export type GenerationEventView =
   | {
@@ -34,15 +32,17 @@ export type GenerationEventView =
       model: string
     }
   | { type: "delta"; generationId: string; content: string }
-  | {
-      type: "ready_to_commit"
-      generationId: string
-      commitToken: string
-    }
+
+export type GenerationTerminalView =
   | {
       type: "completed"
       generationId: string
       node: ConversationNodeView
     }
-  | { type: "failed"; generationId?: string; error: UiError }
   | { type: "cancelled"; generationId: string }
+  | {
+      type: "failed"
+      generationId: string
+      stage: "generation" | "persistence"
+      error: UiError
+    }

@@ -36,7 +36,6 @@ fn register_commands<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Bu
         providers::commands::delete_provider_profile,
         providers::commands::generate_from_active_path,
         providers::commands::cancel_generation,
-        providers::commands::commit_generation,
     ])
 }
 
@@ -167,7 +166,7 @@ mod tests {
     }
 
     #[test]
-    fn generation_cancel_and_commit_commands_are_registered_for_mock_ipc() {
+    fn generation_cancel_command_is_registered_for_mock_ipc() {
         let app = register_commands(test::mock_builder())
             .manage(DbInstances::default())
             .manage(crate::providers::GenerationRuntime::default())
@@ -177,19 +176,10 @@ mod tests {
             .build()
             .expect("mock webview builds");
         let generation_id = "11111111-1111-4111-8111-111111111111";
-        let requests = [
-            (
-                "cancel_generation",
-                json!({ "request": { "generation_id": generation_id } }),
-            ),
-            (
-                "commit_generation",
-                json!({ "request": {
-                    "generation_id": generation_id,
-                    "commit_token": "22222222-2222-4222-8222-222222222222"
-                } }),
-            ),
-        ];
+        let requests = [(
+            "cancel_generation",
+            json!({ "request": { "generation_id": generation_id } }),
+        )];
 
         for (command, body) in requests {
             let response = test::get_ipc_response(

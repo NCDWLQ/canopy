@@ -18,7 +18,6 @@ function createClient() {
     deleteProviderProfile: vi.fn<ProviderClient["deleteProviderProfile"]>(),
     generateFromActivePath: vi.fn<ProviderClient["generateFromActivePath"]>(),
     cancelGeneration: vi.fn<ProviderClient["cancelGeneration"]>(),
-    commitGeneration: vi.fn<ProviderClient["commitGeneration"]>(),
   } satisfies ProviderClient
 }
 
