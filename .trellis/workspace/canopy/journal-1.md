@@ -446,3 +446,24 @@ Added collapsed-sidebar quick new conversation entry to main header, toolbarized
 ### Status
 
 [OK] **Completed**
+
+
+## Session 21: Keep archive action visible during generation
+
+**Date**: 2026-08-15
+**Task**: Keep archive action visible during generation
+**Branch**: `main`
+
+### Summary
+
+Changed the conversation archive button to remain visible during active generation while disabled with Chinese guidance. Added regression coverage for visibility, disabled behavior, and re-enabling after cancellation. Full tests, lint, and typecheck pass.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bc3b539` | (see git log) |
+
+### Status
+
+[OK] **Completed**
