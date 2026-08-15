@@ -1,21 +1,19 @@
 import * as React from "react"
-import {
-  Archive,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Plus,
-  Sparkles,
-  Square,
-} from "lucide-react"
+import { Archive, PanelLeftClose, PanelLeftOpen, Plus } from "lucide-react"
 import { useShallow } from "zustand/react/shallow"
 
-import { Composer } from "./Composer"
-import { ConversationPane } from "./ConversationPane"
+import { Composer, type ComposerAction } from "./Composer"
+import {
+  ConversationPane,
+  type AssistantRegenerationAction,
+  type UserGenerationAction,
+} from "./ConversationPane"
 import { OutlineTree } from "./OutlineTree"
 import { useWorkspaceGenerationController } from "../hooks/useWorkspaceGenerationController"
 import {
   isGenerationActive,
   selectActivePath,
+  type ConversationTreeState,
   useConversationStore,
 } from "../store"
 import { Badge } from "@/components/ui/badge"
@@ -42,6 +40,60 @@ export type ConversationWorkspaceProps = {
   providerClient?: ProviderClient
 }
 
+type AssistantRegenerationTarget = {
+  conversationId: string
+  assistantNodeId: string
+  parentUserNodeId: string
+}
+
+function resolveAssistantRegenerationTarget(
+  state: ConversationTreeState,
+): AssistantRegenerationTarget | null {
+  if (
+    state.isCreatingConversation ||
+    state.conversationId === null ||
+    state.isArchived ||
+    state.status !== "ready" ||
+    (state.generation.phase !== "idle" &&
+      state.generation.phase !== "completed")
+  ) {
+    return null
+  }
+
+  const projection = selectActivePath(state)
+  const finalMessage =
+    projection.kind === "ready" ? projection.path.at(-1) : null
+  if (
+    finalMessage?.role !== "assistant" ||
+    state.activeNodeId !== finalMessage.id
+  ) {
+    return null
+  }
+
+  const assistantNode = state.fullNodes[finalMessage.id]
+  if (
+    assistantNode?.role !== "assistant" ||
+    assistantNode.parentId === undefined ||
+    assistantNode.conversationId !== state.conversationId
+  ) {
+    return null
+  }
+
+  const parentNode = state.fullNodes[assistantNode.parentId]
+  if (
+    parentNode?.role !== "user" ||
+    parentNode.conversationId !== state.conversationId
+  ) {
+    return null
+  }
+
+  return {
+    conversationId: state.conversationId,
+    assistantNodeId: assistantNode.id,
+    parentUserNodeId: parentNode.id,
+  }
+}
+
 export function ConversationWorkspace({
   conversationClient: injectedConversationClient,
   providerClient: injectedProviderClient,
@@ -57,6 +109,7 @@ export function ConversationWorkspace({
   const loadProviderProfile = useProviderProfileStore(
     (state) => state.loadProfile,
   )
+  const providerPhase = useProviderProfileStore((state) => state.phase)
   const store = useConversationStore(
     useShallow((state) => ({
       conversationId: state.conversationId,
@@ -87,6 +140,7 @@ export function ConversationWorkspace({
     providerClient,
   })
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true)
+  const [isSettingsOpen, setIsSettingsOpen] = React.useState(false)
 
   React.useEffect(() => {
     void loadProviderProfile(providerClient)
@@ -145,19 +199,49 @@ export function ConversationWorkspace({
         return null
     }
   })()
-  const canMutate =
+
+  const canEditDraft =
     !isBlankConversation &&
     store.conversationId !== null &&
     !store.isArchived &&
     store.status === "ready" &&
-    isProjectionValid &&
-    !controller.mutationLocked
+    isProjectionValid
+
+  const canMutate = canEditDraft && !controller.mutationLocked
 
   const canAppend = (() => {
     if (!canMutate || store.activeNodeId === null) return false
     const node = store.nodesById[store.activeNodeId]
     return node?.role === "assistant" && node.childIds.length === 0
   })()
+
+  const userGenerationAction: UserGenerationAction | null = (() => {
+    if (
+      !canMutate ||
+      store.activeNodeId === null ||
+      transientGeneration !== null
+    ) {
+      return null
+    }
+    const activeNode = store.nodesById[store.activeNodeId]
+    if (activeNode?.role !== "user" || activeNode.childIds.length > 0) {
+      return null
+    }
+    if (providerPhase === "ready") {
+      return {
+        kind: "generate",
+        onSelect: controller.generate,
+      }
+    }
+    return {
+      kind: "configure-provider",
+      onSelect: () => setIsSettingsOpen(true),
+    }
+  })()
+
+  const composerAction: ComposerAction = controller.canCancel
+    ? { kind: "cancel", onCancel: controller.cancel }
+    : { kind: "send", disabled: !canAppend }
 
   const canCreateBranch = (nodeId: string) => {
     if (!canMutate) return false
@@ -172,6 +256,35 @@ export function ConversationWorkspace({
       node?.parentId === undefined ? undefined : store.fullNodes[node.parentId]
     return node?.role === "user" && parent?.role === "assistant"
   }
+
+  const handleRegenerateAssistant = (assistantNodeId: string) => {
+    if (useProviderProfileStore.getState().phase !== "ready") return
+
+    const target = resolveAssistantRegenerationTarget(
+      useConversationStore.getState(),
+    )
+    if (target?.assistantNodeId !== assistantNodeId) return
+
+    controller.selectNode(target.parentUserNodeId)
+    const selectedState = useConversationStore.getState()
+    if (
+      selectedState.conversationId !== target.conversationId ||
+      selectedState.activeNodeId !== target.parentUserNodeId
+    ) {
+      return
+    }
+    controller.generate()
+  }
+
+  const assistantRegenerationTarget =
+    providerPhase === "ready" ? resolveAssistantRegenerationTarget(store) : null
+  const assistantRegenerationAction: AssistantRegenerationAction | null =
+    assistantRegenerationTarget === null
+      ? null
+      : {
+          assistantNodeId: assistantRegenerationTarget.assistantNodeId,
+          onSelect: handleRegenerateAssistant,
+        }
 
   const handleRetry = () => {
     if (store.conversationId === null) store.clearError()
@@ -306,6 +419,8 @@ export function ConversationWorkspace({
             client={providerClient}
             readOnly={!isBlankConversation && store.isArchived}
             generationActive={isGenerationActive(store.generation)}
+            open={isSettingsOpen}
+            onOpenChange={setIsSettingsOpen}
           />
         </footer>
       </aside>
@@ -338,26 +453,6 @@ export function ConversationWorkspace({
           </div>
 
           <div className="flex items-center gap-2">
-            {!isBlankConversation &&
-              store.conversationId !== null &&
-              !store.isArchived &&
-              (controller.canCancel ? (
-                <Button variant="outline" size="sm" onClick={controller.cancel}>
-                  <Square data-icon="inline-start" />
-                  取消生成
-                </Button>
-              ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={controller.generate}
-                  disabled={!controller.canGenerate}
-                  title={controller.unavailableReason ?? "生成回复"}
-                >
-                  <Sparkles data-icon="inline-start" />
-                  生成
-                </Button>
-              ))}
             {canMutate && (
               <Button
                 variant="outline"
@@ -406,9 +501,14 @@ export function ConversationWorkspace({
             <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10">
               <Composer
                 onSubmit={controller.createConversation}
-                disabled={
+                inputDisabled={
                   store.status === "loading" || controller.mutationLocked
                 }
+                action={{
+                  kind: "send",
+                  disabled:
+                    store.status === "loading" || controller.mutationLocked,
+                }}
                 placeholder="输入第一条消息…"
               />
             </div>
@@ -452,18 +552,21 @@ export function ConversationWorkspace({
               transientGeneration={transientGeneration}
               onRegenerate={controller.generate}
               onRetryReconciliation={controller.retryReconciliation}
+              userGenerationAction={userGenerationAction}
+              assistantRegenerationAction={assistantRegenerationAction}
             />
 
             <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10">
               <Composer
                 onSubmit={(content) => void controller.appendNode(content)}
-                disabled={!canAppend}
+                inputDisabled={!canEditDraft}
+                action={composerAction}
                 placeholder={
                   store.isArchived
                     ? "会话已归档，无法修改。"
                     : canAppend
                       ? "输入下一条用户消息…"
-                      : "暂时无法输入；请选择末端的助手回复以继续。"
+                      : "可输入草稿；当前路径暂无法发送。"
                 }
               />
             </div>

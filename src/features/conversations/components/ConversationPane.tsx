@@ -2,9 +2,15 @@ import * as React from "react"
 import type { PathMessageView, UiError } from "../types"
 import { AssistantMarkdown } from "./AssistantMarkdown"
 import { MessageBubble } from "./MessageBubble"
-import { MessageNode } from "./MessageNode"
+import {
+  MessageNode,
+  type AssistantRegenerationAction,
+  type UserGenerationAction,
+} from "./MessageNode"
 import { Button } from "@/components/ui/button"
 import { AlertCircle, RefreshCw, Loader2 } from "lucide-react"
+
+export type { AssistantRegenerationAction, UserGenerationAction }
 
 export type ConversationPaneProps = {
   path: readonly PathMessageView[]
@@ -18,6 +24,8 @@ export type ConversationPaneProps = {
   transientGeneration: TransientGenerationView | null
   onRegenerate: () => void
   onRetryReconciliation: () => void
+  userGenerationAction?: UserGenerationAction | null
+  assistantRegenerationAction?: AssistantRegenerationAction | null
 }
 
 export type TransientGenerationView =
@@ -70,12 +78,31 @@ function TransientGenerationMessage({
     status =
       generation.failureKind === "generation" ? "回复失败" : "这条回复未能保存"
     action = (
-      <Button variant="ghost" size="xs" onClick={onRegenerate}>
-        重新生成
+      <Button
+        variant="ghost"
+        size="icon"
+        className="size-7 text-muted-foreground hover:text-foreground"
+        title="重新生成"
+        aria-label="重新生成"
+        onClick={onRegenerate}
+      >
+        <RefreshCw className="size-3.5" aria-hidden="true" />
       </Button>
     )
   } else if (generation.phase === "cancelled") {
     status = "回复已停止"
+    action = (
+      <Button
+        variant="ghost"
+        size="icon"
+        className="size-7 text-muted-foreground hover:text-foreground"
+        title="重新生成"
+        aria-label="重新生成"
+        onClick={onRegenerate}
+      >
+        <RefreshCw className="size-3.5" aria-hidden="true" />
+      </Button>
+    )
   }
 
   return (
@@ -128,6 +155,8 @@ export function ConversationPane({
   transientGeneration,
   onRegenerate,
   onRetryReconciliation,
+  userGenerationAction,
+  assistantRegenerationAction,
 }: ConversationPaneProps) {
   const bottomRef = React.useRef<HTMLDivElement>(null)
   const transientContent =
@@ -197,16 +226,33 @@ export function ConversationPane({
         className="mx-auto w-full max-w-4xl flex-1 pb-28 md:pb-32"
         role="log"
       >
-        {path.map((msg) => (
-          <MessageNode
-            key={msg.id}
-            message={msg}
-            canBranch={canBranch(msg.id)}
-            canEdit={canEdit(msg.id)}
-            onCreateBranch={onCreateBranch}
-            onEditAsBranch={onEditAsBranch}
-          />
-        ))}
+        {path.map((msg, index) => {
+          const isLastMessage = index === path.length - 1
+          const nodeGenerationAction =
+            isLastMessage && userGenerationAction && msg.role === "user"
+              ? userGenerationAction
+              : undefined
+          const nodeAssistantRegenerationAction =
+            status === "ready" &&
+            transientGeneration === null &&
+            isLastMessage &&
+            msg.role === "assistant" &&
+            assistantRegenerationAction?.assistantNodeId === msg.id
+              ? assistantRegenerationAction
+              : undefined
+          return (
+            <MessageNode
+              key={msg.id}
+              message={msg}
+              canBranch={canBranch(msg.id)}
+              canEdit={canEdit(msg.id)}
+              onCreateBranch={onCreateBranch}
+              onEditAsBranch={onEditAsBranch}
+              generationAction={nodeGenerationAction}
+              assistantRegenerationAction={nodeAssistantRegenerationAction}
+            />
+          )
+        })}
         {transientGeneration !== null && (
           <TransientGenerationMessage
             generation={transientGeneration}

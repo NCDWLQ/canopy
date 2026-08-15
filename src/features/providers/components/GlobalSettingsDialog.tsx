@@ -37,17 +37,28 @@ import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import type { ProviderClient } from "@/lib/tauri"
 
-export type GlobalSettingsDialogProps = {
+type GlobalSettingsDialogBaseProps = {
   client: ProviderClient
   readOnly: boolean
   generationActive: boolean
 }
 
-export function GlobalSettingsDialog({
-  client,
-  readOnly,
-  generationActive,
-}: GlobalSettingsDialogProps) {
+export type GlobalSettingsDialogProps = GlobalSettingsDialogBaseProps &
+  (
+    | {
+        open?: never
+        onOpenChange?: never
+      }
+    | {
+        open: boolean
+        onOpenChange: (open: boolean) => void
+      }
+  )
+
+export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
+  const { client, readOnly, generationActive } = props
+  const controlledOpen = props.open
+  const controlledOnOpenChange = props.onOpenChange
   const phase = useProviderProfileStore((state) => state.phase)
   const profile = useProviderProfileStore((state) => state.profile)
   const error = useProviderProfileStore((state) =>
@@ -55,16 +66,37 @@ export function GlobalSettingsDialog({
   )
   const saveProfile = useProviderProfileStore((state) => state.saveProfile)
   const deleteProfile = useProviderProfileStore((state) => state.deleteProfile)
-  const [open, setOpen] = React.useState(false)
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false)
+  const isControlled = controlledOpen !== undefined
+  const open = isControlled ? controlledOpen : uncontrolledOpen
+
   const [baseEndpoint, setBaseEndpoint] = React.useState("")
   const [model, setModel] = React.useState("")
   const [apiKey, setApiKey] = React.useState("")
   const [removeKey, setRemoveKey] = React.useState(false)
 
+  const prevOpenRef = React.useRef(open)
+
+  React.useEffect(() => {
+    if (open && !prevOpenRef.current) {
+      setBaseEndpoint(profile?.baseEndpoint ?? "")
+      setModel(profile?.model ?? "")
+      setApiKey("")
+      setRemoveKey(false)
+    } else if (!open && prevOpenRef.current) {
+      setApiKey("")
+      setRemoveKey(false)
+    }
+    prevOpenRef.current = open
+  }, [open, profile?.baseEndpoint, profile?.model])
+
   const mutationDisabled = readOnly || generationActive || phase === "loading"
 
   const handleOpenChange = (nextOpen: boolean) => {
-    setOpen(nextOpen)
+    if (!isControlled) {
+      setUncontrolledOpen(nextOpen)
+    }
+    controlledOnOpenChange?.(nextOpen)
     setApiKey("")
     setRemoveKey(false)
     if (nextOpen) {

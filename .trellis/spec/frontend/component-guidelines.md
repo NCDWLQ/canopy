@@ -181,6 +181,27 @@ type MessageNodeProps = {
   canEdit: boolean;
   onCreateBranch: (nodeId: NodeId) => void;
   onEditAsBranch: (nodeId: NodeId) => void;
+  generationAction?: UserGenerationAction;
+};
+
+type UserGenerationAction =
+  | { kind: "generate"; onSelect: () => void }
+  | { kind: "configure-provider"; onSelect: () => void };
+
+type AssistantRegenerationAction = {
+  assistantNodeId: NodeId;
+  onSelect: (assistantNodeId: NodeId) => void;
+};
+
+type ComposerAction =
+  | { kind: "send"; disabled: boolean }
+  | { kind: "cancel"; onCancel: () => void };
+
+type ComposerProps = {
+  onSubmit: (content: string) => void | Promise<boolean | void>;
+  inputDisabled: boolean;
+  action: ComposerAction;
+  placeholder?: string;
 };
 ```
 
@@ -210,8 +231,32 @@ after every save attempt, including failure.
 - Generation failure shows “回复失败” plus “重新生成” without retaining partial
   output. Persistence failure retains the complete content and shows
   “这条回复未能保存” plus “重新生成”. Cancellation retains received partial
-  content and shows “回复已停止”. A reconciliation retry appears only after an
-  automatic authoritative reload cannot prove completion.
+  content and shows “回复已停止” plus an always-visible “重新生成”. A
+  reconciliation retry appears only after an automatic authoritative reload
+  cannot prove completion.
+- The Composer circular action is `send` when no cancellable run is active and
+  `cancel` only during `starting` or `streaming`. Draft editability is controlled
+  independently through `inputDisabled`: a valid writable conversation keeps
+  the textarea editable while Send is unavailable, generation is active, or a
+  transient response awaits recovery. `committing` and `reconciling` expose a
+  disabled Send action, never Cancel.
+- Plain Enter submits only an enabled Send action. When Send is disabled or the
+  action is Cancel, prevent the newline but do not submit, cancel, or clear the
+  draft. Shift+Enter remains a newline and IME composition remains guarded.
+- A writable selected user leaf with no child and no transient response owns an
+  always-visible contextual action below that message: `生成回复` when Provider
+  state is ready, otherwise `配置服务提供商以生成`. Provider setup opens the
+  existing global settings dialog but never auto-starts generation after save.
+  Answered users, assistant leaves, archived conversations, and transient
+  responses do not expose this action.
+- A durable assistant regeneration action is a single
+  `AssistantRegenerationAction` object, never a boolean plus optional callback.
+  The workspace derives it only for the final assistant in the valid active
+  path with a ready Provider, writable conversation, and authoritative user
+  parent. The pane routes it only to that final message; the node renders it in
+  the existing Edit/Create Branch action bar. Its callback revalidates current
+  state, selects the exact parent user, and starts one sibling generation while
+  preserving the old assistant and Composer draft.
 - `MessageNode` displays capabilities supplied through `canBranch` / `canEdit`; it must not infer authorization from raw roles beyond visual presentation.
 - Branch and edit callbacks emit the source node ID. Editing is labeled as creating a branch and never mutates displayed history optimistically.
 - Unknown IPC payloads are decoded in `lib/tauri`, before they reach feature components.
@@ -228,6 +273,13 @@ after every save attempt, including failure.
 | Branch/edit capability is false | Hide or disable the action consistently and prevent keyboard activation |
 | Status is `error` | Show the safe error message; offer retry only when `retryable` is true |
 | User cancels streaming | Preserve received partial content and show “回复已停止” without an error toast |
+| Generation is `starting` or `streaming` | Show one enabled Composer `取消生成`; only clicking it invokes exact cancellation |
+| Generation is `committing` or `reconciling` | Keep the draft editable, hide Cancel, and keep Send disabled |
+| Enter while Send is unavailable or Cancel is shown | Preserve the draft and perform no submit/cancel/newline action |
+| Writable unanswered user leaf, Provider ready | Show always-visible `生成回复` beneath that user message |
+| Writable unanswered user leaf, Provider not ready | Show `配置服务提供商以生成`; open Settings and require a later explicit Generate click |
+| Final durable assistant, Provider ready, no active/recovery run | Show icon-only `重新生成` in the existing hover/focus action bar |
+| Earlier assistant, user leaf, archived/invalid/loading, Provider not ready, or active/recovery run | Do not show durable assistant `重新生成` |
 | Generation fails before acknowledgement | Discard partial output; show “回复失败” and “重新生成” |
 | Persistence explicitly fails after ready | Preserve complete output; show “这条回复未能保存” and “重新生成” |
 | Commit result is uncertain | Keep the full assistant bubble silent during the grace period; then show recovery without a button until automatic reload needs help |
@@ -246,7 +298,19 @@ after every save attempt, including failure.
 - Loading, empty, provider-auth, retryable, non-retryable, streaming, and cancellation states.
 - Generation presentation covers starting, streaming, silent committing,
   delayed reconciling, phase-derived failure kinds, retained cancellation
-  content, gated recovery retry, exact copy, and absence of engineering copy.
+  content, always-visible cancelled regeneration, gated recovery retry, exact
+  copy, and absence of engineering copy.
+- Composer tests cover the Send/Cancel union, exact cancel click count, draft
+  preservation across action transitions, disabled plain Enter, Shift+Enter,
+  IME composition, and non-cancellable committing/reconciling phases.
+- Contextual generation tests cover Provider-ready and not-ready unanswered
+  user leaves, controlled Settings opening, readiness after save without
+  automatic generation, and absence for answered/assistant/archived/transient
+  states.
+- Durable assistant regeneration tests cover exact final-message routing,
+  shared icon-button class/accessibility contracts, click-time state
+  revalidation, exact parent-user targeting, sibling generation, old-node and
+  draft preservation, and ineligible-state absence.
 - A successful streaming-to-authoritative transition uses the same assistant
   article structure and list position without duplicate transient/durable
   content in one render.
@@ -378,12 +442,14 @@ configuration the wrong ownership and competes with conversation-scoped
 actions.
 
 **Decision**: Expose workspace-global Settings through one persistent footer
-action in the expanded conversation sidebar. Open a titled Radix/shadcn dialog
-and compose feature-owned settings content inside it; keep Provider state,
-secret handling, and typed client calls in the Provider feature. Low-frequency
-sidebar footer actions use the flat `ghost` treatment with muted default text
-and foreground hover emphasis so they remain subordinate to history and tree
-navigation.
+action in the expanded conversation sidebar. Keep one dialog instance and allow
+the owning workspace to control its `open` / `onOpenChange` state so the
+contextual `配置服务提供商以生成` action can open the same surface. Open a titled
+Radix/shadcn dialog and compose feature-owned settings content inside it; keep
+Provider state, secret handling, and typed client calls in the Provider feature.
+Low-frequency sidebar footer actions use the flat `ghost` treatment with muted
+default text and foreground hover emphasis so they remain subordinate to
+history and tree navigation.
 
 ```tsx
 <footer>
@@ -398,9 +464,13 @@ navigation.
 </footer>
 ```
 
-Do not duplicate the Provider trigger in the conversation header. Tests must
-assert that Settings has one accessible trigger in the sidebar footer, opens a
-titled dialog, restores focus when closed, and remains usable after the sidebar
+Do not duplicate the Provider trigger in the conversation header. The
+message-scoped configuration action is an alternate opener for the same dialog,
+not another settings surface. Saving Provider configuration must update the
+contextual action to `生成回复` without starting a billable generation. Tests
+must assert that Settings has one accessible persistent trigger in the sidebar
+footer, both entry points open the titled dialog, controlled close is emitted,
+focus is restored when closed, and the footer remains usable after the sidebar
 is collapsed and reopened. Provider tests continue to cover keyboard submit,
 secret clearing, save/delete, errors, read-only state, and generation/loading
 locks through the global settings surface.
@@ -425,5 +495,14 @@ Use when implementing or styling conversation message displays (`MessageBubble`,
 ### 2. Design Patterns
 - **User Messages**: Rendered as right-aligned message bubbles (`ml-auto max-w-[85%] rounded-2xl bg-muted px-4 py-2.5 text-foreground`). No visible "用户" header text. Accessible name preserved via `aria-label="用户消息"`.
 - **Assistant Messages**: Rendered directly on the background full-width (`w-full bg-transparent border-0 text-foreground`) without card boundaries or box wrappers, similar to modern conversational AI interfaces (ChatGPT/Claude). No visible "助手" header text. Accessible name preserved via `aria-label="助手消息"`.
-- **Actions**: Branching and editing action buttons are placed in subtle action bars below messages with hover/focus disclosure (`opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity`).
-
+- **Actions**: Branching and editing action buttons are placed in subtle action
+  bars below messages with hover/focus disclosure
+  (`opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity`).
+  Generation and recovery actions are different: `生成回复`,
+  `配置服务提供商以生成`, and cancelled/failed `重新生成` remain visible below
+  the exact message they affect so the recovery path does not depend on hover.
+  A durable final-assistant `重新生成` belongs beside Edit/Create Branch in the
+  existing hover/focus action bar, using the same icon-only button classes and
+  accessibility contract. It must not be a second footer or header action.
+  The workspace header contains no Generate or Cancel slot; active cancellation
+  belongs to the Composer's circular action.

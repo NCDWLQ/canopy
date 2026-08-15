@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend verification scope and relevant guideline routing."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Check component ownership, message action placement, settings reuse, Chinese accessibility, and transient response contracts."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Check behavioral coverage, forbidden patterns, and required lint/type/test/build gates."}
+{"file":".trellis/tasks/08-15-composer-cancel-send-button/research/gemini-ux-consultation.md","reason":"Check the implementation against the accepted no-header and contextual-recovery UX decisions."}

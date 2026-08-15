@@ -256,4 +256,37 @@ describe("GlobalSettingsDialog", () => {
     ).toBeDisabled()
     expect(screen.getByRole("button", { name: "删除配置" })).toBeDisabled()
   })
+
+  it("supports controlled open state and emits onOpenChange when closed", async () => {
+    const user = userEvent.setup()
+    const onOpenChange = vi.fn()
+    const { rerender } = render(
+      <GlobalSettingsDialog
+        client={client}
+        readOnly={false}
+        generationActive={false}
+        open={false}
+        onOpenChange={onOpenChange}
+      />,
+    )
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+
+    rerender(
+      <GlobalSettingsDialog
+        client={client}
+        readOnly={false}
+        generationActive={false}
+        open={true}
+        onOpenChange={onOpenChange}
+      />,
+    )
+
+    expect(screen.getByRole("dialog")).toHaveAccessibleName("设置")
+    expect(screen.getByLabelText("基础端点")).toHaveValue(profile.baseEndpoint)
+    expect(screen.getByLabelText("模型")).toHaveValue(profile.model)
+
+    await user.click(screen.getByRole("button", { name: "关闭" }))
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
 })

@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend specification index and routing for the component-only implementation."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Conversation component boundaries, transient generation presentation, message actions, settings ownership, styling, and accessibility contracts."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Behavioral test requirements and frontend quality gates for cancellation and recovery states."}
+{"file":".trellis/tasks/08-15-composer-cancel-send-button/research/gemini-ux-consultation.md","reason":"Reviewed UX rationale, mainstream evidence limits, contextual recovery decision, and provider-readiness edge case."}

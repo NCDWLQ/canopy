@@ -1,16 +1,21 @@
 import * as React from "react"
-import { SendHorizontal } from "lucide-react"
+import { SendHorizontal, Square } from "lucide-react"
 import { Button } from "@/components/ui/button"
+
+export type ComposerAction =
+  { kind: "send"; disabled: boolean } | { kind: "cancel"; onCancel: () => void }
 
 export type ComposerProps = {
   onSubmit: (content: string) => void | Promise<boolean | void>
-  disabled: boolean
+  inputDisabled: boolean
+  action: ComposerAction
   placeholder?: string
 }
 
 export function Composer({
   onSubmit,
-  disabled,
+  inputDisabled,
+  action,
   placeholder = "输入消息…",
 }: ComposerProps) {
   const [content, setContent] = React.useState("")
@@ -18,7 +23,13 @@ export function Composer({
   const textareaRef = React.useRef<HTMLTextAreaElement>(null)
 
   const handleSubmit = async () => {
-    if (content.trim() && !disabled && !isSubmitting) {
+    if (
+      action.kind === "send" &&
+      !action.disabled &&
+      !inputDisabled &&
+      !isSubmitting &&
+      content.trim()
+    ) {
       setIsSubmitting(true)
       let submitted: boolean | void
       try {
@@ -39,7 +50,9 @@ export function Composer({
 
   const handleFormSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    void handleSubmit()
+    if (action.kind === "send") {
+      void handleSubmit()
+    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -48,7 +61,9 @@ export function Composer({
     }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
-      void handleSubmit()
+      if (action.kind === "send" && !action.disabled && !inputDisabled) {
+        void handleSubmit()
+      }
     }
   }
 
@@ -74,21 +89,39 @@ export function Composer({
           onChange={(e) => setContent(e.target.value)}
           onKeyDown={handleKeyDown}
           onInput={handleInput}
-          disabled={disabled || isSubmitting}
+          disabled={inputDisabled || isSubmitting}
           placeholder={placeholder}
           rows={1}
           className="max-h-[200px] w-full resize-none border-none bg-transparent px-3 py-1.5 text-sm leading-5 text-foreground outline-none placeholder:text-muted-foreground/70 disabled:opacity-50"
         />
-        <Button
-          size="icon"
-          className="size-8 shrink-0 rounded-full transition-transform active:scale-95"
-          disabled={disabled || isSubmitting || !content.trim()}
-          type="submit"
-          title="发送消息"
-          aria-label="发送消息"
-        >
-          <SendHorizontal className="size-4" aria-hidden="true" />
-        </Button>
+        {action.kind === "cancel" ? (
+          <Button
+            size="icon"
+            className="size-8 shrink-0 rounded-full transition-transform active:scale-95"
+            type="button"
+            title="取消生成"
+            aria-label="取消生成"
+            onClick={action.onCancel}
+          >
+            <Square className="size-4" aria-hidden="true" />
+          </Button>
+        ) : (
+          <Button
+            size="icon"
+            className="size-8 shrink-0 rounded-full transition-transform active:scale-95"
+            disabled={
+              inputDisabled ||
+              isSubmitting ||
+              action.disabled ||
+              !content.trim()
+            }
+            type="submit"
+            title="发送消息"
+            aria-label="发送消息"
+          >
+            <SendHorizontal className="size-4" aria-hidden="true" />
+          </Button>
+        )}
       </div>
     </form>
   )

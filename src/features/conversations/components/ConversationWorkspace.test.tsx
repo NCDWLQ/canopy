@@ -163,7 +163,9 @@ function createMockProviderClient() {
       ),
     deleteProviderProfile: vi.fn<ProviderClient["deleteProviderProfile"]>(),
     generateFromActivePath: vi.fn<ProviderClient["generateFromActivePath"]>(),
-    cancelGeneration: vi.fn<ProviderClient["cancelGeneration"]>(),
+    cancelGeneration: vi
+      .fn<ProviderClient["cancelGeneration"]>()
+      .mockResolvedValue({ accepted: true }),
     commitGeneration: vi.fn<ProviderClient["commitGeneration"]>(),
   } satisfies ProviderClient
 }
@@ -542,8 +544,20 @@ describe("ConversationWorkspace", () => {
       content: "ONE_USER_ROOT_SENTINEL",
     })
     expect(screen.queryByLabelText("助手消息")).not.toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "生成" })).toBeDisabled()
-    expect(screen.getByRole("textbox", { name: "消息输入框" })).toBeDisabled()
+    expect(
+      screen.queryByRole("button", { name: "生成" }),
+    ).not.toBeInTheDocument()
+    expect(
+      within(screen.getByTestId("conversation-pane")).getByRole("button", {
+        name: "配置服务提供商以生成",
+      }),
+    ).toBeVisible()
+    expect(screen.getByRole("textbox", { name: "消息输入框" })).toBeEnabled()
+    expect(screen.getByRole("textbox", { name: "消息输入框" })).toHaveAttribute(
+      "placeholder",
+      "可输入草稿；当前路径暂无法发送。",
+    )
+    expect(screen.getByRole("button", { name: "发送消息" })).toBeDisabled()
   })
 
   it("switches a loaded conversation to a blank Composer without clearing its projection", async () => {
@@ -713,8 +727,9 @@ describe("ConversationWorkspace", () => {
     useConversationStore.getState().selectNode(right.id)
     render(<ConversationWorkspace />)
 
-    const generateButton = await screen.findByRole("button", {
-      name: "生成",
+    const pane = await screen.findByTestId("conversation-pane")
+    const generateButton = await within(pane).findByRole("button", {
+      name: "生成回复",
     })
     await waitFor(() => expect(generateButton).toBeEnabled())
     await user.click(generateButton)
@@ -735,7 +750,6 @@ describe("ConversationWorkspace", () => {
       onEvent!({ type: "delta", generationId, content: streamedContent })
     })
 
-    const pane = screen.getByTestId("conversation-pane")
     const transientArticle = within(pane)
       .getByRole("heading", { name: visibleStreamedContent })
       .closest("article")
@@ -827,10 +841,12 @@ describe("ConversationWorkspace", () => {
       .loadConversation(client, root.conversationId)
     useConversationStore.getState().selectNode(right.id)
     render(<ConversationWorkspace />)
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "生成" })).toBeEnabled()
-    })
     const pane = screen.getByTestId("conversation-pane")
+    await waitFor(() => {
+      expect(
+        within(pane).getByRole("button", { name: "生成回复" }),
+      ).toBeEnabled()
+    })
 
     act(() => {
       useConversationStore.setState({
@@ -916,6 +932,7 @@ describe("ConversationWorkspace", () => {
     })
     expect(within(pane).getByText("PARTIAL_REPLY")).toBeVisible()
     expect(within(pane).getByText("回复已停止")).toBeVisible()
+    expect(within(pane).getByRole("button", { name: "重新生成" })).toBeEnabled()
 
     client.loadConversationTree.mockClear()
     client.loadConversationTree.mockReturnValueOnce(retryLoad)
@@ -977,5 +994,581 @@ describe("ConversationWorkspace", () => {
     render(<ConversationWorkspace />)
 
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "auto" })
+  })
+
+  it("renders Composer cancel action during starting/streaming and cancels generation on click", async () => {
+    const user = userEvent.setup()
+    const generationId = "22222222-2222-4222-8222-222222222222"
+    let onEvent: ((event: GenerationEventView) => void) | undefined
+
+    providerClient.loadProviderProfile.mockResolvedValue({
+      baseEndpoint: "http://127.0.0.1:7788/v1",
+      model: "fixture-model",
+      hasApiKey: false,
+      updatedAt: 10,
+    })
+    providerClient.generateFromActivePath.mockImplementation(
+      (_conversationId, _activeNodeId, callback) => {
+        onEvent = callback
+        return Promise.resolve({ generationId })
+      },
+    )
+    providerClient.cancelGeneration.mockResolvedValue({ accepted: true })
+
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(right.id)
+    render(<ConversationWorkspace />)
+
+    const pane = await screen.findByTestId("conversation-pane")
+    const generateButton = await within(pane).findByRole("button", {
+      name: "生成回复",
+    })
+    await user.click(generateButton)
+
+    act(() => {
+      onEvent!({
+        type: "started",
+        generationId,
+        conversationId: root.conversationId,
+        activeNodeId: right.id,
+        model: "fixture-model",
+      })
+    })
+
+    const cancelButton = screen.getByRole("button", { name: "取消生成" })
+    expect(cancelButton).toBeVisible()
+    expect(cancelButton).toBeEnabled()
+    expect(
+      screen.queryByRole("button", { name: "发送消息" }),
+    ).not.toBeInTheDocument()
+    // Workspace header must not have cancel or generate buttons
+    expect(
+      screen.queryByRole("button", { name: "生成" }),
+    ).not.toBeInTheDocument()
+
+    await user.click(cancelButton)
+    expect(providerClient.cancelGeneration).toHaveBeenCalledWith(generationId)
+    expect(providerClient.cancelGeneration).toHaveBeenCalledTimes(1)
+  })
+
+  it("opens GlobalSettingsDialog via contextual '配置服务提供商以生成' and updates to '生成回复' on save without auto-generating", async () => {
+    const user = userEvent.setup()
+    useProviderProfileStore.setState({ phase: "unconfigured", profile: null })
+    providerClient.saveProviderProfile.mockResolvedValueOnce({
+      baseEndpoint: "http://127.0.0.1:7788/v1",
+      model: "fixture-model",
+      hasApiKey: false,
+      updatedAt: 11,
+    })
+
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(right.id)
+    render(<ConversationWorkspace />)
+
+    const pane = await screen.findByTestId("conversation-pane")
+    const configButton = await within(pane).findByRole("button", {
+      name: "配置服务提供商以生成",
+    })
+    expect(configButton).toBeVisible()
+
+    await user.click(configButton)
+    expect(screen.getByRole("dialog")).toHaveAccessibleName("设置")
+
+    await user.type(
+      screen.getByLabelText("基础端点"),
+      "http://127.0.0.1:7788/v1",
+    )
+    await user.type(screen.getByLabelText("模型"), "fixture-model")
+    await user.click(screen.getByRole("button", { name: "保存服务提供商配置" }))
+
+    await waitFor(() => {
+      expect(providerClient.saveProviderProfile).toHaveBeenCalledWith({
+        baseEndpoint: "http://127.0.0.1:7788/v1",
+        model: "fixture-model",
+        apiKey: { action: "remove" },
+      })
+    })
+
+    await user.click(screen.getByRole("button", { name: "关闭" }))
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+
+    // Now contextual action becomes "生成回复"
+    expect(within(pane).getByRole("button", { name: "生成回复" })).toBeVisible()
+    // Generation must NOT start automatically
+    expect(providerClient.generateFromActivePath).not.toHaveBeenCalled()
+  })
+
+  it("keeps Composer draft editable during streaming/reconciling/cancelled while Send is gated by assistant leaf", async () => {
+    const user = userEvent.setup()
+    const run = {
+      runId: 99,
+      conversationId: root.conversationId,
+      parentNodeId: right.id,
+      generationId: "test-gen-id",
+      model: "fixture-model",
+    } as const
+
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(right.id)
+    render(<ConversationWorkspace />)
+
+    const composer = screen.getByRole("textbox", { name: "消息输入框" })
+    expect(composer).toBeEnabled()
+    expect(composer).toHaveAttribute(
+      "placeholder",
+      "可输入草稿；当前路径暂无法发送。",
+    )
+
+    // 1. During streaming: textarea editable, Cancel button active, Send hidden
+    act(() => {
+      useConversationStore.setState({
+        generation: { ...run, phase: "streaming", content: "STREAM_TEXT" },
+      })
+    })
+    expect(composer).toBeEnabled()
+    expect(screen.getByRole("button", { name: "取消生成" })).toBeEnabled()
+    expect(
+      screen.queryByRole("button", { name: "发送消息" }),
+    ).not.toBeInTheDocument()
+    await user.type(composer, "MY_PERSISTENT_DRAFT")
+    expect(composer).toHaveValue("MY_PERSISTENT_DRAFT")
+
+    // 2. During committing: textarea editable, Cancel absent, Send disabled
+    act(() => {
+      useConversationStore.setState({
+        generation: { ...run, phase: "committing", content: "FULL_TEXT" },
+      })
+    })
+    expect(composer).toBeEnabled()
+    expect(composer).toHaveValue("MY_PERSISTENT_DRAFT")
+    expect(
+      screen.queryByRole("button", { name: "取消生成" }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "发送消息" })).toBeDisabled()
+
+    // 3. During reconciling: textarea editable, Cancel absent, Send disabled, draft editable
+    act(() => {
+      useConversationStore.setState({
+        generation: {
+          ...run,
+          phase: "reconciling",
+          content: "FULL_TEXT",
+          needsUserAction: true,
+          error: {
+            code: "internal",
+            message: "Reconciling",
+            retryable: true,
+          },
+        },
+      })
+    })
+    expect(composer).toBeEnabled()
+    expect(composer).toHaveValue("MY_PERSISTENT_DRAFT")
+    expect(
+      screen.queryByRole("button", { name: "取消生成" }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "发送消息" })).toBeDisabled()
+    await user.type(composer, "_APPEND")
+    expect(composer).toHaveValue("MY_PERSISTENT_DRAFT_APPEND")
+
+    // 4. During cancelled: textarea editable, Cancel absent, Send disabled
+    act(() => {
+      useConversationStore.setState({
+        generation: { ...run, phase: "cancelled", content: "PARTIAL" },
+      })
+    })
+    expect(composer).toBeEnabled()
+    expect(composer).toHaveValue("MY_PERSISTENT_DRAFT_APPEND")
+    expect(
+      screen.queryByRole("button", { name: "取消生成" }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "发送消息" })).toBeDisabled()
+  })
+
+  it("excludes contextual generation actions for archived, answered, and transient states", async () => {
+    // 1. Answered user node (root has assistant child)
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(root.id)
+    const { unmount } = render(<ConversationWorkspace />)
+
+    const pane = screen.getByTestId("conversation-pane")
+    expect(
+      within(pane).queryByRole("button", { name: "生成回复" }),
+    ).not.toBeInTheDocument()
+    expect(
+      within(pane).queryByRole("button", { name: "配置服务提供商以生成" }),
+    ).not.toBeInTheDocument()
+    unmount()
+
+    // 2. Assistant leaf (assistant node selected)
+    useConversationStore.getState().selectNode(assistant.id)
+    const { unmount: unmount2 } = render(<ConversationWorkspace />)
+    const pane2 = screen.getByTestId("conversation-pane")
+    expect(
+      within(pane2).queryByRole("button", { name: "生成回复" }),
+    ).not.toBeInTheDocument()
+    expect(
+      within(pane2).queryByRole("button", { name: "配置服务提供商以生成" }),
+    ).not.toBeInTheDocument()
+    unmount2()
+
+    // 3. Archived conversation with unanswered user leaf
+    client.loadConversationTree.mockResolvedValueOnce({
+      ...tree,
+      conversation: { ...tree.conversation, isArchived: true },
+    })
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(right.id)
+    const { unmount: unmount3 } = render(<ConversationWorkspace />)
+    const pane3 = screen.getByTestId("conversation-pane")
+    expect(
+      within(pane3).queryByRole("button", { name: "生成回复" }),
+    ).not.toBeInTheDocument()
+    expect(
+      within(pane3).queryByRole("button", { name: "配置服务提供商以生成" }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole("textbox", { name: "消息输入框" })).toBeDisabled()
+    expect(screen.getByRole("textbox", { name: "消息输入框" })).toHaveAttribute(
+      "placeholder",
+      "会话已归档，无法修改。",
+    )
+    unmount3()
+
+    // 4. Transient generation active on unanswered user leaf
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(right.id)
+    act(() => {
+      useConversationStore.setState({
+        generation: {
+          runId: 101,
+          conversationId: root.conversationId,
+          parentNodeId: right.id,
+          generationId: "transient-gen-id",
+          phase: "starting",
+        },
+      })
+    })
+    const { unmount: unmount4 } = render(<ConversationWorkspace />)
+    const pane4 = screen.getByTestId("conversation-pane")
+    // Contextual button on the user node must be absent while transient response is active
+    expect(
+      within(pane4).queryByRole("button", { name: "生成回复" }),
+    ).not.toBeInTheDocument()
+    expect(
+      within(pane4).queryByRole("button", { name: "配置服务提供商以生成" }),
+    ).not.toBeInTheDocument()
+
+    // When cancelled, only the transient bubble has "重新生成", no duplicate user-leaf "生成回复"
+    act(() => {
+      useConversationStore.setState({
+        generation: {
+          phase: "cancelled",
+          runId: 101,
+          content: "CANCELLED_STREAM",
+        },
+      })
+    })
+    expect(
+      within(pane4).queryByRole("button", { name: "生成回复" }),
+    ).not.toBeInTheDocument()
+    expect(
+      within(pane4).getByRole("button", { name: "重新生成" }),
+    ).toBeVisible()
+    unmount4()
+  })
+
+  it("renders durable '重新生成' on final assistant node, selects user parent and triggers generateFromActivePath with parent ID on click while preserving old assistant and draft", async () => {
+    const user = userEvent.setup()
+    const generationId = "33333333-3333-4333-8333-333333333333"
+
+    providerClient.loadProviderProfile.mockResolvedValue({
+      baseEndpoint: "http://127.0.0.1:7788/v1",
+      model: "fixture-model",
+      hasApiKey: false,
+      updatedAt: 10,
+    })
+    providerClient.generateFromActivePath.mockReturnValue(
+      Promise.resolve({ generationId }),
+    )
+
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(assistant.id)
+    render(<ConversationWorkspace />)
+
+    const composer = screen.getByRole("textbox", { name: "消息输入框" })
+    expect(composer).toBeEnabled()
+    await user.type(composer, "MY_PERSISTENT_ASSISTANT_DRAFT")
+
+    const pane = screen.getByTestId("conversation-pane")
+    const assistantArticle = within(pane)
+      .getByText(assistant.content)
+      .closest("article")
+    expect(assistantArticle).not.toBeNull()
+
+    const regenBtn = await within(assistantArticle!).findByRole("button", {
+      name: "重新生成",
+    })
+    expect(regenBtn).toBeVisible()
+    expect(regenBtn).toHaveAttribute("title", "重新生成")
+    expect(regenBtn).toHaveAttribute("aria-label", "重新生成")
+    expect(regenBtn).toHaveAttribute("data-variant", "ghost")
+    expect(regenBtn).toHaveAttribute("data-size", "icon")
+    expect(regenBtn).toHaveClass(
+      "size-7",
+      "text-muted-foreground",
+      "hover:text-foreground",
+    )
+    expect(regenBtn).toHaveTextContent("")
+    expect(regenBtn.querySelector("svg")).toHaveClass("size-3.5")
+
+    await user.click(regenBtn)
+
+    // Selects parent user node (root.id) and invokes generateFromActivePath with root.id
+    expect(providerClient.generateFromActivePath).toHaveBeenCalledWith(
+      root.conversationId,
+      root.id,
+      expect.any(Function),
+    )
+    expect(providerClient.generateFromActivePath).toHaveBeenCalledTimes(1)
+    expect(useConversationStore.getState().activeNodeId).toBe(root.id)
+
+    // Old assistant is preserved in the tree
+    expect(useConversationStore.getState().fullNodes[assistant.id]).toEqual(
+      assistant,
+    )
+
+    // Composer draft is preserved
+    expect(composer).toHaveValue("MY_PERSISTENT_ASSISTANT_DRAFT")
+  })
+
+  it("revalidates a durable assistant regeneration action at click time", async () => {
+    providerClient.loadProviderProfile.mockResolvedValue({
+      baseEndpoint: "http://127.0.0.1:7788/v1",
+      model: "fixture-model",
+      hasApiKey: false,
+      updatedAt: 10,
+    })
+
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(assistant.id)
+    render(<ConversationWorkspace />)
+
+    const pane = screen.getByTestId("conversation-pane")
+    const assistantArticle = within(pane)
+      .getByText(assistant.content)
+      .closest("article")
+    const regenerateButton = await within(assistantArticle!).findByRole(
+      "button",
+      { name: "重新生成" },
+    )
+
+    regenerateButton.addEventListener(
+      "click",
+      () => {
+        useProviderProfileStore.setState({
+          phase: "unconfigured",
+          profile: null,
+        })
+      },
+      { capture: true, once: true },
+    )
+    act(() => regenerateButton.click())
+
+    expect(providerClient.generateFromActivePath).not.toHaveBeenCalled()
+    expect(useConversationStore.getState().activeNodeId).toBe(assistant.id)
+    expect(useConversationStore.getState().fullNodes[assistant.id]).toEqual(
+      assistant,
+    )
+  })
+
+  it("excludes durable '重新生成' from non-final, read-only, invalid, loading, and transient states", async () => {
+    const readyProfile = {
+      baseEndpoint: "http://127.0.0.1:7788/v1",
+      model: "fixture-model",
+      hasApiKey: false,
+      updatedAt: 10,
+    }
+    providerClient.loadProviderProfile.mockResolvedValue(readyProfile)
+
+    // 1. The earlier assistant and the final user stay ineligible even when the Provider is ready.
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(right.id)
+    const { unmount: unmount1 } = render(<ConversationWorkspace />)
+
+    const pane1 = screen.getByTestId("conversation-pane")
+    await within(pane1).findByRole("button", { name: "生成回复" })
+    const earlierAssistantArticle = within(pane1)
+      .getByText(assistant.content)
+      .closest("article")
+    expect(
+      within(earlierAssistantArticle!).queryByRole("button", {
+        name: "重新生成",
+      }),
+    ).not.toBeInTheDocument()
+
+    // 2. User leaf ('right' is active user leaf): no durable 重新生成 on user message
+    const userArticle = within(pane1)
+      .getByText(right.content)
+      .closest("article")
+    expect(
+      within(userArticle!).queryByRole("button", { name: "重新生成" }),
+    ).not.toBeInTheDocument()
+    unmount1()
+
+    // 2. Provider not ready.
+    providerClient.loadProviderProfile.mockRejectedValueOnce(
+      new ConversationCommandError({
+        code: "not_found",
+        message: "Provider profile not found.",
+        retryable: false,
+      }),
+    )
+    useProviderProfileStore.setState({ phase: "unconfigured", profile: null })
+    useConversationStore.getState().selectNode(assistant.id)
+    const { unmount: unmount2 } = render(<ConversationWorkspace />)
+    const pane2 = screen.getByTestId("conversation-pane")
+    const assistantArticle2 = within(pane2)
+      .getByText(assistant.content)
+      .closest("article")
+    expect(
+      within(assistantArticle2!).queryByRole("button", {
+        name: "重新生成",
+      }),
+    ).not.toBeInTheDocument()
+    unmount2()
+
+    providerClient.loadProviderProfile.mockResolvedValue(readyProfile)
+    useProviderProfileStore.setState({
+      phase: "ready",
+      profile: readyProfile,
+    })
+
+    // 3. Archived conversation.
+    client.loadConversationTree.mockResolvedValueOnce({
+      ...tree,
+      conversation: { ...tree.conversation, isArchived: true },
+    })
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(assistant.id)
+    const { unmount: unmount3 } = render(<ConversationWorkspace />)
+    const pane3 = screen.getByTestId("conversation-pane")
+    const assistantArticle3 = within(pane3)
+      .getByText(assistant.content)
+      .closest("article")
+    expect(
+      within(assistantArticle3!).queryByRole("button", {
+        name: "重新生成",
+      }),
+    ).not.toBeInTheDocument()
+    unmount3()
+
+    // 4. Active transient generation.
+    client.loadConversationTree.mockResolvedValueOnce(tree)
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(assistant.id)
+    act(() => {
+      useConversationStore.setState({
+        generation: {
+          runId: 202,
+          conversationId: root.conversationId,
+          parentNodeId: root.id,
+          generationId: "gen-active",
+          phase: "streaming",
+          model: "fixture-model",
+          content: "STREAMING_TEXT",
+        },
+      })
+    })
+    const { unmount: unmount4 } = render(<ConversationWorkspace />)
+    const pane4 = screen.getByTestId("conversation-pane")
+    const assistantArticle4 = within(pane4)
+      .getByText(assistant.content)
+      .closest("article")
+    expect(
+      within(assistantArticle4!).queryByRole("button", {
+        name: "重新生成",
+      }),
+    ).not.toBeInTheDocument()
+    unmount4()
+
+    // 5. Cancelled recovery keeps only the always-visible transient action.
+    act(() => {
+      useConversationStore.setState({
+        generation: {
+          phase: "cancelled",
+          runId: 203,
+          content: "CANCELLED_RECOVERY_CONTENT",
+        },
+      })
+    })
+    const { unmount: unmount5 } = render(<ConversationWorkspace />)
+    const pane5 = screen.getByTestId("conversation-pane")
+    const assistantArticle5 = within(pane5)
+      .getByText(assistant.content)
+      .closest("article")
+    expect(
+      within(assistantArticle5!).queryByRole("button", {
+        name: "重新生成",
+      }),
+    ).not.toBeInTheDocument()
+    expect(
+      within(pane5).getAllByRole("button", { name: "重新生成" }),
+    ).toHaveLength(1)
+    unmount5()
+
+    // 6. A loading projection cannot expose the durable action.
+    act(() => {
+      useConversationStore.setState({
+        generation: { phase: "idle" },
+        status: "loading",
+      })
+    })
+    const { unmount: unmount6 } = render(<ConversationWorkspace />)
+    const pane6 = screen.getByTestId("conversation-pane")
+    const assistantArticle6 = within(pane6)
+      .getByText(assistant.content)
+      .closest("article")
+    expect(
+      within(assistantArticle6!).queryByRole("button", {
+        name: "重新生成",
+      }),
+    ).not.toBeInTheDocument()
+    unmount6()
+
+    // 7. An invalid active-path projection cannot expose the durable action.
+    act(() => {
+      useConversationStore.setState({
+        activeNodeId: "missing-active-node",
+        status: "ready",
+      })
+    })
+    const { unmount: unmount7 } = render(<ConversationWorkspace />)
+    const pane7 = screen.getByTestId("conversation-pane")
+    expect(
+      within(pane7).queryByRole("button", { name: "重新生成" }),
+    ).not.toBeInTheDocument()
+    unmount7()
   })
 })

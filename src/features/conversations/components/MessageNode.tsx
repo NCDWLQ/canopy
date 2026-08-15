@@ -1,9 +1,26 @@
 import * as React from "react"
-import { GitBranch, Edit2, X, Check } from "lucide-react"
+import {
+  GitBranch,
+  Edit2,
+  X,
+  Check,
+  Sparkles,
+  Settings2,
+  RefreshCw,
+} from "lucide-react"
 import { AssistantMarkdown } from "./AssistantMarkdown"
 import { MessageBubble } from "./MessageBubble"
 import type { PathMessageView } from "../types"
 import { Button } from "@/components/ui/button"
+
+export type UserGenerationAction =
+  | { kind: "generate"; onSelect: () => void }
+  | { kind: "configure-provider"; onSelect: () => void }
+
+export type AssistantRegenerationAction = {
+  assistantNodeId: string
+  onSelect: (assistantNodeId: string) => void
+}
 
 export type MessageNodeProps = {
   message: PathMessageView
@@ -11,6 +28,8 @@ export type MessageNodeProps = {
   canEdit: boolean
   onCreateBranch: (nodeId: string, content: string) => void
   onEditAsBranch: (nodeId: string, content: string) => void
+  generationAction?: UserGenerationAction
+  assistantRegenerationAction?: AssistantRegenerationAction
 }
 
 export function MessageNode({
@@ -19,6 +38,8 @@ export function MessageNode({
   canEdit,
   onCreateBranch,
   onEditAsBranch,
+  generationAction,
+  assistantRegenerationAction,
 }: MessageNodeProps) {
   const [isEditing, setIsEditing] = React.useState(false)
   const [editContent, setEditContent] = React.useState(message.content)
@@ -50,14 +71,64 @@ export function MessageNode({
     }
   }
 
-  const hasActions = (canEdit || canBranch) && !isEditing && !isBranching
+  const regenerationAction =
+    assistantRegenerationAction?.assistantNodeId === message.id
+      ? assistantRegenerationAction
+      : undefined
+  const hasActions =
+    (canEdit || canBranch || regenerationAction !== undefined) &&
+    !isEditing &&
+    !isBranching
+
+  const showGenerationAction =
+    generationAction !== undefined && !isEditing && !isBranching
 
   return (
     <MessageBubble
       role={message.role}
+      footer={
+        showGenerationAction ? (
+          <div className="flex items-center justify-end">
+            <Button
+              variant="ghost"
+              size="xs"
+              className="text-muted-foreground hover:text-foreground"
+              onClick={generationAction.onSelect}
+            >
+              {generationAction.kind === "generate" ? (
+                <>
+                  <Sparkles data-icon="inline-start" aria-hidden="true" />
+                  生成回复
+                </>
+              ) : (
+                <>
+                  <Settings2 data-icon="inline-start" aria-hidden="true" />
+                  配置服务提供商以生成
+                </>
+              )}
+            </Button>
+          </div>
+        ) : undefined
+      }
       actions={
         hasActions ? (
           <>
+            {regenerationAction !== undefined && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7 text-muted-foreground hover:text-foreground"
+                title="重新生成"
+                aria-label="重新生成"
+                onClick={() =>
+                  regenerationAction.onSelect(
+                    regenerationAction.assistantNodeId,
+                  )
+                }
+              >
+                <RefreshCw className="size-3.5" aria-hidden="true" />
+              </Button>
+            )}
             {canEdit && (
               <Button
                 variant="ghost"
