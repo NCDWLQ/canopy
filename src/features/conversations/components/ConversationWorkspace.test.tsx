@@ -284,6 +284,35 @@ describe("ConversationWorkspace", () => {
     expect(within(sidebar).getByRole("button", { name: "设置" })).toBeVisible()
   })
 
+  it("renders new conversation button in main header when sidebar is collapsed and triggers conversation creation", async () => {
+    const user = userEvent.setup()
+    client.listConversations.mockResolvedValueOnce([
+      { ...tree.conversation, updatedAt: right.createdAt },
+    ])
+    render(<ConversationWorkspace />)
+    await within(await screen.findByTestId("conversation-pane")).findByText(
+      right.content,
+    )
+
+    const sidebar = screen.getByRole("complementary", { name: "会话树侧栏" })
+    expect(within(sidebar).getByText("Canopy")).toBeVisible()
+    expect(within(sidebar).getByText("历史记录")).toBeVisible()
+    expect(within(sidebar).getByText("会话树")).toBeVisible()
+    expect(
+      within(sidebar).getByRole("button", { name: "新建会话" }),
+    ).toBeVisible()
+
+    await user.click(screen.getByRole("button", { name: "收起侧栏" }))
+
+    const newChatButton = screen.getByRole("button", { name: "新建会话" })
+    expect(newChatButton).toBeVisible()
+
+    await user.click(newChatButton)
+
+    expect(screen.getByTestId("blank-conversation-pane")).toBeVisible()
+    expect(useConversationStore.getState().isCreatingConversation).toBe(true)
+  })
+
   it("switches history without leaking nodes from the prior conversation", async () => {
     const user = userEvent.setup()
     const otherRoot: ConversationNodeView = {

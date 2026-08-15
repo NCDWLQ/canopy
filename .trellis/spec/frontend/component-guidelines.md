@@ -474,6 +474,26 @@ is collapsed and reopened. Provider tests continue to cover keyboard submit,
 secret clearing, save/delete, errors, read-only state, and generation/loading
 locks through the global settings surface.
 
+### Design Decision: New Conversation Affordance & Sidebar Toolbarization
+
+**Context**: Starting a new conversation is the primary top-level user action.
+When the sidebar is collapsed, users need direct access to start a new chat
+without first expanding the sidebar. Within the sidebar, "新建会话" is a global
+action rather than an item belonging strictly to the history list.
+
+**Decision**:
+1. **Sidebar Header Toolbar**: The top `h-12` bar of `<aside>` is dedicated to
+   workspace branding (`Canopy`) and the primary `新建会话` icon button (`size="icon" className="size-8"` with Tooltip).
+2. **Symmetrical Section Headers**: `历史记录` and `会话树` each have their
+   own distinct, matching subheaders (`h-8 text-xs font-semibold uppercase tracking-wide text-muted-foreground px-3`).
+3. **Collapsed Sidebar Quick Entry**: When `!isSidebarOpen`, the main window
+   `<header>` renders an identical icon-only `新建会话` button (`size="icon" className="size-8"`)
+   next to the sidebar expand toggle (`PanelLeftOpen`), complete with tooltip and `aria-label="新建会话"`.
+   When the sidebar is open, this duplicate icon in the main header is hidden.
+4. **State & Form Consistency**: Both entry points use the exact same icon-only
+   affordance, trigger `store.enterConversationCreation`, and share disabled states
+   during loading or active generation.
+
 ## Common Mistakes
 
 - Rendering the entire conversation instead of the supplied active path.

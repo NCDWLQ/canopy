@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Archive, PanelLeftClose, PanelLeftOpen, Plus } from "lucide-react"
+import { Archive, PanelLeftClose, PanelLeftOpen, SquarePen } from "lucide-react"
 import { useShallow } from "zustand/react/shallow"
 
 import { Composer, type ComposerAction } from "./Composer"
@@ -289,23 +289,35 @@ export function ConversationWorkspace({
         aria-hidden={!isSidebarOpen}
         inert={!isSidebarOpen}
       >
-        <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b px-2 text-sm font-semibold">
-          <span>历史记录</span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            aria-label="新建会话"
-            disabled={
-              store.status === "loading" || isGenerationActive(store.generation)
-            }
-            onClick={store.enterConversationCreation}
-          >
-            <Plus data-icon="inline-start" aria-hidden="true" />
-            新建会话
-          </Button>
+        <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b px-3 text-sm font-semibold">
+          <span className="font-bold tracking-tight">Canopy</span>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-8"
+                  aria-label="新建会话"
+                  title="新建会话"
+                  disabled={
+                    store.status === "loading" ||
+                    isGenerationActive(store.generation)
+                  }
+                  onClick={store.enterConversationCreation}
+                >
+                  <SquarePen className="size-4" aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>新建会话</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
-        <div className="max-h-64 shrink-0 overflow-y-auto p-2">
+        <div className="flex h-8 shrink-0 items-center px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          历史记录
+        </div>
+        <div className="max-h-64 shrink-0 overflow-y-auto px-2 pb-2">
           {store.history.summaries.length > 0 && (
             <ul aria-label="会话历史记录" className="flex flex-col gap-1">
               {store.history.summaries.map((summary) => (
@@ -377,7 +389,7 @@ export function ConversationWorkspace({
           )}
         </div>
         <Separator />
-        <div className="flex h-10 shrink-0 items-center px-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <div className="flex h-8 shrink-0 items-center px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           会话树
         </div>
         <div className="flex-1 overflow-hidden pb-2">
@@ -431,6 +443,30 @@ export function ConversationWorkspace({
                 <PanelLeftOpen aria-hidden="true" />
               )}
             </Button>
+            {!isSidebarOpen && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-8"
+                      aria-label="新建会话"
+                      title="新建会话"
+                      disabled={
+                        store.status === "loading" ||
+                        isGenerationActive(store.generation)
+                      }
+                      onClick={store.enterConversationCreation}
+                    >
+                      <SquarePen className="size-4" aria-hidden="true" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>新建会话</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
             {!isBlankConversation && store.isArchived && (
               <Badge variant="secondary">
                 <Archive data-icon="inline-start" />
