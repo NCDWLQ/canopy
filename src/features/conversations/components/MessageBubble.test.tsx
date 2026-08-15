@@ -17,7 +17,10 @@ describe("MessageBubble", () => {
     // Ensure "用户" plain label text is not rendered
     expect(screen.queryByText(/^用户$/)).not.toBeInTheDocument()
     expect(screen.getByText("用户问题内容")).toBeVisible()
-    expect(screen.getByText("用户问题内容").closest("div")).toHaveClass("bg-muted", "rounded-2xl")
+    expect(screen.getByText("用户问题内容").closest("div")).toHaveClass(
+      "bg-muted",
+      "rounded-2xl",
+    )
   })
 
   it("renders assistant messages directly on background with w-full and without text label", () => {
@@ -38,7 +41,10 @@ describe("MessageBubble", () => {
 
   it("renders actions inside hover/focus container", () => {
     render(
-      <MessageBubble role="user" actions={<button data-testid="action-btn">操作</button>}>
+      <MessageBubble
+        role="user"
+        actions={<button data-testid="action-btn">操作</button>}
+      >
         内容
       </MessageBubble>,
     )

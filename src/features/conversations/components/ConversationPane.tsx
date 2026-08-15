@@ -193,7 +193,10 @@ export function ConversationPane({
         </div>
       )}
 
-      <div className="mx-auto w-full max-w-4xl flex-1 pb-4" role="log">
+      <div
+        className="mx-auto w-full max-w-4xl flex-1 pb-28 md:pb-32"
+        role="log"
+      >
         {path.map((msg) => (
           <MessageNode
             key={msg.id}

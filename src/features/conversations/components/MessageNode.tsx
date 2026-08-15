@@ -111,7 +111,8 @@ export function MessageNode({
               onClick={handleEditSubmit}
               disabled={!editContent.trim()}
             >
-              <Check className="size-3.5 mr-1" aria-hidden="true" /> 保存为新分支
+              <Check className="size-3.5 mr-1" aria-hidden="true" />{" "}
+              保存为新分支
             </Button>
           </div>
         </div>

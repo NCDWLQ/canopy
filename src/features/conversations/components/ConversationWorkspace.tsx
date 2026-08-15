@@ -372,10 +372,10 @@ export function ConversationWorkspace({
         </header>
 
         {isBlankConversation ? (
-          <>
+          <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
             <section
               data-testid="blank-conversation-pane"
-              className="flex flex-1 flex-col items-center justify-center gap-3 overflow-y-auto p-6 text-center"
+              className="flex flex-1 flex-col items-center justify-center gap-3 overflow-y-auto p-6 pb-28 text-center"
               aria-labelledby="blank-conversation-title"
             >
               <h1
@@ -403,12 +403,16 @@ export function ConversationWorkspace({
                 </Alert>
               )}
             </section>
-            <Composer
-              onSubmit={controller.createConversation}
-              disabled={store.status === "loading" || controller.mutationLocked}
-              placeholder="输入第一条消息…"
-            />
-          </>
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10">
+              <Composer
+                onSubmit={controller.createConversation}
+                disabled={
+                  store.status === "loading" || controller.mutationLocked
+                }
+                placeholder="输入第一条消息…"
+              />
+            </div>
+          </div>
         ) : store.conversationId === null &&
           (store.history.status === "idle" ||
             store.history.status === "loading") ? (
@@ -431,7 +435,7 @@ export function ConversationWorkspace({
             </AlertDescription>
           </Alert>
         ) : store.conversationId === null ? null : (
-          <>
+          <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
             <ConversationPane
               path={visiblePath}
               status={projectionError === null ? store.status : "error"}
@@ -450,18 +454,20 @@ export function ConversationWorkspace({
               onRetryReconciliation={controller.retryReconciliation}
             />
 
-            <Composer
-              onSubmit={(content) => void controller.appendNode(content)}
-              disabled={!canAppend}
-              placeholder={
-                store.isArchived
-                  ? "会话已归档，无法修改。"
-                  : canAppend
-                    ? "输入下一条用户消息…"
-                    : "暂时无法输入；请选择末端的助手回复以继续。"
-              }
-            />
-          </>
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10">
+              <Composer
+                onSubmit={(content) => void controller.appendNode(content)}
+                disabled={!canAppend}
+                placeholder={
+                  store.isArchived
+                    ? "会话已归档，无法修改。"
+                    : canAppend
+                      ? "输入下一条用户消息…"
+                      : "暂时无法输入；请选择末端的助手回复以继续。"
+                }
+              />
+            </div>
+          </div>
         )}
       </div>
     </div>

@@ -42,7 +42,10 @@ export function Composer({
     void handleSubmit()
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.nativeEvent.isComposing || e.keyCode === 229) {
+      return
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
       void handleSubmit()
@@ -56,8 +59,11 @@ export function Composer({
   }
 
   return (
-    <form className="border-t bg-background p-4" onSubmit={handleFormSubmit}>
-      <div className="relative mx-auto flex max-w-4xl items-end gap-2 rounded-2xl border bg-muted p-2 focus-within:ring-2 focus-within:ring-ring">
+    <form
+      className="pointer-events-none relative w-full bg-gradient-to-t from-background/90 via-background/60 to-transparent px-4 pb-6 pt-6 backdrop-blur-md md:px-8"
+      onSubmit={handleFormSubmit}
+    >
+      <div className="pointer-events-auto relative mx-auto flex max-w-4xl items-end gap-2 rounded-2xl border border-border/80 bg-card/75 p-2 shadow-sm backdrop-blur-lg transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 dark:border-border/60 dark:bg-card/70">
         <label className="sr-only" htmlFor="message-composer">
           消息输入框
         </label>
@@ -71,17 +77,17 @@ export function Composer({
           disabled={disabled || isSubmitting}
           placeholder={placeholder}
           rows={1}
-          className="max-h-[200px] w-full resize-none border-none bg-transparent px-3 py-2 text-sm text-foreground outline-none disabled:opacity-50"
+          className="max-h-[200px] w-full resize-none border-none bg-transparent px-3 py-1.5 text-sm leading-5 text-foreground outline-none placeholder:text-muted-foreground/70 disabled:opacity-50"
         />
         <Button
           size="icon"
-          className="size-8 shrink-0 rounded-full"
+          className="size-8 shrink-0 rounded-full transition-transform active:scale-95"
           disabled={disabled || isSubmitting || !content.trim()}
           type="submit"
           title="发送消息"
           aria-label="发送消息"
         >
-          <SendHorizontal aria-hidden="true" />
+          <SendHorizontal className="size-4" aria-hidden="true" />
         </Button>
       </div>
     </form>
