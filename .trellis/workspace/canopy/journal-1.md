@@ -383,3 +383,24 @@ Added safe GFM rendering for durable and streaming assistant messages with Shiki
 ### Status
 
 [OK] **Completed**
+
+
+## Session 18: Composer generation controls and assistant regeneration
+
+**Date**: 2026-08-15
+**Task**: Composer generation controls and assistant regeneration
+**Branch**: `main`
+
+### Summary
+
+Integrated Composer Send/Stop behavior, preserved editable drafts and keyboard semantics, moved generation/recovery actions into message context, added always-visible cancelled/failed recovery, and added final-assistant regeneration from its exact parent user. Added controlled provider settings opening, focused component/workspace tests, frontend spec contracts, and verified format/lint/typecheck/151 tests/build.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0a38799` | (see git log) |
+
+### Status
+
+[OK] **Completed**
