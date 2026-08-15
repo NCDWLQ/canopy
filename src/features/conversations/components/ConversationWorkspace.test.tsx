@@ -1019,6 +1019,13 @@ describe("ConversationWorkspace", () => {
     const cancelButton = screen.getByRole("button", { name: "取消生成" })
     expect(cancelButton).toBeVisible()
     expect(cancelButton).toBeEnabled()
+    const archiveButton = screen.getByRole("button", { name: "归档" })
+    expect(archiveButton).toBeVisible()
+    expect(archiveButton).toBeDisabled()
+    expect(archiveButton).toHaveAttribute("title", "请等待当前回复完成。")
+    await user.click(archiveButton)
+    expect(client.archiveConversation).not.toHaveBeenCalled()
+    expect(providerClient.cancelGeneration).not.toHaveBeenCalled()
     expect(
       screen.queryByRole("button", { name: "发送消息" }),
     ).not.toBeInTheDocument()
@@ -1030,6 +1037,8 @@ describe("ConversationWorkspace", () => {
     await user.click(cancelButton)
     expect(providerClient.cancelGeneration).toHaveBeenCalledWith(generationId)
     expect(providerClient.cancelGeneration).toHaveBeenCalledTimes(1)
+    expect(archiveButton).toBeEnabled()
+    expect(archiveButton).toHaveAttribute("title", "归档")
   })
 
   it("opens GlobalSettingsDialog via contextual '配置服务提供商以生成' and updates to '生成回复' on save without auto-generating", async () => {

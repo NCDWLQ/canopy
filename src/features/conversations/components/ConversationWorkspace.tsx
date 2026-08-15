@@ -476,10 +476,14 @@ export function ConversationWorkspace({
           </div>
 
           <div className="flex items-center gap-2">
-            {canMutate && (
+            {canEditDraft && (
               <Button
                 variant="outline"
                 size="sm"
+                disabled={controller.mutationLocked}
+                title={
+                  controller.mutationLocked ? "请等待当前回复完成。" : "归档"
+                }
                 onClick={() => void controller.archiveConversation()}
               >
                 <Archive data-icon="inline-start" />
