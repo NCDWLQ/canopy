@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 19
+- **Total Sessions**: 20
 - **Last Active**: 2026-08-15
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~427 | Active |
+| `journal-1.md` | ~448 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 20 | 2026-08-15 | Optimize new conversation button layout and sidebar hierarchy | `631195b` | `main` |
 | 19 | 2026-08-15 | Simplify generation commit protocol | `88067cc` | `main` |
 | 18 | 2026-08-15 | Composer generation controls and assistant regeneration | `0a38799` | `main` |
 | 17 | 2026-08-15 | 优化 Composer 视觉样式为半透明磨砂质感与悬浮透出 | `75f7b5d` | `main` |
