@@ -362,3 +362,24 @@ Added safe GFM rendering for durable and streaming assistant messages with Shiki
 ### Status
 
 [OK] **Completed**
+
+
+## Session 17: 优化 Composer 视觉样式为半透明磨砂质感与悬浮透出
+
+**Date**: 2026-08-15
+**Task**: 优化 Composer 视觉样式为半透明磨砂质感与悬浮透出
+**Branch**: `main`
+
+### Summary
+
+重构输入框 Composer 布局为悬浮磨砂玻璃质感，移除硬通栏边框并支持滚动内容透出，修复中文输入法回车误提交与发送按钮垂直居中对齐
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `75f7b5d` | (see git log) |
+
+### Status
+
+[OK] **Completed**
