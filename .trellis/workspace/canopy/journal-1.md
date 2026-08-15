@@ -341,3 +341,24 @@ Added safe GFM rendering for durable and streaming assistant messages with Shiki
 ### Status
 
 [OK] **Completed**
+
+
+## Session 16: 右侧对话区域消息气泡与极简输出风格改造
+
+**Date**: 2026-08-15
+**Task**: 右侧对话区域消息气泡与极简输出风格改造
+**Branch**: `main`
+
+### Summary
+
+重构右侧会话区域消息展示风格：用户消息改为右对齐气泡（保留 bg-muted，移除'用户'文字），助手消息改为背景直出极简风格（无边框无卡片，移除'助手'文字，瞬态无缝显示），操作按钮悬停/聚焦显现，保留完整无障碍可访问性，新增单元测试并更新设计规范。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0beb065` | (see git log) |
+
+### Status
+
+[OK] **Completed**
