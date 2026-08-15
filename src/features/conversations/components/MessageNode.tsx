@@ -50,46 +50,50 @@ export function MessageNode({
     }
   }
 
+  const hasActions = (canEdit || canBranch) && !isEditing && !isBranching
+
   return (
     <MessageBubble
       role={message.role}
       actions={
-        <>
-          {canEdit && !isEditing && !isBranching && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-7"
-              title="编辑为新分支"
-              aria-label="编辑为新分支"
-              onClick={() => {
-                setEditContent(message.content)
-                setIsEditing(true)
-              }}
-            >
-              <Edit2 aria-hidden="true" />
-            </Button>
-          )}
-          {canBranch && !isEditing && !isBranching && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-7"
-              title="从此处创建分支"
-              aria-label="从此处创建分支"
-              onClick={() => setIsBranching(true)}
-            >
-              <GitBranch aria-hidden="true" />
-            </Button>
-          )}
-        </>
+        hasActions ? (
+          <>
+            {canEdit && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7 text-muted-foreground hover:text-foreground"
+                title="编辑为新分支"
+                aria-label="编辑为新分支"
+                onClick={() => {
+                  setEditContent(message.content)
+                  setIsEditing(true)
+                }}
+              >
+                <Edit2 className="size-3.5" aria-hidden="true" />
+              </Button>
+            )}
+            {canBranch && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7 text-muted-foreground hover:text-foreground"
+                title="从此处创建分支"
+                aria-label="从此处创建分支"
+                onClick={() => setIsBranching(true)}
+              >
+                <GitBranch className="size-3.5" aria-hidden="true" />
+              </Button>
+            )}
+          </>
+        ) : undefined
       }
     >
       {isEditing && canEdit ? (
-        <div className="mt-2">
+        <div className="w-full min-w-[260px] sm:min-w-[360px]">
           <textarea
             ref={editInputRef}
-            className="min-h-[100px] w-full resize-y rounded-md border bg-background p-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+            className="min-h-[100px] w-full resize-y rounded-md border bg-background p-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
             value={editContent}
             onChange={(e) => setEditContent(e.target.value)}
             aria-label="编辑消息内容"
@@ -100,22 +104,22 @@ export function MessageNode({
               size="sm"
               onClick={() => setIsEditing(false)}
             >
-              <X aria-hidden="true" /> 取消
+              <X className="size-3.5 mr-1" aria-hidden="true" /> 取消
             </Button>
             <Button
               size="sm"
               onClick={handleEditSubmit}
               disabled={!editContent.trim()}
             >
-              <Check aria-hidden="true" /> 保存为新分支
+              <Check className="size-3.5 mr-1" aria-hidden="true" /> 保存为新分支
             </Button>
           </div>
         </div>
       ) : isBranching && canBranch ? (
-        <div className="mt-2">
+        <div className="w-full min-w-[260px] sm:min-w-[360px]">
           <textarea
             ref={branchInputRef}
-            className="min-h-[100px] w-full resize-y rounded-md border bg-background p-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+            className="min-h-[100px] w-full resize-y rounded-md border bg-background p-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
             placeholder="输入分支消息…"
             value={branchContent}
             onChange={(e) => setBranchContent(e.target.value)}
@@ -127,14 +131,14 @@ export function MessageNode({
               size="sm"
               onClick={() => setIsBranching(false)}
             >
-              <X aria-hidden="true" /> 取消
+              <X className="size-3.5 mr-1" aria-hidden="true" /> 取消
             </Button>
             <Button
               size="sm"
               onClick={handleBranchSubmit}
               disabled={!branchContent.trim()}
             >
-              <Check aria-hidden="true" /> 创建分支
+              <Check className="size-3.5 mr-1" aria-hidden="true" /> 创建分支
             </Button>
           </div>
         </div>

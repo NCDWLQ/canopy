@@ -415,3 +415,15 @@ locks through the global settings surface.
 - Testing only that ancestors appear without asserting that sibling content is absent.
 - Rendering transient output as a warning/status card or exposing `Not saved`,
   commit, local-storage, or database vocabulary in the successful path.
+- Wrapping assistant messages inside card borders or adding redundant visible role headers ("用户"/"助手") instead of accessible `aria-label` attributes.
+
+## Scenario: Conversation Message Rendering (Bubble vs. Direct Output)
+
+### 1. Scope / Trigger
+Use when implementing or styling conversation message displays (`MessageBubble`, `MessageNode`, `ConversationPane`).
+
+### 2. Design Patterns
+- **User Messages**: Rendered as right-aligned message bubbles (`ml-auto max-w-[85%] rounded-2xl bg-muted px-4 py-2.5 text-foreground`). No visible "用户" header text. Accessible name preserved via `aria-label="用户消息"`.
+- **Assistant Messages**: Rendered directly on the background full-width (`w-full bg-transparent border-0 text-foreground`) without card boundaries or box wrappers, similar to modern conversational AI interfaces (ChatGPT/Claude). No visible "助手" header text. Accessible name preserved via `aria-label="助手消息"`.
+- **Actions**: Branching and editing action buttons are placed in subtle action bars below messages with hover/focus disclosure (`opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity`).
+

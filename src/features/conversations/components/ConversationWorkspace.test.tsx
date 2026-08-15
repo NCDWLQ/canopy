@@ -743,7 +743,7 @@ describe("ConversationWorkspace", () => {
     expect(
       within(pane).getAllByRole("article", { name: "助手消息" }),
     ).toHaveLength(2)
-    expect(transientArticle).toHaveClass("mr-8", "bg-card")
+    expect(transientArticle).toHaveClass("w-full")
     expect(within(pane).queryByText(left.content)).not.toBeInTheDocument()
     expect(pane).not.toHaveTextContent("Not saved")
     expect(pane).not.toHaveTextContent("Saving the accepted response")
@@ -785,7 +785,7 @@ describe("ConversationWorkspace", () => {
       .getByRole("heading", { name: visibleStreamedContent })
       .closest("article")
     expect(authoritativeArticle).toHaveAccessibleName("助手消息")
-    expect(authoritativeArticle).toHaveClass("mr-8", "bg-card")
+    expect(authoritativeArticle).toHaveClass("w-full")
     expect(
       within(pane).getAllByRole("article", { name: "助手消息" }),
     ).toHaveLength(2)

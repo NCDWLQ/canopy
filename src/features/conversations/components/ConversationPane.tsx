@@ -84,7 +84,7 @@ function TransientGenerationMessage({
       footer={
         status === null || statusInContent ? null : (
           <div
-            className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground"
+            className="mt-2 flex items-center justify-between gap-2 text-xs text-muted-foreground"
             role="status"
             aria-live="polite"
           >
@@ -101,10 +101,14 @@ function TransientGenerationMessage({
         />
       ) : statusInContent && status !== null ? (
         <span
-          className="text-sm text-muted-foreground"
+          className="inline-flex items-center gap-2 text-sm text-muted-foreground"
           role="status"
           aria-live="polite"
         >
+          <Loader2
+            className="size-3.5 animate-spin motion-reduce:animate-none"
+            aria-hidden="true"
+          />
           {status}
         </span>
       ) : null}
