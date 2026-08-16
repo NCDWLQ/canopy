@@ -3,7 +3,7 @@
   "name": "multi-provider",
   "title": "多 provider 支持：多 API 协议与模型列表获取",
   "description": "",
-  "status": "in_progress",
+  "status": "completed",
   "dev_type": null,
   "scope": null,
   "package": null,
@@ -11,18 +11,18 @@
   "creator": "canopy",
   "assignee": "canopy",
   "createdAt": "2026-08-16",
-  "completedAt": null,
+  "completedAt": "2026-08-17",
   "branch": "feat/multi-provider",
   "base_branch": "main",
   "worktree_path": "/home/jwh/Code/canopy-multi-provider",
-  "commit": null,
-  "pr_url": null,
+  "commit": "92d5a99",
+  "pr_url": "https://github.com/NCDWLQ/canopy/pull/3",
   "subtasks": [],
   "children": [],
   "parent": null,
   "relatedFiles": [],
   "notes": "",
   "meta": {
-    "checkpoint": "2026-08-17: 实现完成并提交为 3 笔（backend+fixtures / 前端 UI / 任务工件）。cargo test（含补齐 0006 provider_models 的迁移目录断言）+ clippy -D warnings + pnpm check 全绿。待办：G2 手动验收（旧库升级、双协议真实生成、流式中改配置），验收后归档。"
+    "checkpoint": "2026-08-17: G2 手动验收通过（旧库升级、双协议双会话、会话内切换、删除级联回退、模型列表失败兜底）。PR #3 已合并（9099c75），归档收尾。"
   }
 }
