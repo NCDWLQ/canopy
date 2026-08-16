@@ -490,3 +490,28 @@ Moved the archive action from the workspace header to a hover-revealed icon butt
 ### Status
 
 [OK] **Completed**
+
+
+## Session 23: Flatten markdown block chrome and unify copy buttons
+
+**Date**: 2026-08-16
+**Task**: Flatten markdown block chrome and unify copy buttons
+**Branch**: `main`
+
+### Summary
+
+Committed pending sidebar restyle (single scroll area, sticky section headers, row selection pills). Replaced streamdown double-card wrappers with lean single-card markup for code blocks (CSS via .assistant-markdown scope, no !important) and tables (LeanTable component). Added TableCopyDropdown to tables with zh translations. Pinned code copy button to language row (position:static via :has()), unified copy buttons to ghost style with 14px icons and 8px card spacing. All work split into 5 atomic commits, each verified (prettier/eslint/tsc/160 tests).
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6848a98` | (see git log) |
+| `cf5dabc` | (see git log) |
+| `137b6b1` | (see git log) |
+| `1a8929f` | (see git log) |
+| `cbfb716` | (see git log) |
+
+### Status
+
+[OK] **Completed**
