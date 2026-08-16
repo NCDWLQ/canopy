@@ -536,3 +536,26 @@ Committed pending sidebar restyle (single scroll area, sticky section headers, r
 ### Status
 
 [OK] **Completed**
+
+
+## Session 25: 多 Provider 支持：提交、PR 与验收收尾
+
+**Date**: 2026-08-17
+**Task**: 多 Provider 支持：提交、PR 与验收收尾
+**Branch**: `main`
+
+### Summary
+
+multi-provider 任务收尾：修复 tree_persistence 迁移目录断言（补 0006 provider_models）后全量验证转绿；按既定 3-commit 方案提交（backend+契约 fixtures / 前端 UI / 任务工件+spec）并合并 main——main 侧滚动回归测试适配 streaming 状态新增的必填 thinking 字段；cargo test 77 + clippy -D warnings + pnpm check（168 前端测试）全绿。发起 PR #3，G2 手动验收通过（旧库升级、双协议双会话、删除级联回退、模型列表失败兜底）后合并（9099c75），任务归档。经验：管道 tail/grep 会掩盖测试退出码，验证命令需显式回传 $?；分支落后 main 时先提交再合并，自动合并无冲突不等于类型层面兼容（本例 TS 必填字段）。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `92d5a99` | (see git log) |
+| `f3f744c` | (see git log) |
+| `5af255b` | (see git log) |
+
+### Status
+
+[OK] **Completed**
