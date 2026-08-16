@@ -122,7 +122,7 @@ function LeanTable(props: MarkdownTableProps) {
       <div className="flex h-8 items-center justify-end">
         <TableCopyDropdown className="rounded-md hover:bg-accent" />
       </div>
-      <div className="overflow-x-auto rounded-md border border-border">
+      <div className="mt-2 overflow-x-auto rounded-md border border-border">
         <table
           className="w-full divide-y divide-border"
           data-streamdown="table"

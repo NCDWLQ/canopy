@@ -143,7 +143,8 @@
    - 复制按钮默认 sticky 悬浮(滚动时跟随视口),改为固定停在语言标签行:
      sticky 挂在药丸的外层 wrapper 上(无 data 属性),用 :has() 反选;
      药丸与语言行的对齐由库内置 -mt-10 负边距负责,不要改 gap/负边距。
-   - 复制按钮药丸去掉 backdrop-blur,减少每个代码块一个合成层。 */
+   - 复制按钮做幽灵样式:去掉药丸的边框/底色/padding,
+     悬停底色交给按钮本身的 :hover(同 shadcn ghost 的 hover:bg-accent)。 */
 .assistant-markdown [data-streamdown="code-block"] {
   border: 0;
   background: transparent;
@@ -161,8 +162,21 @@
 }
 
 .assistant-markdown [data-streamdown="code-block-actions"] {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.assistant-markdown [data-streamdown="code-block-copy-button"] {
+  border-radius: var(--radius-md);
+}
+
+/* 库给代码块复制按钮的图标传 size:14,但其内置 SVG 图标不认 size prop,
+   实际渲染 16px;表格复制按钮传的是 height/width:14,渲染 14px。
+   这里统一到 14px,两个按钮同尺寸。 */
+.assistant-markdown [data-streamdown="code-block-copy-button"] svg {
+  height: 14px;
+  width: 14px;
 }
 
 .assistant-markdown [data-streamdown="code-block-copy-button"]:hover {
