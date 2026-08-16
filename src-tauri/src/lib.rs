@@ -37,6 +37,7 @@ fn register_commands<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Bu
         providers::commands::save_provider,
         providers::commands::delete_provider,
         providers::commands::set_active_provider,
+        providers::commands::reveal_provider_api_key,
         providers::commands::generate_from_active_path,
         providers::commands::cancel_generation,
         providers::commands::list_provider_models,

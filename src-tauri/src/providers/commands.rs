@@ -24,6 +24,7 @@ pub const PROVIDER_COMMAND_NAMES: &[&str] = &[
     "save_provider",
     "delete_provider",
     "set_active_provider",
+    "reveal_provider_api_key",
     "list_provider_models",
     "generate_from_active_path",
     "cancel_generation",
@@ -116,6 +117,18 @@ pub struct DeleteProviderRequest {
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct SetActiveProviderRequest {
     pub provider_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct RevealProviderApiKeyRequest {
+    pub provider_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct RevealProviderApiKeyResult {
+    pub api_key: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -321,6 +334,28 @@ pub async fn set_active_provider(
         .await
         .map(|active_provider_id| SetActiveProviderResult { active_provider_id })
         .map_err(CommandError::from)
+}
+
+/// Returns one stored provider's API key in plaintext for the settings
+/// editor. Profile results stay redacted; reveal is the only command that
+/// may echo a secret, and only on explicit request.
+#[tauri::command]
+pub async fn reveal_provider_api_key(
+    request: RevealProviderApiKeyRequest,
+    instances: State<'_, DbInstances>,
+) -> Result<RevealProviderApiKeyResult, CommandError> {
+    validate_id("provider_id", &request.provider_id)?;
+    let pool = managed_sqlite_pool(instances.inner())
+        .await
+        .map_err(CommandError::from)?;
+    let (_, secret) = production_service(pool)
+        .load_by_id_with_secret(&request.provider_id)
+        .await
+        .map_err(CommandError::from)?;
+    use secrecy::ExposeSecret;
+    Ok(RevealProviderApiKeyResult {
+        api_key: secret.map(|secret| secret.expose_secret().to_owned()),
+    })
 }
 
 #[tauri::command]

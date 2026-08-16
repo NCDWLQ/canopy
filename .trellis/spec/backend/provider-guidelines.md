@@ -51,7 +51,10 @@ API key, authorization header, encrypted secret, or secret-derived verifier.
 
 - API-key actions are explicit: `keep`, `replace { value }`, or `remove`.
   Profile results expose only `has_api_key`; credential references remain Rust
-  internal.
+  internal. `reveal_provider_api_key({ provider_id }) -> { api_key }` is the
+  single deliberate exception: the settings editor calls it on provider
+  selection to seed its masked key field. List/save results stay redacted;
+  never widen them to echo secrets.
 - Native credentials use service namespace `app.canopy.desktop` behind
   `CredentialStore`. Production keyring calls run on the blocking runtime;
   tests inject a fake and never touch the developer's keychain.

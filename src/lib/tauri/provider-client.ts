@@ -32,6 +32,8 @@ import {
   listProviderModelsResultSchema,
   listProvidersResultSchema,
   providerDtoSchema,
+  revealProviderApiKeyRequestSchema,
+  revealProviderApiKeyResultSchema,
   saveProviderRequestSchema,
   setActiveProviderRequestSchema,
   setActiveProviderResultSchema,
@@ -47,6 +49,7 @@ export const PROVIDER_COMMANDS = {
   saveProvider: "save_provider",
   deleteProvider: "delete_provider",
   setActiveProvider: "set_active_provider",
+  revealProviderApiKey: "reveal_provider_api_key",
   listProviderModels: "list_provider_models",
   generateFromActivePath: "generate_from_active_path",
   cancelGeneration: "cancel_generation",
@@ -141,6 +144,17 @@ export function createProviderClient(
         { provider_id: providerId },
         setActiveProviderResultSchema,
         (value) => value.active_provider_id,
+      )
+    },
+
+    async revealProviderApiKey(providerId: string): Promise<string | null> {
+      return providerCall(
+        transport,
+        PROVIDER_COMMANDS.revealProviderApiKey,
+        revealProviderApiKeyRequestSchema,
+        { provider_id: providerId },
+        revealProviderApiKeyResultSchema,
+        (value) => value.api_key,
       )
     },
 

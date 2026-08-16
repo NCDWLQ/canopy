@@ -2,6 +2,8 @@ import * as React from "react"
 import {
   Check,
   ChevronDown,
+  Eye,
+  EyeOff,
   KeyRound,
   Plus,
   Radio,
@@ -27,7 +29,6 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -44,6 +45,12 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group"
 import { Spinner } from "@/components/ui/spinner"
 import {
   DropdownMenu,
@@ -110,28 +117,46 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
   const [draft, setDraft] = React.useState<ProviderDraft>(emptyDraft)
   const [apiKey, setApiKey] = React.useState("")
-  const [removeKey, setRemoveKey] = React.useState(false)
+  // The revealed key the field was seeded with; null while unknown (new
+  // provider or failed reveal) — then an empty field must read as "keep".
+  const [savedApiKey, setSavedApiKey] = React.useState<string | null>(null)
+  const [showApiKey, setShowApiKey] = React.useState(false)
   const [models, setModels] = React.useState<readonly ModelSummaryView[]>([])
   const [modelsError, setModelsError] = React.useState<string | null>(null)
   const [modelsLoading, setModelsLoading] = React.useState(false)
   const [modelAddition, setModelAddition] = React.useState("")
+  const selectedIdRef = React.useRef<string | null>(null)
   const isControlled = props.open !== undefined
   const open = isControlled ? props.open : uncontrolledOpen
   const mutationDisabled = readOnly || phase === "loading"
 
   const selectDraft = React.useCallback(
     (providerId: string | null) => {
+      selectedIdRef.current = providerId
       setSelectedId(providerId)
       const provider = providers.find((item) => item.id === providerId)
       setDraft(
         provider === undefined ? emptyDraft() : draftFromProvider(provider),
       )
       setApiKey("")
-      setRemoveKey(false)
+      setSavedApiKey(null)
+      setShowApiKey(false)
       setModels([])
       setModelsError(null)
+      if (providerId === null) return
+      void client
+        .revealProviderApiKey(providerId)
+        .then((key) => {
+          if (selectedIdRef.current !== providerId) return
+          setSavedApiKey(key)
+          setApiKey(key ?? "")
+        })
+        .catch(() => {
+          // Reveal failed: leave the field empty and savedApiKey unknown so
+          // saving cannot silently remove the stored key.
+        })
     },
-    [providers],
+    [providers, client],
   )
 
   const handleOpenChange = (nextOpen: boolean) => {
@@ -140,7 +165,8 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
     if (nextOpen) selectDraft(activeProviderId ?? providers[0]?.id ?? null)
     else {
       setApiKey("")
-      setRemoveKey(false)
+      setSavedApiKey(null)
+      setShowApiKey(false)
     }
   }
 
@@ -212,9 +238,8 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
       baseEndpoint: draft.baseEndpoint,
       model: draft.model,
       models: draft.models,
-      apiKey: resolveApiKeyAction(existing, apiKey, removeKey),
+      apiKey: resolveApiKeyAction(existing, apiKey, savedApiKey),
     })
-    setApiKey("")
     if (saved !== null) selectDraft(saved.id)
   }
 
@@ -363,7 +388,10 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                         <ChevronDown className="size-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)]">
+                    <DropdownMenuContent
+                      align="start"
+                      className="w-[var(--radix-dropdown-menu-trigger-width)]"
+                    >
                       <DropdownMenuItem
                         onClick={() =>
                           updateDraft("protocol", "openai_compatible")
@@ -375,9 +403,7 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                         OpenAI 兼容
                       </DropdownMenuItem>
                       <DropdownMenuItem
-                        onClick={() =>
-                          updateDraft("protocol", "anthropic")
-                        }
+                        onClick={() => updateDraft("protocol", "anthropic")}
                       >
                         {draft.protocol === "anthropic" && (
                           <Check className="size-4" />
@@ -510,41 +536,43 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                     </div>
                   )}
                 </Field>
-                <Field data-disabled={mutationDisabled || removeKey}>
+                <Field data-disabled={mutationDisabled}>
                   <FieldLabel htmlFor="provider-api-key">API 密钥</FieldLabel>
-                  <Input
-                    id="provider-api-key"
-                    type="password"
-                    autoComplete="new-password"
-                    value={apiKey}
-                    onChange={(event) => setApiKey(event.target.value)}
-                    placeholder={
-                      draft.id === undefined ? "可选" : "留空以保留现有密钥"
-                    }
-                    disabled={mutationDisabled || removeKey}
-                  />
-                  <FieldDescription>
-                    每次尝试保存后，此对话框中的密钥都会被清空。
-                  </FieldDescription>
-                </Field>
-                {draft.id !== undefined && (
-                  <Field
-                    orientation="horizontal"
-                    data-disabled={mutationDisabled}
-                  >
-                    <Checkbox
-                      id="provider-remove-key"
-                      checked={removeKey}
-                      onCheckedChange={(checked) =>
-                        setRemoveKey(checked === true)
+                  <InputGroup>
+                    <InputGroupInput
+                      id="provider-api-key"
+                      type={showApiKey ? "text" : "password"}
+                      autoComplete="new-password"
+                      value={apiKey}
+                      onChange={(event) => setApiKey(event.target.value)}
+                      placeholder={
+                        draft.id !== undefined && draft.hasApiKey
+                          ? undefined
+                          : "可选"
                       }
                       disabled={mutationDisabled}
                     />
-                    <FieldLabel htmlFor="provider-remove-key">
-                      删除已保存的 API 密钥
-                    </FieldLabel>
-                  </Field>
-                )}
+                    <InputGroupAddon align="inline-end">
+                      <InputGroupButton
+                        size="icon-sm"
+                        aria-label={
+                          showApiKey ? "隐藏 API 密钥" : "显示 API 密钥"
+                        }
+                        disabled={mutationDisabled}
+                        onClick={() => setShowApiKey((visible) => !visible)}
+                      >
+                        {showApiKey ? (
+                          <EyeOff aria-hidden="true" />
+                        ) : (
+                          <Eye aria-hidden="true" />
+                        )}
+                      </InputGroupButton>
+                    </InputGroupAddon>
+                  </InputGroup>
+                  <FieldDescription>
+                    已保存的密钥会显示在此处，默认以星号遮蔽，可切换为明文；清空后保存将删除已保存的密钥。
+                  </FieldDescription>
+                </Field>
               </FieldGroup>
               {draft.id !== undefined && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">

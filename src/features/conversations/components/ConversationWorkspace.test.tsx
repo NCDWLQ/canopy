@@ -196,6 +196,9 @@ function createMockProviderClient() {
     saveProvider: vi.fn<ProviderClient["saveProvider"]>(),
     deleteProvider: vi.fn<ProviderClient["deleteProvider"]>(),
     setActiveProvider: vi.fn<ProviderClient["setActiveProvider"]>(),
+    revealProviderApiKey: vi
+      .fn<ProviderClient["revealProviderApiKey"]>()
+      .mockResolvedValue(null),
     listProviderModels: vi.fn<ProviderClient["listProviderModels"]>(),
     generateFromActivePath: vi.fn<ProviderClient["generateFromActivePath"]>(),
     cancelGeneration: vi

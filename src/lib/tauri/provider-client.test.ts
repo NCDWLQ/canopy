@@ -49,6 +49,7 @@ describe("provider Tauri contract", () => {
       save_provider: fixture.successes.provider,
       delete_provider: fixture.successes.delete,
       set_active_provider: fixture.successes.active,
+      reveal_provider_api_key: fixture.successes.reveal_api_key,
       list_provider_models: { models: [{ id: "fixture-model" }] },
       cancel_generation: fixture.successes.cancel,
     })
@@ -78,6 +79,9 @@ describe("provider Tauri contract", () => {
     await expect(client.deleteProvider("provider-fixture")).resolves.toBe(true)
     await expect(client.setActiveProvider("provider-fixture")).resolves.toBe(
       "provider-fixture",
+    )
+    await expect(client.revealProviderApiKey("provider-fixture")).resolves.toBe(
+      "fixture-revealed-key-sentinel",
     )
     await expect(
       client.listProviderModels({

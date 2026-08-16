@@ -80,6 +80,10 @@ export const deleteProviderRequestSchema = z
   .object({ provider_id: idSchema })
   .strict()
 export const setActiveProviderRequestSchema = deleteProviderRequestSchema
+export const revealProviderApiKeyRequestSchema = deleteProviderRequestSchema
+export const revealProviderApiKeyResultSchema = z
+  .object({ api_key: secretSchema.nullable() })
+  .strict()
 export const listProviderModelsRequestSchema = z
   .object({
     source: z.discriminatedUnion("type", [

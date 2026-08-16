@@ -2,7 +2,8 @@ use canopy_lib::providers::commands::{
     CancelGenerationRequest, CancelGenerationResult, DeleteProviderRequest, DeleteProviderResult,
     GenerateFromActivePathRequest, GenerationEventDto, GenerationTerminalDto,
     ListProviderModelsRequest, ListProvidersRequest, ListProvidersResult, ProviderDto,
-    SaveProviderRequest, SetActiveProviderRequest, SetActiveProviderResult, PROVIDER_COMMAND_NAMES,
+    RevealProviderApiKeyRequest, RevealProviderApiKeyResult, SaveProviderRequest,
+    SetActiveProviderRequest, SetActiveProviderResult, PROVIDER_COMMAND_NAMES,
 };
 use serde_json::Value;
 
@@ -27,6 +28,7 @@ fn shared_provider_fixture_round_trips_rust_wire_types() {
     request!("save_provider", SaveProviderRequest);
     request!("delete_provider", DeleteProviderRequest);
     request!("set_active_provider", SetActiveProviderRequest);
+    request!("reveal_provider_api_key", RevealProviderApiKeyRequest);
     request!("list_provider_models", ListProviderModelsRequest);
     request!("generate_from_active_path", GenerateFromActivePathRequest);
     request!("cancel_generation", CancelGenerationRequest);
@@ -54,6 +56,12 @@ fn shared_provider_fixture_round_trips_rust_wire_types() {
     assert_eq!(
         serde_json::to_value(active).unwrap(),
         fixture["successes"]["active"]
+    );
+    let revealed: RevealProviderApiKeyResult =
+        serde_json::from_value(fixture["successes"]["reveal_api_key"].clone()).unwrap();
+    assert_eq!(
+        serde_json::to_value(revealed).unwrap(),
+        fixture["successes"]["reveal_api_key"]
     );
     let cancelled: CancelGenerationResult =
         serde_json::from_value(fixture["successes"]["cancel"].clone()).unwrap();

@@ -4,6 +4,7 @@
     "save_provider",
     "delete_provider",
     "set_active_provider",
+    "reveal_provider_api_key",
     "list_provider_models",
     "generate_from_active_path",
     "cancel_generation"
@@ -25,6 +26,9 @@
       "provider_id": "provider-fixture"
     },
     "set_active_provider": {
+      "provider_id": "provider-fixture"
+    },
+    "reveal_provider_api_key": {
       "provider_id": "provider-fixture"
     },
     "list_provider_models": {
@@ -73,6 +77,9 @@
     },
     "active": {
       "active_provider_id": "provider-fixture"
+    },
+    "reveal_api_key": {
+      "api_key": "fixture-revealed-key-sentinel"
     },
     "delete": {
       "deleted": true

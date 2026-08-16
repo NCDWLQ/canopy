@@ -21,6 +21,7 @@ function client() {
     saveProvider: vi.fn(),
     deleteProvider: vi.fn(),
     setActiveProvider: vi.fn(),
+    revealProviderApiKey: vi.fn(),
     listProviderModels: vi.fn(),
     generateFromActivePath: vi.fn(),
     cancelGeneration: vi.fn(),

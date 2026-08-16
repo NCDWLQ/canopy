@@ -25,6 +25,7 @@ function client() {
     saveProvider: vi.fn(),
     deleteProvider: vi.fn(),
     setActiveProvider: vi.fn(),
+    revealProviderApiKey: vi.fn().mockResolvedValue(null),
     listProviderModels: vi.fn(),
     generateFromActivePath: vi.fn(),
     cancelGeneration: vi.fn(),
@@ -48,10 +49,11 @@ describe("GlobalSettingsDialog", () => {
     })
   })
 
-  it("edits providers using a redacted key replacement and clears the draft secret", async () => {
+  it("reveals the saved key masked, toggles visibility, and keeps it when unchanged", async () => {
     const user = userEvent.setup()
     const bridge = client()
-    bridge.saveProvider.mockResolvedValueOnce({ ...provider, updatedAt: 11 })
+    bridge.revealProviderApiKey.mockResolvedValue("STORED_SECRET_SENTINEL")
+    bridge.saveProvider.mockResolvedValue({ ...provider, updatedAt: 11 })
     render(
       <GlobalSettingsDialog
         client={bridge as ProviderClient}
@@ -59,7 +61,48 @@ describe("GlobalSettingsDialog", () => {
       />,
     )
     await user.click(screen.getByRole("button", { name: "设置" }))
-    await user.type(screen.getByLabelText("API 密钥"), "DIALOG_SECRET_SENTINEL")
+    expect(bridge.revealProviderApiKey).toHaveBeenCalledWith(provider.id)
+    const field = screen.getByLabelText("API 密钥")
+    await waitFor(() => expect(field).toHaveValue("STORED_SECRET_SENTINEL"))
+    expect(field).toHaveAttribute("type", "password")
+
+    await user.click(screen.getByRole("button", { name: "显示 API 密钥" }))
+    expect(field).toHaveAttribute("type", "text")
+    expect(screen.getByRole("button", { name: "隐藏 API 密钥" })).toBeVisible()
+
+    await user.click(screen.getByRole("button", { name: "保存服务提供商" }))
+    await waitFor(() =>
+      expect(bridge.saveProvider).toHaveBeenCalledWith(
+        expect.objectContaining({
+          apiKey: { action: "keep" },
+        }),
+      ),
+    )
+    // A successful save reselects the provider, which reveals the key again.
+    await waitFor(() =>
+      expect(bridge.revealProviderApiKey).toHaveBeenCalledTimes(2),
+    )
+    expect(JSON.stringify(useProviderStore.getState())).not.toContain(
+      "STORED_SECRET_SENTINEL",
+    )
+  })
+
+  it("sends replace when the revealed key is edited", async () => {
+    const user = userEvent.setup()
+    const bridge = client()
+    bridge.revealProviderApiKey.mockResolvedValue("OLD_SECRET_SENTINEL")
+    bridge.saveProvider.mockResolvedValue({ ...provider, updatedAt: 11 })
+    render(
+      <GlobalSettingsDialog
+        client={bridge as ProviderClient}
+        readOnly={false}
+      />,
+    )
+    await user.click(screen.getByRole("button", { name: "设置" }))
+    const field = screen.getByLabelText("API 密钥")
+    await waitFor(() => expect(field).toHaveValue("OLD_SECRET_SENTINEL"))
+    await user.clear(field)
+    await user.type(field, "DIALOG_SECRET_SENTINEL")
     await user.click(screen.getByRole("button", { name: "保存服务提供商" }))
     await waitFor(() =>
       expect(bridge.saveProvider).toHaveBeenCalledWith({
@@ -72,9 +115,48 @@ describe("GlobalSettingsDialog", () => {
         apiKey: { action: "replace", value: "DIALOG_SECRET_SENTINEL" },
       }),
     )
-    expect(screen.getByLabelText("API 密钥")).toHaveValue("")
-    expect(JSON.stringify(useProviderStore.getState())).not.toContain(
-      "DIALOG_SECRET_SENTINEL",
+  })
+
+  it("sends remove when the revealed key is cleared, but keep when the reveal failed", async () => {
+    const user = userEvent.setup()
+    const bridge = client()
+    bridge.revealProviderApiKey.mockResolvedValueOnce("OLD_SECRET_SENTINEL")
+    bridge.saveProvider.mockResolvedValue({ ...provider, updatedAt: 11 })
+    render(
+      <GlobalSettingsDialog
+        client={bridge as ProviderClient}
+        readOnly={false}
+      />,
+    )
+    await user.click(screen.getByRole("button", { name: "设置" }))
+    const field = screen.getByLabelText("API 密钥")
+    await waitFor(() => expect(field).toHaveValue("OLD_SECRET_SENTINEL"))
+    await user.clear(field)
+    await user.click(screen.getByRole("button", { name: "保存服务提供商" }))
+    await waitFor(() =>
+      expect(bridge.saveProvider).toHaveBeenCalledWith(
+        expect.objectContaining({ apiKey: { action: "remove" } }),
+      ),
+    )
+
+    // Second edit: reveal fails, so an empty field must keep the stored key.
+    bridge.revealProviderApiKey.mockRejectedValueOnce(new Error("keyring"))
+    bridge.saveProvider.mockClear()
+    await user.click(screen.getByRole("button", { name: "新建" }))
+    const providerButton = screen
+      .getAllByRole("button", { name: /OpenAI/ })
+      .find((button) => button.textContent === "OpenAI")
+    expect(providerButton).toBeDefined()
+    await user.click(providerButton!)
+    await waitFor(() =>
+      expect(bridge.revealProviderApiKey).toHaveBeenCalledTimes(3),
+    )
+    expect(field).toHaveValue("")
+    await user.click(screen.getByRole("button", { name: "保存服务提供商" }))
+    await waitFor(() =>
+      expect(bridge.saveProvider).toHaveBeenCalledWith(
+        expect.objectContaining({ apiKey: { action: "keep" } }),
+      ),
     )
   })
 
