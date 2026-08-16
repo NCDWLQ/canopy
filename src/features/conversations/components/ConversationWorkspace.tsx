@@ -11,13 +11,15 @@ import {
 import { OutlineTree } from "./OutlineTree"
 import { useWorkspaceGenerationController } from "../hooks/useWorkspaceGenerationController"
 import {
-  isGenerationActive,
+  isRunActive,
   selectActivePath,
+  selectActiveRunIds,
   type ConversationTreeState,
   useConversationStore,
 } from "../store"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
@@ -64,7 +66,7 @@ function resolveAssistantRegenerationTarget(
     state.conversationId === null ||
     state.isArchived ||
     state.status !== "ready" ||
-    state.generation.phase !== "idle"
+    state.generationRuns[state.conversationId] !== undefined
   ) {
     return null
   }
@@ -131,7 +133,7 @@ export function ConversationWorkspace({
       expandedIds: state.expandedIds,
       status: state.status,
       error: state.error,
-      generation: state.generation,
+      generationRuns: state.generationRuns,
       history: state.history,
       toggleExpanded: state.toggleExpanded,
       clearError: state.clearError,
@@ -169,18 +171,25 @@ export function ConversationWorkspace({
   const isBlankConversation =
     store.isCreatingConversation ||
     (store.conversationId === null && store.history.status === "empty")
+  const currentRun =
+    store.conversationId === null
+      ? undefined
+      : store.generationRuns[store.conversationId]
+  const activeRunIds = selectActiveRunIds({
+    generationRuns: store.generationRuns,
+  })
   const transientGeneration = (() => {
-    const generation = store.generation
-    switch (generation.phase) {
+    if (currentRun === undefined) return null
+    switch (currentRun.phase) {
       case "starting":
         return { phase: "starting" as const }
       case "streaming":
         return {
           phase: "streaming" as const,
-          content: generation.content,
+          content: currentRun.content,
         }
       case "failed":
-        return generation.failureKind === "generation"
+        return currentRun.failureKind === "generation"
           ? {
               phase: "failed" as const,
               failureKind: "generation" as const,
@@ -188,17 +197,22 @@ export function ConversationWorkspace({
           : {
               phase: "failed" as const,
               failureKind: "persistence" as const,
-              content: generation.content,
+              content: currentRun.content,
             }
       case "cancelled":
         return {
           phase: "cancelled" as const,
-          content: generation.content,
+          content: currentRun.content,
         }
-      case "idle":
-        return null
     }
   })()
+  // The transient bubble belongs under the run's parent. When the user is
+  // browsing another branch, the run keeps streaming in the background of
+  // this conversation and the composer keeps the cancel affordance.
+  const transientBubbleVisible =
+    transientGeneration !== null &&
+    pathProjection.kind === "ready" &&
+    pathProjection.path.at(-1)?.id === currentRun?.parentNodeId
 
   const canEditDraft =
     !isBlankConversation &&
@@ -216,11 +230,7 @@ export function ConversationWorkspace({
   })()
 
   const userGenerationAction: UserGenerationAction | null = (() => {
-    if (
-      !canMutate ||
-      store.activeNodeId === null ||
-      transientGeneration !== null
-    ) {
+    if (!canMutate || store.activeNodeId === null || currentRun !== undefined) {
       return null
     }
     const activeNode = store.nodesById[store.activeNodeId]
@@ -297,11 +307,10 @@ export function ConversationWorkspace({
       : (store.history.summaries.find((item) => item.id === pendingArchiveId) ??
         null)
   // Re-evaluated from the live store on every render while the dialog is
-  // open, so the warning reflects the confirm-time generation state.
+  // open, so the warning reflects the confirm-time run state — including a
+  // background run on a non-current conversation.
   const pendingArchiveInterrupts =
-    pendingArchiveId !== null &&
-    pendingArchiveId === store.conversationId &&
-    isGenerationActive(store.generation)
+    pendingArchiveId !== null && activeRunIds.has(pendingArchiveId)
 
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
@@ -326,10 +335,7 @@ export function ConversationWorkspace({
                   className="size-8"
                   aria-label="新建会话"
                   title="新建会话"
-                  disabled={
-                    store.status === "loading" ||
-                    isGenerationActive(store.generation)
-                  }
+                  disabled={store.status === "loading"}
                   onClick={store.enterConversationCreation}
                 >
                   <SquarePen className="size-4" aria-hidden="true" />
@@ -349,6 +355,7 @@ export function ConversationWorkspace({
                 {store.history.summaries.map((summary) => {
                   const isCurrent =
                     !isBlankConversation && store.conversationId === summary.id
+                  const isGenerating = activeRunIds.has(summary.id)
                   return (
                     <li key={summary.id}>
                       <div
@@ -366,10 +373,7 @@ export function ConversationWorkspace({
                             isCurrent && "font-medium",
                           )}
                           aria-current={isCurrent ? "page" : undefined}
-                          disabled={
-                            store.status === "loading" ||
-                            isGenerationActive(store.generation)
-                          }
+                          disabled={store.status === "loading"}
                           onClick={() =>
                             void store.selectConversation(client, summary.id)
                           }
@@ -380,6 +384,12 @@ export function ConversationWorkspace({
                           >
                             {summary.title}
                           </span>
+                          {isGenerating && (
+                            <Spinner
+                              className="size-3.5 shrink-0 text-muted-foreground"
+                              aria-label="正在生成回复"
+                            />
+                          )}
                           {summary.isArchived && (
                             <Badge className="shrink-0" variant="secondary">
                               已归档
@@ -466,7 +476,7 @@ export function ConversationWorkspace({
           <GlobalSettingsDialog
             client={providerClient}
             readOnly={!isBlankConversation && store.isArchived}
-            generationActive={isGenerationActive(store.generation)}
+            generationActive={activeRunIds.size > 0}
             open={isSettingsOpen}
             onOpenChange={setIsSettingsOpen}
           />
@@ -503,10 +513,7 @@ export function ConversationWorkspace({
                       className="size-8"
                       aria-label="新建会话"
                       title="新建会话"
-                      disabled={
-                        store.status === "loading" ||
-                        isGenerationActive(store.generation)
-                      }
+                      disabled={store.status === "loading"}
                       onClick={store.enterConversationCreation}
                     >
                       <SquarePen className="size-4" aria-hidden="true" />
@@ -560,13 +567,10 @@ export function ConversationWorkspace({
             <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10">
               <Composer
                 onSubmit={controller.createConversation}
-                inputDisabled={
-                  store.status === "loading" || controller.mutationLocked
-                }
+                inputDisabled={store.status === "loading"}
                 action={{
                   kind: "send",
-                  disabled:
-                    store.status === "loading" || controller.mutationLocked,
+                  disabled: store.status === "loading",
                 }}
                 placeholder="输入第一条消息…"
               />
@@ -608,7 +612,9 @@ export function ConversationWorkspace({
               onEditAsBranch={(nodeId, content) =>
                 void controller.editNodeAsBranch(nodeId, content)
               }
-              transientGeneration={transientGeneration}
+              transientGeneration={
+                transientBubbleVisible ? transientGeneration : null
+              }
               onRegenerate={controller.generate}
               userGenerationAction={userGenerationAction}
               assistantRegenerationAction={assistantRegenerationAction}
@@ -622,9 +628,11 @@ export function ConversationWorkspace({
                 placeholder={
                   store.isArchived
                     ? "会话已归档，无法修改。"
-                    : canAppend
-                      ? "输入下一条用户消息…"
-                      : "可输入草稿；当前路径暂无法发送。"
+                    : isRunActive(currentRun) && !transientBubbleVisible
+                      ? "回复生成中…"
+                      : canAppend
+                        ? "输入下一条用户消息…"
+                        : "可输入草稿；当前路径暂无法发送。"
                 }
               />
             </div>

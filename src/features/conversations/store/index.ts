@@ -14,36 +14,54 @@ import { ConversationCommandError, type ConversationClient } from "@/lib/tauri"
 type StartedGenerationEvent = Extract<GenerationEventView, { type: "started" }>
 type DeltaGenerationEvent = Extract<GenerationEventView, { type: "delta" }>
 
-type ActiveGeneration = {
+type RunIdentity = {
   runId: number
   conversationId: string
   parentNodeId: string
   generationId?: string
   model?: string
+  // Children of parentNodeId at run start. Recovery must never mistake a
+  // pre-existing assistant sibling for this run's result.
+  priorChildIds: readonly string[]
+  // Truncated prompt preview of parentNodeId, captured at run start for
+  // background notifications (the parent tree may be unloaded by then).
+  parentPreview?: string
 }
 
-export type GenerationState =
-  | { phase: "idle" }
-  | (ActiveGeneration & { phase: "starting" })
-  | (Required<ActiveGeneration> & {
+// CJK text has no word boundaries; character slicing is the natural fit.
+export function truncatePreview(text: string, maxLength: number): string {
+  const flattened = text.replaceAll(/\s+/g, " ").trim()
+  if (flattened.length <= maxLength) return flattened
+  return flattened.slice(0, maxLength) + "…"
+}
+
+const PARENT_PREVIEW_MAX_LENGTH = 60
+
+export type GenerationRun =
+  | (RunIdentity & { phase: "starting" })
+  | (RunIdentity & {
       phase: "streaming"
+      generationId: string
       model: string
       content: string
     })
-  | (ActiveGeneration & { phase: "cancelled"; content: string })
-  | {
+  | (RunIdentity & { phase: "cancelled"; content: string })
+  | (RunIdentity & {
       phase: "failed"
-      runId: number
       failureKind: "generation"
       error: UiError
-    }
-  | {
+    })
+  | (RunIdentity & {
       phase: "failed"
-      runId: number
       failureKind: "persistence"
       content: string
       error: UiError
-    }
+    })
+
+export type ActiveGenerationRun = Extract<
+  GenerationRun,
+  { phase: "starting" | "streaming" }
+>
 
 export type ConversationTreeState = {
   isCreatingConversation: boolean
@@ -56,7 +74,10 @@ export type ConversationTreeState = {
   expandedIds: ReadonlySet<string>
   status: "idle" | "loading" | "ready" | "streaming" | "error"
   error: UiError | null
-  generation: GenerationState
+  // At most one run record per conversation, keyed by conversation ID. Active
+  // runs stream in the background when their conversation is not loaded;
+  // terminal records survive switches so failures can surface on re-entry.
+  generationRuns: Readonly<Record<string, GenerationRun>>
 }
 
 export type ActivePathProjection =
@@ -112,7 +133,7 @@ export type ConversationStore = ConversationTreeState & {
     targetId?: string,
   ) => Promise<void>
   clearError: () => void
-  beginGeneration: () => number | null
+  beginGeneration: (explicitParentNodeId?: string) => number | null
   acceptGenerationStarted: (
     runId: number,
     event: StartedGenerationEvent,
@@ -190,7 +211,7 @@ const initialState: ConversationTreeState = {
   expandedIds: new Set(),
   status: "idle",
   error: null,
-  generation: { phase: "idle" },
+  generationRuns: emptyRecord(),
 }
 
 const initialHistoryState: ConversationHistoryState = {
@@ -277,7 +298,7 @@ function expandedPathIds(
 
 function loadedTreeState(
   tree: ConversationTreeView,
-  generation: GenerationState = { phase: "idle" },
+  generationRuns: Readonly<Record<string, GenerationRun>>,
 ): ConversationTreeState {
   const activeNodeId = newestLeafId(tree)
   return {
@@ -291,8 +312,91 @@ function loadedTreeState(
     expandedIds: expandedPathIds(tree, activeNodeId),
     status: "ready",
     error: null,
-    generation,
+    generationRuns,
   }
+}
+
+// Re-attaching to a conversation with a run record focuses the run's parent so
+// the transient bubble is visible, even when the newest leaf drifted elsewhere
+// (for example a background regeneration over an older branch).
+function withRunFocus(
+  base: ConversationTreeState,
+  tree: ConversationTreeView,
+): ConversationTreeState {
+  const run = base.generationRuns[tree.conversation.id]
+  if (run === undefined) return base
+  if (!Object.hasOwn(base.nodesById, run.parentNodeId)) return base
+  return {
+    ...base,
+    activeNodeId: run.parentNodeId,
+    expandedIds: expandedPathIds(tree, run.parentNodeId),
+  }
+}
+
+function setRunRecord(
+  state: ConversationTreeState,
+  conversationId: string,
+  run: GenerationRun,
+): Record<string, GenerationRun> {
+  const generationRuns = copyRecord(state.generationRuns)
+  generationRuns[conversationId] = run
+  return generationRuns
+}
+
+function removeRunRecord(
+  state: ConversationTreeState,
+  conversationId: string,
+): Record<string, GenerationRun> {
+  if (!Object.hasOwn(state.generationRuns, conversationId)) {
+    return copyRecord(state.generationRuns)
+  }
+  const generationRuns = copyRecord(state.generationRuns)
+  delete generationRuns[conversationId]
+  return generationRuns
+}
+
+export function findRunEntry(
+  state: ConversationTreeState,
+  runId: number,
+): readonly [conversationId: string, run: GenerationRun] | undefined {
+  for (const [conversationId, run] of Object.entries(state.generationRuns)) {
+    if (run.runId === runId) return [conversationId, run]
+  }
+  return undefined
+}
+
+export function isRunActive(
+  run: GenerationRun | undefined,
+): run is ActiveGenerationRun {
+  return (
+    run !== undefined && (run.phase === "starting" || run.phase === "streaming")
+  )
+}
+
+export function selectCurrentRun(
+  state: ConversationTreeState,
+): GenerationRun | undefined {
+  return state.conversationId === null
+    ? undefined
+    : state.generationRuns[state.conversationId]
+}
+
+const activeRunIdsCache = new WeakMap<
+  Readonly<Record<string, GenerationRun>>,
+  ReadonlySet<string>
+>()
+
+export function selectActiveRunIds(
+  state: Pick<ConversationTreeState, "generationRuns">,
+): ReadonlySet<string> {
+  const cached = activeRunIdsCache.get(state.generationRuns)
+  if (cached !== undefined) return cached
+  const ids = new Set<string>()
+  for (const [conversationId, run] of Object.entries(state.generationRuns)) {
+    if (isRunActive(run)) ids.add(conversationId)
+  }
+  activeRunIdsCache.set(state.generationRuns, ids)
+  return ids
 }
 
 function addAuthoritativeNode(
@@ -347,7 +451,7 @@ function addAuthoritativeNode(
 function addAuthoritativeAssistantNode(
   state: ConversationTreeState,
   generation: Extract<
-    GenerationState,
+    GenerationRun,
     { phase: "starting" | "streaming" | "cancelled" }
   >,
   node: ConversationNodeView,
@@ -356,16 +460,44 @@ function addAuthoritativeAssistantNode(
   if (
     state.isArchived ||
     state.status !== "ready" ||
-    state.activeNodeId !== generation.parentNodeId ||
-    parent?.role !== "user" ||
     node.role !== "assistant" ||
     (generation.model !== undefined && node.model !== generation.model) ||
     node.model === undefined ||
+    parent?.role !== "user" ||
     !hasValidTreeShape(state)
   ) {
     return null
   }
-  return addAuthoritativeNode(state, node, generation.parentNodeId)
+  return addAuthoritativeNode(
+    state,
+    node,
+    generation.parentNodeId,
+    // Keep the user's current view when they browsed to another node while
+    // this run was active; select the reply only on the generating path.
+    state.activeNodeId === generation.parentNodeId,
+  )
+}
+
+function findRecoveredAssistant(
+  tree: ConversationTreeView,
+  run: Extract<
+    GenerationRun,
+    { phase: "starting" | "streaming" | "cancelled" }
+  >,
+  priorNodeIds: ReadonlySet<string>,
+): ConversationNodeView | undefined {
+  const priorChildIds = new Set(run.priorChildIds)
+  const matches = tree.nodes.filter(
+    (node) =>
+      !priorNodeIds.has(node.id) &&
+      !priorChildIds.has(node.id) &&
+      node.conversationId === run.conversationId &&
+      node.parentId === run.parentNodeId &&
+      node.role === "assistant" &&
+      node.model !== undefined &&
+      (run.model === undefined || node.model === run.model),
+  )
+  return matches.length === 1 ? matches[0] : undefined
 }
 
 export const useConversationStore = create<ConversationStore>((set, get) => {
@@ -398,7 +530,7 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
         set({ status: "error", error: TREE_INTEGRITY_ERROR })
         return false
       }
-      set(loadedTreeState(tree))
+      set(withRunFocus(loadedTreeState(tree, get().generationRuns), tree))
       return true
     } catch (error: unknown) {
       if (epoch !== requestEpoch) return false
@@ -413,7 +545,6 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
 
     enterConversationCreation: () => {
       const state = get()
-      if (isGenerationActive(state.generation)) return
       requestEpoch += 1
       set({
         isCreatingConversation: true,
@@ -496,123 +627,138 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
     },
 
     selectConversation: async (client, id) => {
-      const state = get()
-      if (
-        isGenerationActive(state.generation) ||
-        !state.history.summaries.some((summary) => summary.id === id)
-      ) {
+      if (!get().history.summaries.some((summary) => summary.id === id)) {
         return
       }
       await loadSelectedConversation(client, id, ++requestEpoch)
     },
 
-    beginGeneration: () => {
+    beginGeneration: (explicitParentNodeId?: string) => {
       const state = get()
-      const activeNode =
-        state.activeNodeId === null
-          ? undefined
-          : state.fullNodes[state.activeNodeId]
+      const parentNodeId = explicitParentNodeId ?? state.activeNodeId
+      const parentNode =
+        parentNodeId === null ? undefined : state.fullNodes[parentNodeId]
       const projection = selectActivePath(state)
       if (
         state.conversationId === null ||
-        state.activeNodeId === null ||
+        parentNodeId === null ||
         state.isArchived ||
         state.status !== "ready" ||
-        activeNode?.role !== "user" ||
+        parentNode?.role !== "user" ||
+        parentNode.conversationId !== state.conversationId ||
         projection.kind !== "ready" ||
-        projection.path.at(-1)?.id !== state.activeNodeId ||
-        isGenerationActive(state.generation)
+        // An implicit target (the manual generate button) must sit at the end
+        // of the visible path; an explicit target (auto-generate after append)
+        // only needs to be a user node of this conversation, because the run
+        // belongs to the node, not to the current view.
+        (explicitParentNodeId === undefined &&
+          projection.path.at(-1)?.id !== parentNodeId) ||
+        isRunActive(state.generationRuns[state.conversationId])
       ) {
         return null
       }
 
       const runId = ++nextRunId
       set({
-        generation: {
+        generationRuns: setRunRecord(state, state.conversationId, {
           phase: "starting",
           runId,
           conversationId: state.conversationId,
-          parentNodeId: state.activeNodeId,
-        },
+          parentNodeId,
+          priorChildIds: [...(state.nodesById[parentNodeId]?.childIds ?? [])],
+          parentPreview: truncatePreview(
+            parentNode.content,
+            PARENT_PREVIEW_MAX_LENGTH,
+          ),
+        }),
       })
       return runId
     },
 
     acceptGenerationStarted: (runId, event) => {
       const state = get()
-      const generation = state.generation
-      if (generation.phase !== "starting" || generation.runId !== runId) {
-        return false
-      }
-      const parent = state.fullNodes[generation.parentNodeId]
+      const entry = findRunEntry(state, runId)
+      if (entry === undefined) return false
+      const [conversationId, run] = entry
       if (
-        generation.conversationId !== event.conversationId ||
-        generation.parentNodeId !== event.activeNodeId ||
-        (generation.generationId !== undefined &&
-          generation.generationId !== event.generationId) ||
-        state.conversationId !== generation.conversationId ||
-        state.activeNodeId !== generation.parentNodeId ||
-        state.isArchived ||
-        state.status !== "ready" ||
-        parent?.role !== "user"
+        run.phase !== "starting" ||
+        run.conversationId !== event.conversationId ||
+        run.parentNodeId !== event.activeNodeId ||
+        (run.generationId !== undefined &&
+          run.generationId !== event.generationId)
       ) {
         return false
       }
       set({
-        generation: {
+        generationRuns: setRunRecord(state, conversationId, {
           phase: "streaming",
           runId,
-          conversationId: generation.conversationId,
-          parentNodeId: generation.parentNodeId,
+          conversationId: run.conversationId,
+          parentNodeId: run.parentNodeId,
+          priorChildIds: run.priorChildIds,
+          parentPreview: run.parentPreview,
           generationId: event.generationId,
           model: event.model,
           content: "",
-        },
+        }),
       })
       return true
     },
 
     appendGenerationDelta: (runId, event) => {
-      const generation = get().generation
+      const state = get()
+      const entry = findRunEntry(state, runId)
+      if (entry === undefined) return false
+      const [conversationId, run] = entry
       if (
-        generation.phase !== "streaming" ||
-        generation.runId !== runId ||
-        generation.generationId !== event.generationId
+        run.phase !== "streaming" ||
+        run.generationId !== event.generationId
       ) {
         return false
       }
       set({
-        generation: {
-          ...generation,
-          content: generation.content + event.content,
-        },
+        generationRuns: setRunRecord(state, conversationId, {
+          ...run,
+          content: run.content + event.content,
+        }),
       })
       return true
     },
 
     completeGeneration: (runId, generationId, node) => {
       const state = get()
-      const generation = state.generation
+      const entry = findRunEntry(state, runId)
+      if (entry === undefined) return false
+      const [conversationId, run] = entry
       if (
-        (generation.phase !== "starting" &&
-          generation.phase !== "streaming" &&
-          generation.phase !== "cancelled") ||
-        generation.runId !== runId ||
-        (generation.generationId !== undefined &&
-          generation.generationId !== generationId)
+        (run.phase !== "starting" &&
+          run.phase !== "streaming" &&
+          run.phase !== "cancelled") ||
+        (run.generationId !== undefined && run.generationId !== generationId)
       ) {
         return false
       }
-      const update = addAuthoritativeAssistantNode(state, generation, node)
+
+      const history = updateSummaryActivity(
+        state.history,
+        conversationId,
+        node.createdAt,
+      )
+      if (state.conversationId !== conversationId) {
+        // Background completion: the node is durable on the Rust side; the
+        // tree itself is refreshed by the next conversation load.
+        set({
+          history,
+          generationRuns: removeRunRecord(state, conversationId),
+        })
+        return true
+      }
+      const update = addAuthoritativeAssistantNode(state, run, node)
       if (update === null) return false
       set({
         ...update,
-        history: updateSummaryActivity(
-          state.history,
-          generation.conversationId,
-          node.createdAt,
-        ),
-        generation: { phase: "idle" },
+        history,
+        generationRuns: removeRunRecord(state, conversationId),
       })
       return true
     },
@@ -623,135 +769,179 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
       generationId,
       failureKind = "generation",
     ) => {
-      const generation = get().generation
+      const state = get()
+      const entry = findRunEntry(state, runId)
+      if (entry === undefined) return false
+      const [conversationId, run] = entry
       if (
-        (generation.phase !== "starting" &&
-          generation.phase !== "streaming" &&
-          generation.phase !== "cancelled") ||
-        generation.runId !== runId ||
+        (run.phase !== "starting" &&
+          run.phase !== "streaming" &&
+          run.phase !== "cancelled") ||
         (generationId !== undefined &&
-          generation.generationId !== undefined &&
-          generation.generationId !== generationId)
+          run.generationId !== undefined &&
+          run.generationId !== generationId)
       ) {
         return false
       }
-      if (failureKind === "persistence") {
-        set({
-          generation: {
-            phase: "failed",
-            runId,
-            failureKind: "persistence",
-            content:
-              generation.phase === "streaming" ||
-              generation.phase === "cancelled"
-                ? generation.content
-                : "",
-            error,
-          },
-        })
-      } else {
-        set({
-          generation: {
-            phase: "failed",
-            runId,
-            failureKind: "generation",
-            error,
-          },
-        })
-      }
+      const terminalContent =
+        run.phase === "starting"
+          ? ""
+          : run.phase === "streaming" || run.phase === "cancelled"
+            ? run.content
+            : ""
+      const failed: GenerationRun =
+        failureKind === "persistence"
+          ? {
+              phase: "failed",
+              runId,
+              conversationId: run.conversationId,
+              parentNodeId: run.parentNodeId,
+              priorChildIds: run.priorChildIds,
+              parentPreview: run.parentPreview,
+              generationId: run.generationId,
+              failureKind: "persistence",
+              content: terminalContent,
+              error,
+            }
+          : {
+              phase: "failed",
+              runId,
+              conversationId: run.conversationId,
+              parentNodeId: run.parentNodeId,
+              priorChildIds: run.priorChildIds,
+              parentPreview: run.parentPreview,
+              generationId: run.generationId,
+              failureKind: "generation",
+              error,
+            }
+      set({
+        generationRuns: setRunRecord(state, conversationId, failed),
+      })
       return true
     },
 
     failGenerationRecovery: (runId, error) => {
-      const generation = get().generation
+      const state = get()
+      const entry = findRunEntry(state, runId)
+      if (entry === undefined) return false
+      const [conversationId, run] = entry
       if (
-        (generation.phase !== "starting" &&
-          generation.phase !== "streaming" &&
-          generation.phase !== "cancelled") ||
-        generation.runId !== runId
+        run.phase !== "starting" &&
+        run.phase !== "streaming" &&
+        run.phase !== "cancelled"
       ) {
         return false
+      }
+      if (run.phase === "cancelled") return true
+      const failed: GenerationRun = {
+        phase: "failed",
+        runId,
+        conversationId: run.conversationId,
+        parentNodeId: run.parentNodeId,
+        priorChildIds: run.priorChildIds,
+        parentPreview: run.parentPreview,
+        generationId: run.generationId,
+        failureKind: "generation",
+        error,
+      }
+      if (state.conversationId !== conversationId) {
+        set({
+          generationRuns: setRunRecord(state, conversationId, failed),
+        })
+        return true
       }
       set({
         status: "error",
         error,
-        generation:
-          generation.phase === "cancelled"
-            ? generation
-            : {
-                phase: "failed",
-                runId,
-                failureKind: "generation",
-                error,
-              },
+        generationRuns: setRunRecord(state, conversationId, failed),
       })
       return true
     },
 
     cancelGenerationRun: (runId) => {
-      const generation = get().generation
-      if (!isGenerationActive(generation) || generation.runId !== runId) {
-        return false
-      }
+      const state = get()
+      const entry = findRunEntry(state, runId)
+      if (entry === undefined) return false
+      const [conversationId, run] = entry
+      if (!isRunActive(run)) return false
       set({
-        generation: {
-          ...generation,
+        generationRuns: setRunRecord(state, conversationId, {
           phase: "cancelled",
-          content: generation.phase === "streaming" ? generation.content : "",
-        },
+          runId,
+          conversationId: run.conversationId,
+          parentNodeId: run.parentNodeId,
+          priorChildIds: run.priorChildIds,
+          parentPreview: run.parentPreview,
+          generationId: run.generationId,
+          model: run.model,
+          content: run.phase === "streaming" ? run.content : "",
+        }),
       })
       return true
     },
 
     acceptGenerationCancelled: (runId, generationId) => {
-      const generation = get().generation
+      const state = get()
+      const entry = findRunEntry(state, runId)
+      if (entry === undefined) return false
+      const [conversationId, run] = entry
       if (
-        (generation.phase !== "starting" &&
-          generation.phase !== "streaming" &&
-          generation.phase !== "cancelled") ||
-        generation.runId !== runId ||
-        (generation.generationId !== undefined &&
-          generation.generationId !== generationId)
+        (run.phase !== "starting" &&
+          run.phase !== "streaming" &&
+          run.phase !== "cancelled") ||
+        (run.generationId !== undefined && run.generationId !== generationId)
       ) {
         return false
       }
       set({
-        generation: {
-          ...generation,
+        generationRuns: setRunRecord(state, conversationId, {
           phase: "cancelled",
-          content: generation.phase === "starting" ? "" : generation.content,
-        },
+          runId,
+          conversationId: run.conversationId,
+          parentNodeId: run.parentNodeId,
+          priorChildIds: run.priorChildIds,
+          parentPreview: run.parentPreview,
+          generationId: run.generationId,
+          model: run.model,
+          content: run.phase === "starting" ? "" : run.content,
+        }),
       })
       return true
     },
 
     recoverGeneration: (runId, tree) => {
       const state = get()
-      const generation = state.generation
+      const entry = findRunEntry(state, runId)
+      if (entry === undefined) return false
+      const [conversationId, run] = entry
       if (
-        (generation.phase !== "starting" &&
-          generation.phase !== "streaming" &&
-          generation.phase !== "cancelled") ||
-        generation.runId !== runId ||
-        tree.conversation.id !== generation.conversationId
+        (run.phase !== "starting" &&
+          run.phase !== "streaming" &&
+          run.phase !== "cancelled") ||
+        tree.conversation.id !== conversationId
       ) {
         return false
       }
 
-      const candidate = loadedTreeState(tree, generation)
+      const priorNodeIds = new Set(Object.keys(state.fullNodes))
+      const match = findRecoveredAssistant(tree, run, priorNodeIds)
+
+      if (state.conversationId !== conversationId) {
+        if (match === undefined) return false
+        set({
+          history: updateSummaryActivity(
+            state.history,
+            conversationId,
+            summaryFromTree(tree).updatedAt,
+          ),
+          generationRuns: removeRunRecord(state, conversationId),
+        })
+        return true
+      }
+
+      const candidate = loadedTreeState(tree, state.generationRuns)
       if (!hasValidTreeShape(candidate)) return false
 
-      const oldNodeIds = new Set(Object.keys(state.fullNodes))
-      const matches = tree.nodes.filter(
-        (node) =>
-          !oldNodeIds.has(node.id) &&
-          node.conversationId === generation.conversationId &&
-          node.parentId === generation.parentNodeId &&
-          node.role === "assistant" &&
-          node.model !== undefined &&
-          (generation.model === undefined || node.model === generation.model),
-      )
-      const match = matches.length === 1 ? matches[0] : undefined
       const preservedActiveId =
         state.activeNodeId !== null &&
         Object.hasOwn(candidate.nodesById, state.activeNodeId)
@@ -763,7 +953,7 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
         ),
       )
       expandedIds.add(candidate.rootNodeId ?? tree.rootNodeId)
-      if (match !== undefined) expandedIds.add(generation.parentNodeId)
+      if (match !== undefined) expandedIds.add(run.parentNodeId)
 
       set({
         ...candidate,
@@ -771,10 +961,13 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
         expandedIds,
         history: updateSummaryActivity(
           state.history,
-          generation.conversationId,
+          conversationId,
           summaryFromTree(tree).updatedAt,
         ),
-        generation: match === undefined ? generation : { phase: "idle" },
+        generationRuns:
+          match === undefined
+            ? state.generationRuns
+            : removeRunRecord(state, conversationId),
       })
       return match !== undefined
     },
@@ -807,7 +1000,6 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
 
     selectNode: (nodeId) => {
       const state = get()
-      if (isGenerationActive(state.generation)) return
       if (!Object.hasOwn(state.nodesById, nodeId)) return
       const projection = selectActivePath({ ...state, activeNodeId: nodeId })
       if (projection.kind !== "ready") return
@@ -815,13 +1007,11 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
     },
 
     loadConversation: async (client, id) => {
-      if (isGenerationActive(get().generation)) return
       await loadSelectedConversation(client, id, ++requestEpoch)
     },
 
     createConversation: async (client, title, content) => {
-      if (get().status === "loading" || isGenerationActive(get().generation))
-        return
+      if (get().status === "loading") return
       const epoch = ++requestEpoch
       set({ isCreatingConversation: true, status: "loading", error: null })
       try {
@@ -835,7 +1025,7 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
           ),
           error: null,
         }
-        set({ ...loadedTreeState(tree), history })
+        set({ ...loadedTreeState(tree, get().generationRuns), history })
       } catch (error: unknown) {
         if (epoch !== requestEpoch) return
         set({ status: "error", error: normalizeUiError(error) })
@@ -852,7 +1042,7 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
         state.activeNodeId === null ||
         state.isArchived ||
         state.status !== "ready" ||
-        isGenerationActive(state.generation) ||
+        isRunActive(state.generationRuns[state.conversationId]) ||
         activeNode?.role !== "assistant" ||
         activeNode.childIds.length !== 0
       ) {
@@ -894,6 +1084,7 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
             conversationId,
             node.createdAt,
           ),
+          generationRuns: removeRunRecord(liveState, conversationId),
         })
       } catch (error: unknown) {
         if (epoch !== requestEpoch || get().conversationId !== conversationId) {
@@ -910,7 +1101,7 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
         state.conversationId === null ||
         state.isArchived ||
         state.status !== "ready" ||
-        isGenerationActive(state.generation) ||
+        isRunActive(state.generationRuns[state.conversationId]) ||
         parentNode?.role !== "assistant" ||
         parentNode.childIds.length === 0
       ) {
@@ -951,6 +1142,7 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
             conversationId,
             node.createdAt,
           ),
+          generationRuns: removeRunRecord(liveState, conversationId),
         })
       } catch (error: unknown) {
         if (epoch !== requestEpoch || get().conversationId !== conversationId) {
@@ -970,7 +1162,7 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
         state.conversationId === null ||
         state.isArchived ||
         state.status !== "ready" ||
-        isGenerationActive(state.generation) ||
+        isRunActive(state.generationRuns[state.conversationId]) ||
         sourceNode?.role !== "user" ||
         sourceNode.parentId === undefined ||
         sourceParent?.role !== "assistant"
@@ -1013,6 +1205,7 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
             conversationId,
             node.createdAt,
           ),
+          generationRuns: removeRunRecord(liveState, conversationId),
         })
       } catch (error: unknown) {
         if (epoch !== requestEpoch || get().conversationId !== conversationId) {
@@ -1058,6 +1251,7 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
               }),
               error: null,
             },
+            generationRuns: removeRunRecord(get(), target),
           })
         } catch (error: unknown) {
           set({
@@ -1071,7 +1265,7 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
         return
       }
 
-      // Current conversation: the generation/ready guards are owned by the
+      // Current conversation: the generation-run guards are owned by the
       // workspace controller (confirm-time cancel decision), not the store.
       set({ status: "loading", error: null })
       try {
@@ -1103,6 +1297,9 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
                   error: null,
                 },
               }),
+          // Archived conversations are read-only; any lingering terminal run
+          // record for it can no longer be acted on.
+          generationRuns: removeRunRecord(get(), target),
         })
       } catch (error: unknown) {
         set({ status: "error", error: normalizeUiError(error) })
@@ -1110,12 +1307,6 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
     },
   }
 })
-
-export function isGenerationActive(
-  generation: GenerationState,
-): generation is Extract<GenerationState, { phase: "starting" | "streaming" }> {
-  return generation.phase === "starting" || generation.phase === "streaming"
-}
 
 function hasValidTreeShape(state: ConversationTreeState): boolean {
   if (

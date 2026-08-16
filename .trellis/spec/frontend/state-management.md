@@ -5,10 +5,13 @@
 ## Current State
 
 The conversation feature owns a normalized Zustand projection of one loaded
-SQLite conversation plus one transient generation lifecycle. The provider
-feature owns a separate redacted-profile store. Neither store uses persist
-middleware; SQLite and the native credential store remain the durable sources
-of truth.
+SQLite conversation plus a per-conversation generation-run registry (at most
+one `GenerationRun` record per conversation ID, keyed by `generationRuns`).
+Runs keep streaming when their conversation is not loaded (background
+generation); the Rust side already enforces one active generation per
+conversation and allows concurrency across conversations. The provider feature
+owns a separate redacted-profile store. Neither store uses persist middleware;
+SQLite and the native credential store remain the durable sources of truth.
 
 ## State Categories
 
@@ -39,6 +42,7 @@ type ConversationTreeState = {
   expandedIds: ReadonlySet<string>
   status: "idle" | "loading" | "ready" | "streaming" | "error"
   error: UiError | null
+  generationRuns: Readonly<Record<string, GenerationRun>>
 }
 ```
 
@@ -91,19 +95,31 @@ decoded and projected before entering the store.
 - Stale failures must not replace the status or error owned by a newer load or
   blank-draft transition.
 
-## Generation Interruption and Off-Target Mutations
+## Generation Runs, Interruption, and Off-Target Mutations
 
-- Cancellation is synchronous in the store: `cancelGenerationRun` flips
-  `generation.phase` to `cancelled` immediately, so `isGenerationActive` is
-  `false` as soon as the controller's `cancel()` returns. Mutation
-  orchestration may cancel-then-proceed without awaiting the provider
-  terminal event (the run/epoch guards ignore the late terminal).
-- Whether a mutation interrupts the active generation is a user-intent
-  decision owned by the workspace controller (e.g. behind a confirmation
-  dialog), not by blanket store guards. `archiveConversation` therefore has
-  no `isGenerationActive` / `status !== "ready"` early-returns; the
-  controller cancels first when — and only when — the confirmed target is
-  the generating current conversation.
+- Cancellation is synchronous in the store: `cancelGenerationRun` flips the
+  run record's phase to `cancelled` immediately, so `isRunActive` is `false`
+  as soon as the controller's `cancel()` returns. Mutation orchestration may
+  cancel-then-proceed without awaiting the provider terminal event (the
+  run/epoch guards ignore the late terminal).
+- Run guards are per conversation, never global: `appendNode`, `createBranch`,
+  and `editNodeAsBranch` reject only when **this** conversation has an active
+  run (`isRunActive(generationRuns[conversationId])`). Switching or creating
+  conversations, entering blank creation, and selecting nodes (view-only)
+  stay available while any run is active.
+- Whether a mutation interrupts a run is a user-intent decision owned by the
+  workspace controller (e.g. behind a confirmation dialog), not by blanket
+  store guards. `archiveConversation` therefore has no active-run
+  early-returns; the controller cancels first when the confirmed target has
+  an active run — current **or background** (persisting into an archived
+  conversation would fail). Successful archive clears any lingering run
+  record for the target.
+- Terminal run records (`failed`, `cancelled`) stay keyed in the registry
+  across conversation switches so re-entry can surface them inline; the next
+  successful mutation or new run in that conversation supersedes the record.
+  Re-entering a conversation with a run record restores `activeNodeId` to
+  `run.parentNodeId` so the transient bubble is visible even when the newest
+  leaf drifted (background regeneration).
 - Mutations targeting a conversation other than the currently loaded one
   (e.g. archive-by-ID from a history row) must not touch the global
   conversation `status`/`error` — that would disable the whole workspace for
@@ -117,43 +133,77 @@ decoded and projected before entering the store.
 
 Use this contract when a workspace action consumes the typed provider client,
 renders streamed assistant content, starts generation after authoritative
-user-message persistence, or cancels generation during navigation/unmount.
+user-message persistence, or coordinates background runs across conversation
+switches.
 
 ### 2. State Shape
 
-The conversation store has a closed generation union:
+Generation lives in a per-conversation registry (`generationRuns`), not a
+single-slot field. A missing record means idle; there is no `idle` phase.
 
 ```ts
-type GenerationState =
-  | { phase: "idle" }
-  | { phase: "starting"; runId: string; target: GenerationTarget }
-  | { phase: "streaming"; runId: string; target: GenerationTarget; generationId: string; model: string; content: string }
-  | { phase: "cancelled"; runId: string; target: GenerationTarget; generationId?: string; content: string }
-  | { phase: "failed"; runId: string; target: GenerationTarget; kind: "generation" | "persistence"; error: UiError; content?: string }
+type RunIdentity = {
+  runId: number // monotonic, UI-scoped
+  conversationId: string
+  parentNodeId: string // the user node the reply attaches to
+  generationId?: string // backend UUID once started
+  model?: string
+  priorChildIds: readonly string[] // children of parentNodeId at run start
+  parentPreview?: string // truncated prompt preview (~60 chars) for toasts
+}
+
+type GenerationRun =
+  | RunIdentity & { phase: "starting" }
+  | RunIdentity & { phase: "streaming"; generationId: string; model: string; content: string }
+  | RunIdentity & { phase: "cancelled"; content: string }
+  | RunIdentity & { phase: "failed"; failureKind: "generation"; error: UiError }
+  | RunIdentity & { phase: "failed"; failureKind: "persistence"; content: string; error: UiError }
 ```
+
+Selectors: `selectCurrentRun` (foreground = record of the loaded
+conversation), `selectActiveRunIds` (sidebar spinners, settings lock;
+WeakMap-cached on registry identity), `isRunActive` (`starting | streaming`),
+`findRunEntry(state, runId)`.
 
 There are no stored finalization, retry-window, or duplicate terminal phases.
 Streamed content is transient. Only the terminal `completed.node` or a fresh
 authoritative tree reload can change normalized durable records.
+`priorChildIds` exists so recovery never mistakes a pre-existing assistant
+child (for example the old branch during a regeneration) for this run's
+result.
 
 ### 3. Contracts
 
 - Provider profile state contains only `ProviderProfileView`, a safe `UiError`,
   and request status. API-key text may exist in local dialog state while
   editing, but it is cleared on close and after every save attempt.
-- Deltas live only in `GenerationState.content`. They never enter
+- Deltas live only in the run record's `content`. They never enter
   `nodesById`, the active path, or the outline.
 - Creating a conversation or appending a user message starts generation only
-  after typed persistence returns authoritative data and the store accepts that
-  exact conversation/user node as the current target. A replaced target,
-  unmounted controller, unavailable provider, or unsafe path suppresses
-  auto-start while leaving the persisted user message intact.
-- A monotonically changing UI `runId` rejects stale callbacks. Conversation,
-  selected user parent, generation ID, model, and current path must still match
-  before accepting events or terminal results.
+  after typed persistence returns authoritative data. Auto-start passes the
+  persisted node explicitly (`beginGeneration(parentNodeId)`), so the run
+  targets the node the user sent even if they browsed elsewhere meanwhile; a
+  conversation switch during persistence suppresses auto-start while leaving
+  the persisted user message intact. An implicit `beginGeneration()` (manual
+  Generate) still requires the visible path to end at the selected user node.
+- A monotonically changing UI `runId` rejects stale callbacks. Event guards
+  validate against the run record — conversation, parent node, generation ID —
+  not against the loaded tree: a background run must keep streaming while
+  another conversation is displayed. Fail-closed cancellation fires only on
+  protocol mismatch, never because the visible tree moved.
 - The controller may receive the terminal invoke result before delayed Channel
   callbacks. It accepts a result for the exact current run and ignores late
   callbacks after terminalization.
+- Foreground vs background is decided at terminal time by
+  `state.conversationId === run.conversationId`. Foreground terminals render
+  inline; background `completed`/`failed` terminals also fire a toast
+  (sonner, top-right) titled with the run's `parentPreview` (prompt,
+  truncated) and a reply/error preview body; clicking the toast jumps back
+  to the conversation. The preview must be read from the run record before
+  the terminal store transition — completion deletes the record. Background
+  completion updates the history summary timestamp only — the tree is
+  refreshed by the next load. Runs are never cancelled by unmount or by
+  switching conversations; the controller has no unmount cancel.
 - A persistence-stage terminal result remains a persistence failure even when
   it wins the result-before-`started` callback race; its retained content is
   empty until any streamed content has been accepted.
@@ -175,10 +225,11 @@ authoritative tree reload can change normalized durable records.
 | Condition | Store/controller result |
 |---|---|
 | Provider missing/loading/error | Generation disabled; ordinary conversation actions remain available |
-| Archived conversation, unsafe path, non-user selection, or active run | Generation rejected locally |
-| Exact persisted user target remains active | Start one generation from that target |
-| Persistence fails or target is replaced while awaiting | Keep authoritative persisted state; do not auto-start |
-| Navigation/unmount while running | Invalidate the run and best-effort exact-cancel the known ID |
+| Archived conversation, unsafe path, non-user selection, or active run for this conversation | Generation rejected locally |
+| Exact persisted user target remains valid | Start one generation from that target |
+| Persistence fails or the conversation is replaced while awaiting | Keep authoritative persisted state; do not auto-start |
+| Conversation switch or controller unmount while running | Run continues in the background; no cancellation |
+| Another conversation loaded at terminal time | Background terminal: summary bump + toast; no tree mutation |
 | Valid delta for the current run | Update transient content only |
 | Valid generation failure | Failed generation state without partial output |
 | Valid persistence failure | Failed persistence state retaining complete content |
@@ -194,9 +245,10 @@ authoritative tree reload can change normalized durable records.
   assistant becomes one new child without changing its sibling.
 - **Base**: no provider profile disables Generate but still permits creating,
   appending, loading, navigating, and reading local conversations.
-- **Bad**: inserting deltas optimistically, starting from a mutable post-await
-  selection, cancelling because a promise resolves after an exact result, or
-  inventing a node when reload does not prove completion.
+- **Bad**: inserting deltas optimistically, cancelling a run because the
+  visible tree moved away from its parent, cancelling because a promise
+  resolves after an exact result, or inventing a node when reload does not
+  prove completion.
 
 ### 6. Tests Required
 
@@ -206,8 +258,14 @@ authoritative tree reload can change normalized durable records.
   returned conversation/user IDs are used, and generation occurs once.
 - Cover result-before-callback, persistence failure before `started`,
   cancel-before-started, stale events, terminal stage classification, exact
-  cancellation, invoke rejection, one-shot reload, target replacement, unmount,
+  cancellation, invoke rejection, one-shot reload, target replacement,
   provider changes, and manual regeneration.
+- Cover background semantics: conversation switch mid-run keeps streaming;
+  background completion bumps the summary and clears the record without
+  touching the loaded tree; background failure keeps the record and fires a
+  toast; re-entry focuses `run.parentNodeId`; per-conversation mutation locks
+  (same conversation blocked, other conversation free); recovery uses
+  `priorChildIds` to reject a pre-existing assistant child.
 - Drift each completed-node invariant independently and assert no direct merge.
 - Assert API-key input is absent from store snapshots, logs, and browser
   persistence. Run bridge, store/controller/component, build, and Rust tests.
@@ -224,13 +282,14 @@ await providerClient.generateFromActivePath(conversationId, activeNodeId, onEven
 #### Correct
 
 ```ts
-set({ generation: { ...currentRun, phase: "streaming", content } })
+setRunRecord(state, conversationId, { ...run, phase: "streaming", content })
 const terminal = await providerClient.generateFromActivePath(
   conversationId,
-  activeNodeId,
+  parentNodeId,
   onEvent,
 )
 // Merge only terminal.node after all invariants pass, or reload authority once.
+// If another conversation is loaded by then, bump the summary and toast.
 ```
 
 Transient presentation is allowed before terminal authority, but only the
@@ -255,5 +314,8 @@ backend result or a durable reload changes conversation records.
 - Using one global store for unrelated provider-form and conversation-tree
   state.
 - Clearing valid visible state after a retryable command failure.
+- Cancelling a background run because the loaded tree is a different
+  conversation, or blocking sidebar switching/creation because some run is
+  active somewhere.
 - Treating an invoke transport error as proof that durable persistence failed;
   use the one-shot authoritative reload when a generation may have started.

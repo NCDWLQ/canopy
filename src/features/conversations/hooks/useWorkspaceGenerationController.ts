@@ -2,9 +2,12 @@ import * as React from "react"
 
 import { deriveConversationTitle } from "../deriveConversationTitle"
 import {
-  isGenerationActive,
+  findRunEntry,
+  isRunActive,
   normalizeUiError,
   selectActivePath,
+  selectCurrentRun,
+  truncatePreview,
   useConversationStore,
 } from "../store"
 import type { ConversationNodeView, ConversationTreeView } from "../types"
@@ -13,6 +16,7 @@ import type {
   GenerationEventView,
   GenerationTerminalView,
 } from "@/features/providers/types"
+import { showClickableToast } from "@/components/ui/toaster"
 import {
   generationIdFromBridgeError,
   type ConversationClient,
@@ -45,6 +49,8 @@ type GenerationTarget = {
   parentNodeId: string
 }
 
+const REPLY_PREVIEW_MAX_LENGTH = 120
+
 export function useWorkspaceGenerationController({
   conversationClient,
   providerClient,
@@ -58,13 +64,12 @@ export function useWorkspaceGenerationController({
   )
   const isArchived = useConversationStore((state) => state.isArchived)
   const status = useConversationStore((state) => state.status)
-  const generation = useConversationStore((state) => state.generation)
+  const currentRun = useConversationStore(selectCurrentRun)
   const pathProjection = useConversationStore(selectActivePath)
   const cancelRequestedRuns = React.useRef(new Set<number>())
   const cancelSentIds = React.useRef(new Set<string>())
   const generationIds = React.useRef(new Map<number, string>())
   const recoveryRuns = React.useRef(new Set<number>())
-  const isMounted = React.useRef(false)
 
   const requestExactCancellation = React.useCallback(
     (generationId: string) => {
@@ -75,73 +80,144 @@ export function useWorkspaceGenerationController({
     [providerClient],
   )
 
-  const recoverAmbiguousRun = React.useCallback(
-    async (runId: number, target: GenerationTarget, fallback: unknown) => {
-      if (recoveryRuns.current.has(runId)) return
-      recoveryRuns.current.add(runId)
-      const beforeReload = useConversationStore.getState().generation
-      if (
-        beforeReload.phase === "idle" ||
-        beforeReload.phase === "failed" ||
-        beforeReload.runId !== runId
-      ) {
-        return
-      }
-      try {
-        const tree = await conversationClient.loadConversationTree(
-          target.conversationId,
-        )
-        if (!useConversationStore.getState().recoverGeneration(runId, tree)) {
-          const current = useConversationStore.getState().generation
-          if (isGenerationActive(current)) {
-            useConversationStore
-              .getState()
-              .failGeneration(runId, normalizeUiError(fallback))
-          }
-        }
-      } catch (error: unknown) {
-        useConversationStore
-          .getState()
-          .failGenerationRecovery(runId, normalizeUiError(error))
-      }
+  // Terminal results for a background run have no inline surface, so they
+  // surface as content-preview toasts: the run's prompt as the title and the
+  // reply (or error) as the body. Clicking anywhere on the toast jumps back
+  // to the conversation.
+  const notifyBackgroundTerminal = React.useCallback(
+    (
+      target: GenerationTarget,
+      kind: "completed" | "failed",
+      payload: {
+        parentPreview?: string
+        replyPreview?: string
+        detail?: string
+      } = {},
+    ) => {
+      const store = useConversationStore.getState()
+      if (store.conversationId === target.conversationId) return
+      const title =
+        payload.parentPreview ??
+        (kind === "completed" ? "已生成回复" : "生成失败")
+      const body = kind === "completed" ? payload.replyPreview : payload.detail
+      showClickableToast({
+        kind: kind === "completed" ? "success" : "error",
+        title,
+        ...(body === undefined ? {} : { description: body }),
+        onSelect: () => {
+          void useConversationStore
+            .getState()
+            .selectConversation(conversationClient, target.conversationId)
+        },
+      })
     },
     [conversationClient],
   )
 
+  // The run record (and its prompt preview) is deleted by a successful
+  // completion, so read the preview before dispatching terminal state.
+  const parentPreviewOf = React.useCallback(
+    (runId: number): string | undefined => {
+      return findRunEntry(useConversationStore.getState(), runId)?.[1]
+        .parentPreview
+    },
+    [],
+  )
+
+  const recoverAmbiguousRun = React.useCallback(
+    async (runId: number, target: GenerationTarget, fallback: unknown) => {
+      if (recoveryRuns.current.has(runId)) return
+      recoveryRuns.current.add(runId)
+      const beforeReload = findRunEntry(useConversationStore.getState(), runId)
+      if (beforeReload === undefined || beforeReload[1].phase === "failed") {
+        return
+      }
+      const parentPreview = beforeReload[1].parentPreview
+      try {
+        const tree = await conversationClient.loadConversationTree(
+          target.conversationId,
+        )
+        if (useConversationStore.getState().recoverGeneration(runId, tree)) {
+          // The recovery path cannot cheaply prove which node content the
+          // run produced, so the completion toast ships without a preview.
+          notifyBackgroundTerminal(target, "completed", { parentPreview })
+          return
+        }
+        const after = findRunEntry(useConversationStore.getState(), runId)
+        if (after !== undefined && isRunActive(after[1])) {
+          const error = normalizeUiError(fallback)
+          if (useConversationStore.getState().failGeneration(runId, error)) {
+            notifyBackgroundTerminal(target, "failed", {
+              parentPreview,
+              detail: error.message,
+            })
+          }
+        }
+      } catch (error: unknown) {
+        const normalized = normalizeUiError(error)
+        if (
+          useConversationStore
+            .getState()
+            .failGenerationRecovery(runId, normalized)
+        ) {
+          notifyBackgroundTerminal(target, "failed", {
+            parentPreview,
+            detail: normalized.message,
+          })
+        }
+      }
+    },
+    [conversationClient, notifyBackgroundTerminal],
+  )
+
   const handleTerminal = React.useCallback(
-    async (
+    (
       runId: number,
       target: GenerationTarget,
       terminal: GenerationTerminalView,
     ) => {
       generationIds.current.set(runId, terminal.generationId)
-      const current = useConversationStore.getState().generation
-      if (current.phase === "idle" || current.runId !== runId) return
-
       if (terminal.type === "completed") {
+        const parentPreview = parentPreviewOf(runId)
         if (
           !useConversationStore
             .getState()
             .completeGeneration(runId, terminal.generationId, terminal.node)
         ) {
-          await recoverAmbiguousRun(runId, target, terminal)
+          void recoverAmbiguousRun(runId, target, terminal)
+          return
         }
+        notifyBackgroundTerminal(target, "completed", {
+          parentPreview,
+          replyPreview: truncatePreview(
+            terminal.node.content,
+            REPLY_PREVIEW_MAX_LENGTH,
+          ),
+        })
       } else if (terminal.type === "cancelled") {
         useConversationStore
           .getState()
           .acceptGenerationCancelled(runId, terminal.generationId)
       } else {
-        useConversationStore
-          .getState()
-          .failGeneration(
-            runId,
-            terminal.error,
-            terminal.generationId,
-            terminal.stage,
-          )
+        const parentPreview = parentPreviewOf(runId)
+        if (
+          useConversationStore
+            .getState()
+            .failGeneration(
+              runId,
+              terminal.error,
+              terminal.generationId,
+              terminal.stage,
+            )
+        ) {
+          notifyBackgroundTerminal(target, "failed", {
+            parentPreview,
+            detail: terminal.error.message,
+          })
+        }
       }
     },
-    [recoverAmbiguousRun],
+    [recoverAmbiguousRun, notifyBackgroundTerminal, parentPreviewOf],
   )
 
   const handleEvent = React.useCallback(
@@ -168,35 +244,43 @@ export function useWorkspaceGenerationController({
     [requestExactCancellation],
   )
 
+  const cancelRunFor = React.useCallback(
+    (targetConversationId: string) => {
+      const state = useConversationStore.getState()
+      const run = state.generationRuns[targetConversationId]
+      if (!isRunActive(run)) return
+      cancelRequestedRuns.current.add(run.runId)
+      const generationId =
+        run.generationId ?? generationIds.current.get(run.runId)
+      useConversationStore.getState().cancelGenerationRun(run.runId)
+      if (generationId !== undefined) requestExactCancellation(generationId)
+    },
+    [requestExactCancellation],
+  )
+
   const cancel = React.useCallback(() => {
-    const current = useConversationStore.getState().generation
-    if (current.phase !== "starting" && current.phase !== "streaming") return
-    cancelRequestedRuns.current.add(current.runId)
-    const generationId =
-      current.generationId ?? generationIds.current.get(current.runId)
-    useConversationStore.getState().cancelGenerationRun(current.runId)
-    if (generationId !== undefined) requestExactCancellation(generationId)
-  }, [requestExactCancellation])
+    const conversationId = useConversationStore.getState().conversationId
+    if (conversationId === null) return
+    cancelRunFor(conversationId)
+  }, [cancelRunFor])
 
   const startGeneration = React.useCallback(
     (expectedTarget?: GenerationTarget) => {
-      if (!isMounted.current) return
       if (useProviderProfileStore.getState().phase !== "ready") return
       const store = useConversationStore.getState()
       if (
         expectedTarget !== undefined &&
-        (store.conversationId !== expectedTarget.conversationId ||
-          store.activeNodeId !== expectedTarget.parentNodeId)
+        store.conversationId !== expectedTarget.conversationId
       ) {
         return
       }
-      const runId = store.beginGeneration()
+      const runId = store.beginGeneration(expectedTarget?.parentNodeId)
       if (runId === null) return
-      const current = useConversationStore.getState().generation
-      if (current.phase !== "starting" || current.runId !== runId) return
+      const entry = findRunEntry(useConversationStore.getState(), runId)
+      if (entry === undefined || entry[1].phase !== "starting") return
       const target = {
-        conversationId: current.conversationId,
-        parentNodeId: current.parentNodeId,
+        conversationId: entry[1].conversationId,
+        parentNodeId: entry[1].parentNodeId,
       }
 
       void providerClient
@@ -207,12 +291,13 @@ export function useWorkspaceGenerationController({
         )
         .then((terminal) => handleTerminal(runId, target, terminal))
         .catch((error: unknown) => {
-          const currentGeneration = useConversationStore.getState().generation
+          const currentEntry = findRunEntry(
+            useConversationStore.getState(),
+            runId,
+          )
           const normalizedError = normalizeUiError(error)
           const knownGenerationId =
-            ("generationId" in currentGeneration
-              ? currentGeneration.generationId
-              : undefined) ??
+            currentEntry?.[1].generationId ??
             generationIds.current.get(runId) ??
             generationIdFromBridgeError(error)
           if (
@@ -221,36 +306,36 @@ export function useWorkspaceGenerationController({
           ) {
             void recoverAmbiguousRun(runId, target, error)
           } else {
-            useConversationStore
-              .getState()
-              .failGeneration(runId, normalizedError)
+            const parentPreview = parentPreviewOf(runId)
+            if (
+              useConversationStore
+                .getState()
+                .failGeneration(runId, normalizedError)
+            ) {
+              notifyBackgroundTerminal(target, "failed", {
+                parentPreview,
+                detail: normalizedError.message,
+              })
+            }
           }
         })
     },
-    [handleEvent, handleTerminal, providerClient, recoverAmbiguousRun],
+    [
+      handleEvent,
+      handleTerminal,
+      parentPreviewOf,
+      providerClient,
+      recoverAmbiguousRun,
+      notifyBackgroundTerminal,
+    ],
   )
 
   const generate = React.useCallback(() => {
     startGeneration()
   }, [startGeneration])
 
-  const prepareMutation = React.useCallback(() => {
-    if (isGenerationActive(useConversationStore.getState().generation)) cancel()
-    return true
-  }, [cancel])
-
-  React.useEffect(() => {
-    isMounted.current = true
-    return () => {
-      isMounted.current = false
-      if (isGenerationActive(useConversationStore.getState().generation))
-        cancel()
-    }
-  }, [cancel])
-
-  const mutationLocked = isGenerationActive(generation)
-  const canCancel =
-    generation.phase === "starting" || generation.phase === "streaming"
+  const mutationLocked = isRunActive(currentRun)
+  const canCancel = isRunActive(currentRun)
   const canGenerate =
     providerPhase === "ready" &&
     conversationId !== null &&
@@ -258,7 +343,7 @@ export function useWorkspaceGenerationController({
     status === "ready" &&
     pathProjection.kind === "ready" &&
     activeNodeRole === "user" &&
-    !isGenerationActive(generation)
+    !isRunActive(currentRun)
 
   let unavailableReason: string | null = null
   if (!canGenerate && !canCancel) {
@@ -285,28 +370,21 @@ export function useWorkspaceGenerationController({
     generate,
     cancel,
     selectNode: (nodeId) => {
-      if (prepareMutation()) useConversationStore.getState().selectNode(nodeId)
+      useConversationStore.getState().selectNode(nodeId)
     },
     archiveConversation: async (targetId) => {
       const store = useConversationStore.getState()
       const target = targetId ?? store.conversationId
       if (target === null) return
-      // Confirm-time interruption: only archiving the generating current
-      // conversation may cancel the run; any other row leaves it untouched.
-      // cancel() flips generation.phase synchronously, so the store call
-      // below observes an inactive generation.
-      if (
-        target === store.conversationId &&
-        isGenerationActive(store.generation)
-      ) {
-        cancel()
-      }
+      // Confirm-time interruption: archiving a conversation with an active
+      // run (current or background) cancels it first, because persisting
+      // into an archived conversation would fail.
+      cancelRunFor(target)
       await useConversationStore
         .getState()
         .archiveConversation(conversationClient, target)
     },
     createConversation: async (content) => {
-      if (!prepareMutation()) return false
       let authoritativeTree: ConversationTreeView | undefined
       const trackingClient: ConversationClient = {
         ...conversationClient,
@@ -338,13 +416,11 @@ export function useWorkspaceGenerationController({
       return true
     },
     loadConversation: async (id) => {
-      if (!prepareMutation()) return
       await useConversationStore
         .getState()
         .loadConversation(conversationClient, id)
     },
     appendNode: async (content) => {
-      if (!prepareMutation()) return
       let authoritativeNode: ConversationNodeView | undefined
       const trackingClient: ConversationClient = {
         ...conversationClient,
@@ -362,13 +438,11 @@ export function useWorkspaceGenerationController({
       })
     },
     createBranch: async (parentNodeId, content) => {
-      if (!prepareMutation()) return
       await useConversationStore
         .getState()
         .createBranch(conversationClient, parentNodeId, content)
     },
     editNodeAsBranch: async (sourceNodeId, content) => {
-      if (!prepareMutation()) return
       await useConversationStore
         .getState()
         .editNodeAsBranch(conversationClient, sourceNodeId, content)

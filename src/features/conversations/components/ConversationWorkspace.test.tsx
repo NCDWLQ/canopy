@@ -4,7 +4,7 @@ import { StrictMode } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { ConversationWorkspace } from "./ConversationWorkspace"
-import { useConversationStore } from "../store"
+import { useConversationStore, type GenerationRun } from "../store"
 import type { ConversationNodeView, ConversationTreeView } from "../types"
 import { useProviderProfileStore } from "@/features/providers/store"
 import type { GenerationEventView } from "@/features/providers/types"
@@ -181,10 +181,16 @@ function resetStore() {
     expandedIds: new Set(),
     status: "idle",
     error: null,
-    generation: { phase: "idle" },
+    generationRuns: {},
     history: { status: "idle", summaries: [], error: null },
   })
   useProviderProfileStore.setState({ phase: "idle", profile: null })
+}
+
+function seedGenerationRun(run: GenerationRun) {
+  useConversationStore.setState((state) => ({
+    generationRuns: { ...state.generationRuns, [run.conversationId]: run },
+  }))
 }
 
 describe("ConversationWorkspace", () => {
@@ -368,6 +374,106 @@ describe("ConversationWorkspace", () => {
     expect(within(pane).queryByText(root.content)).not.toBeInTheDocument()
     expect(within(pane).queryByText(left.content)).not.toBeInTheDocument()
     expect(screen.getByText("已归档 — 只读")).toBeVisible()
+  })
+
+  it("keeps streaming in the background across sidebar switches and re-attaches on return", async () => {
+    const user = userEvent.setup()
+    const generationId = "44444444-4444-4444-8444-444444444444"
+    let onEvent: ((event: GenerationEventView) => void) | undefined
+    const otherRoot: ConversationNodeView = {
+      id: "bg-other-root",
+      conversationId: "conversation-bg-other",
+      role: "user",
+      content: "BG_OTHER_SENTINEL",
+      createdAt: 8,
+      metadata: null,
+    }
+    const otherTree: ConversationTreeView = {
+      conversation: {
+        id: otherRoot.conversationId,
+        title: "Other history",
+        rootNodeId: otherRoot.id,
+        isArchived: false,
+      },
+      rootNodeId: otherRoot.id,
+      nodes: [otherRoot],
+      nodesById: {
+        [otherRoot.id]: {
+          id: otherRoot.id,
+          role: otherRoot.role,
+          preview: otherRoot.content,
+          childIds: [],
+        },
+      },
+    }
+    providerClient.loadProviderProfile.mockResolvedValue({
+      baseEndpoint: "http://127.0.0.1:7788/v1",
+      model: "fixture-model",
+      hasApiKey: false,
+      updatedAt: 10,
+    })
+    providerClient.generateFromActivePath.mockImplementation(
+      (_conversationId, _activeNodeId, callback) => {
+        onEvent = callback
+        return new Promise(() => undefined)
+      },
+    )
+    client.listConversations.mockResolvedValueOnce([
+      { ...tree.conversation, updatedAt: right.createdAt },
+      { ...otherTree.conversation, updatedAt: 2 },
+    ])
+    client.loadConversationTree.mockImplementation((id) =>
+      Promise.resolve(id === otherTree.conversation.id ? otherTree : tree),
+    )
+
+    render(<ConversationWorkspace />)
+    const pane = await screen.findByTestId("conversation-pane")
+    await within(pane).findByText(right.content)
+
+    await user.click(within(pane).getByRole("button", { name: "生成回复" }))
+    act(() => {
+      onEvent!({
+        type: "started",
+        generationId,
+        conversationId: root.conversationId,
+        activeNodeId: right.id,
+        model: "fixture-model",
+      })
+    })
+    act(() => {
+      onEvent!({ type: "delta", generationId, content: "BACKGROUND_PART_" })
+    })
+    expect(within(pane).getByText("BACKGROUND_PART_")).toBeVisible()
+
+    // The generating row shows a running indicator and every row stays
+    // clickable while the run is active.
+    const generatingRow = screen
+      .getByRole("button", { name: /Branch proof/ })
+      .closest("li")
+    expect(generatingRow).not.toBeNull()
+    expect(
+      within(generatingRow!).getByRole("status", { name: "正在生成回复" }),
+    ).toBeVisible()
+    expect(screen.getByRole("button", { name: "新建会话" })).toBeEnabled()
+
+    await user.click(screen.getByRole("button", { name: /Other history/ }))
+    await waitFor(() => {
+      expect(within(pane).getByText(otherRoot.content)).toBeVisible()
+    })
+    expect(within(pane).queryByText("BACKGROUND_PART_")).not.toBeInTheDocument()
+    expect(screen.getByRole("textbox", { name: "消息输入框" })).toBeEnabled()
+
+    // The background run keeps accumulating while another conversation is
+    // loaded.
+    act(() => {
+      onEvent!({ type: "delta", generationId, content: "MORE" })
+    })
+
+    await user.click(screen.getByRole("button", { name: /Branch proof/ }))
+    await waitFor(() => {
+      expect(within(pane).getByText("BACKGROUND_PART_MORE")).toBeVisible()
+    })
+    expect(screen.getByRole("button", { name: "取消生成" })).toBeEnabled()
   })
 
   it("shows a retryable discovery error instead of the empty form", async () => {
@@ -857,6 +963,7 @@ describe("ConversationWorkspace", () => {
       runId: 41,
       conversationId: root.conversationId,
       parentNodeId: right.id,
+      priorChildIds: [],
       generationId,
       model: "fixture-model",
     } as const
@@ -888,28 +995,26 @@ describe("ConversationWorkspace", () => {
     })
 
     act(() => {
-      useConversationStore.setState({
-        generation: { ...run, phase: "starting" },
-      })
+      seedGenerationRun({ ...run, phase: "starting" })
     })
     expect(within(pane).getByText("正在思考")).toBeVisible()
 
     act(() => {
-      useConversationStore.setState({
-        generation: { ...run, phase: "streaming", content: "PARTIAL_REPLY" },
+      seedGenerationRun({
+        ...run,
+        phase: "streaming",
+        content: "PARTIAL_REPLY",
       })
     })
     expect(within(pane).getByText("PARTIAL_REPLY")).toBeVisible()
     expect(within(pane).queryByText("正在思考")).not.toBeInTheDocument()
 
     act(() => {
-      useConversationStore.setState({
-        generation: {
-          phase: "failed",
-          runId: run.runId,
-          failureKind: "generation",
-          error: recoveryError,
-        },
+      seedGenerationRun({
+        ...run,
+        phase: "failed",
+        failureKind: "generation",
+        error: recoveryError,
       })
     })
     expect(within(pane).getByText("回复失败")).toBeVisible()
@@ -922,14 +1027,12 @@ describe("ConversationWorkspace", () => {
     )
 
     act(() => {
-      useConversationStore.setState({
-        generation: {
-          phase: "failed",
-          runId: run.runId,
-          failureKind: "persistence",
-          content: "FULL_REPLY",
-          error: recoveryError,
-        },
+      seedGenerationRun({
+        ...run,
+        phase: "failed",
+        failureKind: "persistence",
+        content: "FULL_REPLY",
+        error: recoveryError,
       })
     })
     expect(within(pane).getByText("FULL_REPLY")).toBeVisible()
@@ -937,12 +1040,10 @@ describe("ConversationWorkspace", () => {
     expect(within(pane).getByRole("button", { name: "重新生成" })).toBeEnabled()
 
     act(() => {
-      useConversationStore.setState({
-        generation: {
-          ...run,
-          phase: "cancelled",
-          content: "PARTIAL_REPLY",
-        },
+      seedGenerationRun({
+        ...run,
+        phase: "cancelled",
+        content: "PARTIAL_REPLY",
       })
     })
     expect(within(pane).getByText("PARTIAL_REPLY")).toBeVisible()
@@ -1063,7 +1164,10 @@ describe("ConversationWorkspace", () => {
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
     expect(client.archiveConversation).not.toHaveBeenCalled()
     expect(providerClient.cancelGeneration).not.toHaveBeenCalled()
-    expect(useConversationStore.getState().generation.phase).toBe("streaming")
+    expect(
+      useConversationStore.getState().generationRuns[root.conversationId]
+        ?.phase,
+    ).toBe("streaming")
     expect(
       screen.queryByRole("button", { name: "发送消息" }),
     ).not.toBeInTheDocument()
@@ -1253,7 +1357,9 @@ describe("ConversationWorkspace", () => {
       const state = useConversationStore.getState()
       expect(state.isArchived).toBe(true)
       expect(state.status).toBe("ready")
-      expect(state.generation.phase).toBe("cancelled")
+      // The archived conversation is read-only; its cancelled run record is
+      // cleared instead of lingering as an unusable transient bubble.
+      expect(state.generationRuns[root.conversationId]).toBeUndefined()
       expect(
         state.history.summaries.find((item) => item.id === root.conversationId)
           ?.isArchived,
@@ -1285,15 +1391,16 @@ describe("ConversationWorkspace", () => {
         ],
         error: null,
       },
-      generation: {
-        runId: 31,
-        conversationId: root.conversationId,
-        parentNodeId: right.id,
-        generationId: "other-row-gen-id",
-        model: "fixture-model",
-        phase: "streaming",
-        content: "PARTIAL_REPLY",
-      },
+    })
+    seedGenerationRun({
+      runId: 31,
+      conversationId: root.conversationId,
+      parentNodeId: right.id,
+      priorChildIds: [],
+      generationId: "other-row-gen-id",
+      model: "fixture-model",
+      phase: "streaming",
+      content: "PARTIAL_REPLY",
     })
     client.archiveConversation.mockResolvedValueOnce({
       id: otherSummary.id,
@@ -1319,7 +1426,10 @@ describe("ConversationWorkspace", () => {
       expect(client.archiveConversation).toHaveBeenCalledWith(otherSummary.id)
     })
     expect(providerClient.cancelGeneration).not.toHaveBeenCalled()
-    expect(useConversationStore.getState().generation.phase).toBe("streaming")
+    expect(
+      useConversationStore.getState().generationRuns[root.conversationId]
+        ?.phase,
+    ).toBe("streaming")
     expect(useConversationStore.getState().status).toBe("ready")
     expect(screen.getByRole("button", { name: "取消生成" })).toBeEnabled()
   })
@@ -1336,15 +1446,16 @@ describe("ConversationWorkspace", () => {
         summaries: [{ ...tree.conversation, updatedAt: right.createdAt }],
         error: null,
       },
-      generation: {
-        runId: 57,
-        conversationId: root.conversationId,
-        parentNodeId: right.id,
-        generationId: "confirm-time-gen-id",
-        model: "fixture-model",
-        phase: "streaming",
-        content: "PARTIAL_REPLY",
-      },
+    })
+    seedGenerationRun({
+      runId: 57,
+      conversationId: root.conversationId,
+      parentNodeId: right.id,
+      priorChildIds: [],
+      generationId: "confirm-time-gen-id",
+      model: "fixture-model",
+      phase: "streaming",
+      content: "PARTIAL_REPLY",
     })
     render(<ConversationWorkspace />)
 
@@ -1353,7 +1464,7 @@ describe("ConversationWorkspace", () => {
     expect(within(dialog).getByText("归档将打断正在进行的生成。")).toBeVisible()
 
     act(() => {
-      useConversationStore.setState({ generation: { phase: "idle" } })
+      useConversationStore.setState({ generationRuns: {} })
     })
     expect(
       within(dialog).queryByText("归档将打断正在进行的生成。"),
@@ -1429,6 +1540,7 @@ describe("ConversationWorkspace", () => {
       runId: 99,
       conversationId: root.conversationId,
       parentNodeId: right.id,
+      priorChildIds: [],
       generationId: "test-gen-id",
       model: "fixture-model",
     } as const
@@ -1448,9 +1560,7 @@ describe("ConversationWorkspace", () => {
 
     // 1. During streaming: textarea editable, Cancel button active, Send hidden
     act(() => {
-      useConversationStore.setState({
-        generation: { ...run, phase: "streaming", content: "STREAM_TEXT" },
-      })
+      seedGenerationRun({ ...run, phase: "streaming", content: "STREAM_TEXT" })
     })
     expect(composer).toBeEnabled()
     expect(screen.getByRole("button", { name: "取消生成" })).toBeEnabled()
@@ -1462,17 +1572,15 @@ describe("ConversationWorkspace", () => {
 
     // 2. After persistence failure: textarea editable, Cancel absent, Send disabled
     act(() => {
-      useConversationStore.setState({
-        generation: {
-          phase: "failed",
-          runId: run.runId,
-          failureKind: "persistence",
-          content: "FULL_TEXT",
-          error: {
-            code: "database_unavailable",
-            message: "Unable to save reply.",
-            retryable: true,
-          },
+      seedGenerationRun({
+        ...run,
+        phase: "failed",
+        failureKind: "persistence",
+        content: "FULL_TEXT",
+        error: {
+          code: "database_unavailable",
+          message: "Unable to save reply.",
+          retryable: true,
         },
       })
     })
@@ -1488,9 +1596,7 @@ describe("ConversationWorkspace", () => {
 
     // 3. During cancelled: textarea editable, Cancel absent, Send disabled
     act(() => {
-      useConversationStore.setState({
-        generation: { ...run, phase: "cancelled", content: "PARTIAL" },
-      })
+      seedGenerationRun({ ...run, phase: "cancelled", content: "PARTIAL" })
     })
     expect(composer).toBeEnabled()
     expect(composer).toHaveValue("MY_PERSISTENT_DRAFT_APPEND")
@@ -1559,14 +1665,13 @@ describe("ConversationWorkspace", () => {
       .loadConversation(client, root.conversationId)
     useConversationStore.getState().selectNode(right.id)
     act(() => {
-      useConversationStore.setState({
-        generation: {
-          runId: 101,
-          conversationId: root.conversationId,
-          parentNodeId: right.id,
-          generationId: "transient-gen-id",
-          phase: "starting",
-        },
+      seedGenerationRun({
+        runId: 101,
+        conversationId: root.conversationId,
+        parentNodeId: right.id,
+        priorChildIds: [],
+        generationId: "transient-gen-id",
+        phase: "starting",
       })
     })
     const { unmount: unmount4 } = render(<ConversationWorkspace />)
@@ -1581,15 +1686,14 @@ describe("ConversationWorkspace", () => {
 
     // When cancelled, only the transient bubble has "重新生成", no duplicate user-leaf "生成回复"
     act(() => {
-      useConversationStore.setState({
-        generation: {
-          phase: "cancelled",
-          runId: 101,
-          conversationId: root.conversationId,
-          parentNodeId: right.id,
-          generationId: "transient-gen-id",
-          content: "CANCELLED_STREAM",
-        },
+      seedGenerationRun({
+        runId: 101,
+        conversationId: root.conversationId,
+        parentNodeId: right.id,
+        priorChildIds: [],
+        generationId: "transient-gen-id",
+        phase: "cancelled",
+        content: "CANCELLED_STREAM",
       })
     })
     expect(
@@ -1799,16 +1903,15 @@ describe("ConversationWorkspace", () => {
       .loadConversation(client, root.conversationId)
     useConversationStore.getState().selectNode(assistant.id)
     act(() => {
-      useConversationStore.setState({
-        generation: {
-          runId: 202,
-          conversationId: root.conversationId,
-          parentNodeId: root.id,
-          generationId: "gen-active",
-          phase: "streaming",
-          model: "fixture-model",
-          content: "STREAMING_TEXT",
-        },
+      seedGenerationRun({
+        runId: 202,
+        conversationId: root.conversationId,
+        parentNodeId: root.id,
+        priorChildIds: [],
+        generationId: "gen-active",
+        model: "fixture-model",
+        phase: "streaming",
+        content: "STREAMING_TEXT",
       })
     })
     const { unmount: unmount4 } = render(<ConversationWorkspace />)
@@ -1825,15 +1928,14 @@ describe("ConversationWorkspace", () => {
 
     // 5. Cancelled recovery keeps only the always-visible transient action.
     act(() => {
-      useConversationStore.setState({
-        generation: {
-          phase: "cancelled",
-          runId: 203,
-          conversationId: root.conversationId,
-          parentNodeId: root.id,
-          generationId: "gen-cancelled",
-          content: "CANCELLED_RECOVERY_CONTENT",
-        },
+      seedGenerationRun({
+        runId: 203,
+        conversationId: root.conversationId,
+        parentNodeId: root.id,
+        priorChildIds: [],
+        generationId: "gen-cancelled",
+        phase: "cancelled",
+        content: "CANCELLED_RECOVERY_CONTENT",
       })
     })
     const { unmount: unmount5 } = render(<ConversationWorkspace />)
@@ -1846,15 +1948,18 @@ describe("ConversationWorkspace", () => {
         name: "重新生成",
       }),
     ).not.toBeInTheDocument()
+    // The active path ends at the assistant, not at the run's parent, so the
+    // cancelled bubble is hidden until the user navigates back to the parent.
     expect(
-      within(pane5).getAllByRole("button", { name: "重新生成" }),
-    ).toHaveLength(1)
+      within(pane5).queryByRole("button", { name: "重新生成" }),
+    ).not.toBeInTheDocument()
+    expect(within(pane5).queryByText("回复已停止")).not.toBeInTheDocument()
     unmount5()
 
     // 6. A loading projection cannot expose the durable action.
     act(() => {
       useConversationStore.setState({
-        generation: { phase: "idle" },
+        generationRuns: {},
         status: "loading",
       })
     })

@@ -132,7 +132,7 @@ function resetStore() {
     expandedIds: new Set(),
     status: "idle",
     error: null,
-    generation: { phase: "idle" },
+    generationRuns: {},
     history: { status: "idle", summaries: [], error: null },
   })
 }
@@ -576,14 +576,17 @@ describe("conversation store", () => {
     client.listConversations.mockResolvedValueOnce([summary])
     await useConversationStore.getState().initializeHistory(client)
     useConversationStore.setState({
-      generation: {
-        runId: 9,
-        conversationId: conversation.id,
-        parentNodeId: right.id,
-        generationId: "active-gen-id",
-        model: "fixture-model",
-        phase: "streaming",
-        content: "PARTIAL_REPLY",
+      generationRuns: {
+        [conversation.id]: {
+          runId: 9,
+          conversationId: conversation.id,
+          parentNodeId: right.id,
+          generationId: "active-gen-id",
+          model: "fixture-model",
+          phase: "streaming",
+          content: "PARTIAL_REPLY",
+          priorChildIds: [],
+        },
       },
     })
     client.archiveConversation.mockResolvedValueOnce({
@@ -595,6 +598,10 @@ describe("conversation store", () => {
 
     expect(client.archiveConversation).toHaveBeenCalledTimes(1)
     expect(useConversationStore.getState().isArchived).toBe(true)
+    // The archived conversation is read-only; its run record cannot linger.
+    expect(
+      useConversationStore.getState().generationRuns[conversation.id],
+    ).toBeUndefined()
   })
 
   it("enters blank creation without replacing the loaded tree or history", async () => {

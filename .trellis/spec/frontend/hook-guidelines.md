@@ -5,8 +5,9 @@
 ## Current State
 
 `useWorkspaceGenerationController` coordinates the typed provider Channel,
-conversation selection, mutation locking, exact cancellation, terminal result
-handling, and one-shot authoritative reloads. Keep this lifecycle under
+conversation selection, per-conversation mutation locking, exact cancellation,
+terminal result handling (foreground inline, background via toast), and
+one-shot authoritative reloads. Keep this lifecycle under
 `features/conversations/hooks`; do not move it into a generic root hook or
 duplicate it in components.
 
@@ -58,14 +59,19 @@ const activePath = useConversationStore(selectActivePath)
   cancellation explicitly.
 - Channel callbacks and the long-lived command promise may resolve in either
   order. Gate both with the current `runId`; a late terminal result for the
-  exact current generation is valid, not a cancellation condition.
+  exact current run is valid, not a cancellation condition.
 - The hook accepts only `started`/`delta` Channel events and a separate
   `completed`/`cancelled`/`failed` terminal result. It never invents a durable
   assistant from deltas.
-- User cancellation is permitted only in `starting` or `streaming`. Cleanup
-  invalidates the run and best-effort exact-cancels a known generation ID.
+- User cancellation is permitted only in `starting` or `streaming`, for the
+  currently loaded conversation. Runs are never cancelled by controller
+  unmount or by switching conversations — they stream in the background and
+  outlive the hook instance (the run registry lives in the store).
 - A malformed callback or terminal result fails closed. If a known exact ID is
   available, cancel it; never cancel an ID taken from an unvalidated payload.
+  A guard mismatch means protocol corruption, not "the user navigated away" —
+  event guards validate against the run record in the store registry, never
+  against the currently visible tree.
 - An invoke rejection after `started` is ambiguous. Reload authoritative
   conversation state at most once for that run, and preserve a safe existing
   projection if reload cannot prove one exact assistant.
@@ -80,7 +86,9 @@ const activePath = useConversationStore(selectActivePath)
 - Use deterministic typed bridge fakes; do not mock raw SQL or reach through
   the Tauri boundary.
 - Cover result-before-callback, malformed event, exact cancellation, stale
-  run, unmount, terminal-stage handling, and one-shot reload behavior.
+  run, terminal-stage handling, and one-shot reload behavior. For background
+  runs, cover switch-away-keeps-streaming, toast on background terminal, and
+  cancel-on-archive of a background target.
 - Every active-path test includes two sibling branches and asserts that the
   inactive sibling is absent.
 

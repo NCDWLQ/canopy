@@ -5,6 +5,7 @@ import { useWorkspaceGenerationController } from "./useWorkspaceGenerationContro
 import { selectActivePath, useConversationStore } from "../store"
 import type {
   ConversationNodeView,
+  ConversationSummaryView,
   ConversationTreeView,
   ConversationView,
 } from "../types"
@@ -13,12 +14,17 @@ import type {
   GenerationEventView,
   ProviderProfileView,
 } from "@/features/providers/types"
+import { showClickableToast } from "@/components/ui/toaster"
 import {
   ConversationCommandError,
   GenerationBridgeError,
   type ConversationClient,
   type ProviderClient,
 } from "@/lib/tauri"
+
+vi.mock("@/components/ui/toaster", () => ({
+  showClickableToast: vi.fn(),
+}))
 
 const conversation: ConversationView = {
   id: "controller-conversation",
@@ -252,9 +258,13 @@ function resetConversationStore() {
     expandedIds: new Set(),
     status: "idle",
     error: null,
-    generation: { phase: "idle" },
+    generationRuns: {},
     history: { status: "idle", summaries: [], error: null },
   })
+}
+
+function runOf(conversationId: string) {
+  return useConversationStore.getState().generationRuns[conversationId]
 }
 
 function deferred<T>() {
@@ -273,6 +283,7 @@ describe("workspace generation controller", () => {
     conversationClient = createConversationClient()
     providerClient = createProviderClient()
     resetConversationStore()
+    vi.mocked(showClickableToast).mockClear()
     useProviderProfileStore.setState({ phase: "ready", profile })
     await useConversationStore
       .getState()
@@ -340,7 +351,7 @@ describe("workspace generation controller", () => {
     expect(providerClient.generateFromActivePath).toHaveBeenCalledTimes(1)
   })
 
-  it("does not auto-generate when navigation changes during append persistence", async () => {
+  it("auto-generates from the appended node even when the user browses elsewhere meanwhile", async () => {
     conversationClient.loadConversationTree.mockResolvedValueOnce(
       appendableTree,
     )
@@ -350,6 +361,10 @@ describe("workspace generation controller", () => {
     useConversationStore.getState().selectNode(assistant.id)
     const append = deferred<ConversationNodeView>()
     conversationClient.appendNode.mockReturnValueOnce(append.promise)
+    providerClient.generateFromActivePath.mockReturnValueOnce(
+      deferred<Awaited<ReturnType<ProviderClient["generateFromActivePath"]>>>()
+        .promise,
+    )
     const { result } = renderHook(() =>
       useWorkspaceGenerationController({ conversationClient, providerClient }),
     )
@@ -371,7 +386,17 @@ describe("workspace generation controller", () => {
     expect(useConversationStore.getState().fullNodes[appendedUser.id]).toEqual(
       appendedUser,
     )
-    expect(providerClient.generateFromActivePath).not.toHaveBeenCalled()
+    // The run targets the appended node, not the user's current view.
+    expect(providerClient.generateFromActivePath).toHaveBeenCalledTimes(1)
+    expect(providerClient.generateFromActivePath).toHaveBeenCalledWith(
+      conversation.id,
+      appendedUser.id,
+      expect.any(Function),
+    )
+    expect(runOf(conversation.id)).toMatchObject({
+      phase: "starting",
+      parentNodeId: appendedUser.id,
+    })
   })
 
   it("starts generation once from a created conversation only after persistence", async () => {
@@ -560,7 +585,7 @@ describe("workspace generation controller", () => {
           expandedIds: new Set([replacementRoot.id]),
           status: "ready",
           error: null,
-          generation: { phase: "idle" },
+          generationRuns: {},
         })
       }
     })
@@ -579,7 +604,7 @@ describe("workspace generation controller", () => {
     expect(providerClient.generateFromActivePath).not.toHaveBeenCalled()
   })
 
-  it("does not start generation after unmount while append is pending", async () => {
+  it("starts a background run even if the workspace unmounts while append is pending", async () => {
     conversationClient.loadConversationTree.mockResolvedValueOnce(
       appendableTree,
     )
@@ -589,6 +614,10 @@ describe("workspace generation controller", () => {
     useConversationStore.getState().selectNode(assistant.id)
     const append = deferred<ConversationNodeView>()
     conversationClient.appendNode.mockReturnValueOnce(append.promise)
+    providerClient.generateFromActivePath.mockReturnValueOnce(
+      deferred<Awaited<ReturnType<ProviderClient["generateFromActivePath"]>>>()
+        .promise,
+    )
     const { result, unmount } = renderHook(() =>
       useWorkspaceGenerationController({ conversationClient, providerClient }),
     )
@@ -604,8 +633,15 @@ describe("workspace generation controller", () => {
       await appendOperation
     })
 
-    expect(useConversationStore.getState().activeNodeId).toBe(appendedUser.id)
-    expect(providerClient.generateFromActivePath).not.toHaveBeenCalled()
+    // Runs outlive the component lifecycle: the reply belongs to the
+    // conversation, not to the mounted hook instance.
+    expect(providerClient.generateFromActivePath).toHaveBeenCalledTimes(1)
+    expect(providerClient.generateFromActivePath).toHaveBeenCalledWith(
+      conversation.id,
+      appendedUser.id,
+      expect.any(Function),
+    )
+    expect(runOf(conversation.id)?.phase).toBe("starting")
   })
 
   it("does not generate from an unsafe created tree", async () => {
@@ -661,7 +697,7 @@ describe("workspace generation controller", () => {
       await result.current.appendNode(appendedUser.content)
     })
     await waitFor(() => {
-      expect(useConversationStore.getState().generation.phase).toBe("failed")
+      expect(runOf(conversation.id)?.phase).toBe("failed")
     })
 
     expect(useConversationStore.getState().activeNodeId).toBe(appendedUser.id)
@@ -715,9 +751,8 @@ describe("workspace generation controller", () => {
         generated,
       )
     })
-    expect(useConversationStore.getState().generation).toEqual({
-      phase: "idle",
-    })
+    expect(runOf(conversation.id)).toBeUndefined()
+    expect(showClickableToast).not.toHaveBeenCalled()
   })
 
   it("cancels the exact generation and keeps its partial presentation", async () => {
@@ -741,23 +776,15 @@ describe("workspace generation controller", () => {
     )
 
     act(() => hook.current.generate())
-    await waitFor(() =>
-      expect(useConversationStore.getState().generation.phase).toBe(
-        "streaming",
-      ),
-    )
+    await waitFor(() => expect(runOf(conversation.id)?.phase).toBe("streaming"))
     act(() => hook.current.cancel())
     expect(providerClient.cancelGeneration).toHaveBeenCalledWith(generationId)
-    expect(useConversationStore.getState().generation).toMatchObject({
+    expect(runOf(conversation.id)).toMatchObject({
       phase: "cancelled",
       content: "PARTIAL",
     })
     result.resolve({ type: "cancelled", generationId })
-    await waitFor(() =>
-      expect(useConversationStore.getState().generation.phase).toBe(
-        "cancelled",
-      ),
-    )
+    await waitFor(() => expect(runOf(conversation.id)?.phase).toBe("cancelled"))
   })
 
   it("cancels the exact generation when started arrives after the user stops", async () => {
@@ -775,7 +802,7 @@ describe("workspace generation controller", () => {
     )
 
     act(() => result.current.generate())
-    expect(useConversationStore.getState().generation.phase).toBe("starting")
+    expect(runOf(conversation.id)?.phase).toBe("starting")
     act(() => result.current.cancel())
     expect(providerClient.cancelGeneration).not.toHaveBeenCalled()
 
@@ -791,11 +818,7 @@ describe("workspace generation controller", () => {
     expect(providerClient.cancelGeneration).toHaveBeenCalledTimes(1)
     expect(providerClient.cancelGeneration).toHaveBeenCalledWith(generationId)
     terminal.resolve({ type: "cancelled", generationId })
-    await waitFor(() =>
-      expect(useConversationStore.getState().generation.phase).toBe(
-        "cancelled",
-      ),
-    )
+    await waitFor(() => expect(runOf(conversation.id)?.phase).toBe("cancelled"))
   })
 
   it("reloads SQLite once when terminal delivery is ambiguous", async () => {
@@ -839,9 +862,7 @@ describe("workspace generation controller", () => {
       ),
     )
     expect(conversationClient.loadConversationTree).toHaveBeenCalledTimes(1)
-    expect(useConversationStore.getState().generation).toEqual({
-      phase: "idle",
-    })
+    expect(runOf(conversation.id)).toBeUndefined()
   })
 
   it("reloads SQLite when transport rejects before started is observed", async () => {
@@ -885,9 +906,7 @@ describe("workspace generation controller", () => {
     )
 
     expect(conversationClient.loadConversationTree).toHaveBeenCalledTimes(1)
-    expect(useConversationStore.getState().generation).toEqual({
-      phase: "idle",
-    })
+    expect(runOf(conversation.id)).toBeUndefined()
   })
 
   it("blocks mutations after one failed authoritative reload without retrying it", async () => {
@@ -915,10 +934,242 @@ describe("workspace generation controller", () => {
       expect(useConversationStore.getState().status).toBe("error"),
     )
     expect(conversationClient.loadConversationTree).toHaveBeenCalledTimes(1)
-    expect(useConversationStore.getState().generation).toMatchObject({
+    expect(runOf(conversation.id)).toMatchObject({
       phase: "failed",
       failureKind: "generation",
     })
     expect(result.current.canGenerate).toBe(false)
+  })
+
+  async function switchToReplacementConversation() {
+    conversationClient.loadConversationTree.mockResolvedValueOnce(
+      replacementTree,
+    )
+    await useConversationStore
+      .getState()
+      .loadConversation(conversationClient, replacementConversation.id)
+  }
+
+  function seedSummaries(summaries: readonly ConversationSummaryView[]) {
+    useConversationStore.setState({
+      history: { status: "ready", summaries, error: null },
+    })
+  }
+
+  it("notifies a background completion with a toast that jumps back", async () => {
+    seedSummaries([
+      { ...conversation, updatedAt: right.createdAt },
+      { ...replacementConversation, updatedAt: replacementRoot.createdAt },
+    ])
+    const generated: ConversationNodeView = {
+      id: "background-generated",
+      parentId: right.id,
+      conversationId: conversation.id,
+      role: "assistant",
+      content: "BACKGROUND",
+      model: profile.model,
+      createdAt: 9,
+      metadata: null,
+    }
+    const terminal =
+      deferred<Awaited<ReturnType<ProviderClient["generateFromActivePath"]>>>()
+    providerClient.generateFromActivePath.mockImplementation(
+      (_conversationId, _activeNodeId, onEvent) => {
+        onEvent({
+          type: "started",
+          generationId,
+          conversationId: conversation.id,
+          activeNodeId: right.id,
+          model: profile.model,
+        })
+        return terminal.promise
+      },
+    )
+    const { result } = renderHook(() =>
+      useWorkspaceGenerationController({ conversationClient, providerClient }),
+    )
+
+    act(() => result.current.generate())
+    await switchToReplacementConversation()
+    terminal.resolve({ type: "completed", generationId, node: generated })
+    await waitFor(() => expect(runOf(conversation.id)).toBeUndefined())
+
+    expect(showClickableToast).toHaveBeenCalledTimes(1)
+    const notification = vi.mocked(showClickableToast).mock.calls[0]![0]
+    // The title previews the run's prompt; the body previews the reply.
+    expect(notification.kind).toBe("success")
+    expect(notification.title).toBe("RIGHT_ACTIVE_SENTINEL")
+    expect(notification.description).toBe(generated.content)
+    expect(
+      useConversationStore
+        .getState()
+        .history.summaries.find((summary) => summary.id === conversation.id)
+        ?.updatedAt,
+    ).toBe(generated.createdAt)
+    // The loaded replacement conversation is untouched.
+    expect(useConversationStore.getState().conversationId).toBe(
+      replacementConversation.id,
+    )
+    // The jump action selects the finished conversation.
+    conversationClient.loadConversationTree.mockResolvedValueOnce({
+      ...tree,
+      nodes: [...tree.nodes, generated],
+      nodesById: {
+        ...tree.nodesById,
+        right: { ...tree.nodesById.right!, childIds: [generated.id] },
+        [generated.id]: {
+          id: generated.id,
+          parentId: right.id,
+          role: "assistant",
+          preview: generated.content,
+          childIds: [],
+        },
+      },
+    })
+    await act(async () => {
+      // Selecting the toast jumps back to the conversation.
+      notification.onSelect()
+      await waitFor(() =>
+        expect(useConversationStore.getState().conversationId).toBe(
+          conversation.id,
+        ),
+      )
+    })
+  })
+
+  it("truncates the reply preview of a background completion toast", async () => {
+    seedSummaries([
+      { ...conversation, updatedAt: right.createdAt },
+      { ...replacementConversation, updatedAt: replacementRoot.createdAt },
+    ])
+    const longReply = "回".repeat(300)
+    const generated: ConversationNodeView = {
+      id: "background-generated-long",
+      parentId: right.id,
+      conversationId: conversation.id,
+      role: "assistant",
+      content: longReply,
+      model: profile.model,
+      createdAt: 9,
+      metadata: null,
+    }
+    const terminal =
+      deferred<Awaited<ReturnType<ProviderClient["generateFromActivePath"]>>>()
+    providerClient.generateFromActivePath.mockImplementation(
+      (_conversationId, _activeNodeId, onEvent) => {
+        onEvent({
+          type: "started",
+          generationId,
+          conversationId: conversation.id,
+          activeNodeId: right.id,
+          model: profile.model,
+        })
+        return terminal.promise
+      },
+    )
+    const { result } = renderHook(() =>
+      useWorkspaceGenerationController({ conversationClient, providerClient }),
+    )
+
+    act(() => result.current.generate())
+    await switchToReplacementConversation()
+    terminal.resolve({ type: "completed", generationId, node: generated })
+    await waitFor(() => expect(runOf(conversation.id)).toBeUndefined())
+
+    const { description } = vi.mocked(showClickableToast).mock.calls[0]![0]
+    expect(description).toHaveLength(121)
+    expect(description?.endsWith("…")).toBe(true)
+  })
+
+  it("notifies a background failure and keeps the record for re-entry", async () => {
+    seedSummaries([
+      { ...conversation, updatedAt: right.createdAt },
+      { ...replacementConversation, updatedAt: replacementRoot.createdAt },
+    ])
+    const terminal =
+      deferred<Awaited<ReturnType<ProviderClient["generateFromActivePath"]>>>()
+    providerClient.generateFromActivePath.mockImplementation(
+      (_conversationId, _activeNodeId, onEvent) => {
+        onEvent({
+          type: "started",
+          generationId,
+          conversationId: conversation.id,
+          activeNodeId: right.id,
+          model: profile.model,
+        })
+        return terminal.promise
+      },
+    )
+    const { result } = renderHook(() =>
+      useWorkspaceGenerationController({ conversationClient, providerClient }),
+    )
+
+    act(() => result.current.generate())
+    await switchToReplacementConversation()
+    terminal.resolve({
+      type: "failed",
+      generationId,
+      stage: "generation",
+      error: new ConversationCommandError({
+        code: "provider_unavailable",
+        message: "Provider unavailable.",
+        retryable: true,
+      }),
+    })
+    await waitFor(() => expect(runOf(conversation.id)?.phase).toBe("failed"))
+
+    expect(showClickableToast).toHaveBeenCalledTimes(1)
+    const notification = vi.mocked(showClickableToast).mock.calls[0]![0]
+    expect(notification.kind).toBe("error")
+    expect(notification.title).toBe("RIGHT_ACTIVE_SENTINEL")
+    expect(notification.description).toBe("Provider unavailable.")
+  })
+
+  it("cancels a background run when its conversation is archived", async () => {
+    seedSummaries([
+      { ...conversation, updatedAt: right.createdAt },
+      { ...replacementConversation, updatedAt: replacementRoot.createdAt },
+    ])
+    const terminal =
+      deferred<Awaited<ReturnType<ProviderClient["generateFromActivePath"]>>>()
+    providerClient.generateFromActivePath.mockImplementation(
+      (_conversationId, _activeNodeId, onEvent) => {
+        onEvent({
+          type: "started",
+          generationId,
+          conversationId: conversation.id,
+          activeNodeId: right.id,
+          model: profile.model,
+        })
+        return terminal.promise
+      },
+    )
+    const { result } = renderHook(() =>
+      useWorkspaceGenerationController({ conversationClient, providerClient }),
+    )
+
+    act(() => result.current.generate())
+    await waitFor(() => expect(runOf(conversation.id)?.phase).toBe("streaming"))
+    await switchToReplacementConversation()
+    conversationClient.archiveConversation.mockResolvedValueOnce({
+      ...conversation,
+      isArchived: true,
+    })
+
+    await act(async () => {
+      await result.current.archiveConversation(conversation.id)
+    })
+
+    expect(providerClient.cancelGeneration).toHaveBeenCalledWith(generationId)
+    expect(conversationClient.archiveConversation).toHaveBeenCalledWith(
+      conversation.id,
+    )
+    expect(runOf(conversation.id)).toBeUndefined()
+    expect(
+      useConversationStore
+        .getState()
+        .history.summaries.find((summary) => summary.id === conversation.id)
+        ?.isArchived,
+    ).toBe(true)
   })
 })
