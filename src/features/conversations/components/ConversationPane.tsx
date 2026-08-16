@@ -2,6 +2,7 @@ import * as React from "react"
 import type { PathMessageView, UiError } from "../types"
 import { AssistantMarkdown } from "./AssistantMarkdown"
 import { MessageBubble } from "./MessageBubble"
+import { ThinkingBlock } from "./ThinkingBlock"
 import {
   MessageNode,
   type AssistantRegenerationAction,
@@ -29,7 +30,7 @@ export type ConversationPaneProps = {
 
 export type TransientGenerationView =
   | { phase: "starting" }
-  | { phase: "streaming"; content: string }
+  | { phase: "streaming"; content: string; thinking: string }
   | {
       phase: "failed"
       failureKind: "generation"
@@ -51,6 +52,7 @@ function TransientGenerationMessage({
   onRegenerate,
 }: TransientGenerationMessageProps) {
   const content = "content" in generation ? generation.content : ""
+  const thinking = "thinking" in generation ? (generation.thinking ?? "") : ""
   let status: string | null = null
   let action: React.ReactNode = null
   const statusInContent = generation.phase === "starting"
@@ -104,6 +106,12 @@ function TransientGenerationMessage({
         )
       }
     >
+      {thinking.length > 0 && (
+        <ThinkingBlock
+          thinking={thinking}
+          streaming={generation.phase === "streaming" && content.length === 0}
+        />
+      )}
       {content.length > 0 ? (
         <AssistantMarkdown
           content={content}

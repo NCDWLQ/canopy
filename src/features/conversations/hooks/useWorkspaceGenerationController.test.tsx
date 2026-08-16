@@ -9,10 +9,10 @@ import type {
   ConversationTreeView,
   ConversationView,
 } from "../types"
-import { useProviderProfileStore } from "@/features/providers/store"
+import { useProviderStore } from "@/features/providers/store"
 import type {
   GenerationEventView,
-  ProviderProfileView,
+  ProviderView,
 } from "@/features/providers/types"
 import { showClickableToast } from "@/components/ui/toaster"
 import {
@@ -208,10 +208,15 @@ const replacementTree: ConversationTreeView = {
   },
 }
 
-const profile: ProviderProfileView = {
+const provider: ProviderView = {
+  id: "provider-1",
+  name: "Fixture provider",
+  protocol: "openai_compatible",
   baseEndpoint: "http://127.0.0.1:7788/v1",
   model: "fixture-model",
+  models: ["fixture-model"],
   hasApiKey: false,
+  createdAt: 10,
   updatedAt: 10,
 }
 
@@ -236,9 +241,14 @@ function createConversationClient() {
 
 function createProviderClient() {
   return {
-    saveProviderProfile: vi.fn<ProviderClient["saveProviderProfile"]>(),
-    loadProviderProfile: vi.fn<ProviderClient["loadProviderProfile"]>(),
-    deleteProviderProfile: vi.fn<ProviderClient["deleteProviderProfile"]>(),
+    listProviders: vi.fn<ProviderClient["listProviders"]>().mockResolvedValue({
+      providers: [provider],
+      activeProviderId: provider.id,
+    }),
+    saveProvider: vi.fn<ProviderClient["saveProvider"]>(),
+    deleteProvider: vi.fn<ProviderClient["deleteProvider"]>(),
+    setActiveProvider: vi.fn<ProviderClient["setActiveProvider"]>(),
+    listProviderModels: vi.fn<ProviderClient["listProviderModels"]>(),
     generateFromActivePath: vi.fn<ProviderClient["generateFromActivePath"]>(),
     cancelGeneration: vi
       .fn<ProviderClient["cancelGeneration"]>()
@@ -284,7 +294,11 @@ describe("workspace generation controller", () => {
     providerClient = createProviderClient()
     resetConversationStore()
     vi.mocked(showClickableToast).mockClear()
-    useProviderProfileStore.setState({ phase: "ready", profile })
+    useProviderStore.setState({
+      phase: "ready",
+      providers: [provider],
+      activeProviderId: provider.id,
+    })
     await useConversationStore
       .getState()
       .loadConversation(conversationClient, conversation.id)
@@ -523,7 +537,11 @@ describe("workspace generation controller", () => {
       .getState()
       .loadConversation(conversationClient, conversation.id)
     useConversationStore.getState().selectNode(assistant.id)
-    useProviderProfileStore.setState({ phase: "idle", profile: null })
+    useProviderStore.setState({
+      phase: "idle",
+      providers: [provider],
+      activeProviderId: null,
+    })
     conversationClient.appendNode.mockResolvedValueOnce(appendedUser)
     const { result } = renderHook(() =>
       useWorkspaceGenerationController({ conversationClient, providerClient }),
@@ -558,7 +576,11 @@ describe("workspace generation controller", () => {
     act(() => {
       appendOperation = result.current.appendNode(appendedUser.content)
     })
-    useProviderProfileStore.setState({ phase: "idle", profile: null })
+    useProviderStore.setState({
+      phase: "idle",
+      providers: [provider],
+      activeProviderId: null,
+    })
 
     await act(async () => {
       append.resolve(appendedUser)
@@ -720,7 +742,7 @@ describe("workspace generation controller", () => {
       conversationId: conversation.id,
       role: "assistant",
       content: "AUTHORITATIVE",
-      model: profile.model,
+      model: provider.model,
       createdAt: 5,
       metadata: null,
     }
@@ -731,7 +753,7 @@ describe("workspace generation controller", () => {
           generationId,
           conversationId: conversation.id,
           activeNodeId: right.id,
-          model: profile.model,
+          model: provider.model,
         })
         onEvent({ type: "delta", generationId, content: generated.content })
         return Promise.resolve({
@@ -765,7 +787,7 @@ describe("workspace generation controller", () => {
           generationId,
           conversationId: conversation.id,
           activeNodeId: right.id,
-          model: profile.model,
+          model: provider.model,
         })
         onEvent({ type: "delta", generationId, content: "PARTIAL" })
         return result.promise
@@ -812,7 +834,7 @@ describe("workspace generation controller", () => {
         generationId,
         conversationId: conversation.id,
         activeNodeId: right.id,
-        model: profile.model,
+        model: provider.model,
       })
     })
     expect(providerClient.cancelGeneration).toHaveBeenCalledTimes(1)
@@ -828,7 +850,7 @@ describe("workspace generation controller", () => {
       conversationId: conversation.id,
       role: "assistant",
       content: "RECOVERED",
-      model: profile.model,
+      model: provider.model,
       createdAt: 5,
       metadata: null,
     }
@@ -872,7 +894,7 @@ describe("workspace generation controller", () => {
       conversationId: conversation.id,
       role: "assistant",
       content: "RECOVERED_BEFORE_STARTED",
-      model: profile.model,
+      model: provider.model,
       createdAt: 5,
       metadata: null,
     }
@@ -920,7 +942,7 @@ describe("workspace generation controller", () => {
           generationId,
           conversationId: conversation.id,
           activeNodeId: right.id,
-          model: profile.model,
+          model: provider.model,
         })
         return Promise.reject(new Error("terminal delivery lost"))
       },
@@ -967,7 +989,7 @@ describe("workspace generation controller", () => {
       conversationId: conversation.id,
       role: "assistant",
       content: "BACKGROUND",
-      model: profile.model,
+      model: provider.model,
       createdAt: 9,
       metadata: null,
     }
@@ -980,7 +1002,7 @@ describe("workspace generation controller", () => {
           generationId,
           conversationId: conversation.id,
           activeNodeId: right.id,
-          model: profile.model,
+          model: provider.model,
         })
         return terminal.promise
       },
@@ -1049,7 +1071,7 @@ describe("workspace generation controller", () => {
       conversationId: conversation.id,
       role: "assistant",
       content: longReply,
-      model: profile.model,
+      model: provider.model,
       createdAt: 9,
       metadata: null,
     }
@@ -1062,7 +1084,7 @@ describe("workspace generation controller", () => {
           generationId,
           conversationId: conversation.id,
           activeNodeId: right.id,
-          model: profile.model,
+          model: provider.model,
         })
         return terminal.promise
       },
@@ -1095,7 +1117,7 @@ describe("workspace generation controller", () => {
           generationId,
           conversationId: conversation.id,
           activeNodeId: right.id,
-          model: profile.model,
+          model: provider.model,
         })
         return terminal.promise
       },
@@ -1139,7 +1161,7 @@ describe("workspace generation controller", () => {
           generationId,
           conversationId: conversation.id,
           activeNodeId: right.id,
-          model: profile.model,
+          model: provider.model,
         })
         return terminal.promise
       },

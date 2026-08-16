@@ -152,7 +152,9 @@ fn ordered_migrations_create_the_expected_schema_and_managed_pool_is_reused() {
                 (1, "bootstrap"),
                 (2, "conversation_tree"),
                 (3, "conversation_archive"),
-                (4, "provider_profile")
+                (4, "provider_profile"),
+                (5, "multi_provider"),
+                (6, "provider_models")
             ]
         );
 
@@ -174,10 +176,11 @@ fn ordered_migrations_create_the_expected_schema_and_managed_pool_is_reused() {
             tables,
             vec![
                 "_canopy_bootstrap",
+                "app_settings",
                 "conversations",
                 "nodes",
                 "provider_credential_operations",
-                "provider_profiles"
+                "providers"
             ]
         );
 

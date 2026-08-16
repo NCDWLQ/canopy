@@ -10,9 +10,13 @@ import type {
 } from "../types"
 import type { GenerationEventView } from "@/features/providers/types"
 import { ConversationCommandError, type ConversationClient } from "@/lib/tauri"
+import type { SetConversationProviderInput } from "@/lib/tauri"
 
 type StartedGenerationEvent = Extract<GenerationEventView, { type: "started" }>
-type DeltaGenerationEvent = Extract<GenerationEventView, { type: "delta" }>
+type StreamingGenerationEvent = Extract<
+  GenerationEventView,
+  { type: "delta" | "thinking_delta" }
+>
 
 type RunIdentity = {
   runId: number
@@ -44,6 +48,7 @@ export type GenerationRun =
       generationId: string
       model: string
       content: string
+      thinking: string
     })
   | (RunIdentity & { phase: "cancelled"; content: string })
   | (RunIdentity & {
@@ -67,6 +72,9 @@ export type ConversationTreeState = {
   isCreatingConversation: boolean
   conversationId: string | null
   isArchived: boolean
+  providerId: string | null
+  model: string | null
+  reasoningEffort: "low" | "medium" | "high" | null
   rootNodeId: string | null
   activeNodeId: string | null
   nodesById: Readonly<Record<string, TreeNodeView>>
@@ -132,13 +140,20 @@ export type ConversationStore = ConversationTreeState & {
     client: ConversationClient,
     targetId?: string,
   ) => Promise<void>
+  setConversationProvider: (
+    client: ConversationClient,
+    input: Omit<SetConversationProviderInput, "conversationId">,
+  ) => Promise<void>
   clearError: () => void
   beginGeneration: (explicitParentNodeId?: string) => number | null
   acceptGenerationStarted: (
     runId: number,
     event: StartedGenerationEvent,
   ) => boolean
-  appendGenerationDelta: (runId: number, event: DeltaGenerationEvent) => boolean
+  appendGenerationDelta: (
+    runId: number,
+    event: StreamingGenerationEvent,
+  ) => boolean
   completeGeneration: (
     runId: number,
     generationId: string,
@@ -204,6 +219,9 @@ const initialState: ConversationTreeState = {
   isCreatingConversation: false,
   conversationId: null,
   isArchived: false,
+  providerId: null,
+  model: null,
+  reasoningEffort: null,
   rootNodeId: null,
   activeNodeId: null,
   nodesById: emptyRecord(),
@@ -305,6 +323,9 @@ function loadedTreeState(
     isCreatingConversation: false,
     conversationId: tree.conversation.id,
     isArchived: tree.conversation.isArchived,
+    providerId: tree.conversation.providerId ?? null,
+    model: tree.conversation.model ?? null,
+    reasoningEffort: tree.conversation.reasoningEffort ?? null,
     rootNodeId: tree.rootNodeId,
     activeNodeId,
     nodesById: copyRecord(tree.nodesById),
@@ -503,6 +524,7 @@ function findRecoveredAssistant(
 export const useConversationStore = create<ConversationStore>((set, get) => {
   let nextRunId = 0
   let requestEpoch = 0
+  let bindingEpoch = 0
 
   const loadSelectedConversation = async (
     client: ConversationClient,
@@ -700,6 +722,7 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
           generationId: event.generationId,
           model: event.model,
           content: "",
+          thinking: "",
         }),
       })
       return true
@@ -719,7 +742,9 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
       set({
         generationRuns: setRunRecord(state, conversationId, {
           ...run,
-          content: run.content + event.content,
+          ...(event.type === "thinking_delta"
+            ? { thinking: run.thinking + event.content }
+            : { content: run.content + event.content }),
         }),
       })
       return true
@@ -1215,6 +1240,59 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
       }
     },
 
+    setConversationProvider: async (client, input) => {
+      const state = get()
+      const conversationId = state.conversationId
+      if (
+        conversationId === null ||
+        state.isArchived ||
+        client.setConversationProvider === undefined
+      ) {
+        return
+      }
+      const epoch = ++bindingEpoch
+      try {
+        const result = await client.setConversationProvider({
+          conversationId,
+          ...input,
+        })
+        const live = get()
+        if (epoch !== bindingEpoch || live.conversationId !== conversationId) {
+          return
+        }
+        if (result.id !== conversationId) {
+          set({ error: TREE_INTEGRITY_ERROR })
+          return
+        }
+        const summary = live.history.summaries.find(
+          (item) => item.id === conversationId,
+        )
+        set({
+          providerId: result.providerId ?? null,
+          model: result.model ?? null,
+          reasoningEffort: result.reasoningEffort ?? null,
+          ...(summary === undefined
+            ? {}
+            : {
+                history: {
+                  status: "ready" as const,
+                  summaries: upsertSummary(live.history.summaries, {
+                    ...summary,
+                    providerId: result.providerId ?? null,
+                    model: result.model ?? null,
+                    reasoningEffort: result.reasoningEffort ?? null,
+                  }),
+                  error: null,
+                },
+              }),
+        })
+      } catch (error: unknown) {
+        if (epoch === bindingEpoch && get().conversationId === conversationId) {
+          set({ error: normalizeUiError(error) })
+        }
+      }
+    },
+
     archiveConversation: async (client, targetId) => {
       const state = get()
       const target = targetId ?? state.conversationId
@@ -1430,6 +1508,7 @@ export const selectActivePath = (
       ...(node.model === undefined ? {} : { model: node.model }),
       createdAt: node.createdAt,
       metadata: node.metadata,
+      ...(node.thinking === undefined ? {} : { thinking: node.thinking }),
     })
     if (currentId === state.rootNodeId) break
     currentId = node.parentId

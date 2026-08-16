@@ -3,10 +3,17 @@ import type {
   UiError,
 } from "@/features/conversations/types"
 
-export type ProviderProfileView = {
+export type ProviderProtocol = "openai_compatible" | "anthropic"
+
+export type ProviderView = {
+  id: string
+  name: string
+  protocol: ProviderProtocol
   baseEndpoint: string
   model: string
+  models: readonly string[]
   hasApiKey: boolean
+  createdAt: number
   updatedAt: number
 }
 
@@ -15,11 +22,36 @@ export type ApiKeyInputAction =
   | { action: "replace"; value: string }
   | { action: "remove" }
 
-export type SaveProviderProfileInput = {
+export type SaveProviderInput = {
+  id?: string
+  name: string
+  protocol: ProviderProtocol
   baseEndpoint: string
   model: string
+  models: readonly string[]
   apiKey: ApiKeyInputAction
 }
+
+export type ListProvidersView = {
+  providers: readonly ProviderView[]
+  activeProviderId: string | null
+}
+
+export type ModelSummaryView = {
+  id: string
+  displayName?: string
+}
+
+export type ModelListSource =
+  | { type: "saved"; providerId: string }
+  | {
+      type: "draft"
+      protocol: ProviderProtocol
+      baseEndpoint: string
+      apiKey?: string
+    }
+
+export type ReasoningEffort = "low" | "medium" | "high"
 
 export type CancelGenerationView = { accepted: boolean }
 
@@ -32,6 +64,7 @@ export type GenerationEventView =
       model: string
     }
   | { type: "delta"; generationId: string; content: string }
+  | { type: "thinking_delta"; generationId: string; content: string }
 
 export type GenerationTerminalView =
   | {

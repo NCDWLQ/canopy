@@ -6,8 +6,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { ConversationWorkspace } from "./ConversationWorkspace"
 import { useConversationStore, type GenerationRun } from "../store"
 import type { ConversationNodeView, ConversationTreeView } from "../types"
-import { useProviderProfileStore } from "@/features/providers/store"
-import type { GenerationEventView } from "@/features/providers/types"
+import { useProviderStore } from "@/features/providers/store"
+import type {
+  GenerationEventView,
+  ProviderView,
+} from "@/features/providers/types"
 import {
   ConversationCommandError,
   createConversationClient,
@@ -24,7 +27,6 @@ vi.mock("@/lib/tauri", async (importOriginal) => {
     createProviderClient: vi.fn(),
   }
 })
-
 const root: ConversationNodeView = {
   id: "root",
   conversationId: "conversation-1",
@@ -32,6 +34,34 @@ const root: ConversationNodeView = {
   content: "ROOT_SENTINEL",
   createdAt: 1,
   metadata: null,
+}
+
+const provider: ProviderView = {
+  id: "provider-1",
+  name: "Fixture provider",
+  protocol: "openai_compatible",
+  baseEndpoint: "http://127.0.0.1:7788/v1",
+  model: "fixture-model",
+  models: ["fixture-model"],
+  hasApiKey: false,
+  createdAt: 10,
+  updatedAt: 11,
+}
+
+function configureActiveProvider(next: ProviderView = provider) {
+  useProviderStore.setState({
+    phase: "ready",
+    providers: [next],
+    activeProviderId: next.id,
+  })
+}
+
+function clearActiveProvider() {
+  useProviderStore.setState({
+    phase: "unconfigured",
+    providers: [],
+    activeProviderId: null,
+  })
 }
 
 const assistant: ConversationNodeView = {
@@ -146,22 +176,27 @@ function createMockClient() {
       .mockResolvedValue(tree),
     loadActivePath: vi.fn<ConversationClient["loadActivePath"]>(),
     archiveConversation: vi.fn<ConversationClient["archiveConversation"]>(),
+    setConversationProvider: vi
+      .fn<NonNullable<ConversationClient["setConversationProvider"]>>()
+      .mockResolvedValue({
+        id: root.conversationId,
+        providerId: null,
+        model: null,
+        reasoningEffort: null,
+      }),
   } satisfies ConversationClient
 }
 
 function createMockProviderClient() {
   return {
-    saveProviderProfile: vi.fn<ProviderClient["saveProviderProfile"]>(),
-    loadProviderProfile: vi
-      .fn<ProviderClient["loadProviderProfile"]>()
-      .mockRejectedValue(
-        new ConversationCommandError({
-          code: "not_found",
-          message: "Provider profile not found.",
-          retryable: false,
-        }),
-      ),
-    deleteProviderProfile: vi.fn<ProviderClient["deleteProviderProfile"]>(),
+    listProviders: vi.fn<ProviderClient["listProviders"]>().mockResolvedValue({
+      providers: [provider],
+      activeProviderId: provider.id,
+    }),
+    saveProvider: vi.fn<ProviderClient["saveProvider"]>(),
+    deleteProvider: vi.fn<ProviderClient["deleteProvider"]>(),
+    setActiveProvider: vi.fn<ProviderClient["setActiveProvider"]>(),
+    listProviderModels: vi.fn<ProviderClient["listProviderModels"]>(),
     generateFromActivePath: vi.fn<ProviderClient["generateFromActivePath"]>(),
     cancelGeneration: vi
       .fn<ProviderClient["cancelGeneration"]>()
@@ -184,7 +219,11 @@ function resetStore() {
     generationRuns: {},
     history: { status: "idle", summaries: [], error: null },
   })
-  useProviderProfileStore.setState({ phase: "idle", profile: null })
+  useProviderStore.setState({
+    phase: "idle",
+    providers: [],
+    activeProviderId: null,
+  })
 }
 
 function seedGenerationRun(run: GenerationRun) {
@@ -212,7 +251,6 @@ describe("ConversationWorkspace", () => {
     vi.mocked(createProviderClient).mockReturnValue(providerClient)
     resetStore()
   })
-
   it("restores persisted history once on a clean StrictMode mount", async () => {
     let resolveTree: ((value: ConversationTreeView) => void) | undefined
     client.listConversations.mockResolvedValueOnce([
@@ -403,12 +441,7 @@ describe("ConversationWorkspace", () => {
         },
       },
     }
-    providerClient.loadProviderProfile.mockResolvedValue({
-      baseEndpoint: "http://127.0.0.1:7788/v1",
-      model: "fixture-model",
-      hasApiKey: false,
-      updatedAt: 10,
-    })
+    configureActiveProvider()
     providerClient.generateFromActivePath.mockImplementation(
       (_conversationId, _activeNodeId, callback) => {
         onEvent = callback
@@ -674,6 +707,10 @@ describe("ConversationWorkspace", () => {
 
   it("creates only the returned user root and keeps generation unavailable without a provider", async () => {
     const user = userEvent.setup()
+    providerClient.listProviders.mockResolvedValue({
+      providers: [],
+      activeProviderId: null,
+    })
     client.createConversation.mockResolvedValueOnce(rootOnlyTree)
     render(<ConversationWorkspace />)
 
@@ -862,13 +899,7 @@ describe("ConversationWorkspace", () => {
     >((resolve) => {
       completeGeneration = resolve
     })
-    providerClient.loadProviderProfile.mockReset()
-    providerClient.loadProviderProfile.mockResolvedValue({
-      baseEndpoint: "http://127.0.0.1:7788/v1",
-      model: "fixture-model",
-      hasApiKey: false,
-      updatedAt: 10,
-    })
+    configureActiveProvider()
     providerClient.generateFromActivePath.mockImplementation(
       (_conversationId, _activeNodeId, callback) => {
         onEvent = callback
@@ -969,13 +1000,7 @@ describe("ConversationWorkspace", () => {
       message: "Internal recovery detail that must stay hidden.",
       retryable: true,
     }
-    providerClient.loadProviderProfile.mockReset()
-    providerClient.loadProviderProfile.mockResolvedValue({
-      baseEndpoint: "http://127.0.0.1:7788/v1",
-      model: run.model,
-      hasApiKey: false,
-      updatedAt: 10,
-    })
+    configureActiveProvider({ ...provider, model: run.model })
     providerClient.generateFromActivePath.mockReturnValue(
       new Promise(() => undefined),
     )
@@ -1000,6 +1025,7 @@ describe("ConversationWorkspace", () => {
       seedGenerationRun({
         ...run,
         phase: "streaming",
+        thinking: "",
         content: "PARTIAL_REPLY",
       })
     })
@@ -1093,12 +1119,7 @@ describe("ConversationWorkspace", () => {
     const generationId = "22222222-2222-4222-8222-222222222222"
     let onEvent: ((event: GenerationEventView) => void) | undefined
 
-    providerClient.loadProviderProfile.mockResolvedValue({
-      baseEndpoint: "http://127.0.0.1:7788/v1",
-      model: "fixture-model",
-      hasApiKey: false,
-      updatedAt: 10,
-    })
+    configureActiveProvider()
     providerClient.generateFromActivePath.mockImplementation(
       (_conversationId, _activeNodeId, callback) => {
         onEvent = callback
@@ -1284,12 +1305,7 @@ describe("ConversationWorkspace", () => {
     const user = userEvent.setup()
     const generationId = "33333333-3333-4333-8333-333333333333"
     let onEvent: ((event: GenerationEventView) => void) | undefined
-    providerClient.loadProviderProfile.mockResolvedValue({
-      baseEndpoint: "http://127.0.0.1:7788/v1",
-      model: "fixture-model",
-      hasApiKey: false,
-      updatedAt: 10,
-    })
+    configureActiveProvider()
     providerClient.generateFromActivePath.mockImplementation(
       (_conversationId, _activeNodeId, callback) => {
         onEvent = callback
@@ -1397,6 +1413,7 @@ describe("ConversationWorkspace", () => {
       generationId: "other-row-gen-id",
       model: "fixture-model",
       phase: "streaming",
+      thinking: "",
       content: "PARTIAL_REPLY",
     })
     client.archiveConversation.mockResolvedValueOnce({
@@ -1452,6 +1469,7 @@ describe("ConversationWorkspace", () => {
       generationId: "confirm-time-gen-id",
       model: "fixture-model",
       phase: "streaming",
+      thinking: "",
       content: "PARTIAL_REPLY",
     })
     render(<ConversationWorkspace />)
@@ -1482,15 +1500,27 @@ describe("ConversationWorkspace", () => {
     expect(useConversationStore.getState().isArchived).toBe(true)
   })
 
-  it("opens GlobalSettingsDialog via contextual '配置服务提供商以生成' and updates to '生成回复' on save without auto-generating", async () => {
+  it("opens GlobalSettingsDialog via contextual '配置服务提供商以生成' and updates to '生成回复' after choosing a global default", async () => {
     const user = userEvent.setup()
-    useProviderProfileStore.setState({ phase: "unconfigured", profile: null })
-    providerClient.saveProviderProfile.mockResolvedValueOnce({
+    clearActiveProvider()
+    providerClient.listProviders.mockResolvedValue({
+      providers: [],
+      activeProviderId: null,
+    })
+    providerClient.saveProvider = vi.fn().mockResolvedValueOnce({
+      id: "provider-1",
+      name: "Fixture provider",
+      protocol: "openai_compatible",
       baseEndpoint: "http://127.0.0.1:7788/v1",
       model: "fixture-model",
+      models: ["fixture-model"],
       hasApiKey: false,
+      createdAt: 10,
       updatedAt: 11,
     })
+    providerClient.setActiveProvider = vi
+      .fn()
+      .mockResolvedValueOnce("provider-1")
 
     await useConversationStore
       .getState()
@@ -1507,20 +1537,28 @@ describe("ConversationWorkspace", () => {
     await user.click(configButton)
     expect(screen.getByRole("dialog")).toHaveAccessibleName("设置")
 
+    await user.type(screen.getByLabelText("名称"), "Fixture provider")
     await user.type(
       screen.getByLabelText("基础端点"),
       "http://127.0.0.1:7788/v1",
     )
-    await user.type(screen.getByLabelText("模型"), "fixture-model")
-    await user.click(screen.getByRole("button", { name: "保存服务提供商配置" }))
+    await user.type(screen.getByLabelText("模型列表"), "fixture-model")
+    await user.click(screen.getByRole("button", { name: "添加" }))
+    await user.click(screen.getByRole("button", { name: "保存服务提供商" }))
 
     await waitFor(() => {
-      expect(providerClient.saveProviderProfile).toHaveBeenCalledWith({
+      expect(providerClient.saveProvider).toHaveBeenCalledWith({
+        name: "Fixture provider",
+        protocol: "openai_compatible",
         baseEndpoint: "http://127.0.0.1:7788/v1",
         model: "fixture-model",
+        models: ["fixture-model"],
         apiKey: { action: "remove" },
       })
     })
+    await user.click(
+      screen.getByRole("button", { name: "设为全局默认：Fixture provider" }),
+    )
 
     await user.click(screen.getByRole("button", { name: "关闭" }))
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
@@ -1557,7 +1595,12 @@ describe("ConversationWorkspace", () => {
 
     // 1. During streaming: textarea editable, Cancel button active, Send hidden
     act(() => {
-      seedGenerationRun({ ...run, phase: "streaming", content: "STREAM_TEXT" })
+      seedGenerationRun({
+        ...run,
+        phase: "streaming",
+        content: "STREAM_TEXT",
+        thinking: "",
+      })
     })
     expect(composer).toBeEnabled()
     expect(screen.getByRole("button", { name: "取消生成" })).toBeEnabled()
@@ -1704,12 +1747,7 @@ describe("ConversationWorkspace", () => {
 
   it("renders durable '重新生成' on final assistant node, selects user parent and triggers generateFromActivePath with parent ID on click while preserving old assistant and draft", async () => {
     const user = userEvent.setup()
-    providerClient.loadProviderProfile.mockResolvedValue({
-      baseEndpoint: "http://127.0.0.1:7788/v1",
-      model: "fixture-model",
-      hasApiKey: false,
-      updatedAt: 10,
-    })
+    configureActiveProvider()
     providerClient.generateFromActivePath.mockReturnValue(
       new Promise(() => undefined),
     )
@@ -1767,12 +1805,7 @@ describe("ConversationWorkspace", () => {
   })
 
   it("revalidates a durable assistant regeneration action at click time", async () => {
-    providerClient.loadProviderProfile.mockResolvedValue({
-      baseEndpoint: "http://127.0.0.1:7788/v1",
-      model: "fixture-model",
-      hasApiKey: false,
-      updatedAt: 10,
-    })
+    configureActiveProvider()
 
     await useConversationStore
       .getState()
@@ -1792,10 +1825,7 @@ describe("ConversationWorkspace", () => {
     regenerateButton.addEventListener(
       "click",
       () => {
-        useProviderProfileStore.setState({
-          phase: "unconfigured",
-          profile: null,
-        })
+        clearActiveProvider()
       },
       { capture: true, once: true },
     )
@@ -1809,13 +1839,7 @@ describe("ConversationWorkspace", () => {
   })
 
   it("excludes durable '重新生成' from non-final, read-only, invalid, loading, and transient states", async () => {
-    const readyProfile = {
-      baseEndpoint: "http://127.0.0.1:7788/v1",
-      model: "fixture-model",
-      hasApiKey: false,
-      updatedAt: 10,
-    }
-    providerClient.loadProviderProfile.mockResolvedValue(readyProfile)
+    configureActiveProvider()
 
     // 1. The earlier assistant and the final user stay ineligible even when the Provider is ready.
     await useConversationStore
@@ -1845,14 +1869,7 @@ describe("ConversationWorkspace", () => {
     unmount1()
 
     // 2. Provider not ready.
-    providerClient.loadProviderProfile.mockRejectedValueOnce(
-      new ConversationCommandError({
-        code: "not_found",
-        message: "Provider profile not found.",
-        retryable: false,
-      }),
-    )
-    useProviderProfileStore.setState({ phase: "unconfigured", profile: null })
+    clearActiveProvider()
     useConversationStore.getState().selectNode(assistant.id)
     const { unmount: unmount2 } = render(<ConversationWorkspace />)
     const pane2 = screen.getByTestId("conversation-pane")
@@ -1866,11 +1883,7 @@ describe("ConversationWorkspace", () => {
     ).not.toBeInTheDocument()
     unmount2()
 
-    providerClient.loadProviderProfile.mockResolvedValue(readyProfile)
-    useProviderProfileStore.setState({
-      phase: "ready",
-      profile: readyProfile,
-    })
+    configureActiveProvider()
 
     // 3. Archived conversation.
     client.loadConversationTree.mockResolvedValueOnce({
@@ -1908,6 +1921,7 @@ describe("ConversationWorkspace", () => {
         generationId: "gen-active",
         model: "fixture-model",
         phase: "streaming",
+        thinking: "",
         content: "STREAMING_TEXT",
       })
     })

@@ -167,3 +167,42 @@ let node = persistence.append_completed_assistant(assistant_node(content)).await
 Only a validated branch reaches HTTP, deltas remain transient, and the
 finalization transition protects the immutable assistant transaction from a
 late cancellation.
+
+## 8. Multi-provider conventions (2026-08-17, task 08-16-multi-provider)
+
+- Providers are rows keyed by uuid (the migrated legacy row keeps id
+  `'default'`); the global default lives in `app_settings` under
+  `active_provider_id`. Deleting the active provider clears the setting —
+  never auto-promote a successor: an explicit unconfigured state beats a
+  silent endpoint switch.
+- Providers persist a `models` JSON list (1..=50, order-preserving dedup; the
+  default model must be a member — `validate_models`). The conversation picker
+  reads this list offline and never fetches; only the settings dialog fetches
+  (manual button, draft source) to let the user add entries.
+- Conversations carry `(provider_id, model)` as one binding plus an
+  independent `reasoning_effort` column. FK is `ON DELETE SET NULL`; when the
+  binding is NULL the leftover `model` value must be ignored (it belonged to
+  the deleted provider) — see `prepare_generation`.
+- Generation snapshots everything at prepare time (provider, model, effort,
+  endpoint, secret, protocol client). Config edits, binding switches, and
+  even deleting the in-flight provider never affect a running generation;
+  changes apply from the next message. UI must not lock settings while
+  streaming.
+- Protocol dispatch is a static `match` on `Protocol` (openai_compatible |
+  anthropic) — no trait objects while there are only two variants. Adding a
+  protocol = new module + enum variant + the two matches.
+- Anthropic: thinking is always on; `reasoning_effort` maps to a
+  budget/max_tokens ladder (None 2048/8192, low 1024/5120, medium 4096/8192,
+  high 16384/20480 — `budget_tokens + 4096` rule in anthropic.rs). OpenAI
+  compatible: `reasoning_effort` is sent only when the user selected a tier
+  (`skip_serializing_if`) — unselected means the field is absent, so strict
+  providers never 400.
+- `save` uses a staging row (new attrs + old credential_ref) because the
+  credential-operation journal schema cannot replay name/protocol changes;
+  reconcile moves `credential_ref` only after the keyring write is verified.
+  Invariant kept: every DB credential_ref exists in the keyring. If a replace
+  write fails, the new attributes survive with the old key instead of rolling
+  the whole profile back.
+- Thinking streams on a separate callback channel (`on_thinking`), surfaces as
+  a `thinking_delta` event with its own 1MB budget, and persists into
+  `nodes.metadata.thinking` only when non-empty.

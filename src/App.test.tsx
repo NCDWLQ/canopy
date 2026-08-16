@@ -7,13 +7,8 @@ vi.mock("@/lib/tauri", () => ({
     listConversations: () => Promise.resolve([]),
   }),
   createProviderClient: () => ({
-    loadProviderProfile: () =>
-      Promise.resolve({
-        baseEndpoint: "http://127.0.0.1:7788/v1",
-        model: "fixture-model",
-        hasApiKey: false,
-        updatedAt: 1,
-      }),
+    listProviders: () =>
+      Promise.resolve({ providers: [], activeProviderId: null }),
   }),
 }))
 

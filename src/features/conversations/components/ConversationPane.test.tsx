@@ -301,7 +301,11 @@ describe("ConversationPane", () => {
         <ConversationPane
           {...props}
           path={[user1, assistant1, user2]}
-          transientGeneration={{ phase: "streaming", content: "PARTIAL" }}
+          transientGeneration={{
+            phase: "streaming",
+            content: "PARTIAL",
+            thinking: "",
+          }}
         />,
       )
       expect(scrollIntoView).toHaveBeenCalledTimes(3)
@@ -310,7 +314,11 @@ describe("ConversationPane", () => {
         <ConversationPane
           {...props}
           path={[user1, assistant1, user2]}
-          transientGeneration={{ phase: "streaming", content: "PARTIAL_GROWN" }}
+          transientGeneration={{
+            phase: "streaming",
+            content: "PARTIAL_GROWN",
+            thinking: "",
+          }}
         />,
       )
       expect(scrollIntoView).toHaveBeenCalledTimes(4)

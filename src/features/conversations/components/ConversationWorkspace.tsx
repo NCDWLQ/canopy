@@ -39,7 +39,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { GlobalSettingsDialog } from "@/features/providers/components"
-import { useProviderProfileStore } from "@/features/providers/store"
+import { ConversationProviderPicker } from "./ConversationProviderPicker"
+import { useProviderStore } from "@/features/providers/store"
 import {
   createConversationClient,
   createProviderClient,
@@ -117,15 +118,16 @@ export function ConversationWorkspace({
     () => injectedProviderClient ?? createProviderClient(),
     [injectedProviderClient],
   )
-  const loadProviderProfile = useProviderProfileStore(
-    (state) => state.loadProfile,
-  )
-  const providerPhase = useProviderProfileStore((state) => state.phase)
+  const loadProviders = useProviderStore((state) => state.loadProviders)
+  const providerPhase = useProviderStore((state) => state.phase)
   const store = useConversationStore(
     useShallow((state) => ({
       conversationId: state.conversationId,
       isCreatingConversation: state.isCreatingConversation,
       isArchived: state.isArchived,
+      providerId: state.providerId,
+      model: state.model,
+      reasoningEffort: state.reasoningEffort,
       rootNodeId: state.rootNodeId,
       activeNodeId: state.activeNodeId,
       nodesById: state.nodesById,
@@ -157,8 +159,8 @@ export function ConversationWorkspace({
   )
 
   React.useEffect(() => {
-    void loadProviderProfile(providerClient)
-  }, [loadProviderProfile, providerClient])
+    void loadProviders(providerClient)
+  }, [loadProviders, providerClient])
 
   React.useEffect(() => {
     void initializeHistory(client)
@@ -187,6 +189,7 @@ export function ConversationWorkspace({
         return {
           phase: "streaming" as const,
           content: currentRun.content,
+          thinking: currentRun.thinking,
         }
       case "failed":
         return currentRun.failureKind === "generation"
@@ -268,7 +271,7 @@ export function ConversationWorkspace({
   }
 
   const handleRegenerateAssistant = (assistantNodeId: string) => {
-    if (useProviderProfileStore.getState().phase !== "ready") return
+    if (useProviderStore.getState().phase !== "ready") return
 
     const target = resolveAssistantRegenerationTarget(
       useConversationStore.getState(),
@@ -476,7 +479,6 @@ export function ConversationWorkspace({
           <GlobalSettingsDialog
             client={providerClient}
             readOnly={!isBlankConversation && store.isArchived}
-            generationActive={activeRunIds.size > 0}
             open={isSettingsOpen}
             onOpenChange={setIsSettingsOpen}
           />
@@ -528,6 +530,16 @@ export function ConversationWorkspace({
                 <Archive data-icon="inline-start" />
                 已归档 — 只读
               </Badge>
+            )}
+            {!isBlankConversation && store.conversationId !== null && (
+              <ConversationProviderPicker
+                conversationClient={client}
+                providerId={store.providerId}
+                model={store.model}
+                reasoningEffort={store.reasoningEffort}
+                readOnly={store.isArchived}
+                onManageProviders={() => setIsSettingsOpen(true)}
+              />
             )}
           </div>
         </header>

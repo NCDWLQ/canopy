@@ -1,8 +1,8 @@
 use canopy_lib::providers::commands::{
-    CancelGenerationRequest, CancelGenerationResult, DeleteProviderProfileRequest,
-    DeleteProviderProfileResult, GenerateFromActivePathRequest, GenerationEventDto,
-    GenerationTerminalDto, LoadProviderProfileRequest, ProviderProfileDto,
-    SaveProviderProfileRequest, PROVIDER_COMMAND_NAMES,
+    CancelGenerationRequest, CancelGenerationResult, DeleteProviderRequest, DeleteProviderResult,
+    GenerateFromActivePathRequest, GenerationEventDto, GenerationTerminalDto,
+    ListProviderModelsRequest, ListProvidersRequest, ListProvidersResult, ProviderDto,
+    SaveProviderRequest, SetActiveProviderRequest, SetActiveProviderResult, PROVIDER_COMMAND_NAMES,
 };
 use serde_json::Value;
 
@@ -23,27 +23,44 @@ fn shared_provider_fixture_round_trips_rust_wire_types() {
             assert_eq!(serde_json::to_value(decoded).unwrap(), value);
         }};
     }
-    request!("save_provider_profile", SaveProviderProfileRequest);
-    request!("load_provider_profile", LoadProviderProfileRequest);
-    request!("delete_provider_profile", DeleteProviderProfileRequest);
+    request!("list_providers", ListProvidersRequest);
+    request!("save_provider", SaveProviderRequest);
+    request!("delete_provider", DeleteProviderRequest);
+    request!("set_active_provider", SetActiveProviderRequest);
+    request!("list_provider_models", ListProviderModelsRequest);
     request!("generate_from_active_path", GenerateFromActivePathRequest);
     request!("cancel_generation", CancelGenerationRequest);
 
-    for name in ["profile_without_key", "profile_with_key"] {
-        let value = fixture["successes"][name].clone();
-        let dto: ProviderProfileDto = serde_json::from_value(value.clone()).unwrap();
-        assert_eq!(serde_json::to_value(dto).unwrap(), value);
-    }
-    for (name, ty) in [("delete", "delete"), ("cancel", "cancel")] {
-        let value = fixture["successes"][name].clone();
-        if ty == "delete" {
-            let dto: DeleteProviderProfileResult = serde_json::from_value(value.clone()).unwrap();
-            assert_eq!(serde_json::to_value(dto).unwrap(), value);
-        } else {
-            let dto: CancelGenerationResult = serde_json::from_value(value.clone()).unwrap();
-            assert_eq!(serde_json::to_value(dto).unwrap(), value);
-        }
-    }
+    let provider: ProviderDto =
+        serde_json::from_value(fixture["successes"]["provider"].clone()).unwrap();
+    assert_eq!(
+        serde_json::to_value(provider).unwrap(),
+        fixture["successes"]["provider"]
+    );
+    let listed: ListProvidersResult =
+        serde_json::from_value(fixture["successes"]["providers"].clone()).unwrap();
+    assert_eq!(
+        serde_json::to_value(listed).unwrap(),
+        fixture["successes"]["providers"]
+    );
+    let deleted: DeleteProviderResult =
+        serde_json::from_value(fixture["successes"]["delete"].clone()).unwrap();
+    assert_eq!(
+        serde_json::to_value(deleted).unwrap(),
+        fixture["successes"]["delete"]
+    );
+    let active: SetActiveProviderResult =
+        serde_json::from_value(fixture["successes"]["active"].clone()).unwrap();
+    assert_eq!(
+        serde_json::to_value(active).unwrap(),
+        fixture["successes"]["active"]
+    );
+    let cancelled: CancelGenerationResult =
+        serde_json::from_value(fixture["successes"]["cancel"].clone()).unwrap();
+    assert_eq!(
+        serde_json::to_value(cancelled).unwrap(),
+        fixture["successes"]["cancel"]
+    );
 
     let completed = fixture["successes"]["generation_completed"].clone();
     let terminal: GenerationTerminalDto = serde_json::from_value(completed.clone()).unwrap();

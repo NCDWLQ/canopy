@@ -4,7 +4,7 @@ use sqlx::SqlitePool;
 
 use super::{
     repository::ConversationRepository, Conversation, ConversationSummary, ConversationTree,
-    NewConversation, NewNode, Node, PersistenceError, Role, ValidatedPath,
+    NewConversation, NewNode, Node, PersistenceError, ReasoningEffort, Role, ValidatedPath,
 };
 
 const MAX_GENERATED_CONTENT_BYTES: usize = 1024 * 1024;
@@ -253,6 +253,35 @@ impl ConversationPersistenceService {
         }
         transaction.commit().await?;
         Ok((conversation, path))
+    }
+
+    pub async fn set_provider_binding(
+        &self,
+        conversation_id: &str,
+        provider_id: Option<String>,
+        model: Option<String>,
+        reasoning_effort: Option<ReasoningEffort>,
+    ) -> Result<Conversation, PersistenceError> {
+        if provider_id.is_some() != model.is_some() {
+            return Err(PersistenceError::invalid_input("set_conversation_provider"));
+        }
+        let mut transaction = self.pool.begin().await?;
+        Self::require_writable_conversation(&mut transaction, conversation_id).await?;
+        if let Some(provider_id) = provider_id.as_deref() {
+            if !ConversationRepository::provider_exists(&mut transaction, provider_id).await? {
+                return Err(PersistenceError::NotFound { entity: "provider" });
+            }
+        }
+        let conversation = ConversationRepository::set_provider_binding(
+            &mut transaction,
+            conversation_id,
+            provider_id.as_deref(),
+            model.as_deref(),
+            reasoning_effort,
+        )
+        .await?;
+        transaction.commit().await?;
+        Ok(conversation)
     }
 
     pub async fn append_completed_assistant(

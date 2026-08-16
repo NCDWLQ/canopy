@@ -5,8 +5,8 @@ mod repository;
 mod service;
 
 pub use domain::{
-    Conversation, ConversationSummary, ConversationTree, NewConversation, NewNode, Node, Role,
-    UnknownRole, ValidatedPath,
+    Conversation, ConversationSummary, ConversationTree, NewConversation, NewNode, Node,
+    ReasoningEffort, Role, UnknownRole, ValidatedPath,
 };
 pub use error::PersistenceError;
 pub use service::ConversationPersistenceService;

@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 import { AssistantMarkdown } from "./AssistantMarkdown"
 import { MessageBubble } from "./MessageBubble"
+import { ThinkingBlock } from "./ThinkingBlock"
 import type { PathMessageView } from "../types"
 import { Button } from "@/components/ui/button"
 
@@ -256,7 +257,12 @@ export function MessageNode({
           </div>
         </div>
       ) : message.role === "assistant" ? (
-        <AssistantMarkdown content={message.content} />
+        <>
+          {message.thinking !== undefined && (
+            <ThinkingBlock thinking={message.thinking} streaming={false} />
+          )}
+          <AssistantMarkdown content={message.content} />
+        </>
       ) : (
         <div className="whitespace-pre-wrap break-words text-sm text-foreground">
           {message.content}

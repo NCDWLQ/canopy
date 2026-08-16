@@ -12,9 +12,11 @@ use tokio_util::sync::CancellationToken;
 
 use crate::conversations::{Role, ValidatedPath};
 
+use crate::conversations::ReasoningEffort;
+
 use super::{domain::validate_model, ProviderError, ValidatedEndpoint};
 
-const MAX_RESPONSE_BYTES: usize = 1024 * 1024;
+pub(crate) const MAX_RESPONSE_BYTES: usize = 1024 * 1024;
 static HTTP_CLIENT: OnceLock<Client> = OnceLock::new();
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -28,11 +30,14 @@ pub struct ChatCompletionRequest {
     model: String,
     messages: Vec<ChatMessage>,
     stream: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reasoning_effort: Option<&'static str>,
 }
 
 pub fn build_request(
     path: &ValidatedPath,
     model: &str,
+    reasoning_effort: Option<ReasoningEffort>,
 ) -> Result<ChatCompletionRequest, ProviderError> {
     let model = validate_model(model)?;
     let nodes = path.as_slice();
@@ -72,7 +77,26 @@ pub fn build_request(
         model,
         messages,
         stream: true,
+        reasoning_effort: reasoning_effort.map(ReasoningEffort::as_str),
     })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GeneratedContent {
+    pub content: String,
+    pub thinking: Option<String>,
+}
+
+/// Immutable provider inputs captured at generation prepare time. Protocol
+/// implementations only borrow this snapshot, so edits to provider settings
+/// or conversation binding cannot alter an in-flight request.
+pub struct StreamingRequest<'a> {
+    pub endpoint: &'a ValidatedEndpoint,
+    pub path: &'a ValidatedPath,
+    pub model: &'a str,
+    pub secret: Option<&'a SecretString>,
+    pub cancellation: &'a CancellationToken,
+    pub reasoning_effort: Option<ReasoningEffort>,
 }
 
 #[derive(Debug, Clone)]
@@ -101,6 +125,10 @@ impl OpenAiCompatibleClient {
         })
     }
 
+    pub(crate) fn http_client(&self) -> &Client {
+        &self.client
+    }
+
     pub async fn stream<F>(
         &self,
         endpoint: &ValidatedEndpoint,
@@ -108,21 +136,48 @@ impl OpenAiCompatibleClient {
         model: &str,
         secret: Option<&SecretString>,
         cancellation: &CancellationToken,
-        mut on_delta: F,
+        on_delta: F,
     ) -> Result<String, ProviderError>
     where
         F: FnMut(&str) -> Result<(), ProviderError>,
     {
-        let request = build_request(path, model)?;
+        let request = StreamingRequest {
+            endpoint,
+            path,
+            model,
+            secret,
+            cancellation,
+            reasoning_effort: None,
+        };
+        self.stream_with_thinking(request, on_delta, |_| Ok(()))
+            .await
+            .map(|generated| generated.content)
+    }
+
+    pub async fn stream_with_thinking<F, T>(
+        &self,
+        request: StreamingRequest<'_>,
+        mut on_delta: F,
+        mut on_thinking: T,
+    ) -> Result<GeneratedContent, ProviderError>
+    where
+        F: FnMut(&str) -> Result<(), ProviderError>,
+        T: FnMut(&str) -> Result<(), ProviderError>,
+    {
+        let body = build_request(request.path, request.model, request.reasoning_effort)?;
         let mut builder = self
             .client
-            .post(endpoint.chat_completions_url().clone())
-            .json(&request);
-        if let Some(secret) = secret {
+            .post(request.endpoint.chat_completions_url().clone())
+            .json(&body);
+        if let Some(secret) = request.secret {
             builder = builder.bearer_auth(secret.expose_secret());
         }
 
-        let response = match select(cancellation.cancelled().boxed(), builder.send().boxed()).await
+        let response = match select(
+            request.cancellation.cancelled().boxed(),
+            builder.send().boxed(),
+        )
+        .await
         {
             Either::Left(_) => return Err(ProviderError::Cancelled),
             Either::Right((response, _)) => response.map_err(map_transport_error)?,
@@ -134,10 +189,16 @@ impl OpenAiCompatibleClient {
         let events = response.bytes_stream().eventsource();
         pin_mut!(events);
         let mut content = String::new();
+        let mut thinking = String::new();
         let mut finished = false;
         let mut done = false;
         loop {
-            let next = match select(cancellation.cancelled().boxed(), events.next().boxed()).await {
+            let next = match select(
+                request.cancellation.cancelled().boxed(),
+                events.next().boxed(),
+            )
+            .await
+            {
                 Either::Left(_) => return Err(ProviderError::Cancelled),
                 Either::Right((event, _)) => event,
             };
@@ -168,6 +229,20 @@ impl OpenAiCompatibleClient {
                     content.push_str(delta);
                 }
             }
+            if let Some(delta) = choice
+                .delta
+                .reasoning_content
+                .as_deref()
+                .or(choice.delta.reasoning.as_deref())
+            {
+                if thinking.len().saturating_add(delta.len()) > MAX_RESPONSE_BYTES {
+                    return Err(ProviderError::Protocol);
+                }
+                if !delta.is_empty() {
+                    on_thinking(delta)?;
+                    thinking.push_str(delta);
+                }
+            }
             if let Some(reason) = choice.finish_reason.as_deref() {
                 if reason != "stop" {
                     return Err(ProviderError::Protocol);
@@ -179,11 +254,14 @@ impl OpenAiCompatibleClient {
         if !done || !finished || content.trim().is_empty() {
             return Err(ProviderError::Protocol);
         }
-        Ok(content)
+        Ok(GeneratedContent {
+            content,
+            thinking: (!thinking.is_empty()).then_some(thinking),
+        })
     }
 }
 
-fn map_transport_error(_: reqwest::Error) -> ProviderError {
+pub(crate) fn map_transport_error(_: reqwest::Error) -> ProviderError {
     // Endpoint, model, and credential inputs have already passed the local
     // boundary before `send`. Reqwest's error categories overlap for early
     // peer disconnects (they can be both builder and decode errors), so every
@@ -192,7 +270,10 @@ fn map_transport_error(_: reqwest::Error) -> ProviderError {
     ProviderError::Network
 }
 
-fn map_status(status: StatusCode, headers: &reqwest::header::HeaderMap) -> ProviderError {
+pub(crate) fn map_status(
+    status: StatusCode,
+    headers: &reqwest::header::HeaderMap,
+) -> ProviderError {
     match status.as_u16() {
         401 | 403 => ProviderError::Authentication,
         429 => ProviderError::RateLimited {
@@ -228,13 +309,17 @@ struct StreamChoice {
 struct StreamDelta {
     #[serde(default)]
     content: Option<String>,
+    #[serde(default)]
+    reasoning_content: Option<String>,
+    #[serde(default)]
+    reasoning: Option<String>,
 }
 
 #[cfg(test)]
 mod tests {
     use serde_json::json;
 
-    use crate::conversations::{NewNode, Node, Role, ValidatedPath};
+    use crate::conversations::{NewNode, Node, ReasoningEffort, Role, ValidatedPath};
 
     use super::build_request;
 
@@ -273,7 +358,8 @@ mod tests {
                 "SELECTED_SENTINEL",
             ),
         ]);
-        let request = serde_json::to_value(build_request(&path, "fixture-model").unwrap()).unwrap();
+        let request =
+            serde_json::to_value(build_request(&path, "fixture-model", None).unwrap()).unwrap();
         assert_eq!(
             request,
             json!({
@@ -292,11 +378,30 @@ mod tests {
     #[test]
     fn tool_and_non_user_terminal_paths_are_rejected() {
         let tool_path = ValidatedPath::new(vec![node("tool", None, Role::Tool, "tool")]);
-        assert!(build_request(&tool_path, "model").is_err());
+        assert!(build_request(&tool_path, "model", None).is_err());
         let assistant_path =
             ValidatedPath::new(vec![node("assistant", None, Role::Assistant, "answer")]);
-        assert!(build_request(&assistant_path, "model").is_err());
+        assert!(build_request(&assistant_path, "model", None).is_err());
         let user_path = ValidatedPath::new(vec![node("user", None, Role::User, "question")]);
-        assert!(build_request(&user_path, &"m".repeat(201)).is_err());
+        assert!(build_request(&user_path, &"m".repeat(201), None).is_err());
+    }
+
+    #[test]
+    fn reasoning_effort_is_carried_only_when_selected() {
+        let path = ValidatedPath::new(vec![node("user", None, Role::User, "question")]);
+        let unselected =
+            serde_json::to_value(build_request(&path, "fixture-model", None).unwrap()).unwrap();
+        assert!(unselected.get("reasoning_effort").is_none());
+
+        for (effort, expected) in [
+            (ReasoningEffort::Low, "low"),
+            (ReasoningEffort::Medium, "medium"),
+            (ReasoningEffort::High, "high"),
+        ] {
+            let request =
+                serde_json::to_value(build_request(&path, "fixture-model", Some(effort)).unwrap())
+                    .unwrap();
+            assert_eq!(request["reasoning_effort"], expected);
+        }
     }
 }

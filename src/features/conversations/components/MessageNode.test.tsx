@@ -100,6 +100,24 @@ describe("MessageNode", () => {
     ).not.toBeInTheDocument()
   })
 
+  it("renders persisted assistant thinking collapsed by default", async () => {
+    const user = userEvent.setup()
+    render(
+      <MessageNode
+        message={{ ...assistantMessage, thinking: "THINKING_SENTINEL" }}
+        canBranch={false}
+        canEdit={false}
+        onCreateBranch={vi.fn()}
+        onEditAsBranch={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText("思考过程")).toBeVisible()
+    expect(screen.queryByText("THINKING_SENTINEL")).not.toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "思考过程" }))
+    expect(screen.getByText("THINKING_SENTINEL")).toBeVisible()
+  })
+
   it("hides generation action when entering edit mode", async () => {
     const user = userEvent.setup()
     render(

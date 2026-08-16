@@ -18,6 +18,7 @@ fn register_conversation_commands<R: tauri::Runtime>(
         conversations::commands::load_conversation_tree,
         conversations::commands::load_active_path,
         conversations::commands::archive_conversation,
+        conversations::commands::set_conversation_provider,
     ])
 }
 
@@ -31,11 +32,14 @@ fn register_commands<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Bu
         conversations::commands::load_conversation_tree,
         conversations::commands::load_active_path,
         conversations::commands::archive_conversation,
-        providers::commands::save_provider_profile,
-        providers::commands::load_provider_profile,
-        providers::commands::delete_provider_profile,
+        conversations::commands::set_conversation_provider,
+        providers::commands::list_providers,
+        providers::commands::save_provider,
+        providers::commands::delete_provider,
+        providers::commands::set_active_provider,
         providers::commands::generate_from_active_path,
         providers::commands::cancel_generation,
+        providers::commands::list_provider_models,
     ])
 }
 

@@ -12,21 +12,66 @@ use crate::{
     error::CommandError,
 };
 
+use super::model_list::{list_models, ModelSummary};
 use super::{
     generation::{prepare_generation, GenerationOutcome, GenerationStage},
-    ApiKeyAction, GenerationRuntime, NativeCredentialStore, ProviderError, ProviderProfileInput,
-    ProviderProfileService, RedactedProviderProfile,
+    ApiKeyAction, GenerationRuntime, NativeCredentialStore, Protocol, ProviderError, ProviderInput,
+    ProviderService, RedactedProvider,
 };
 
 pub const PROVIDER_COMMAND_NAMES: &[&str] = &[
-    "save_provider_profile",
-    "load_provider_profile",
-    "delete_provider_profile",
+    "list_providers",
+    "save_provider",
+    "delete_provider",
+    "set_active_provider",
+    "list_provider_models",
     "generate_from_active_path",
     "cancel_generation",
 ];
 
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+pub enum ModelListSourceRequest {
+    Saved {
+        provider_id: String,
+    },
+    Draft {
+        protocol: String,
+        base_endpoint: String,
+        api_key: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct ListProviderModelsRequest {
+    pub source: ModelListSourceRequest,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct ModelSummaryDto {
+    pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct ListProviderModelsResult {
+    pub models: Vec<ModelSummaryDto>,
+}
+
+impl From<ModelSummary> for ModelSummaryDto {
+    fn from(model: ModelSummary) -> Self {
+        Self {
+            id: model.id,
+            display_name: model.display_name,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ApiKeyActionDto {
     Keep,
@@ -34,35 +79,77 @@ pub enum ApiKeyActionDto {
     Remove,
 }
 
-#[derive(Deserialize, Serialize)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct SaveProviderProfileRequest {
-    pub base_endpoint: String,
-    pub model: String,
-    pub api_key: ApiKeyActionDto,
+impl From<ApiKeyActionDto> for ApiKeyAction {
+    fn from(action: ApiKeyActionDto) -> Self {
+        match action {
+            ApiKeyActionDto::Keep => Self::Keep,
+            ApiKeyActionDto::Replace { value } => Self::Replace(SecretString::from(value)),
+            ApiKeyActionDto::Remove => Self::Remove,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct LoadProviderProfileRequest {}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Default)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct DeleteProviderProfileRequest {}
+pub struct ListProvidersRequest {}
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct ProviderProfileDto {
+pub struct SaveProviderRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    pub name: String,
+    pub protocol: String,
     pub base_endpoint: String,
     pub model: String,
+    pub models: Vec<String>,
+    pub api_key: ApiKeyActionDto,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct DeleteProviderRequest {
+    pub provider_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct SetActiveProviderRequest {
+    pub provider_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct ProviderDto {
+    pub id: String,
+    pub name: String,
+    pub protocol: String,
+    pub base_endpoint: String,
+    pub model: String,
+    pub models: Vec<String>,
     pub has_api_key: bool,
+    pub created_at: i64,
     pub updated_at: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct DeleteProviderProfileResult {
+pub struct ListProvidersResult {
+    pub providers: Vec<ProviderDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_provider_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct DeleteProviderResult {
     pub deleted: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct SetActiveProviderResult {
+    pub active_provider_id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -106,6 +193,11 @@ pub enum GenerationEventDto {
         generation_id: String,
         content: String,
     },
+    ThinkingDelta {
+        #[serde(deserialize_with = "deserialize_uuid_v4")]
+        generation_id: String,
+        content: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -128,79 +220,148 @@ pub enum GenerationTerminalDto {
     },
 }
 
-impl From<RedactedProviderProfile> for ProviderProfileDto {
-    fn from(profile: RedactedProviderProfile) -> Self {
+impl From<RedactedProvider> for ProviderDto {
+    fn from(provider: RedactedProvider) -> Self {
         Self {
-            base_endpoint: profile.base_endpoint,
-            model: profile.model,
-            has_api_key: profile.has_api_key,
-            updated_at: profile.updated_at,
+            id: provider.id,
+            name: provider.name,
+            protocol: provider.protocol.as_str().to_owned(),
+            base_endpoint: provider.base_endpoint,
+            model: provider.model,
+            models: provider.models,
+            has_api_key: provider.has_api_key,
+            created_at: provider.created_at,
+            updated_at: provider.updated_at,
         }
     }
 }
 
-fn production_service(pool: sqlx::SqlitePool) -> ProviderProfileService {
-    ProviderProfileService::new(pool, Arc::new(NativeCredentialStore))
+fn production_service(pool: sqlx::SqlitePool) -> ProviderService {
+    ProviderService::new(pool, Arc::new(NativeCredentialStore))
 }
 
 #[tauri::command]
-pub async fn save_provider_profile(
-    request: SaveProviderProfileRequest,
+pub async fn list_providers(
+    _request: ListProvidersRequest,
     instances: State<'_, DbInstances>,
-) -> Result<ProviderProfileDto, CommandError> {
-    let source = SystemIdentityTimeSource;
-    let api_key = match request.api_key {
-        ApiKeyActionDto::Keep => ApiKeyAction::Keep,
-        ApiKeyActionDto::Replace { value } => ApiKeyAction::Replace(SecretString::from(value)),
-        ApiKeyActionDto::Remove => ApiKeyAction::Remove,
-    };
+) -> Result<ListProvidersResult, CommandError> {
     let pool = managed_sqlite_pool(instances.inner())
         .await
         .map_err(CommandError::from)?;
-    production_service(pool)
+    let (providers, active_provider_id) = production_service(pool)
+        .list_providers()
+        .await
+        .map_err(CommandError::from)?;
+    Ok(ListProvidersResult {
+        providers: providers.into_iter().map(ProviderDto::from).collect(),
+        active_provider_id,
+    })
+}
+
+#[tauri::command]
+pub async fn save_provider(
+    request: SaveProviderRequest,
+    instances: State<'_, DbInstances>,
+) -> Result<ProviderDto, CommandError> {
+    let source = SystemIdentityTimeSource;
+    let provider_id = request.id.unwrap_or_else(|| Uuid::new_v4().to_string());
+    validate_id("id", &provider_id)?;
+    let protocol = Protocol::from_db_text(&request.protocol).map_err(CommandError::from)?;
+    let pool = managed_sqlite_pool(instances.inner())
+        .await
+        .map_err(CommandError::from)?;
+    let service = production_service(pool);
+    service
         .save(
-            ProviderProfileInput {
+            &provider_id,
+            ProviderInput {
+                name: request.name,
+                protocol,
                 base_endpoint: request.base_endpoint,
                 model: request.model,
-                api_key,
+                models: request.models,
+                api_key: request.api_key.into(),
             },
             Uuid::new_v4().to_string(),
             Uuid::new_v4().to_string(),
             source.now_millis(),
         )
         .await
-        .map(ProviderProfileDto::from)
+        .map(ProviderDto::from)
         .map_err(CommandError::from)
 }
 
 #[tauri::command]
-pub async fn load_provider_profile(
-    _request: LoadProviderProfileRequest,
+pub async fn delete_provider(
+    request: DeleteProviderRequest,
     instances: State<'_, DbInstances>,
-) -> Result<ProviderProfileDto, CommandError> {
+) -> Result<DeleteProviderResult, CommandError> {
+    validate_id("provider_id", &request.provider_id)?;
     let pool = managed_sqlite_pool(instances.inner())
         .await
         .map_err(CommandError::from)?;
     production_service(pool)
-        .load()
+        .delete(&request.provider_id, Uuid::new_v4().to_string())
         .await
-        .map(ProviderProfileDto::from)
+        .map(|deleted| DeleteProviderResult { deleted })
         .map_err(CommandError::from)
 }
 
 #[tauri::command]
-pub async fn delete_provider_profile(
-    _request: DeleteProviderProfileRequest,
+pub async fn set_active_provider(
+    request: SetActiveProviderRequest,
     instances: State<'_, DbInstances>,
-) -> Result<DeleteProviderProfileResult, CommandError> {
+) -> Result<SetActiveProviderResult, CommandError> {
+    validate_id("provider_id", &request.provider_id)?;
     let pool = managed_sqlite_pool(instances.inner())
         .await
         .map_err(CommandError::from)?;
     production_service(pool)
-        .delete(Uuid::new_v4().to_string())
+        .set_active(&request.provider_id)
         .await
-        .map(|deleted| DeleteProviderProfileResult { deleted })
+        .map(|active_provider_id| SetActiveProviderResult { active_provider_id })
         .map_err(CommandError::from)
+}
+
+#[tauri::command]
+pub async fn list_provider_models(
+    request: ListProviderModelsRequest,
+    instances: State<'_, DbInstances>,
+) -> Result<ListProviderModelsResult, CommandError> {
+    let pool = managed_sqlite_pool(instances.inner())
+        .await
+        .map_err(CommandError::from)?;
+    let service = production_service(pool);
+    let models = match request.source {
+        ModelListSourceRequest::Saved { provider_id } => {
+            validate_id("provider_id", &provider_id)?;
+            let (provider, secret) = service
+                .load_by_id_with_secret(&provider_id)
+                .await
+                .map_err(CommandError::from)?;
+            let endpoint =
+                super::ValidatedEndpoint::parse(&provider.base_endpoint, provider.protocol)
+                    .map_err(CommandError::from)?;
+            list_models(provider.protocol, &endpoint, secret.as_ref()).await
+        }
+        ModelListSourceRequest::Draft {
+            protocol,
+            base_endpoint,
+            api_key,
+        } => {
+            let protocol = Protocol::from_db_text(&protocol).map_err(CommandError::from)?;
+            let endpoint = super::ValidatedEndpoint::parse(&base_endpoint, protocol)
+                .map_err(CommandError::from)?;
+            let secret = api_key
+                .filter(|key| !key.is_empty())
+                .map(SecretString::from);
+            list_models(protocol, &endpoint, secret.as_ref()).await
+        }
+    }
+    .map_err(CommandError::from)?;
+    Ok(ListProviderModelsResult {
+        models: models.into_iter().map(ModelSummaryDto::from).collect(),
+    })
 }
 
 #[tauri::command]
@@ -241,15 +402,27 @@ pub async fn generate_from_active_path(
 
     let delta_channel = on_event.clone();
     let delta_generation_id = generation_id.clone();
+    let thinking_channel = on_event.clone();
+    let thinking_generation_id = generation_id.clone();
     let run_result = prepared
-        .run(move |content| {
-            delta_channel
-                .send(GenerationEventDto::Delta {
-                    generation_id: delta_generation_id.clone(),
-                    content: content.to_owned(),
-                })
-                .map_err(|_| ProviderError::Cancelled)
-        })
+        .run(
+            move |content| {
+                delta_channel
+                    .send(GenerationEventDto::Delta {
+                        generation_id: delta_generation_id.clone(),
+                        content: content.to_owned(),
+                    })
+                    .map_err(|_| ProviderError::Cancelled)
+            },
+            move |content| {
+                thinking_channel
+                    .send(GenerationEventDto::ThinkingDelta {
+                        generation_id: thinking_generation_id.clone(),
+                        content: content.to_owned(),
+                    })
+                    .map_err(|_| ProviderError::Cancelled)
+            },
+        )
         .await;
 
     Ok(match run_result.outcome {
