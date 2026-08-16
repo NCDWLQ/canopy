@@ -23,6 +23,8 @@
   "relatedFiles": [],
   "notes": "",
   "meta": {
-    "worktree_path": "/home/jwh/Code/canopy-archive-row"
+    "worktree_path": "/home/jwh/Code/canopy-archive-row",
+    "pr_url": "https://github.com/NCDWLQ/canopy/pull/1",
+    "commit": "45afd07"
   }
 }
