@@ -23,11 +23,15 @@ fn configure_webview_renderer() {
         std::env::set_var("GDK_BACKEND", "wayland");
     }
 
-    // WebKitGTK's DMA-BUF renderer can fail to allocate a GBM buffer on some
-    // Linux GPU/driver combinations, leaving the AppImage window blank. This
-    // must be configured before Tauri initializes GTK and its webview runtime.
-    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
-        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    // NVIDIA's proprietary EGL violates the Wayland explicit-sync protocol,
+    // crashing the webview at startup with "Gdk-Message: Error 71 (Protocol
+    // error)". Disabling explicit sync avoids the crash while keeping
+    // WebKitGTK's DMA-BUF renderer (GPU compositing) enabled; the variable
+    // has no effect on non-NVIDIA setups. Machines where DMA-BUF itself
+    // cannot allocate buffers can still export
+    // WEBKIT_DISABLE_DMABUF_RENDERER=1 as a manual fallback.
+    if std::env::var_os("__NV_DISABLE_EXPLICIT_SYNC").is_none() {
+        std::env::set_var("__NV_DISABLE_EXPLICIT_SYNC", "1");
     }
 }
 
