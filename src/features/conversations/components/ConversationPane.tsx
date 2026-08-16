@@ -153,6 +153,11 @@ export function ConversationPane({
     transientGeneration !== null && "content" in transientGeneration
       ? transientGeneration.content
       : ""
+  // `path` is rebuilt with a fresh array identity on unrelated store updates
+  // (e.g. background generation deltas in another conversation), so scrolling
+  // must key on the displayed tail's content, not on the array reference.
+  const lastMessage = path.at(-1)
+  const pathScrollKey = `${path.length}|${lastMessage?.id ?? ""}|${lastMessage?.content ?? ""}`
 
   React.useEffect(() => {
     if (status === "ready" || status === "streaming") {
@@ -163,7 +168,7 @@ export function ConversationPane({
         behavior: reducedMotion ? "auto" : "smooth",
       })
     }
-  }, [path, status, transientContent, transientGeneration?.phase])
+  }, [pathScrollKey, status, transientContent, transientGeneration?.phase])
 
   if (status === "loading" && path.length === 0) {
     return (

@@ -4,6 +4,7 @@ import {
   Edit2,
   X,
   Check,
+  Copy,
   Sparkles,
   Settings2,
   RefreshCw,
@@ -46,8 +47,10 @@ export function MessageNode({
   const [editContent, setEditContent] = React.useState(message.content)
   const [isBranching, setIsBranching] = React.useState(false)
   const [branchContent, setBranchContent] = React.useState("")
+  const [isCopied, setIsCopied] = React.useState(false)
   const editInputRef = React.useRef<HTMLTextAreaElement>(null)
   const branchInputRef = React.useRef<HTMLTextAreaElement>(null)
+  const copyResetRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
 
   React.useEffect(() => {
     if (isEditing) editInputRef.current?.focus()
@@ -56,6 +59,14 @@ export function MessageNode({
   React.useEffect(() => {
     if (isBranching) branchInputRef.current?.focus()
   }, [isBranching])
+
+  React.useEffect(() => {
+    return () => {
+      if (copyResetRef.current !== null) {
+        clearTimeout(copyResetRef.current)
+      }
+    }
+  }, [])
 
   const handleEditSubmit = () => {
     if (canEdit && editContent.trim()) {
@@ -72,12 +83,26 @@ export function MessageNode({
     }
   }
 
+  const handleCopy = () => {
+    void navigator.clipboard.writeText(message.content).then(
+      () => {
+        setIsCopied(true)
+        if (copyResetRef.current !== null) {
+          clearTimeout(copyResetRef.current)
+        }
+        copyResetRef.current = setTimeout(() => setIsCopied(false), 1500)
+      },
+      () => {},
+    )
+  }
+
   const regenerationAction =
     assistantRegenerationAction?.assistantNodeId === message.id
       ? assistantRegenerationAction
       : undefined
+  const canCopy = message.role === "user" || message.role === "assistant"
   const hasActions =
-    (canEdit || canBranch || regenerationAction !== undefined) &&
+    (canCopy || canEdit || canBranch || regenerationAction !== undefined) &&
     !isEditing &&
     !isBranching
 
@@ -155,6 +180,22 @@ export function MessageNode({
                 onClick={() => setIsBranching(true)}
               >
                 <GitBranch className="size-3.5" aria-hidden="true" />
+              </Button>
+            )}
+            {canCopy && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7 text-muted-foreground hover:text-foreground"
+                title={isCopied ? "已复制" : "复制"}
+                aria-label={isCopied ? "已复制" : "复制"}
+                onClick={handleCopy}
+              >
+                {isCopied ? (
+                  <Check className="size-3.5" aria-hidden="true" />
+                ) : (
+                  <Copy className="size-3.5" aria-hidden="true" />
+                )}
               </Button>
             )}
           </>

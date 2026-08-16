@@ -21,6 +21,23 @@ const assistantMessage: PathMessageView = {
   metadata: null,
 }
 
+const systemMessage: PathMessageView = {
+  id: "system-1",
+  role: "system",
+  content: "SYSTEM_CONTENT_SENTINEL",
+  createdAt: 3,
+  metadata: null,
+}
+
+const stubClipboard = () => {
+  const writeText = vi.fn().mockResolvedValue(undefined)
+  Object.defineProperty(navigator, "clipboard", {
+    value: { writeText },
+    configurable: true,
+  })
+  return writeText
+}
+
 describe("MessageNode", () => {
   it("renders contextual '生成回复' action when provider is ready and triggers onSelect", async () => {
     const user = userEvent.setup()
@@ -141,6 +158,7 @@ describe("MessageNode", () => {
     const regenBtn = screen.getByRole("button", { name: "重新生成" })
     const editBtn = screen.getByRole("button", { name: "编辑为新分支" })
     const branchBtn = screen.getByRole("button", { name: "从此处创建分支" })
+    const copyBtn = screen.getByRole("button", { name: "复制" })
     expect(regenBtn).toBeVisible()
     expect(regenBtn).toHaveAttribute("title", "重新生成")
     expect(regenBtn).toHaveAttribute("aria-label", "重新生成")
@@ -155,6 +173,7 @@ describe("MessageNode", () => {
     expect(regenBtn.querySelector("svg")).toHaveClass("size-3.5")
     expect(regenBtn.className).toBe(editBtn.className)
     expect(regenBtn.className).toBe(branchBtn.className)
+    expect(regenBtn.className).toBe(copyBtn.className)
     expect(regenBtn.parentElement).toHaveClass(
       "opacity-0",
       "group-hover:opacity-100",
@@ -207,6 +226,57 @@ describe("MessageNode", () => {
     await user.click(screen.getByRole("button", { name: "从此处创建分支" }))
     expect(
       screen.queryByRole("button", { name: "重新生成" }),
+    ).not.toBeInTheDocument()
+  })
+
+  it("copies user message content and shows copied feedback", async () => {
+    const user = userEvent.setup()
+    const writeText = stubClipboard()
+    render(
+      <MessageNode
+        message={userMessage}
+        canBranch={false}
+        canEdit={false}
+        onCreateBranch={vi.fn()}
+        onEditAsBranch={vi.fn()}
+      />,
+    )
+
+    await user.click(screen.getByRole("button", { name: "复制" }))
+    expect(writeText).toHaveBeenCalledWith("USER_CONTENT_SENTINEL")
+    expect(await screen.findByRole("button", { name: "已复制" })).toBeVisible()
+  })
+
+  it("copies assistant message content", async () => {
+    const user = userEvent.setup()
+    const writeText = stubClipboard()
+    render(
+      <MessageNode
+        message={assistantMessage}
+        canBranch={false}
+        canEdit={false}
+        onCreateBranch={vi.fn()}
+        onEditAsBranch={vi.fn()}
+      />,
+    )
+
+    await user.click(screen.getByRole("button", { name: "复制" }))
+    expect(writeText).toHaveBeenCalledWith("ASSISTANT_CONTENT_SENTINEL")
+  })
+
+  it("does not render copy action for system messages", () => {
+    render(
+      <MessageNode
+        message={systemMessage}
+        canBranch={false}
+        canEdit={false}
+        onCreateBranch={vi.fn()}
+        onEditAsBranch={vi.fn()}
+      />,
+    )
+
+    expect(
+      screen.queryByRole("button", { name: "复制" }),
     ).not.toBeInTheDocument()
   })
 })
