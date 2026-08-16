@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "后端质量检查清单（测试覆盖、lint、clippy）"}
+{"file": ".trellis/spec/backend/provider-guidelines.md", "reason": "校验实现未偏离 provider 模块既有约定（凭据三态、SSE 严格性、错误映射）"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "前端质量检查清单"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "本任务横跨 DB→命令→DTO→store→UI 五层，按跨层清单核查绑定数据流一致性"}
+{"file": ".trellis/tasks/08-16-multi-provider/research/api-protocols.md", "reason": "核对 anthropic 协议实现与调研中的端点/认证/SSE 格式一致"}
+{"file": ".trellis/tasks/08-16-multi-provider/research/thinking-formats.md", "reason": "核对 thinking 捕获/解析/事件/持久化与调研格式一致（双通道、budget 约束、metadata 存储）"}

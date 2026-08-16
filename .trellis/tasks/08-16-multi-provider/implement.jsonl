@@ -1,0 +1,10 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "后端入口：Pre-Development Checklist 与各指南索引"}
+{"file": ".trellis/spec/backend/provider-guidelines.md", "reason": "provider 模块既有约定（endpoint 校验、凭据三态、SSE 解析、错误映射），本次全面扩展该模块"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "SQLite 迁移与 repository 写法约定，0005 迁移必须遵循"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "ProviderError 分类与命令层错误映射约定"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "前端入口：Pre-Development Checklist 与各指南索引"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "zod DTO 契约与 IPC 边界类型规则，provider-schemas 重写需遵循"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "zustand store 约定（requestEpoch 竞态防护等），providers store 重构需遵循"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "组件约定，设置对话框重构与新 ConversationProviderPicker 需遵循"}
+{"file": ".trellis/tasks/08-16-multi-provider/research/api-protocols.md", "reason": "两协议端点/认证/SSE/模型列表格式调研，anthropic.rs 实现的直接依据"}
+{"file": ".trellis/tasks/08-16-multi-provider/research/thinking-formats.md", "reason": "两协议 thinking 流式格式（reasoning_content/reasoning/thinking_delta）、Anthropic 开启参数与解析要点（PRD R8）"}
