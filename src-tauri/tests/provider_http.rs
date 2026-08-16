@@ -1,121 +1,20 @@
 mod support;
 
-use std::{
-    io::{Read, Write},
-    net::TcpListener,
-    sync::{Arc, Mutex},
-    thread,
-    time::Duration,
-};
+use std::{net::TcpListener, thread, time::Duration};
 
 use canopy_lib::{
     conversations::{
         ConversationPersistenceService, NewConversation, NewNode, Role, ValidatedPath,
     },
-    providers::{openai_compatible::OpenAiCompatibleClient, ProviderError, ValidatedEndpoint},
+    providers::{
+        openai_compatible::OpenAiCompatibleClient, Protocol, ProviderError, ValidatedEndpoint,
+    },
 };
 use secrecy::SecretString;
 use serde_json::json;
 use tokio_util::sync::CancellationToken;
 
-use support::{migrated_pool, run_async};
-
-struct TestServer {
-    endpoint: String,
-    request: Arc<Mutex<Option<String>>>,
-    handle: thread::JoinHandle<()>,
-}
-
-impl TestServer {
-    fn spawn(status: &str, extra_headers: &[(&str, &str)], chunks: Vec<Vec<u8>>) -> Self {
-        Self::spawn_with_delay(status, extra_headers, chunks, Duration::from_millis(2))
-    }
-
-    fn spawn_with_delay(
-        status: &str,
-        extra_headers: &[(&str, &str)],
-        chunks: Vec<Vec<u8>>,
-        chunk_delay: Duration,
-    ) -> Self {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let address = listener.local_addr().unwrap();
-        let request = Arc::new(Mutex::new(None));
-        let captured = Arc::clone(&request);
-        let status = status.to_owned();
-        let headers = extra_headers
-            .iter()
-            .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
-            .collect::<Vec<_>>();
-        let handle = thread::spawn(move || {
-            let (mut stream, _) = listener.accept().unwrap();
-            stream
-                .set_read_timeout(Some(Duration::from_secs(5)))
-                .unwrap();
-            let mut bytes = Vec::new();
-            let mut buffer = [0_u8; 4096];
-            let header_end = loop {
-                let count = stream.read(&mut buffer).unwrap();
-                if count == 0 {
-                    return;
-                }
-                bytes.extend_from_slice(&buffer[..count]);
-                if let Some(index) = bytes.windows(4).position(|window| window == b"\r\n\r\n") {
-                    break index + 4;
-                }
-            };
-            let headers_text = String::from_utf8_lossy(&bytes[..header_end]);
-            let content_length = headers_text
-                .lines()
-                .find_map(|line| {
-                    line.to_ascii_lowercase()
-                        .strip_prefix("content-length:")
-                        .and_then(|value| value.trim().parse::<usize>().ok())
-                })
-                .unwrap_or(0);
-            while bytes.len() < header_end + content_length {
-                let count = stream.read(&mut buffer).unwrap();
-                if count == 0 {
-                    break;
-                }
-                bytes.extend_from_slice(&buffer[..count]);
-            }
-            *captured.lock().unwrap() = Some(String::from_utf8_lossy(&bytes).into_owned());
-
-            let response_length: usize = chunks.iter().map(Vec::len).sum();
-            write!(
-                stream,
-                "HTTP/1.1 {status}\r\nContent-Length: {response_length}\r\nConnection: close\r\n"
-            )
-            .unwrap();
-            for (name, value) in headers {
-                write!(stream, "{name}: {value}\r\n").unwrap();
-            }
-            write!(stream, "\r\n").unwrap();
-            stream.flush().unwrap();
-            for chunk in chunks {
-                if stream.write_all(&chunk).is_err() {
-                    break;
-                }
-                let _ = stream.flush();
-                thread::sleep(chunk_delay);
-            }
-        });
-        Self {
-            endpoint: format!("http://{address}/v1"),
-            request,
-            handle,
-        }
-    }
-
-    fn finish(self) -> String {
-        self.handle.join().unwrap();
-        self.request.lock().unwrap().take().unwrap()
-    }
-}
-
-fn sse(data: &str) -> Vec<u8> {
-    format!("data: {data}\n\n").into_bytes()
-}
+use support::{migrated_pool, run_async, sse, TestServer};
 
 fn node(id: &str, parent_id: Option<&str>, role: Role, content: &str, created_at: i64) -> NewNode {
     NewNode {
@@ -193,7 +92,8 @@ fn local_sse_stream_preserves_deltas_request_path_and_header_boundary() {
             &[("Content-Type", "text/event-stream")],
             vec![first, second, third],
         );
-        let endpoint = ValidatedEndpoint::parse(&server.endpoint).unwrap();
+        let endpoint =
+            ValidatedEndpoint::parse(&server.endpoint, Protocol::OpenAiCompatible).unwrap();
         let client = OpenAiCompatibleClient::new().unwrap();
         let cancellation = CancellationToken::new();
         let mut deltas = Vec::new();
@@ -255,7 +155,8 @@ fn status_truncation_and_precancel_map_without_persistence() {
             ),
         ] {
             let server = TestServer::spawn(status, &headers, vec![]);
-            let endpoint = ValidatedEndpoint::parse(&server.endpoint).unwrap();
+            let endpoint =
+                ValidatedEndpoint::parse(&server.endpoint, Protocol::OpenAiCompatible).unwrap();
             let error = client
                 .stream(
                     &endpoint,
@@ -282,7 +183,8 @@ fn status_truncation_and_precancel_map_without_persistence() {
             &[("Content-Type", "text/event-stream")],
             vec![b"data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"partial\"},\"finish_reason\":null}]}\n\n".to_vec()],
         );
-        let endpoint = ValidatedEndpoint::parse(&truncated.endpoint).unwrap();
+        let endpoint =
+            ValidatedEndpoint::parse(&truncated.endpoint, Protocol::OpenAiCompatible).unwrap();
         assert!(matches!(
             client
                 .stream(
@@ -300,7 +202,8 @@ fn status_truncation_and_precancel_map_without_persistence() {
 
         let cancelled = CancellationToken::new();
         cancelled.cancel();
-        let unreachable = ValidatedEndpoint::parse("http://127.0.0.1:9/v1").unwrap();
+        let unreachable =
+            ValidatedEndpoint::parse("http://127.0.0.1:9/v1", Protocol::OpenAiCompatible).unwrap();
         assert!(matches!(
             client
                 .stream(&unreachable, &path, "model", None, &cancelled, |_| Ok(()))
@@ -318,7 +221,8 @@ fn redirects_are_not_followed_with_credentials() {
         let location = format!("http://{}/capture", target.local_addr().unwrap());
         let source = TestServer::spawn("302 Found", &[("Location", location.as_str())], vec![]);
         let path = sibling_path().await;
-        let endpoint = ValidatedEndpoint::parse(&source.endpoint).unwrap();
+        let endpoint =
+            ValidatedEndpoint::parse(&source.endpoint, Protocol::OpenAiCompatible).unwrap();
         let result = OpenAiCompatibleClient::new()
             .unwrap()
             .stream(
@@ -363,7 +267,8 @@ fn malformed_non_normal_and_post_finish_streams_fail_closed() {
         for chunks in cases {
             let server =
                 TestServer::spawn("200 OK", &[("Content-Type", "text/event-stream")], chunks);
-            let endpoint = ValidatedEndpoint::parse(&server.endpoint).unwrap();
+            let endpoint =
+                ValidatedEndpoint::parse(&server.endpoint, Protocol::OpenAiCompatible).unwrap();
             assert!(matches!(
                 client
                     .stream(
@@ -396,7 +301,8 @@ fn response_bound_midstream_cancellation_and_network_failure_are_typed() {
                 r#"{{"choices":[{{"index":0,"delta":{{"content":"{oversized_delta}"}},"finish_reason":"stop"}}]}}"#
             ))],
         );
-        let endpoint = ValidatedEndpoint::parse(&oversized.endpoint).unwrap();
+        let endpoint =
+            ValidatedEndpoint::parse(&oversized.endpoint, Protocol::OpenAiCompatible).unwrap();
         assert!(matches!(
             client
                 .stream(
@@ -426,7 +332,9 @@ fn response_bound_midstream_cancellation_and_network_failure_are_typed() {
             ],
             Duration::from_millis(50),
         );
-        let endpoint = ValidatedEndpoint::parse(&cancelled_server.endpoint).unwrap();
+        let endpoint =
+            ValidatedEndpoint::parse(&cancelled_server.endpoint, Protocol::OpenAiCompatible)
+                .unwrap();
         let cancellation = CancellationToken::new();
         let cancellation_from_delta = cancellation.clone();
         let result = client
@@ -444,7 +352,8 @@ fn response_bound_midstream_cancellation_and_network_failure_are_typed() {
             let (stream, _) = listener.accept().unwrap();
             drop(stream);
         });
-        let endpoint = ValidatedEndpoint::parse(&unavailable_endpoint).unwrap();
+        let endpoint =
+            ValidatedEndpoint::parse(&unavailable_endpoint, Protocol::OpenAiCompatible).unwrap();
         let result = client
             .stream(
                 &endpoint,

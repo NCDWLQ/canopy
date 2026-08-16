@@ -8,8 +8,9 @@ use uuid::Uuid;
 
 use super::{
     Conversation, ConversationPersistenceService, ConversationSummary, ConversationTree,
-    NewConversation, NewNode, Node, Role, ValidatedPath,
+    NewConversation, NewNode, Node, ReasoningEffort, Role, ValidatedPath,
 };
+use crate::providers::domain::validate_model;
 use crate::{database::managed_sqlite_pool, error::CommandError};
 
 const MAX_TITLE_CHARS: usize = 200;
@@ -24,6 +25,7 @@ pub const CONVERSATION_COMMAND_NAMES: &[&str] = &[
     "load_conversation_tree",
     "load_active_path",
     "archive_conversation",
+    "set_conversation_provider",
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -82,6 +84,41 @@ pub struct ArchiveConversationRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct ConversationProviderBindingDto {
+    pub provider_id: String,
+    pub model: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReasoningEffortDto {
+    Low,
+    Medium,
+    High,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct SetConversationProviderRequest {
+    pub conversation_id: String,
+    pub binding: Option<ConversationProviderBindingDto>,
+    pub reasoning_effort: Option<ReasoningEffortDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct ConversationProviderBindingResult {
+    pub conversation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_effort: Option<ReasoningEffortDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum RoleDto {
     System,
     User,
@@ -96,6 +133,12 @@ pub struct ConversationDto {
     pub title: String,
     pub root_node_id: String,
     pub is_archived: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_effort: Option<ReasoningEffortDto>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -106,6 +149,12 @@ pub struct ConversationSummaryDto {
     pub root_node_id: String,
     pub is_archived: bool,
     pub updated_at: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_effort: Option<ReasoningEffortDto>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -316,6 +365,31 @@ impl<S: IdentityTimeSource> ConversationCommandService<S> {
             .map(ConversationDto::from)
             .map_err(CommandError::from)
     }
+
+    pub async fn set_conversation_provider(
+        &self,
+        request: SetConversationProviderRequest,
+    ) -> Result<ConversationProviderBindingResult, CommandError> {
+        validate_id("conversation_id", &request.conversation_id)?;
+        let (provider_id, model) = match request.binding {
+            Some(binding) => {
+                validate_id("provider_id", &binding.provider_id)?;
+                let model = validate_model(&binding.model).map_err(CommandError::from)?;
+                (Some(binding.provider_id), Some(model))
+            }
+            None => (None, None),
+        };
+        self.persistence
+            .set_provider_binding(
+                &request.conversation_id,
+                provider_id,
+                model,
+                request.reasoning_effort.map(Into::into),
+            )
+            .await
+            .map(ConversationProviderBindingResult::from)
+            .map_err(CommandError::from)
+    }
 }
 
 fn validate_title(title: &str) -> Result<String, CommandError> {
@@ -366,6 +440,14 @@ fn user_node(
     }
 }
 
+/// Binding model as exposed over IPC. A provider deletion nulls
+/// `conversations.provider_id` (FK SET NULL) but leaves the bound `model`
+/// column behind; the leftover belongs to the deleted provider, so it must
+/// not surface as a conversation binding value.
+fn binding_model(provider_id: &Option<String>, model: &Option<String>) -> Option<String> {
+    model.clone().filter(|_| provider_id.is_some())
+}
+
 impl From<Conversation> for ConversationDto {
     fn from(conversation: Conversation) -> Self {
         Self {
@@ -373,6 +455,9 @@ impl From<Conversation> for ConversationDto {
             title: conversation.title,
             root_node_id: conversation.root_node_id,
             is_archived: conversation.is_archived,
+            provider_id: conversation.provider_id.clone(),
+            model: binding_model(&conversation.provider_id, &conversation.model),
+            reasoning_effort: conversation.reasoning_effort.map(Into::into),
         }
     }
 }
@@ -385,6 +470,40 @@ impl From<ConversationSummary> for ConversationSummaryDto {
             root_node_id: summary.root_node_id,
             is_archived: summary.is_archived,
             updated_at: summary.updated_at,
+            provider_id: summary.provider_id.clone(),
+            model: binding_model(&summary.provider_id, &summary.model),
+            reasoning_effort: summary.reasoning_effort.map(Into::into),
+        }
+    }
+}
+
+impl From<ReasoningEffort> for ReasoningEffortDto {
+    fn from(effort: ReasoningEffort) -> Self {
+        match effort {
+            ReasoningEffort::Low => Self::Low,
+            ReasoningEffort::Medium => Self::Medium,
+            ReasoningEffort::High => Self::High,
+        }
+    }
+}
+
+impl From<ReasoningEffortDto> for ReasoningEffort {
+    fn from(effort: ReasoningEffortDto) -> Self {
+        match effort {
+            ReasoningEffortDto::Low => Self::Low,
+            ReasoningEffortDto::Medium => Self::Medium,
+            ReasoningEffortDto::High => Self::High,
+        }
+    }
+}
+
+impl From<Conversation> for ConversationProviderBindingResult {
+    fn from(conversation: Conversation) -> Self {
+        Self {
+            conversation_id: conversation.id,
+            provider_id: conversation.provider_id.clone(),
+            model: binding_model(&conversation.provider_id, &conversation.model),
+            reasoning_effort: conversation.reasoning_effort.map(Into::into),
         }
     }
 }
@@ -534,6 +653,17 @@ pub async fn archive_conversation(
         .await
 }
 
+#[tauri::command]
+pub async fn set_conversation_provider(
+    request: SetConversationProviderRequest,
+    instances: State<'_, DbInstances>,
+) -> Result<ConversationProviderBindingResult, CommandError> {
+    production_service(instances.inner())
+        .await?
+        .set_conversation_provider(request)
+        .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::{validate_content, validate_title, CONVERSATION_COMMAND_NAMES};
@@ -541,9 +671,9 @@ mod tests {
 
     #[test]
     fn command_names_are_frozen() {
-        assert_eq!(CONVERSATION_COMMAND_NAMES.len(), 8);
+        assert_eq!(CONVERSATION_COMMAND_NAMES.len(), 9);
         assert_eq!(CONVERSATION_COMMAND_NAMES[0], "create_conversation");
-        assert_eq!(CONVERSATION_COMMAND_NAMES[7], "archive_conversation");
+        assert_eq!(CONVERSATION_COMMAND_NAMES[8], "set_conversation_provider");
     }
 
     #[test]

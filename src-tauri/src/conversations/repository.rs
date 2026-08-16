@@ -4,8 +4,8 @@ use serde_json::Value;
 use sqlx::{sqlite::SqliteRow, Row, SqliteConnection};
 
 use super::{
-    Conversation, ConversationSummary, NewConversation, NewNode, Node, PersistenceError, Role,
-    ValidatedPath,
+    Conversation, ConversationSummary, NewConversation, NewNode, Node, PersistenceError,
+    ReasoningEffort, Role, ValidatedPath,
 };
 
 #[derive(Debug, Default)]
@@ -66,7 +66,8 @@ impl ConversationRepository {
         conversation_id: &str,
     ) -> Result<Option<Conversation>, PersistenceError> {
         let row = sqlx::query(
-            "SELECT id, title, root_node_id, is_archived FROM conversations WHERE id = ?1",
+            "SELECT id, title, root_node_id, is_archived, provider_id, model, reasoning_effort \
+             FROM conversations WHERE id = ?1",
         )
         .bind(conversation_id)
         .fetch_optional(connection)
@@ -79,11 +80,13 @@ impl ConversationRepository {
         connection: &mut SqliteConnection,
     ) -> Result<Vec<ConversationSummary>, PersistenceError> {
         let rows = sqlx::query(
-            "SELECT c.id, c.title, c.root_node_id, c.is_archived, \
+            "SELECT c.id, c.title, c.root_node_id, c.is_archived, c.provider_id, c.model, \
+                    c.reasoning_effort, \
                     MAX(n.created_at) AS updated_at \
              FROM conversations AS c \
              JOIN nodes AS n ON n.conversation_id = c.id \
-             GROUP BY c.id, c.title, c.root_node_id, c.is_archived \
+             GROUP BY c.id, c.title, c.root_node_id, c.is_archived, c.provider_id, c.model, \
+                      c.reasoning_effort \
              ORDER BY updated_at DESC, c.id ASC",
         )
         .fetch_all(connection)
@@ -216,6 +219,45 @@ impl ConversationRepository {
                 reason: "archived conversation could not be read",
             })
     }
+
+    pub(crate) async fn provider_exists(
+        connection: &mut SqliteConnection,
+        provider_id: &str,
+    ) -> Result<bool, PersistenceError> {
+        Ok(
+            sqlx::query_scalar::<_, i64>("SELECT EXISTS(SELECT 1 FROM providers WHERE id = ?1)")
+                .bind(provider_id)
+                .fetch_one(connection)
+                .await?
+                != 0,
+        )
+    }
+
+    pub(crate) async fn set_provider_binding(
+        connection: &mut SqliteConnection,
+        conversation_id: &str,
+        provider_id: Option<&str>,
+        model: Option<&str>,
+        reasoning_effort: Option<ReasoningEffort>,
+    ) -> Result<Conversation, PersistenceError> {
+        sqlx::query(
+            "UPDATE conversations \
+             SET provider_id = ?1, model = ?2, reasoning_effort = ?3 \
+             WHERE id = ?4",
+        )
+        .bind(provider_id)
+        .bind(model)
+        .bind(reasoning_effort.map(ReasoningEffort::as_str))
+        .bind(conversation_id)
+        .execute(&mut *connection)
+        .await
+        .map_err(|error| PersistenceError::from_write("set_conversation_provider", error))?;
+        Self::load_conversation(connection, conversation_id)
+            .await?
+            .ok_or(PersistenceError::NotFound {
+                entity: "conversation",
+            })
+    }
 }
 
 fn canonical_json(value: &Value) -> Result<String, PersistenceError> {
@@ -231,6 +273,9 @@ fn decode_conversation(row: SqliteRow) -> Result<Conversation, PersistenceError>
         title: row.try_get("title")?,
         root_node_id: row.try_get("root_node_id")?,
         is_archived: decode_boolean(&row, "is_archived")?,
+        provider_id: row.try_get("provider_id")?,
+        model: row.try_get("model")?,
+        reasoning_effort: decode_reasoning_effort(&row)?,
     })
 }
 
@@ -241,7 +286,22 @@ fn decode_conversation_summary(row: SqliteRow) -> Result<ConversationSummary, Pe
         root_node_id: row.try_get("root_node_id")?,
         is_archived: decode_boolean(&row, "is_archived")?,
         updated_at: row.try_get("updated_at")?,
+        provider_id: row.try_get("provider_id")?,
+        model: row.try_get("model")?,
+        reasoning_effort: decode_reasoning_effort(&row)?,
     })
+}
+
+fn decode_reasoning_effort(row: &SqliteRow) -> Result<Option<ReasoningEffort>, PersistenceError> {
+    row.try_get::<Option<String>, _>("reasoning_effort")?
+        .map(|value| {
+            ReasoningEffort::try_from(value.as_str()).map_err(|_| {
+                PersistenceError::InvalidStoredData {
+                    field: "reasoning_effort",
+                }
+            })
+        })
+        .transpose()
 }
 
 fn decode_node(row: SqliteRow) -> Result<Node, PersistenceError> {

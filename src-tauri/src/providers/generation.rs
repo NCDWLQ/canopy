@@ -10,12 +10,13 @@ use tokio_util::sync::CancellationToken;
 
 use crate::conversations::{
     commands::{IdentityTimeSource, SystemIdentityTimeSource},
-    ConversationPersistenceService, NewNode, Node, Role, ValidatedPath,
+    ConversationPersistenceService, NewNode, Node, ReasoningEffort, Role, ValidatedPath,
 };
 
 use super::{
-    openai_compatible::{build_request, OpenAiCompatibleClient},
-    ProviderError, ProviderProfileService, ValidatedEndpoint,
+    anthropic,
+    openai_compatible::{self, GeneratedContent, OpenAiCompatibleClient, StreamingRequest},
+    Protocol, ProviderError, ProviderService, ValidatedEndpoint,
 };
 
 struct GenerationEntry {
@@ -170,6 +171,8 @@ pub(crate) struct PreparedGeneration {
     endpoint: ValidatedEndpoint,
     path: ValidatedPath,
     secret: Option<SecretString>,
+    protocol: Protocol,
+    reasoning_effort: Option<ReasoningEffort>,
     client: OpenAiCompatibleClient,
     persistence: ConversationPersistenceService,
     lease: GenerationLease,
@@ -188,22 +191,30 @@ impl PreparedGeneration {
         &self.model
     }
 
-    pub(crate) async fn run<F>(self, on_delta: F) -> GenerationRunResult
+    pub(crate) async fn run<F, T>(self, on_delta: F, on_thinking: T) -> GenerationRunResult
     where
         F: FnMut(&str) -> Result<(), ProviderError>,
+        T: FnMut(&str) -> Result<(), ProviderError>,
     {
         let cancellation = self.lease.cancellation().clone();
-        let streamed = self
-            .client
-            .stream(
-                &self.endpoint,
-                &self.path,
-                &self.model,
-                self.secret.as_ref(),
-                &cancellation,
-                on_delta,
-            )
-            .await;
+        let request = StreamingRequest {
+            endpoint: &self.endpoint,
+            path: &self.path,
+            model: &self.model,
+            secret: self.secret.as_ref(),
+            cancellation: &cancellation,
+            reasoning_effort: self.reasoning_effort,
+        };
+        let streamed = match self.protocol {
+            Protocol::OpenAiCompatible => {
+                self.client
+                    .stream_with_thinking(request, on_delta, on_thinking)
+                    .await
+            }
+            Protocol::Anthropic => {
+                anthropic::stream(&self.client, request, on_delta, on_thinking).await
+            }
+        };
         let outcome = finish_generation(
             &self.persistence,
             &self.lease,
@@ -251,11 +262,11 @@ pub(crate) enum GenerationStage {
 async fn finish_generation(
     persistence: &ConversationPersistenceService,
     lease: &GenerationLease,
-    streamed: Result<String, ProviderError>,
+    streamed: Result<GeneratedContent, ProviderError>,
     pending: PendingAssistant,
 ) -> GenerationOutcome {
     match streamed {
-        Ok(content) => match lease.begin_finalizing() {
+        Ok(generated) => match lease.begin_finalizing() {
             Ok(true) => {
                 let source = SystemIdentityTimeSource;
                 match persistence
@@ -264,10 +275,12 @@ async fn finish_generation(
                         parent_id: Some(pending.parent_id),
                         conversation_id: pending.conversation_id,
                         role: Role::Assistant,
-                        content,
+                        content: generated.content,
                         model: Some(pending.model),
                         created_at: source.now_millis(),
-                        metadata: json!({}),
+                        metadata: generated
+                            .thinking
+                            .map_or_else(|| json!({}), |thinking| json!({ "thinking": thinking })),
                     })
                     .await
                 {
@@ -294,29 +307,48 @@ async fn finish_generation(
 
 pub(crate) async fn prepare_generation(
     pool: SqlitePool,
-    profile_service: &ProviderProfileService,
+    profile_service: &ProviderService,
     runtime: &GenerationRuntime,
     conversation_id: String,
     active_node_id: String,
     generation_id: String,
 ) -> Result<PreparedGeneration, ProviderError> {
     let persistence = ConversationPersistenceService::new(pool);
-    let (_, path) = persistence
+    let (conversation, path) = persistence
         .load_generation_context(&conversation_id, &active_node_id)
         .await?;
-    let (profile, secret) = profile_service.load_with_secret().await?;
-    let endpoint = ValidatedEndpoint::parse(&profile.base_endpoint)?;
-    build_request(&path, &profile.model)?;
+    let (provider, secret) = match conversation.provider_id.as_deref() {
+        Some(provider_id) => profile_service.load_by_id_with_secret(provider_id).await?,
+        None => profile_service.load_active_with_secret().await?,
+    };
+    // A provider deletion nulls `conversations.provider_id` (FK SET NULL) but
+    // leaves the bound model column behind. The leftover value belongs to the
+    // deleted provider, so it must be ignored while the binding is empty.
+    let model = match conversation.provider_id.as_deref() {
+        Some(_) => conversation.model.unwrap_or_else(|| provider.model.clone()),
+        None => provider.model.clone(),
+    };
+    let endpoint = ValidatedEndpoint::parse(&provider.base_endpoint, provider.protocol)?;
+    match provider.protocol {
+        Protocol::OpenAiCompatible => {
+            openai_compatible::build_request(&path, &model, conversation.reasoning_effort)?;
+        }
+        Protocol::Anthropic => {
+            anthropic::build_request(&path, &model, conversation.reasoning_effort)?;
+        }
+    }
     let client = OpenAiCompatibleClient::new()?;
     let lease = runtime.reserve(conversation_id.clone(), generation_id)?;
 
     Ok(PreparedGeneration {
         conversation_id,
         active_node_id,
-        model: profile.model,
+        model,
         endpoint,
         path,
         secret,
+        protocol: provider.protocol,
+        reasoning_effort: conversation.reasoning_effort,
         client,
         persistence,
         lease,
@@ -325,17 +357,23 @@ pub(crate) async fn prepare_generation(
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
+    use std::{str::FromStr, sync::Arc};
 
     use serde_json::json;
     use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 
     use crate::{
-        conversations::{ConversationPersistenceService, NewConversation, NewNode, Role},
+        conversations::{
+            ConversationPersistenceService, NewConversation, NewNode, ReasoningEffort, Role,
+        },
         database::MIGRATION_CATALOG,
+        providers::{NativeCredentialStore, Protocol, ProviderService},
     };
 
-    use super::{finish_generation, GenerationOutcome, GenerationRuntime, PendingAssistant};
+    use super::{
+        finish_generation, prepare_generation, GeneratedContent, GenerationOutcome,
+        GenerationRuntime, PendingAssistant,
+    };
 
     const GENERATION_A: &str = "11111111-1111-4111-8111-111111111111";
     const GENERATION_B: &str = "33333333-3333-4333-8333-333333333333";
@@ -389,6 +427,28 @@ mod tests {
             conversation_id: "conversation".to_owned(),
             model: "model".to_owned(),
         }
+    }
+
+    fn generated(content: &str) -> GeneratedContent {
+        GeneratedContent {
+            content: content.to_owned(),
+            thinking: None,
+        }
+    }
+
+    async fn insert_provider(pool: &sqlx::SqlitePool, id: &str, protocol: Protocol, model: &str) {
+        sqlx::query(
+            "INSERT INTO providers \
+               (id, name, protocol, base_endpoint, model, credential_ref, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, 'https://provider.example/v1', ?4, NULL, 1, 1)",
+        )
+        .bind(id)
+        .bind(id)
+        .bind(protocol.as_str())
+        .bind(model)
+        .execute(pool)
+        .await
+        .unwrap();
     }
 
     async fn assistant_count(pool: &sqlx::SqlitePool) -> i64 {
@@ -451,7 +511,7 @@ mod tests {
             let outcome = finish_generation(
                 &persistence,
                 &lease,
-                Ok("persisted answer".to_owned()),
+                Ok(generated("persisted answer")),
                 pending(),
             )
             .await;
@@ -459,10 +519,192 @@ mod tests {
                 panic!("completed provider result must persist");
             };
             assert_eq!(node.content, "persisted answer");
+            assert_eq!(node.metadata, json!({}));
             assert_eq!(assistant_count(&pool).await, 1);
             assert_eq!(runtime.active_count(), 1);
             drop(lease);
             assert_eq!(runtime.active_count(), 0);
+        });
+    }
+
+    #[test]
+    fn thinking_is_persisted_only_when_the_provider_emits_it() {
+        test_runtime().block_on(async {
+            let (_, persistence) = seeded_persistence().await;
+            let runtime = GenerationRuntime::default();
+            let lease = runtime
+                .reserve("conversation".to_owned(), GENERATION_A.to_owned())
+                .unwrap();
+            let outcome = finish_generation(
+                &persistence,
+                &lease,
+                Ok(GeneratedContent {
+                    content: "answer".to_owned(),
+                    thinking: Some("reasoning trace".to_owned()),
+                }),
+                pending(),
+            )
+            .await;
+            let GenerationOutcome::Completed(node) = outcome else {
+                panic!("completed provider result must persist");
+            };
+            assert_eq!(node.metadata, json!({ "thinking": "reasoning trace" }));
+        });
+    }
+
+    #[test]
+    fn prepare_generation_prefers_binding_and_falls_back_to_active_provider() {
+        test_runtime().block_on(async {
+            let (pool, persistence) = seeded_persistence().await;
+            insert_provider(&pool, "active", Protocol::OpenAiCompatible, "active-model").await;
+            insert_provider(&pool, "bound", Protocol::Anthropic, "bound-default").await;
+            sqlx::query(
+                "INSERT INTO app_settings (key, value) VALUES ('active_provider_id', 'active')",
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            let service = ProviderService::new(pool.clone(), Arc::new(NativeCredentialStore));
+            let runtime = GenerationRuntime::default();
+
+            persistence
+                .set_provider_binding(
+                    "conversation",
+                    Some("bound".to_owned()),
+                    Some("bound-override".to_owned()),
+                    Some(ReasoningEffort::High),
+                )
+                .await
+                .unwrap();
+            let prepared = prepare_generation(
+                pool.clone(),
+                &service,
+                &runtime,
+                "conversation".to_owned(),
+                "user".to_owned(),
+                GENERATION_A.to_owned(),
+            )
+            .await
+            .unwrap();
+            assert_eq!(prepared.protocol, Protocol::Anthropic);
+            assert_eq!(prepared.model, "bound-override");
+            assert_eq!(prepared.reasoning_effort, Some(ReasoningEffort::High));
+            drop(prepared);
+
+            persistence
+                .set_provider_binding("conversation", None, None, Some(ReasoningEffort::Low))
+                .await
+                .unwrap();
+            let prepared = prepare_generation(
+                pool,
+                &service,
+                &runtime,
+                "conversation".to_owned(),
+                "user".to_owned(),
+                GENERATION_B.to_owned(),
+            )
+            .await
+            .unwrap();
+            assert_eq!(prepared.protocol, Protocol::OpenAiCompatible);
+            assert_eq!(prepared.model, "active-model");
+            assert_eq!(prepared.reasoning_effort, Some(ReasoningEffort::Low));
+        });
+    }
+
+    #[test]
+    fn prepare_generation_ignores_a_stale_model_left_by_provider_deletion() {
+        test_runtime().block_on(async {
+            let (pool, persistence) = seeded_persistence().await;
+            insert_provider(&pool, "active", Protocol::OpenAiCompatible, "active-model").await;
+            insert_provider(&pool, "bound", Protocol::Anthropic, "bound-default").await;
+            sqlx::query(
+                "INSERT INTO app_settings (key, value) VALUES ('active_provider_id', 'active')",
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            persistence
+                .set_provider_binding(
+                    "conversation",
+                    Some("bound".to_owned()),
+                    Some("bound-override".to_owned()),
+                    None,
+                )
+                .await
+                .unwrap();
+            // Deleting the bound provider nulls provider_id but leaves the
+            // stale `model` column in place (FK SET NULL does not touch it).
+            sqlx::query("DELETE FROM providers WHERE id = 'bound'")
+                .execute(&pool)
+                .await
+                .unwrap();
+            let service = ProviderService::new(pool.clone(), Arc::new(NativeCredentialStore));
+            let prepared = prepare_generation(
+                pool,
+                &service,
+                &GenerationRuntime::default(),
+                "conversation".to_owned(),
+                "user".to_owned(),
+                GENERATION_A.to_owned(),
+            )
+            .await
+            .unwrap();
+            assert_eq!(prepared.protocol, Protocol::OpenAiCompatible);
+            assert_eq!(prepared.model, "active-model");
+        });
+    }
+
+    #[test]
+    fn prepared_generation_snapshots_survive_concurrent_provider_changes() {
+        test_runtime().block_on(async {
+            let (pool, persistence) = seeded_persistence().await;
+            insert_provider(&pool, "active", Protocol::OpenAiCompatible, "active-model").await;
+            insert_provider(&pool, "other", Protocol::Anthropic, "other-model").await;
+            sqlx::query(
+                "INSERT INTO app_settings (key, value) VALUES ('active_provider_id', 'active')",
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            let service = ProviderService::new(pool.clone(), Arc::new(NativeCredentialStore));
+            let runtime = GenerationRuntime::default();
+            let prepared = prepare_generation(
+                pool.clone(),
+                &service,
+                &runtime,
+                "conversation".to_owned(),
+                "user".to_owned(),
+                GENERATION_A.to_owned(),
+            )
+            .await
+            .unwrap();
+            assert_eq!(prepared.protocol, Protocol::OpenAiCompatible);
+            assert_eq!(prepared.model, "active-model");
+
+            // In-flight isolation (PRD R1/R3): editing settings, rebinding the
+            // conversation, and deleting the in-flight provider must not alter
+            // the snapshot the running request was prepared from.
+            sqlx::query("UPDATE app_settings SET value = 'other' WHERE key = 'active_provider_id'")
+                .execute(&pool)
+                .await
+                .unwrap();
+            persistence
+                .set_provider_binding(
+                    "conversation",
+                    Some("other".to_owned()),
+                    Some("other-override".to_owned()),
+                    Some(ReasoningEffort::High),
+                )
+                .await
+                .unwrap();
+            sqlx::query("DELETE FROM providers WHERE id = 'active'")
+                .execute(&pool)
+                .await
+                .unwrap();
+
+            assert_eq!(prepared.protocol, Protocol::OpenAiCompatible);
+            assert_eq!(prepared.model, "active-model");
+            assert_eq!(prepared.reasoning_effort, None);
         });
     }
 
@@ -479,7 +721,7 @@ mod tests {
                 let outcome = finish_generation(
                     &persistence,
                     &lease,
-                    Ok("persist despite late cancel".to_owned()),
+                    Ok(generated("persist despite late cancel")),
                     pending(),
                 )
                 .await;
@@ -527,7 +769,7 @@ mod tests {
                 finish_generation(
                     &persistence,
                     &lease,
-                    Ok("cancelled answer".to_owned()),
+                    Ok(generated("cancelled answer")),
                     pending(),
                 )
                 .await,
@@ -566,7 +808,7 @@ mod tests {
                 .reserve("conversation".to_owned(), GENERATION_A.to_owned())
                 .unwrap();
             assert!(matches!(
-                finish_generation(&persistence, &lease, Ok("late".to_owned()), pending()).await,
+                finish_generation(&persistence, &lease, Ok(generated("late")), pending()).await,
                 GenerationOutcome::Failed {
                     stage: super::GenerationStage::Persistence,
                     ..

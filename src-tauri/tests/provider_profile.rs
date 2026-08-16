@@ -5,10 +5,15 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use canopy_lib::conversations::{
+    commands::ConversationDto, ConversationPersistenceService, NewConversation, NewNode, Role,
+};
 use canopy_lib::providers::{
-    ApiKeyAction, CredentialStore, ProviderError, ProviderProfileInput, ProviderProfileService,
+    ApiKeyAction, CredentialStore, Protocol, ProviderError, ProviderInput, ProviderService,
+    RedactedProvider,
 };
 use secrecy::{ExposeSecret, SecretString};
+use serde_json::json;
 
 use support::{migrated_pool, run_async};
 
@@ -68,39 +73,63 @@ impl CredentialStore for FakeCredentialStore {
     }
 }
 
-fn input(action: ApiKeyAction) -> ProviderProfileInput {
-    ProviderProfileInput {
+fn input(name: &str, action: ApiKeyAction) -> ProviderInput {
+    ProviderInput {
+        name: name.to_owned(),
+        protocol: Protocol::OpenAiCompatible,
         base_endpoint: "https://provider.example/v1".to_owned(),
         model: "fixture-model".to_owned(),
+        models: vec!["fixture-model".to_owned()],
         api_key: action,
     }
 }
 
+fn assert_duplicate_name(result: Result<RedactedProvider, ProviderError>) {
+    assert!(matches!(
+        result,
+        Err(ProviderError::InvalidInput {
+            field: "name",
+            reason: "duplicate",
+        })
+    ));
+}
+
 #[test]
-fn profile_round_trip_keeps_secrets_only_in_injected_store() {
+fn provider_crud_round_trip_keeps_secrets_only_in_injected_store() {
     run_async(async {
         let pool = migrated_pool().await;
         let store = Arc::new(FakeCredentialStore::default());
-        let service = ProviderProfileService::new(pool.clone(), store.clone());
+        let service = ProviderService::new(pool.clone(), store.clone());
         let sentinel = "SENTINEL_NATIVE_SECRET";
 
         let saved = service
             .save(
-                input(ApiKeyAction::Replace(SecretString::from(sentinel))),
-                "operation-replace".to_owned(),
-                "credential-new".to_owned(),
+                "provider-a",
+                input(
+                    "Primary",
+                    ApiKeyAction::Replace(SecretString::from(sentinel)),
+                ),
+                "operation-create".to_owned(),
+                "credential-a".to_owned(),
                 100,
             )
             .await
-            .expect("profile saves");
+            .expect("provider saves");
+        assert_eq!(saved.id, "provider-a");
+        assert_eq!(saved.name, "Primary");
+        assert_eq!(saved.protocol, Protocol::OpenAiCompatible);
+        assert_eq!(saved.base_endpoint, "https://provider.example/v1");
+        assert_eq!(saved.model, "fixture-model");
         assert!(saved.has_api_key);
-        assert_eq!(store.snapshot().get("credential-new").unwrap(), sentinel);
+        assert_eq!((saved.created_at, saved.updated_at), (100, 100));
+        assert_eq!(store.snapshot().get("credential-a").unwrap(), sentinel);
 
         let database_text: String = sqlx::query_scalar(
             "SELECT coalesce(group_concat(value, '|'), '') FROM ( \
-               SELECT base_endpoint AS value FROM provider_profiles \
-               UNION ALL SELECT model FROM provider_profiles \
-               UNION ALL SELECT coalesce(credential_ref, '') FROM provider_profiles \
+               SELECT name AS value FROM providers \
+               UNION ALL SELECT base_endpoint FROM providers \
+               UNION ALL SELECT model FROM providers \
+               UNION ALL SELECT coalesce(credential_ref, '') FROM providers \
                UNION ALL SELECT coalesce(base_endpoint, '') FROM provider_credential_operations \
                UNION ALL SELECT coalesce(model, '') FROM provider_credential_operations \
                UNION ALL SELECT coalesce(new_credential_ref, '') FROM provider_credential_operations \
@@ -111,13 +140,13 @@ fn profile_round_trip_keeps_secrets_only_in_injected_store() {
         .unwrap();
         assert!(!database_text.contains(sentinel));
 
-        let reconstructed = ProviderProfileService::new(pool.clone(), store.clone());
-        assert!(reconstructed.load().await.unwrap().has_api_key);
-        reconstructed
+        let updated = service
             .save(
-                ProviderProfileInput {
+                "provider-a",
+                ProviderInput {
                     model: "fixture-model-2".to_owned(),
-                    ..input(ApiKeyAction::Keep)
+                    models: vec!["fixture-model".to_owned(), "fixture-model-2".to_owned()],
+                    ..input("Primary", ApiKeyAction::Keep)
                 },
                 "unused-operation".to_owned(),
                 "unused-credential".to_owned(),
@@ -125,57 +154,217 @@ fn profile_round_trip_keeps_secrets_only_in_injected_store() {
             )
             .await
             .unwrap();
+        assert_eq!(updated.model, "fixture-model-2");
+        assert!(updated.has_api_key);
+        assert_eq!(updated.created_at, 100);
+        assert_eq!(updated.updated_at, 101);
         assert_eq!(store.snapshot().len(), 1);
 
-        let removed = reconstructed
+        service
             .save(
-                input(ApiKeyAction::Remove),
-                "operation-remove".to_owned(),
-                "unused-remove".to_owned(),
+                "provider-b",
+                input(
+                    "Secondary",
+                    ApiKeyAction::Replace(SecretString::from("second-secret")),
+                ),
+                "operation-create-b".to_owned(),
+                "credential-b".to_owned(),
                 102,
             )
             .await
             .unwrap();
+
+        let (providers, active) = service.list_providers().await.unwrap();
+        assert_eq!(
+            providers
+                .iter()
+                .map(|provider| provider.id.as_str())
+                .collect::<Vec<_>>(),
+            ["provider-a", "provider-b"]
+        );
+        assert_eq!(active, None);
+
+        assert_eq!(
+            service.set_active("provider-a").await.unwrap(),
+            "provider-a"
+        );
+        let (_, active) = service.list_providers().await.unwrap();
+        assert_eq!(active.as_deref(), Some("provider-a"));
+        assert_eq!(service.load_active().await.unwrap().id, "provider-a");
+        assert_eq!(
+            service.load_by_id("provider-b").await.unwrap().name,
+            "Secondary"
+        );
+
+        let removed = service
+            .save(
+                "provider-b",
+                input("Secondary", ApiKeyAction::Remove),
+                "operation-remove-b".to_owned(),
+                "unused-remove".to_owned(),
+                103,
+            )
+            .await
+            .unwrap();
         assert!(!removed.has_api_key);
-        assert!(store.snapshot().is_empty());
-        assert!(reconstructed
-            .delete("operation-delete".to_owned())
+        assert_eq!(store.snapshot().len(), 1);
+        assert!(store.snapshot().contains_key("credential-a"));
+
+        assert!(service
+            .delete("provider-b", "operation-delete-b".to_owned())
             .await
             .unwrap());
-        assert!(!reconstructed
-            .delete("operation-delete-again".to_owned())
+        assert!(!service
+            .delete("provider-b", "operation-delete-b-again".to_owned())
             .await
             .unwrap());
+
+        let (providers, active) = service.list_providers().await.unwrap();
+        assert_eq!(providers.len(), 1);
+        assert_eq!(providers[0].id, "provider-a");
+        assert_eq!(active.as_deref(), Some("provider-a"));
     });
 }
 
 #[test]
-fn recovery_discards_unwritten_replace_and_locked_store_fails_closed() {
+fn provider_names_are_unique_case_insensitively() {
     run_async(async {
         let pool = migrated_pool().await;
         let store = Arc::new(FakeCredentialStore::default());
-        let service = ProviderProfileService::new(pool.clone(), store.clone());
+        let service = ProviderService::new(pool, store);
+
         service
             .save(
-                input(ApiKeyAction::Keep),
-                "initial".to_owned(),
+                "provider-a",
+                input("Alpha", ApiKeyAction::Keep),
+                "operation-a".to_owned(),
                 "unused".to_owned(),
                 1,
             )
             .await
             .unwrap();
+
+        assert_duplicate_name(
+            service
+                .save(
+                    "provider-b",
+                    input("ALPHA", ApiKeyAction::Keep),
+                    "operation-b".to_owned(),
+                    "unused".to_owned(),
+                    2,
+                )
+                .await,
+        );
+        assert_duplicate_name(
+            service
+                .save(
+                    "provider-b",
+                    input("  Alpha  ", ApiKeyAction::Keep),
+                    "operation-b".to_owned(),
+                    "unused".to_owned(),
+                    3,
+                )
+                .await,
+        );
+
+        service
+            .save(
+                "provider-b",
+                input("Beta", ApiKeyAction::Keep),
+                "operation-b".to_owned(),
+                "unused".to_owned(),
+                4,
+            )
+            .await
+            .unwrap();
+
+        assert_duplicate_name(
+            service
+                .save(
+                    "provider-a",
+                    ProviderInput {
+                        name: "beta".to_owned(),
+                        ..input("Alpha", ApiKeyAction::Keep)
+                    },
+                    "operation-rename".to_owned(),
+                    "unused".to_owned(),
+                    5,
+                )
+                .await,
+        );
+
+        let renamed = service
+            .save(
+                "provider-a",
+                ProviderInput {
+                    name: "Gamma".to_owned(),
+                    ..input("Alpha", ApiKeyAction::Keep)
+                },
+                "operation-rename".to_owned(),
+                "unused".to_owned(),
+                6,
+            )
+            .await
+            .unwrap();
+        assert_eq!(renamed.name, "Gamma");
+        assert_eq!(service.load_by_id("provider-b").await.unwrap().name, "Beta");
+    });
+}
+
+#[test]
+fn credential_recovery_replays_to_the_owning_provider_and_fails_closed() {
+    run_async(async {
+        let pool = migrated_pool().await;
+        let store = Arc::new(FakeCredentialStore::default());
+        let service = ProviderService::new(pool.clone(), store.clone());
+        service
+            .save(
+                "provider-a",
+                input(
+                    "Primary",
+                    ApiKeyAction::Replace(SecretString::from("old-secret")),
+                ),
+                "operation-a".to_owned(),
+                "credential-old".to_owned(),
+                1,
+            )
+            .await
+            .unwrap();
+        service
+            .save(
+                "provider-b",
+                input(
+                    "Secondary",
+                    ApiKeyAction::Replace(SecretString::from("b-secret")),
+                ),
+                "operation-b".to_owned(),
+                "credential-b".to_owned(),
+                2,
+            )
+            .await
+            .unwrap();
+
+        // Unwritten replace: the staged row keeps the previous reference and
+        // the pending intent is discarded because the key never landed.
         sqlx::query(
             "INSERT INTO provider_credential_operations \
-               (id, operation, base_endpoint, model, new_credential_ref, old_credential_ref, updated_at) \
-             VALUES ('interrupted', 'save', 'https://other.example/v1', 'other-model', \
-                     'never-written', NULL, 2)",
+               (id, provider_id, operation, base_endpoint, model, new_credential_ref, \
+                old_credential_ref, updated_at) \
+             VALUES ('interrupted', 'provider-a', 'save', 'https://other.example/v1', \
+                     'other-model', 'never-written', 'credential-old', 3)",
         )
         .execute(&pool)
         .await
         .unwrap();
 
-        let recovered = service.load().await.unwrap();
-        assert_eq!(recovered.model, "fixture-model");
+        let (providers, _) = service.list_providers().await.unwrap();
+        let provider_a = providers
+            .iter()
+            .find(|provider| provider.id == "provider-a")
+            .unwrap();
+        assert!(provider_a.has_api_key);
+        assert!(store.snapshot().contains_key("credential-old"));
+        assert!(!store.snapshot().contains_key("never-written"));
         let operation_count: i64 =
             sqlx::query_scalar("SELECT count(*) FROM provider_credential_operations")
                 .fetch_one(&pool)
@@ -183,85 +372,7 @@ fn recovery_discards_unwritten_replace_and_locked_store_fails_closed() {
                 .unwrap();
         assert_eq!(operation_count, 0);
 
-        service
-            .save(
-                input(ApiKeyAction::Replace(SecretString::from("secret"))),
-                "replace".to_owned(),
-                "credential".to_owned(),
-                3,
-            )
-            .await
-            .unwrap();
-        store.set_unavailable(true);
-        assert!(matches!(
-            service.load().await,
-            Err(ProviderError::CredentialUnavailable)
-        ));
-
-        let unavailable_keep = service
-            .save(
-                ProviderProfileInput {
-                    model: "must-not-commit".to_owned(),
-                    ..input(ApiKeyAction::Keep)
-                },
-                "keep-unavailable".to_owned(),
-                "unused".to_owned(),
-                4,
-            )
-            .await;
-        assert!(matches!(
-            unavailable_keep,
-            Err(ProviderError::CredentialUnavailable)
-        ));
-        let stored_model: String =
-            sqlx::query_scalar("SELECT model FROM provider_profiles WHERE id = 'default'")
-                .fetch_one(&pool)
-                .await
-                .unwrap();
-        assert_eq!(stored_model, "fixture-model");
-
-        store.set_unavailable(false);
-        store.remove_direct("credential");
-        let missing_keep = service
-            .save(
-                ProviderProfileInput {
-                    model: "also-must-not-commit".to_owned(),
-                    ..input(ApiKeyAction::Keep)
-                },
-                "keep-missing".to_owned(),
-                "unused".to_owned(),
-                5,
-            )
-            .await;
-        assert!(matches!(
-            missing_keep,
-            Err(ProviderError::CredentialMissing)
-        ));
-        let stored_model: String =
-            sqlx::query_scalar("SELECT model FROM provider_profiles WHERE id = 'default'")
-                .fetch_one(&pool)
-                .await
-                .unwrap();
-        assert_eq!(stored_model, "fixture-model");
-    });
-}
-
-#[test]
-fn recovery_replays_written_save_cleanup_and_delete_boundaries() {
-    run_async(async {
-        let pool = migrated_pool().await;
-        let store = Arc::new(FakeCredentialStore::default());
-        let service = ProviderProfileService::new(pool.clone(), store.clone());
-        service
-            .save(
-                input(ApiKeyAction::Replace(SecretString::from("old-secret"))),
-                "initial".to_owned(),
-                "credential-old".to_owned(),
-                1,
-            )
-            .await
-            .unwrap();
-
+        // Written save replays onto its owning provider only.
         store
             .set(
                 "credential-new",
@@ -270,81 +381,304 @@ fn recovery_replays_written_save_cleanup_and_delete_boundaries() {
             .unwrap();
         sqlx::query(
             "INSERT INTO provider_credential_operations \
-               (id, operation, base_endpoint, model, new_credential_ref, old_credential_ref, updated_at) \
-             VALUES ('written-save', 'save', 'https://new.example/v1', 'new-model', \
-                     'credential-new', 'credential-old', 2)",
+               (id, provider_id, operation, base_endpoint, model, new_credential_ref, \
+                old_credential_ref, updated_at) \
+             VALUES ('written-save', 'provider-a', 'save', 'https://new.example/v1', \
+                     'new-model', 'credential-new', 'credential-old', 4)",
         )
         .execute(&pool)
         .await
         .unwrap();
 
-        let recovered = service.load().await.unwrap();
-        assert_eq!(recovered.base_endpoint, "https://new.example/v1");
-        assert_eq!(recovered.model, "new-model");
-        assert_eq!(
-            store.snapshot(),
-            HashMap::from([("credential-new".to_owned(), "new-secret".to_owned())])
-        );
+        let (provider_a, secret) = service.load_by_id_with_secret("provider-a").await.unwrap();
+        assert_eq!(provider_a.base_endpoint, "https://new.example/v1");
+        assert_eq!(provider_a.model, "new-model");
+        assert_eq!(secret.unwrap().expose_secret(), "new-secret");
+        assert!(!store.snapshot().contains_key("credential-old"));
+        assert!(store.snapshot().contains_key("credential-b"));
+        let (provider_b, secret_b) = service.load_by_id_with_secret("provider-b").await.unwrap();
+        assert_eq!(provider_b.model, "fixture-model");
+        assert_eq!(secret_b.unwrap().expose_secret(), "b-secret");
 
+        // Pending delete replay removes the row, keyring entry, and, for the
+        // active provider, the activation pointer.
+        service.set_active("provider-b").await.unwrap();
         sqlx::query(
             "INSERT INTO provider_credential_operations \
-               (id, operation, old_credential_ref) \
-             VALUES ('interrupted-delete', 'delete', 'credential-new')",
+               (id, provider_id, operation, old_credential_ref) \
+             VALUES ('interrupted-delete', 'provider-b', 'delete', 'credential-b')",
         )
         .execute(&pool)
         .await
         .unwrap();
         service.reconcile().await.unwrap();
-        assert!(store.snapshot().is_empty());
-        let profile_count: i64 = sqlx::query_scalar("SELECT count(*) FROM provider_profiles")
-            .fetch_one(&pool)
-            .await
+        assert!(!store.snapshot().contains_key("credential-b"));
+        assert!(store.snapshot().contains_key("credential-new"));
+        let (providers, active) = service.list_providers().await.unwrap();
+        assert_eq!(
+            providers
+                .iter()
+                .map(|provider| provider.id.as_str())
+                .collect::<Vec<_>>(),
+            ["provider-a"]
+        );
+        assert_eq!(active, None);
+
+        // A locked store fails closed and leaves the credential untouched.
+        store.set_unavailable(true);
+        assert!(matches!(
+            service
+                .save(
+                    "provider-a",
+                    input(
+                        "Primary",
+                        ApiKeyAction::Replace(SecretString::from("secret"))
+                    ),
+                    "operation-unavailable".to_owned(),
+                    "credential-x".to_owned(),
+                    5,
+                )
+                .await,
+            Err(ProviderError::CredentialUnavailable)
+        ));
+        assert!(matches!(
+            service.load_by_id_with_secret("provider-a").await,
+            Err(ProviderError::CredentialUnavailable)
+        ));
+
+        store.set_unavailable(false);
+        let (providers, _) = service.list_providers().await.unwrap();
+        let provider_a = providers
+            .iter()
+            .find(|provider| provider.id == "provider-a")
             .unwrap();
-        let operation_count: i64 =
-            sqlx::query_scalar("SELECT count(*) FROM provider_credential_operations")
+        assert!(provider_a.has_api_key);
+        assert!(store.snapshot().contains_key("credential-new"));
+        assert!(!store.snapshot().contains_key("credential-x"));
+
+        // Keep against a vanished keyring entry rejects the write.
+        let model_before_keep: String =
+            sqlx::query_scalar("SELECT model FROM providers WHERE id = 'provider-a'")
                 .fetch_one(&pool)
                 .await
                 .unwrap();
-        assert_eq!((profile_count, operation_count), (0, 0));
+        store.remove_direct("credential-new");
+        assert!(matches!(
+            service
+                .save(
+                    "provider-a",
+                    ProviderInput {
+                        model: "must-not-commit".to_owned(),
+                        models: vec!["must-not-commit".to_owned()],
+                        ..input("Primary", ApiKeyAction::Keep)
+                    },
+                    "operation-missing-keep".to_owned(),
+                    "unused".to_owned(),
+                    6,
+                )
+                .await,
+            Err(ProviderError::CredentialMissing)
+        ));
+        let stored_model: String =
+            sqlx::query_scalar("SELECT model FROM providers WHERE id = 'provider-a'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(stored_model, model_before_keep);
     });
 }
 
 #[test]
-fn concurrent_profile_replacements_are_serialized_without_orphaned_credentials() {
+fn deleting_active_provider_clears_activation_and_unbinds_conversations() {
+    run_async(async {
+        let pool = migrated_pool().await;
+        let persistence = ConversationPersistenceService::new(pool.clone());
+        persistence
+            .create_conversation(
+                NewConversation {
+                    id: "conversation".to_owned(),
+                    title: "Providers".to_owned(),
+                    root_node_id: "root".to_owned(),
+                },
+                NewNode {
+                    id: "root".to_owned(),
+                    parent_id: None,
+                    conversation_id: "conversation".to_owned(),
+                    role: Role::User,
+                    content: "question".to_owned(),
+                    model: None,
+                    created_at: 1,
+                    metadata: json!({}),
+                },
+            )
+            .await
+            .unwrap();
+
+        let store = Arc::new(FakeCredentialStore::default());
+        let service = ProviderService::new(pool.clone(), store.clone());
+        service
+            .save(
+                "provider-a",
+                input(
+                    "Primary",
+                    ApiKeyAction::Replace(SecretString::from("secret")),
+                ),
+                "operation-create-a".to_owned(),
+                "credential-a".to_owned(),
+                1,
+            )
+            .await
+            .unwrap();
+        service
+            .save(
+                "provider-b",
+                input("Secondary", ApiKeyAction::Keep),
+                "operation-create-b".to_owned(),
+                "unused".to_owned(),
+                2,
+            )
+            .await
+            .unwrap();
+        service.set_active("provider-a").await.unwrap();
+        sqlx::query(
+            "UPDATE conversations \
+             SET provider_id = 'provider-a', model = 'primary-model', reasoning_effort = 'low' \
+             WHERE id = 'conversation'",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        assert!(service
+            .delete("provider-a", "operation-delete-a".to_owned())
+            .await
+            .unwrap());
+
+        let (providers, active) = service.list_providers().await.unwrap();
+        assert_eq!(
+            providers
+                .iter()
+                .map(|provider| provider.id.as_str())
+                .collect::<Vec<_>>(),
+            ["provider-b"]
+        );
+        assert_eq!(active, None);
+        assert!(store.snapshot().is_empty());
+        let binding: (Option<String>, Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT provider_id, model, reasoning_effort FROM conversations \
+             WHERE id = 'conversation'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            binding,
+            (
+                None,
+                Some("primary-model".to_owned()),
+                Some("low".to_owned())
+            )
+        );
+        assert!(matches!(
+            service.load_active().await,
+            Err(ProviderError::ProfileNotFound)
+        ));
+
+        // The IPC contract keeps the binding paired: the residual `model`
+        // column left by FK SET NULL must not surface as a binding value, or
+        // the frontend would render (and generation would resolve) a model
+        // from the deleted provider.
+        let tree = persistence
+            .load_conversation_tree("conversation")
+            .await
+            .unwrap();
+        let dto = ConversationDto::from(tree.conversation);
+        assert_eq!(dto.provider_id, None);
+        assert_eq!(dto.model, None);
+        // Effort is independent of the binding and survives the deletion.
+        assert_eq!(
+            dto.reasoning_effort,
+            Some(canopy_lib::conversations::commands::ReasoningEffortDto::Low)
+        );
+
+        service.set_active("provider-b").await.unwrap();
+        assert_eq!(service.load_active().await.unwrap().id, "provider-b");
+    });
+}
+
+#[test]
+fn concurrent_provider_saves_are_serialized_without_orphaned_credentials() {
     run_async(async {
         let pool = migrated_pool().await;
         let store = Arc::new(FakeCredentialStore::default());
-        let first = ProviderProfileService::new(pool.clone(), store.clone());
-        let second = ProviderProfileService::new(pool.clone(), store.clone());
-        let first_save = first.save(
-            ProviderProfileInput {
-                model: "model-first".to_owned(),
-                ..input(ApiKeyAction::Replace(SecretString::from("value-first")))
-            },
-            "operation-first".to_owned(),
+        let first = ProviderService::new(pool.clone(), store.clone());
+        let second = ProviderService::new(pool.clone(), store.clone());
+
+        let first_create = first.save(
+            "provider-a",
+            input(
+                "Primary",
+                ApiKeyAction::Replace(SecretString::from("value-first")),
+            ),
+            "operation-create-first".to_owned(),
             "credential-first".to_owned(),
             1,
         );
-        let second_save = second.save(
-            ProviderProfileInput {
-                model: "model-second".to_owned(),
-                ..input(ApiKeyAction::Replace(SecretString::from("value-second")))
-            },
-            "operation-second".to_owned(),
+        let second_create = second.save(
+            "provider-b",
+            input(
+                "Secondary",
+                ApiKeyAction::Replace(SecretString::from("value-second")),
+            ),
+            "operation-create-second".to_owned(),
             "credential-second".to_owned(),
             2,
         );
         let (first_result, second_result) =
-            futures_util::future::join(first_save, second_save).await;
+            futures_util::future::join(first_create, second_create).await;
+        first_result.unwrap();
+        second_result.unwrap();
+        assert_eq!(store.snapshot().len(), 2);
+
+        let first_replace = first.save(
+            "provider-a",
+            ProviderInput {
+                model: "model-first".to_owned(),
+                models: vec!["model-first".to_owned()],
+                ..input(
+                    "Primary",
+                    ApiKeyAction::Replace(SecretString::from("again-first")),
+                )
+            },
+            "operation-replace-first".to_owned(),
+            "credential-again-first".to_owned(),
+            3,
+        );
+        let second_replace = second.save(
+            "provider-a",
+            ProviderInput {
+                model: "model-second".to_owned(),
+                models: vec!["model-second".to_owned()],
+                ..input(
+                    "Primary",
+                    ApiKeyAction::Replace(SecretString::from("again-second")),
+                )
+            },
+            "operation-replace-second".to_owned(),
+            "credential-again-second".to_owned(),
+            4,
+        );
+        let (first_result, second_result) =
+            futures_util::future::join(first_replace, second_replace).await;
         first_result.unwrap();
         second_result.unwrap();
 
-        let profile = first.load().await.unwrap();
+        let provider = first.load_by_id("provider-a").await.unwrap();
         assert!(matches!(
-            profile.model.as_str(),
+            provider.model.as_str(),
             "model-first" | "model-second"
         ));
-        assert_eq!(store.snapshot().len(), 1);
+        assert_eq!(store.snapshot().len(), 2);
         let operation_count: i64 =
             sqlx::query_scalar("SELECT count(*) FROM provider_credential_operations")
                 .fetch_one(&pool)
@@ -367,27 +701,106 @@ fn migration_is_additive_and_contains_no_secret_column() {
         .unwrap();
         assert!(tables.contains(&"conversations".to_owned()));
         assert!(tables.contains(&"nodes".to_owned()));
-        assert!(tables.contains(&"provider_profiles".to_owned()));
+        assert!(tables.contains(&"providers".to_owned()));
         assert!(tables.contains(&"provider_credential_operations".to_owned()));
+        assert!(tables.contains(&"app_settings".to_owned()));
+        assert!(!tables.contains(&"provider_profiles".to_owned()));
 
-        let columns: Vec<String> = sqlx::query_scalar(
-            "SELECT name FROM pragma_table_info('provider_profiles') ORDER BY cid",
-        )
-        .fetch_all(&pool)
-        .await
-        .unwrap();
+        let columns: Vec<String> =
+            sqlx::query_scalar("SELECT name FROM pragma_table_info('providers') ORDER BY cid")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
         assert_eq!(
             columns,
             [
                 "id",
+                "name",
+                "protocol",
                 "base_endpoint",
                 "model",
                 "credential_ref",
-                "updated_at"
+                "created_at",
+                "updated_at",
+                "models"
             ]
         );
         assert!(columns
             .iter()
             .all(|column| !column.contains("key") && !column.contains("secret")));
+    });
+}
+
+#[test]
+fn model_list_is_validated_deduplicated_and_persisted() {
+    run_async(async {
+        let pool = migrated_pool().await;
+        let service = ProviderService::new(pool, Arc::new(FakeCredentialStore::default()));
+
+        let saved = service
+            .save(
+                "provider-models",
+                ProviderInput {
+                    model: "main-model".to_owned(),
+                    models: vec![
+                        "side-model".to_owned(),
+                        "main-model".to_owned(),
+                        "main-model".to_owned(),
+                        " side-model ".to_owned(),
+                    ],
+                    ..input("Models", ApiKeyAction::Keep)
+                },
+                "op-models".to_owned(),
+                "unused".to_owned(),
+                1,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            saved.models,
+            vec!["side-model".to_owned(), "main-model".to_owned()]
+        );
+
+        // The default model must be a member of the list.
+        let outside = service
+            .save(
+                "provider-models",
+                ProviderInput {
+                    model: "ghost-model".to_owned(),
+                    models: vec!["main-model".to_owned()],
+                    ..input("Models", ApiKeyAction::Keep)
+                },
+                "op-models-2".to_owned(),
+                "unused".to_owned(),
+                2,
+            )
+            .await;
+        assert!(matches!(
+            outside,
+            Err(ProviderError::InvalidInput { field: "model", .. })
+        ));
+
+        // Empty and oversized lists are rejected.
+        for models in [
+            Vec::new(),
+            (0..51).map(|index| format!("m-{index}")).collect::<Vec<_>>(),
+        ] {
+            let result = service
+                .save(
+                    "provider-models",
+                    ProviderInput {
+                        models,
+                        ..input("Models", ApiKeyAction::Keep)
+                    },
+                    "op-models-3".to_owned(),
+                    "unused".to_owned(),
+                    3,
+                )
+                .await;
+            assert!(
+                matches!(result, Err(ProviderError::InvalidInput { field: "models", .. })),
+                "list size must be enforced"
+            );
+        }
     });
 }

@@ -7,7 +7,8 @@
     "list_conversations",
     "load_conversation_tree",
     "load_active_path",
-    "archive_conversation"
+    "archive_conversation",
+    "set_conversation_provider"
   ],
   "requests": {
     "create_conversation": {
@@ -39,6 +40,14 @@
     },
     "archive_conversation": {
       "conversation_id": "conversation-fixture"
+    },
+    "set_conversation_provider": {
+      "conversation_id": "conversation-fixture",
+      "binding": {
+        "provider_id": "provider-fixture",
+        "model": "fixture-model"
+      },
+      "reasoning_effort": "medium"
     }
   },
   "successes": {
@@ -213,6 +222,12 @@
           "metadata": {}
         }
       ]
+    },
+    "set_conversation_provider": {
+      "conversation_id": "conversation-fixture",
+      "provider_id": "provider-fixture",
+      "model": "fixture-model",
+      "reasoning_effort": "medium"
     }
   },
   "errors": [
@@ -220,19 +235,26 @@
       "code": "invalid_input",
       "message": "Invalid input.",
       "retryable": false,
-      "details": { "field": "content", "reason": "blank" }
+      "details": {
+        "field": "content",
+        "reason": "blank"
+      }
     },
     {
       "code": "not_found",
       "message": "Not found.",
       "retryable": false,
-      "details": { "entity": "conversation" }
+      "details": {
+        "entity": "conversation"
+      }
     },
     {
       "code": "tree_integrity",
       "message": "Tree invalid.",
       "retryable": false,
-      "details": { "reason": "broken_parent" }
+      "details": {
+        "reason": "broken_parent"
+      }
     },
     {
       "code": "database_unavailable",
@@ -253,7 +275,9 @@
       "code": "rate_limited",
       "message": "Try later.",
       "retryable": true,
-      "details": { "retry_after_ms": 1000 }
+      "details": {
+        "retry_after_ms": 1000
+      }
     },
     {
       "code": "provider_unavailable",
@@ -265,8 +289,16 @@
       "message": "Network failed.",
       "retryable": true
     },
-    { "code": "cancelled", "message": "Cancelled.", "retryable": false },
-    { "code": "internal", "message": "Unexpected failure.", "retryable": false }
+    {
+      "code": "cancelled",
+      "message": "Cancelled.",
+      "retryable": false
+    },
+    {
+      "code": "internal",
+      "message": "Unexpected failure.",
+      "retryable": false
+    }
   ],
   "malformed_successes": [
     {
@@ -334,14 +366,22 @@
     }
   },
   "malformed_errors": [
-    { "code": "unknown", "message": "unsafe", "retryable": true },
+    {
+      "code": "unknown",
+      "message": "unsafe",
+      "retryable": true
+    },
     {
       "code": "internal",
       "message": "unsafe",
       "retryable": false,
       "extra": "field"
     },
-    { "code": "rate_limited", "message": "unsafe", "retryable": "yes" },
+    {
+      "code": "rate_limited",
+      "message": "unsafe",
+      "retryable": "yes"
+    },
     {
       "code": "rate_limited",
       "message": "unsafe",

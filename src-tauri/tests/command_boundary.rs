@@ -107,6 +107,10 @@ fn shared_fixture_round_trips_rust_requests_dtos_errors_and_exact_command_names(
     assert_request!("load_conversation_tree", LoadConversationTreeRequest);
     assert_request!("load_active_path", LoadActivePathRequest);
     assert_request!("archive_conversation", ArchiveConversationRequest);
+    assert_request!(
+        "set_conversation_provider",
+        canopy_lib::conversations::commands::SetConversationProviderRequest
+    );
 
     let conversation: ConversationDto =
         serde_json::from_value(fixture["successes"]["conversation"].clone())
