@@ -1,6 +1,7 @@
 import * as React from "react"
 import {
   Check,
+  ChevronDown,
   KeyRound,
   Plus,
   Radio,
@@ -44,6 +45,12 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import type { ProviderClient } from "@/lib/tauri"
 
 type GlobalSettingsDialogBaseProps = {
@@ -341,22 +348,44 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                   />
                 </Field>
                 <Field data-disabled={mutationDisabled}>
-                  <FieldLabel htmlFor="provider-protocol">协议</FieldLabel>
-                  <select
-                    id="provider-protocol"
-                    className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    value={draft.protocol}
-                    onChange={(event) =>
-                      updateDraft(
-                        "protocol",
-                        event.target.value as ProviderProtocol,
-                      )
-                    }
-                    disabled={mutationDisabled}
-                  >
-                    <option value="openai_compatible">OpenAI 兼容</option>
-                    <option value="anthropic">Anthropic Messages</option>
-                  </select>
+                  <FieldLabel>协议</FieldLabel>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild disabled={mutationDisabled}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full justify-between"
+                        disabled={mutationDisabled}
+                      >
+                        {draft.protocol === "anthropic"
+                          ? "Anthropic Messages"
+                          : "OpenAI 兼容"}
+                        <ChevronDown className="size-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)]">
+                      <DropdownMenuItem
+                        onClick={() =>
+                          updateDraft("protocol", "openai_compatible")
+                        }
+                      >
+                        {draft.protocol === "openai_compatible" && (
+                          <Check className="size-4" />
+                        )}
+                        OpenAI 兼容
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() =>
+                          updateDraft("protocol", "anthropic")
+                        }
+                      >
+                        {draft.protocol === "anthropic" && (
+                          <Check className="size-4" />
+                        )}
+                        Anthropic Messages
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </Field>
                 <Field data-disabled={mutationDisabled}>
                   <FieldLabel htmlFor="provider-endpoint">基础端点</FieldLabel>
