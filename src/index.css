@@ -139,7 +139,8 @@
 /* streamdown 默认给代码块套双层卡片(外层 chrome 卡片 + 内层 body 卡片,
    双层边框/背景/内边距)。这里只保留 body 一层卡片:
    - 外层去掉边框/背景/内边距,退化为纯布局层。
-   - body 由 overflow-hidden 改为横向滚动(宽代码不裁切)。
+   - body 保持 overflow: hidden(避免 WebKit 滚动条角落遮挡底角圆角边框),
+     由内部 pre 负责横向滚动(宽代码不裁切)。
    - 复制按钮默认 sticky 悬浮(滚动时跟随视口),改为固定停在语言标签行:
      sticky 挂在药丸的外层 wrapper 上(无 data 属性),用 :has() 反选;
      药丸与语言行的对齐由库内置 -mt-10 负边距负责,不要改 gap/负边距。
@@ -149,10 +150,21 @@
   border: 0;
   background: transparent;
   padding: 0;
+  border-radius: 0;
+  content-visibility: visible !important;
+  contain: none !important;
 }
 
 .assistant-markdown [data-streamdown="code-block-body"] {
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--background);
+}
+
+.assistant-markdown [data-streamdown="code-block-body"] pre {
   overflow-x: auto;
+  margin: 0;
 }
 
 .assistant-markdown
