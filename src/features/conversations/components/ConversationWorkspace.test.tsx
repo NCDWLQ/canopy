@@ -717,8 +717,7 @@ describe("ConversationWorkspace", () => {
     expect(await screen.findByText("已归档 — 只读")).toBeVisible()
   })
 
-  it("visually truncates history titles and exposes the complete title on hover and focus", async () => {
-    const user = userEvent.setup()
+  it("visually truncates history titles and exposes the complete title via a native tooltip", async () => {
     const longTitle =
       "A complete automatic conversation title that is wider than the sidebar"
     client.listConversations.mockResolvedValueOnce([
@@ -733,15 +732,8 @@ describe("ConversationWorkspace", () => {
     const title = within(historyButton).getByText(longTitle)
 
     expect(title).toHaveClass("truncate")
-    await user.hover(historyButton)
-    expect(await screen.findByRole("tooltip")).toHaveTextContent(longTitle)
-    await user.unhover(historyButton)
-    await user.keyboard("{Escape}")
-    await waitFor(() => {
-      expect(screen.queryByRole("tooltip")).not.toBeInTheDocument()
-    })
-    act(() => historyButton.focus())
-    expect(await screen.findByRole("tooltip")).toHaveTextContent(longTitle)
+    expect(title).toHaveAttribute("title", longTitle)
+    expect(within(historyButton).queryByRole("tooltip")).not.toBeInTheDocument()
   })
 
   it("renders one transient response and merges only the authoritative completion", async () => {

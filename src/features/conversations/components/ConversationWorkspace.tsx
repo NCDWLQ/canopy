@@ -348,40 +348,33 @@ export function ConversationWorkspace({
               {store.history.summaries.map((summary) => (
                 <li key={summary.id}>
                   <div className="group relative flex items-center">
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            className="h-auto w-full min-w-0 justify-between px-2 py-2 pr-9 text-left"
-                            aria-current={
-                              !isBlankConversation &&
-                              store.conversationId === summary.id
-                                ? "page"
-                                : undefined
-                            }
-                            disabled={
-                              store.status === "loading" ||
-                              isGenerationActive(store.generation)
-                            }
-                            onClick={() =>
-                              void store.selectConversation(client, summary.id)
-                            }
-                          >
-                            <span className="min-w-0 truncate">
-                              {summary.title}
-                            </span>
-                            {summary.isArchived && (
-                              <Badge className="shrink-0" variant="secondary">
-                                已归档
-                              </Badge>
-                            )}
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>{summary.title}</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-auto w-full min-w-0 justify-between px-2 py-2 pr-9 text-left"
+                      aria-current={
+                        !isBlankConversation &&
+                        store.conversationId === summary.id
+                          ? "page"
+                          : undefined
+                      }
+                      disabled={
+                        store.status === "loading" ||
+                        isGenerationActive(store.generation)
+                      }
+                      onClick={() =>
+                        void store.selectConversation(client, summary.id)
+                      }
+                    >
+                      <span className="min-w-0 truncate" title={summary.title}>
+                        {summary.title}
+                      </span>
+                      {summary.isArchived && (
+                        <Badge className="shrink-0" variant="secondary">
+                          已归档
+                        </Badge>
+                      )}
+                    </Button>
                     {!summary.isArchived && (
                       <Button
                         type="button"
