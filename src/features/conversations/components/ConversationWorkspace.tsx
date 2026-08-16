@@ -362,8 +362,8 @@ export function ConversationWorkspace({
                         className={cn(
                           "group relative flex items-center rounded-lg transition-colors motion-reduce:transition-none",
                           isCurrent
-                            ? "bg-background shadow-xs"
-                            : "hover:bg-muted",
+                            ? "bg-sidebar-accent"
+                            : "hover:bg-sidebar-accent",
                         )}
                       >
                         <button

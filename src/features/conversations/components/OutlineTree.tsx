@@ -204,8 +204,8 @@ export function OutlineTree({
             tabIndex={isFocused ? 0 : -1}
             className={`flex h-9 cursor-pointer items-center gap-1.5 rounded-lg pr-2.5 text-sm outline-none transition-colors motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-ring ${
               isActive
-                ? "bg-background font-medium text-foreground shadow-xs"
-                : "hover:bg-muted"
+                ? "bg-sidebar-accent font-medium"
+                : "hover:bg-sidebar-accent"
             }`}
             style={{ paddingLeft: `${(row.level - 1) * 16 + 10}px` }}
             onClick={() => onSelect(node.id)}

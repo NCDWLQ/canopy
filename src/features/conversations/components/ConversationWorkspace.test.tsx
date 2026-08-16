@@ -256,10 +256,7 @@ describe("ConversationWorkspace", () => {
     expect(currentHistoryRow).toHaveAttribute("aria-current", "page")
     // The row surface (hover/selected pill) lives on the wrapper so hovering
     // the archive action keeps the row highlighted.
-    expect(currentHistoryRow.parentElement).toHaveClass(
-      "bg-background",
-      "shadow-xs",
-    )
+    expect(currentHistoryRow.parentElement).toHaveClass("bg-sidebar-accent")
     expect(within(pane).getByText(right.content)).toBeVisible()
     expect(within(pane).queryByText(left.content)).not.toBeInTheDocument()
     expect(
