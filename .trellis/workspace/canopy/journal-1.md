@@ -515,3 +515,24 @@ Committed pending sidebar restyle (single scroll area, sticky section headers, r
 ### Status
 
 [OK] **Completed**
+
+
+## Session 24: 后台生成：跨会话切换与多路并发生成
+
+**Date**: 2026-08-16
+**Task**: 后台生成：跨会话切换与多路并发生成
+**Branch**: `main`
+
+### Summary
+
+实现生成期间自由切换会话：store 单例 generation 重构为按会话键控的 GenerationRun 注册表（含 priorChildIds/parentPreview），事件守卫面向注册表、取消隐式取消与卸载取消；守卫放宽（切换/新建/同会话切节点放行，树变更按会话加锁）；切回强制回到生成路径并续显流式内容；后台完成/失败经 sonner toast 通知——因 sonner 2.x 无整卡点击 API，用 toast.custom 自定义可点击卡片（prompt 标题+回复预览截断、top-right、expand、官方配方面包），并补真实渲染集成测试防 mock 盲区；同步更新 state-management/hook-guidelines 规范。经验：取消/关闭从不持久化部分内容（后端契约）；toast mock 测试需配真实渲染层验证。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6499828` | (see git log) |
+
+### Status
+
+[OK] **Completed**
