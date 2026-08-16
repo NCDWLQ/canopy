@@ -91,6 +91,26 @@ decoded and projected before entering the store.
 - Stale failures must not replace the status or error owned by a newer load or
   blank-draft transition.
 
+## Generation Interruption and Off-Target Mutations
+
+- Cancellation is synchronous in the store: `cancelGenerationRun` flips
+  `generation.phase` to `cancelled` immediately, so `isGenerationActive` is
+  `false` as soon as the controller's `cancel()` returns. Mutation
+  orchestration may cancel-then-proceed without awaiting the provider
+  terminal event (the run/epoch guards ignore the late terminal).
+- Whether a mutation interrupts the active generation is a user-intent
+  decision owned by the workspace controller (e.g. behind a confirmation
+  dialog), not by blanket store guards. `archiveConversation` therefore has
+  no `isGenerationActive` / `status !== "ready"` early-returns; the
+  controller cancels first when — and only when — the confirmed target is
+  the generating current conversation.
+- Mutations targeting a conversation other than the currently loaded one
+  (e.g. archive-by-ID from a history row) must not touch the global
+  conversation `status`/`error` — that would disable the whole workspace for
+  an unrelated failure. Route their errors to the owning slice's channel
+  (history rows use `history.status`/`history.error`, rendered by the
+  sidebar history Alert).
+
 ## Scenario: Provider Generation Workspace Projection
 
 ### 1. Scope / Trigger
