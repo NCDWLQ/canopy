@@ -19,6 +19,16 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Separator } from "@/components/ui/separator"
 import {
   Tooltip,
@@ -140,6 +150,9 @@ export function ConversationWorkspace({
   })
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true)
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(false)
+  const [pendingArchiveId, setPendingArchiveId] = React.useState<string | null>(
+    null,
+  )
 
   React.useEffect(() => {
     void loadProviderProfile(providerClient)
@@ -278,6 +291,18 @@ export function ConversationWorkspace({
     else void controller.loadConversation(store.conversationId)
   }
 
+  const pendingArchiveSummary =
+    pendingArchiveId === null
+      ? null
+      : (store.history.summaries.find((item) => item.id === pendingArchiveId) ??
+        null)
+  // Re-evaluated from the live store on every render while the dialog is
+  // open, so the warning reflects the confirm-time generation state.
+  const pendingArchiveInterrupts =
+    pendingArchiveId !== null &&
+    pendingArchiveId === store.conversationId &&
+    isGenerationActive(store.generation)
+
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
       <aside
@@ -322,40 +347,48 @@ export function ConversationWorkspace({
             <ul aria-label="会话历史记录" className="flex flex-col gap-1">
               {store.history.summaries.map((summary) => (
                 <li key={summary.id}>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          className="h-auto w-full min-w-0 justify-between px-2 py-2 text-left"
-                          aria-current={
-                            !isBlankConversation &&
-                            store.conversationId === summary.id
-                              ? "page"
-                              : undefined
-                          }
-                          disabled={
-                            store.status === "loading" ||
-                            isGenerationActive(store.generation)
-                          }
-                          onClick={() =>
-                            void store.selectConversation(client, summary.id)
-                          }
-                        >
-                          <span className="min-w-0 truncate">
-                            {summary.title}
-                          </span>
-                          {summary.isArchived && (
-                            <Badge className="shrink-0" variant="secondary">
-                              已归档
-                            </Badge>
-                          )}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>{summary.title}</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                  <div className="group relative flex items-center">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-auto w-full min-w-0 justify-between px-2 py-2 pr-9 text-left"
+                      aria-current={
+                        !isBlankConversation &&
+                        store.conversationId === summary.id
+                          ? "page"
+                          : undefined
+                      }
+                      disabled={
+                        store.status === "loading" ||
+                        isGenerationActive(store.generation)
+                      }
+                      onClick={() =>
+                        void store.selectConversation(client, summary.id)
+                      }
+                    >
+                      <span className="min-w-0 truncate" title={summary.title}>
+                        {summary.title}
+                      </span>
+                      {summary.isArchived && (
+                        <Badge className="shrink-0" variant="secondary">
+                          已归档
+                        </Badge>
+                      )}
+                    </Button>
+                    {!summary.isArchived && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-1 top-1/2 size-7 -translate-y-1/2 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 hover:text-foreground"
+                        aria-label="归档"
+                        title="归档"
+                        onClick={() => setPendingArchiveId(summary.id)}
+                      >
+                        <Archive className="size-3.5" aria-hidden="true" />
+                      </Button>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>
@@ -474,23 +507,6 @@ export function ConversationWorkspace({
               </Badge>
             )}
           </div>
-
-          <div className="flex items-center gap-2">
-            {canEditDraft && (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={controller.mutationLocked}
-                title={
-                  controller.mutationLocked ? "请等待当前回复完成。" : "归档"
-                }
-                onClick={() => void controller.archiveConversation()}
-              >
-                <Archive data-icon="inline-start" />
-                归档
-              </Button>
-            )}
-          </div>
         </header>
 
         {isBlankConversation ? (
@@ -599,6 +615,48 @@ export function ConversationWorkspace({
           </div>
         )}
       </div>
+
+      <AlertDialog
+        open={pendingArchiveId !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingArchiveId(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>归档会话？</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingArchiveSummary !== null && (
+                <span className="block font-medium text-foreground">
+                  {pendingArchiveSummary.title}
+                </span>
+              )}
+              <span className="block">
+                归档后会话转为只读，并在历史记录中标记为已归档。
+              </span>
+              {pendingArchiveInterrupts && (
+                <span className="block">归档将打断正在进行的生成。</span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPendingArchiveId(null)}>
+              取消
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const target = pendingArchiveId
+                setPendingArchiveId(null)
+                if (target !== null) {
+                  void controller.archiveConversation(target)
+                }
+              }}
+            >
+              归档
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

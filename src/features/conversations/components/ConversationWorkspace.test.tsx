@@ -486,6 +486,19 @@ describe("ConversationWorkspace", () => {
       .getState()
       .loadConversation(client, root.conversationId)
     useConversationStore.getState().selectNode(right.id)
+    useConversationStore.setState({
+      history: {
+        status: "ready",
+        summaries: [
+          {
+            ...tree.conversation,
+            isArchived: true,
+            updatedAt: right.createdAt,
+          },
+        ],
+        error: null,
+      },
+    })
 
     render(<ConversationWorkspace />)
 
@@ -495,6 +508,9 @@ describe("ConversationWorkspace", () => {
       within(screen.getByTestId("conversation-pane")).getByText(right.content),
     ).toBeVisible()
     expect(screen.getByRole("textbox", { name: "消息输入框" })).toBeDisabled()
+    // The archived history row keeps only its badge; there is no archive
+    // entry point anywhere (header action removed, archived rows hide it).
+    expect(screen.getByText("已归档")).toBeVisible()
     expect(
       screen.queryByRole("button", { name: "归档" }),
     ).not.toBeInTheDocument()
@@ -701,8 +717,7 @@ describe("ConversationWorkspace", () => {
     expect(await screen.findByText("已归档 — 只读")).toBeVisible()
   })
 
-  it("visually truncates history titles and exposes the complete title on hover and focus", async () => {
-    const user = userEvent.setup()
+  it("visually truncates history titles and exposes the complete title via a native tooltip", async () => {
     const longTitle =
       "A complete automatic conversation title that is wider than the sidebar"
     client.listConversations.mockResolvedValueOnce([
@@ -717,15 +732,8 @@ describe("ConversationWorkspace", () => {
     const title = within(historyButton).getByText(longTitle)
 
     expect(title).toHaveClass("truncate")
-    await user.hover(historyButton)
-    expect(await screen.findByRole("tooltip")).toHaveTextContent(longTitle)
-    await user.unhover(historyButton)
-    await user.keyboard("{Escape}")
-    await waitFor(() => {
-      expect(screen.queryByRole("tooltip")).not.toBeInTheDocument()
-    })
-    act(() => historyButton.focus())
-    expect(await screen.findByRole("tooltip")).toHaveTextContent(longTitle)
+    expect(title).toHaveAttribute("title", longTitle)
+    expect(within(historyButton).queryByRole("tooltip")).not.toBeInTheDocument()
   })
 
   it("renders one transient response and merges only the authoritative completion", async () => {
@@ -998,6 +1006,13 @@ describe("ConversationWorkspace", () => {
       .getState()
       .loadConversation(client, root.conversationId)
     useConversationStore.getState().selectNode(right.id)
+    useConversationStore.setState({
+      history: {
+        status: "ready",
+        summaries: [{ ...tree.conversation, updatedAt: right.createdAt }],
+        error: null,
+      },
+    })
     render(<ConversationWorkspace />)
 
     const pane = await screen.findByTestId("conversation-pane")
@@ -1019,13 +1034,29 @@ describe("ConversationWorkspace", () => {
     const cancelButton = screen.getByRole("button", { name: "取消生成" })
     expect(cancelButton).toBeVisible()
     expect(cancelButton).toBeEnabled()
+    // The header archive entry point is gone; the history-row archive button
+    // stays visible and enabled during streaming, and merely opening or
+    // cancelling its dialog must never interrupt anything.
     const archiveButton = screen.getByRole("button", { name: "归档" })
     expect(archiveButton).toBeVisible()
-    expect(archiveButton).toBeDisabled()
-    expect(archiveButton).toHaveAttribute("title", "请等待当前回复完成。")
+    expect(archiveButton).toBeEnabled()
     await user.click(archiveButton)
+    const dialog = screen.getByRole("alertdialog", { name: "归档会话？" })
+    expect(within(dialog).getByText("Branch proof")).toBeVisible()
+    expect(
+      within(dialog).getByText(
+        "归档后会话转为只读，并在历史记录中标记为已归档。",
+      ),
+    ).toBeVisible()
+    expect(within(dialog).getByText("归档将打断正在进行的生成。")).toBeVisible()
     expect(client.archiveConversation).not.toHaveBeenCalled()
     expect(providerClient.cancelGeneration).not.toHaveBeenCalled()
+
+    await user.click(within(dialog).getByRole("button", { name: "取消" }))
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+    expect(client.archiveConversation).not.toHaveBeenCalled()
+    expect(providerClient.cancelGeneration).not.toHaveBeenCalled()
+    expect(useConversationStore.getState().generation.phase).toBe("streaming")
     expect(
       screen.queryByRole("button", { name: "发送消息" }),
     ).not.toBeInTheDocument()
@@ -1039,6 +1070,296 @@ describe("ConversationWorkspace", () => {
     expect(providerClient.cancelGeneration).toHaveBeenCalledTimes(1)
     expect(archiveButton).toBeEnabled()
     expect(archiveButton).toHaveAttribute("title", "归档")
+  })
+
+  it("archives a non-current history row by ID from the confirm dialog without disturbing the loaded conversation", async () => {
+    const user = userEvent.setup()
+    const otherSummary = {
+      id: "conversation-other",
+      title: "Other row",
+      rootNodeId: "other-root",
+      isArchived: false,
+      updatedAt: 1,
+    }
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(right.id)
+    useConversationStore.setState({
+      history: {
+        status: "ready",
+        summaries: [
+          { ...tree.conversation, updatedAt: right.createdAt },
+          otherSummary,
+        ],
+        error: null,
+      },
+    })
+    client.archiveConversation.mockResolvedValueOnce({
+      id: otherSummary.id,
+      title: otherSummary.title,
+      rootNodeId: otherSummary.rootNodeId,
+      isArchived: true,
+    })
+    render(<ConversationWorkspace />)
+
+    const selectButton = screen.getByRole("button", { name: "Other row" })
+    const otherRow = selectButton.closest("li")
+    expect(otherRow).not.toBeNull()
+    // The workspace is writable and ready — the state that used to render the
+    // header archive button. Only the two row buttons exist; no header entry.
+    expect(screen.getAllByRole("button", { name: "归档" })).toHaveLength(2)
+    const archiveButton = within(otherRow!).getByRole("button", {
+      name: "归档",
+    })
+    // Sibling buttons inside one group wrapper — no nested <button> markup.
+    const rowWrapper = archiveButton.parentElement
+    expect(rowWrapper?.querySelectorAll("button")).toHaveLength(2)
+    expect(rowWrapper?.contains(selectButton)).toBe(true)
+    expect(selectButton.contains(archiveButton)).toBe(false)
+    expect(archiveButton.contains(selectButton)).toBe(false)
+    // Hover/focus reveal without layout shift.
+    expect(archiveButton).toHaveClass(
+      "size-7",
+      "text-muted-foreground",
+      "opacity-0",
+      "transition-opacity",
+      "group-hover:opacity-100",
+      "group-focus-within:opacity-100",
+      "hover:text-foreground",
+    )
+
+    await user.click(archiveButton)
+    const dialog = screen.getByRole("alertdialog", { name: "归档会话？" })
+    expect(within(dialog).getByText("Other row")).toBeVisible()
+    expect(
+      within(dialog).getByText(
+        "归档后会话转为只读，并在历史记录中标记为已归档。",
+      ),
+    ).toBeVisible()
+    expect(
+      within(dialog).queryByText("归档将打断正在进行的生成。"),
+    ).not.toBeInTheDocument()
+    expect(client.archiveConversation).not.toHaveBeenCalled()
+
+    await user.click(within(dialog).getByRole("button", { name: "归档" }))
+
+    await waitFor(() => {
+      expect(client.archiveConversation).toHaveBeenCalledTimes(1)
+      expect(client.archiveConversation).toHaveBeenCalledWith(otherSummary.id)
+    })
+    const state = useConversationStore.getState()
+    expect(
+      state.history.summaries.find((item) => item.id === otherSummary.id)
+        ?.isArchived,
+    ).toBe(true)
+    // The global conversation projection is untouched: selection kept, rows
+    // stay enabled, and no sidebar-wide loading/error status is applied.
+    expect(state.conversationId).toBe(root.conversationId)
+    expect(state.isArchived).toBe(false)
+    expect(state.status).toBe("ready")
+    expect(state.error).toBeNull()
+    expect(screen.getByRole("button", { name: "Branch proof" })).toBeEnabled()
+    expect(screen.getByRole("button", { name: /Other row/ })).toBeEnabled()
+    expect(within(otherRow!).getByText("已归档")).toBeVisible()
+    expect(
+      within(otherRow!).queryByRole("button", { name: "归档" }),
+    ).not.toBeInTheDocument()
+  })
+
+  it("cancels the generating current conversation before archiving it from the row dialog", async () => {
+    const user = userEvent.setup()
+    const generationId = "33333333-3333-4333-8333-333333333333"
+    let onEvent: ((event: GenerationEventView) => void) | undefined
+    providerClient.loadProviderProfile.mockResolvedValue({
+      baseEndpoint: "http://127.0.0.1:7788/v1",
+      model: "fixture-model",
+      hasApiKey: false,
+      updatedAt: 10,
+    })
+    providerClient.generateFromActivePath.mockImplementation(
+      (_conversationId, _activeNodeId, callback) => {
+        onEvent = callback
+        return new Promise(() => undefined)
+      },
+    )
+    client.archiveConversation.mockResolvedValueOnce({
+      ...tree.conversation,
+      isArchived: true,
+    })
+
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(right.id)
+    useConversationStore.setState({
+      history: {
+        status: "ready",
+        summaries: [{ ...tree.conversation, updatedAt: right.createdAt }],
+        error: null,
+      },
+    })
+    render(<ConversationWorkspace />)
+
+    const pane = await screen.findByTestId("conversation-pane")
+    await user.click(
+      await within(pane).findByRole("button", { name: "生成回复" }),
+    )
+    act(() => {
+      onEvent!({
+        type: "started",
+        generationId,
+        conversationId: root.conversationId,
+        activeNodeId: right.id,
+        model: "fixture-model",
+      })
+    })
+
+    await user.click(screen.getByRole("button", { name: "归档" }))
+    const dialog = screen.getByRole("alertdialog", { name: "归档会话？" })
+    expect(within(dialog).getByText("归档将打断正在进行的生成。")).toBeVisible()
+
+    await user.click(within(dialog).getByRole("button", { name: "归档" }))
+
+    await waitFor(() => {
+      expect(providerClient.cancelGeneration).toHaveBeenCalledTimes(1)
+      expect(providerClient.cancelGeneration).toHaveBeenCalledWith(generationId)
+      expect(client.archiveConversation).toHaveBeenCalledTimes(1)
+      expect(client.archiveConversation).toHaveBeenCalledWith(
+        root.conversationId,
+      )
+    })
+    // The run is cancelled before the archive command is sent.
+    const [cancelOrder] =
+      providerClient.cancelGeneration.mock.invocationCallOrder
+    const [archiveOrder] = client.archiveConversation.mock.invocationCallOrder
+    expect(cancelOrder).toBeDefined()
+    expect(archiveOrder).toBeDefined()
+    expect(cancelOrder!).toBeLessThan(archiveOrder!)
+
+    await waitFor(() => {
+      const state = useConversationStore.getState()
+      expect(state.isArchived).toBe(true)
+      expect(state.status).toBe("ready")
+      expect(state.generation.phase).toBe("cancelled")
+      expect(
+        state.history.summaries.find((item) => item.id === root.conversationId)
+          ?.isArchived,
+      ).toBe(true)
+    })
+    expect(screen.getByText("已归档 — 只读")).toBeVisible()
+    expect(screen.getByText("已归档")).toBeVisible()
+  })
+
+  it("archives another row during generation without disturbing the active run", async () => {
+    const user = userEvent.setup()
+    const otherSummary = {
+      id: "conversation-other",
+      title: "Other row",
+      rootNodeId: "other-root",
+      isArchived: false,
+      updatedAt: 1,
+    }
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(right.id)
+    useConversationStore.setState({
+      history: {
+        status: "ready",
+        summaries: [
+          { ...tree.conversation, updatedAt: right.createdAt },
+          otherSummary,
+        ],
+        error: null,
+      },
+      generation: {
+        runId: 31,
+        conversationId: root.conversationId,
+        parentNodeId: right.id,
+        generationId: "other-row-gen-id",
+        model: "fixture-model",
+        phase: "streaming",
+        content: "PARTIAL_REPLY",
+      },
+    })
+    client.archiveConversation.mockResolvedValueOnce({
+      id: otherSummary.id,
+      title: otherSummary.title,
+      rootNodeId: otherSummary.rootNodeId,
+      isArchived: true,
+    })
+    render(<ConversationWorkspace />)
+
+    const otherRow = screen
+      .getByRole("button", { name: "Other row" })
+      .closest("li")
+    expect(otherRow).not.toBeNull()
+    await user.click(within(otherRow!).getByRole("button", { name: "归档" }))
+    const dialog = screen.getByRole("alertdialog", { name: "归档会话？" })
+    expect(
+      within(dialog).queryByText("归档将打断正在进行的生成。"),
+    ).not.toBeInTheDocument()
+
+    await user.click(within(dialog).getByRole("button", { name: "归档" }))
+
+    await waitFor(() => {
+      expect(client.archiveConversation).toHaveBeenCalledWith(otherSummary.id)
+    })
+    expect(providerClient.cancelGeneration).not.toHaveBeenCalled()
+    expect(useConversationStore.getState().generation.phase).toBe("streaming")
+    expect(useConversationStore.getState().status).toBe("ready")
+    expect(screen.getByRole("button", { name: "取消生成" })).toBeEnabled()
+  })
+
+  it("decides interruption at confirm time when the run finishes while the dialog is open", async () => {
+    const user = userEvent.setup()
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(right.id)
+    useConversationStore.setState({
+      history: {
+        status: "ready",
+        summaries: [{ ...tree.conversation, updatedAt: right.createdAt }],
+        error: null,
+      },
+      generation: {
+        runId: 57,
+        conversationId: root.conversationId,
+        parentNodeId: right.id,
+        generationId: "confirm-time-gen-id",
+        model: "fixture-model",
+        phase: "streaming",
+        content: "PARTIAL_REPLY",
+      },
+    })
+    render(<ConversationWorkspace />)
+
+    await user.click(screen.getByRole("button", { name: "归档" }))
+    const dialog = screen.getByRole("alertdialog", { name: "归档会话？" })
+    expect(within(dialog).getByText("归档将打断正在进行的生成。")).toBeVisible()
+
+    act(() => {
+      useConversationStore.setState({ generation: { phase: "idle" } })
+    })
+    expect(
+      within(dialog).queryByText("归档将打断正在进行的生成。"),
+    ).not.toBeInTheDocument()
+
+    client.archiveConversation.mockResolvedValueOnce({
+      ...tree.conversation,
+      isArchived: true,
+    })
+    await user.click(within(dialog).getByRole("button", { name: "归档" }))
+
+    await waitFor(() => {
+      expect(client.archiveConversation).toHaveBeenCalledWith(
+        root.conversationId,
+      )
+    })
+    expect(providerClient.cancelGeneration).not.toHaveBeenCalled()
+    expect(useConversationStore.getState().isArchived).toBe(true)
   })
 
   it("opens GlobalSettingsDialog via contextual '配置服务提供商以生成' and updates to '生成回复' on save without auto-generating", async () => {

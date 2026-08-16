@@ -32,7 +32,7 @@ export type WorkspaceGenerationController = {
   generate: () => void
   cancel: () => void
   selectNode: (nodeId: string) => void
-  archiveConversation: () => Promise<void>
+  archiveConversation: (targetId?: string) => Promise<void>
   createConversation: (content: string) => Promise<boolean>
   loadConversation: (conversationId: string) => Promise<void>
   appendNode: (content: string) => Promise<void>
@@ -287,11 +287,23 @@ export function useWorkspaceGenerationController({
     selectNode: (nodeId) => {
       if (prepareMutation()) useConversationStore.getState().selectNode(nodeId)
     },
-    archiveConversation: async () => {
-      if (!prepareMutation()) return
+    archiveConversation: async (targetId) => {
+      const store = useConversationStore.getState()
+      const target = targetId ?? store.conversationId
+      if (target === null) return
+      // Confirm-time interruption: only archiving the generating current
+      // conversation may cancel the run; any other row leaves it untouched.
+      // cancel() flips generation.phase synchronously, so the store call
+      // below observes an inactive generation.
+      if (
+        target === store.conversationId &&
+        isGenerationActive(store.generation)
+      ) {
+        cancel()
+      }
       await useConversationStore
         .getState()
-        .archiveConversation(conversationClient)
+        .archiveConversation(conversationClient, target)
     },
     createConversation: async (content) => {
       if (!prepareMutation()) return false

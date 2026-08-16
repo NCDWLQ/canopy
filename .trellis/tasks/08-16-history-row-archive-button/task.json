@@ -1,0 +1,30 @@
+{
+  "id": "history-row-archive-button",
+  "name": "history-row-archive-button",
+  "title": "Move archive action to history row with hover reveal and confirm dialog",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "canopy",
+  "assignee": "canopy",
+  "createdAt": "2026-08-16",
+  "completedAt": null,
+  "branch": "feat/history-row-archive-button",
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "worktree_path": "/home/jwh/Code/canopy-archive-row",
+    "pr_url": "https://github.com/NCDWLQ/canopy/pull/1",
+    "commit": "45afd07"
+  }
+}

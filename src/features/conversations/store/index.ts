@@ -107,7 +107,10 @@ export type ConversationStore = ConversationTreeState & {
     sourceNodeId: string,
     content: string,
   ) => Promise<void>
-  archiveConversation: (client: ConversationClient) => Promise<void>
+  archiveConversation: (
+    client: ConversationClient,
+    targetId?: string,
+  ) => Promise<void>
   clearError: () => void
   beginGeneration: () => number | null
   acceptGenerationStarted: (
@@ -1019,44 +1022,82 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
       }
     },
 
-    archiveConversation: async (client) => {
+    archiveConversation: async (client, targetId) => {
       const state = get()
-      if (
-        state.conversationId === null ||
-        state.isArchived ||
-        state.status !== "ready" ||
-        isGenerationActive(state.generation)
-      ) {
+      const target = targetId ?? state.conversationId
+      if (target === null) return
+
+      const isCurrent = target === state.conversationId
+      const summary = state.history.summaries.find((item) => item.id === target)
+      if (summary?.isArchived) return
+      if (isCurrent && state.isArchived) return
+
+      if (!isCurrent) {
+        if (summary === undefined) return // row vanished from history
+        // Non-current target: history-only mutation. A failure here must not
+        // disable the whole sidebar via the global conversation status, so
+        // errors surface on the history error channel only.
+        try {
+          const conversation = await client.archiveConversation(target)
+          if (conversation.id !== target || !conversation.isArchived) {
+            set({
+              history: {
+                status: "error" as const,
+                summaries: get().history.summaries,
+                error: TREE_INTEGRITY_ERROR,
+              },
+            })
+            return
+          }
+          set({
+            history: {
+              status: "ready" as const,
+              summaries: upsertSummary(get().history.summaries, {
+                ...summary,
+                isArchived: true,
+              }),
+              error: null,
+            },
+          })
+        } catch (error: unknown) {
+          set({
+            history: {
+              status: "error" as const,
+              summaries: get().history.summaries,
+              error: normalizeUiError(error),
+            },
+          })
+        }
         return
       }
 
+      // Current conversation: the generation/ready guards are owned by the
+      // workspace controller (confirm-time cancel decision), not the store.
       set({ status: "loading", error: null })
       try {
-        const conversation = await client.archiveConversation(
-          state.conversationId,
-        )
+        const conversation = await client.archiveConversation(target)
         if (
-          conversation.id !== state.conversationId ||
+          conversation.id !== target ||
           conversation.rootNodeId !== state.rootNodeId ||
           !conversation.isArchived
         ) {
           set({ status: "error", error: TREE_INTEGRITY_ERROR })
           return
         }
-        const summary = get().history.summaries.find(
+        const liveSummary = get().history.summaries.find(
           (item) => item.id === conversation.id,
         )
         set({
           isArchived: true,
           status: "ready",
           error: null,
-          ...(summary === undefined
+          ...(liveSummary === undefined
             ? {}
             : {
                 history: {
                   status: "ready" as const,
                   summaries: upsertSummary(get().history.summaries, {
-                    ...summary,
+                    ...liveSummary,
                     isArchived: true,
                   }),
                   error: null,
