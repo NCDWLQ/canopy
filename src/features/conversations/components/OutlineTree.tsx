@@ -100,7 +100,7 @@ export function OutlineTree({
 
   if (rows === null) {
     return (
-      <div className="p-4 text-sm text-destructive" role="alert">
+      <div className="px-2.5 py-3 text-sm text-destructive" role="alert">
         无法安全显示会话树。
       </div>
     )
@@ -177,7 +177,7 @@ export function OutlineTree({
 
   return (
     <div
-      className="h-full w-full overflow-y-auto p-1"
+      className="flex w-full flex-col gap-1 py-1"
       role="tree"
       aria-label="会话树"
     >
@@ -202,19 +202,19 @@ export function OutlineTree({
             aria-expanded={hasChildren ? isExpanded : undefined}
             aria-selected={isActive}
             tabIndex={isFocused ? 0 : -1}
-            className={`flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-sm outline-none transition-colors motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-ring ${
+            className={`flex h-9 cursor-pointer items-center gap-1.5 rounded-lg pr-2.5 text-sm outline-none transition-colors motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-ring ${
               isActive
-                ? "bg-accent font-medium text-accent-foreground"
+                ? "bg-background font-medium text-foreground shadow-xs"
                 : "hover:bg-muted"
             }`}
-            style={{ paddingLeft: `${(row.level - 1) * 16 + 8}px` }}
+            style={{ paddingLeft: `${(row.level - 1) * 16 + 10}px` }}
             onClick={() => onSelect(node.id)}
             onFocus={() => setFocusedNodeId(node.id)}
             onKeyDown={(event) => handleKeyDown(event, rowIndex)}
           >
             <button
               type="button"
-              className="flex size-5 items-center justify-center rounded-sm text-muted-foreground outline-none hover:bg-background disabled:opacity-50"
+              className="flex size-5 items-center justify-center rounded-sm text-muted-foreground outline-none transition-colors motion-reduce:transition-none hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50 dark:hover:bg-muted/50 [&_svg]:size-4"
               onClick={(event) => {
                 event.stopPropagation()
                 if (hasChildren) onToggle(node.id)

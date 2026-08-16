@@ -18,6 +18,7 @@ import {
 } from "../store"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   AlertDialog,
@@ -29,7 +30,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Separator } from "@/components/ui/separator"
 import {
   Tooltip,
   TooltipContent,
@@ -308,13 +308,13 @@ export function ConversationWorkspace({
       <aside
         id="conversation-tree-sidebar"
         aria-label="会话树侧栏"
-        className={`flex shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground transition-[width] duration-300 motion-reduce:transition-none ${
+        className={`flex shrink-0 flex-col border-r border-border/70 bg-sidebar text-sidebar-foreground transition-[width] duration-300 motion-reduce:transition-none ${
           isSidebarOpen ? "w-64 md:w-80" : "w-0 overflow-hidden border-none"
         }`}
         aria-hidden={!isSidebarOpen}
         inert={!isSidebarOpen}
       >
-        <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b px-3 text-sm font-semibold">
+        <div className="flex h-12 shrink-0 items-center justify-between gap-2 px-3 text-sm font-semibold">
           <span className="font-bold tracking-tight">Canopy</span>
           <TooltipProvider>
             <Tooltip>
@@ -339,113 +339,129 @@ export function ConversationWorkspace({
             </Tooltip>
           </TooltipProvider>
         </div>
-        <div className="flex h-8 shrink-0 items-center px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          历史记录
-        </div>
-        <div className="max-h-64 shrink-0 overflow-y-auto px-2 pb-2">
-          {store.history.summaries.length > 0 && (
-            <ul aria-label="会话历史记录" className="flex flex-col gap-1">
-              {store.history.summaries.map((summary) => (
-                <li key={summary.id}>
-                  <div className="group relative flex items-center">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="h-auto w-full min-w-0 justify-between px-2 py-2 pr-9 text-left"
-                      aria-current={
-                        !isBlankConversation &&
-                        store.conversationId === summary.id
-                          ? "page"
-                          : undefined
-                      }
-                      disabled={
-                        store.status === "loading" ||
-                        isGenerationActive(store.generation)
-                      }
-                      onClick={() =>
-                        void store.selectConversation(client, summary.id)
-                      }
-                    >
-                      <span className="min-w-0 truncate" title={summary.title}>
-                        {summary.title}
-                      </span>
-                      {summary.isArchived && (
-                        <Badge className="shrink-0" variant="secondary">
-                          已归档
-                        </Badge>
-                      )}
-                    </Button>
-                    {!summary.isArchived && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="absolute right-1 top-1/2 size-7 -translate-y-1/2 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 hover:text-foreground"
-                        aria-label="归档"
-                        title="归档"
-                        onClick={() => setPendingArchiveId(summary.id)}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-2">
+          <section>
+            <div className="sticky top-0 z-10 bg-sidebar px-2.5 pb-1 pt-3 text-sm font-medium text-muted-foreground/70">
+              历史记录
+            </div>
+            {store.history.summaries.length > 0 && (
+              <ul aria-label="会话历史记录" className="flex flex-col gap-1">
+                {store.history.summaries.map((summary) => {
+                  const isCurrent =
+                    !isBlankConversation && store.conversationId === summary.id
+                  return (
+                    <li key={summary.id}>
+                      <div
+                        className={cn(
+                          "group relative flex items-center rounded-lg transition-colors motion-reduce:transition-none",
+                          isCurrent
+                            ? "bg-background shadow-xs"
+                            : "hover:bg-muted",
+                        )}
                       >
-                        <Archive className="size-3.5" aria-hidden="true" />
-                      </Button>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-          {store.history.status === "loading" &&
-            store.history.summaries.length === 0 && (
-              <p className="px-2 py-3 text-sm text-muted-foreground">
-                正在加载历史记录…
+                        <button
+                          type="button"
+                          className={cn(
+                            "flex h-9 w-full min-w-0 cursor-pointer items-center justify-between gap-2 rounded-lg pl-2.5 pr-9 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
+                            isCurrent && "font-medium",
+                          )}
+                          aria-current={isCurrent ? "page" : undefined}
+                          disabled={
+                            store.status === "loading" ||
+                            isGenerationActive(store.generation)
+                          }
+                          onClick={() =>
+                            void store.selectConversation(client, summary.id)
+                          }
+                        >
+                          <span
+                            className="min-w-0 truncate"
+                            title={summary.title}
+                          >
+                            {summary.title}
+                          </span>
+                          {summary.isArchived && (
+                            <Badge className="shrink-0" variant="secondary">
+                              已归档
+                            </Badge>
+                          )}
+                        </button>
+                        {!summary.isArchived && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="absolute inset-y-0 right-1 my-auto size-7 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 hover:text-foreground"
+                            aria-label="归档"
+                            title="归档"
+                            onClick={() => setPendingArchiveId(summary.id)}
+                          >
+                            <Archive className="size-3.5" aria-hidden="true" />
+                          </Button>
+                        )}
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+            {store.history.status === "loading" &&
+              store.history.summaries.length === 0 && (
+                <p className="px-2.5 py-3 text-sm text-muted-foreground">
+                  正在加载历史记录…
+                </p>
+              )}
+            {store.history.status === "empty" && (
+              <p className="px-2.5 py-3 text-sm text-muted-foreground">
+                暂无已保存的会话。
               </p>
             )}
-          {store.history.status === "empty" && (
-            <p className="px-2 py-3 text-sm text-muted-foreground">
-              暂无已保存的会话。
-            </p>
-          )}
-          {store.history.status === "error" && (
-            <Alert variant="destructive">
-              <AlertDescription className="flex flex-col gap-2">
-                <p>{store.history.error.message}</p>
-                {store.history.error.retryable && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void store.retryHistory(client)}
-                  >
-                    重试加载历史记录
-                  </Button>
-                )}
-              </AlertDescription>
-            </Alert>
-          )}
-        </div>
-        <Separator />
-        <div className="flex h-8 shrink-0 items-center px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          会话树
-        </div>
-        <div className="flex-1 overflow-hidden pb-2">
-          {store.rootNodeId !== null && isProjectionValid ? (
-            <OutlineTree
-              rootNodeId={store.rootNodeId}
-              activeNodeId={store.activeNodeId ?? ""}
-              nodesById={store.nodesById}
-              expandedIds={store.expandedIds}
-              onToggle={store.toggleExpanded}
-              onSelect={controller.selectNode}
-            />
-          ) : projectionError !== null ? (
-            <div className="p-4 text-sm text-destructive" role="alert">
-              {projectionError.message}
+            {store.history.status === "error" && (
+              <Alert variant="destructive">
+                <AlertDescription className="flex flex-col gap-2">
+                  <p>{store.history.error.message}</p>
+                  {store.history.error.retryable && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void store.retryHistory(client)}
+                    >
+                      重试加载历史记录
+                    </Button>
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
+          </section>
+          <section>
+            <div className="sticky top-0 z-10 bg-sidebar px-2.5 pb-1 pt-6 text-sm font-medium text-muted-foreground/70">
+              会话树
             </div>
-          ) : (
-            <div className="p-4 text-sm text-muted-foreground">
-              尚未加载会话。
+            <div>
+              {store.rootNodeId !== null && isProjectionValid ? (
+                <OutlineTree
+                  rootNodeId={store.rootNodeId}
+                  activeNodeId={store.activeNodeId ?? ""}
+                  nodesById={store.nodesById}
+                  expandedIds={store.expandedIds}
+                  onToggle={store.toggleExpanded}
+                  onSelect={controller.selectNode}
+                />
+              ) : projectionError !== null ? (
+                <div
+                  className="px-2.5 py-3 text-sm text-destructive"
+                  role="alert"
+                >
+                  {projectionError.message}
+                </div>
+              ) : (
+                <div className="px-2.5 py-3 text-sm text-muted-foreground">
+                  尚未加载会话。
+                </div>
+              )}
             </div>
-          )}
+          </section>
         </div>
-        <Separator />
         <footer className="shrink-0 p-2">
           <GlobalSettingsDialog
             client={providerClient}

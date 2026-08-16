@@ -244,9 +244,16 @@ describe("ConversationWorkspace", () => {
       resolveTree?.(tree)
     })
     const pane = await screen.findByTestId("conversation-pane")
-    expect(
-      screen.getByRole("button", { name: "Branch proof" }),
-    ).toHaveAttribute("aria-current", "page")
+    const currentHistoryRow = screen.getByRole("button", {
+      name: "Branch proof",
+    })
+    expect(currentHistoryRow).toHaveAttribute("aria-current", "page")
+    // The row surface (hover/selected pill) lives on the wrapper so hovering
+    // the archive action keeps the row highlighted.
+    expect(currentHistoryRow.parentElement).toHaveClass(
+      "bg-background",
+      "shadow-xs",
+    )
     expect(within(pane).getByText(right.content)).toBeVisible()
     expect(within(pane).queryByText(left.content)).not.toBeInTheDocument()
     expect(
@@ -1118,8 +1125,13 @@ describe("ConversationWorkspace", () => {
     expect(rowWrapper?.contains(selectButton)).toBe(true)
     expect(selectButton.contains(archiveButton)).toBe(false)
     expect(archiveButton.contains(selectButton)).toBe(false)
-    // Hover/focus reveal without layout shift.
+    // Hover/focus reveal without layout shift. Vertical centering uses
+    // inset-y-0 + my-auto: a -translate-y-1/2 here would be overridden by
+    // Button's active:translate-y-px (both set the `translate` property in
+    // Tailwind v4), making the icon jump ~half its height on press.
     expect(archiveButton).toHaveClass(
+      "inset-y-0",
+      "my-auto",
       "size-7",
       "text-muted-foreground",
       "opacity-0",
