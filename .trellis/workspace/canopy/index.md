@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 21
-- **Last Active**: 2026-08-15
+- **Total Sessions**: 22
+- **Last Active**: 2026-08-16
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~469 | Active |
+| `journal-1.md` | ~492 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 22 | 2026-08-16 | History row archive button with confirm dialog | `eb20651`, `45afd07`, `e2ab7ef` | `main` |
 | 21 | 2026-08-15 | Keep archive action visible during generation | `bc3b539` | `main` |
 | 20 | 2026-08-15 | Optimize new conversation button layout and sidebar hierarchy | `631195b` | `main` |
 | 19 | 2026-08-15 | Simplify generation commit protocol | `88067cc` | `main` |

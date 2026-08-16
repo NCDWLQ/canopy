@@ -467,3 +467,26 @@ Changed the conversation archive button to remain visible during active generati
 ### Status
 
 [OK] **Completed**
+
+
+## Session 22: History row archive button with confirm dialog
+
+**Date**: 2026-08-16
+**Task**: History row archive button with confirm dialog
+**Branch**: `main`
+
+### Summary
+
+Moved the archive action from the workspace header to a hover-revealed icon button on each sidebar history row (sibling buttons, valid HTML). Archiving now requires an AlertDialog confirmation; confirming on the generating current conversation cancels the run first, while other rows archive by ID without disturbing it. Store archiveConversation gained targetId support with history-channel-only errors for non-current targets. History row titles switched to native title tooltips so the bubble no longer blocks the archive icon. Landed via PR #1 (merge 3698b64); spec updated with the generation-interruption / off-target-mutation contract.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `eb20651` | (see git log) |
+| `45afd07` | (see git log) |
+| `e2ab7ef` | (see git log) |
+
+### Status
+
+[OK] **Completed**
