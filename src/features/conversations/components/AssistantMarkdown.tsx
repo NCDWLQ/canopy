@@ -2,6 +2,7 @@ import type { ComponentProps, ReactNode } from "react"
 import { code } from "@streamdown/code"
 import {
   Streamdown,
+  TableCopyDropdown,
   defaultRehypePlugins,
   type Components,
   type ControlsConfig,
@@ -55,6 +56,13 @@ const MARKDOWN_CONTROLS = {
 const MARKDOWN_TRANSLATIONS = {
   copyCode: "复制代码",
   copied: "已复制",
+  copyTable: "复制表格",
+  copyTableAsCsv: "复制为 CSV",
+  copyTableAsMarkdown: "复制为 Markdown",
+  copyTableAsTsv: "复制为 TSV",
+  tableFormatCsv: "CSV",
+  tableFormatMarkdown: "Markdown",
+  tableFormatTsv: "TSV",
 } satisfies Partial<StreamdownTranslations>
 
 const safeUrlTransform: UrlTransform = (url) => {
@@ -105,13 +113,23 @@ type MarkdownTableProps =
   ComponentProps<"table"> | (Record<string, unknown> & { children?: ReactNode })
 
 // streamdown 默认给表格套双层卡片(wrapper 卡片 + 内层滚动盒,双层边框/背景/内边距)。
-// controls.table 已关闭,外层卡片无功能,这里收敛为单层滚动容器。
+// controls.table 已关闭,这里收敛为单层滚动容器,并单独挂 TableCopyDropdown。
+// 复制逻辑靠 closest('[data-streamdown="table-wrapper"]') 找表,wrapper 必须带该属性;
+// 下拉按钮要放在滚动容器外,否则菜单会被 overflow 裁切。
 function LeanTable(props: MarkdownTableProps) {
   return (
-    <div className="my-4 overflow-x-auto rounded-md border border-border">
-      <table className="w-full divide-y divide-border" data-streamdown="table">
-        {props.children}
-      </table>
+    <div className="my-4" data-streamdown="table-wrapper">
+      <div className="flex h-8 items-center justify-end">
+        <TableCopyDropdown className="rounded-md hover:bg-accent" />
+      </div>
+      <div className="overflow-x-auto rounded-md border border-border">
+        <table
+          className="w-full divide-y divide-border"
+          data-streamdown="table"
+        >
+          {props.children}
+        </table>
+      </div>
     </div>
   )
 }

@@ -37,18 +37,17 @@ describe("AssistantMarkdown", () => {
     expect(screen.getByRole("table")).toBeVisible()
   })
 
-  it("renders tables with a single scroll wrapper instead of nested cards", () => {
-    const { container } = render(
+  it("renders tables with a single scroll wrapper and a copy dropdown", () => {
+    render(
       <AssistantMarkdown
         content={"| 名称 | 值 |\n| --- | --- |\n| Canopy | 可用 |"}
       />,
     )
 
     const table = screen.getByRole("table")
-    expect(
-      container.querySelector('[data-streamdown="table-wrapper"]'),
-    ).toBeNull()
+    expect(table.closest('[data-streamdown="table-wrapper"]')).not.toBeNull()
     expect(table.parentElement).toHaveClass("overflow-x-auto")
+    expect(screen.getByRole("button", { name: "复制表格" })).toBeEnabled()
   })
 
   it("preserves standard Markdown soft-break behavior", () => {
