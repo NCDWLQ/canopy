@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { ConversationPane } from "./ConversationPane"
 import type { PathMessageView } from "../types"
@@ -237,5 +237,83 @@ describe("ConversationPane", () => {
       within(assistantArticle!).queryByRole("button", { name: "重新生成" }),
     ).not.toBeInTheDocument()
     expect(screen.getAllByRole("button", { name: "重新生成" })).toHaveLength(1)
+  })
+
+  describe("auto-scroll", () => {
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+
+    beforeEach(() => {
+      scrollIntoView.mockClear()
+    })
+
+    const props = {
+      status: "ready" as const,
+      canBranch: () => false,
+      canEdit: () => false,
+      onCreateBranch: vi.fn(),
+      onEditAsBranch: vi.fn(),
+      onRegenerate: vi.fn(),
+    }
+
+    it("does not scroll when the same path is rebuilt with new identities", () => {
+      const { rerender } = render(
+        <ConversationPane
+          {...props}
+          path={[user1, assistant1]}
+          transientGeneration={null}
+        />,
+      )
+      expect(scrollIntoView).toHaveBeenCalledTimes(1)
+
+      // Identity churn mirrors unrelated store updates such as background
+      // generation deltas in another conversation.
+      rerender(
+        <ConversationPane
+          {...props}
+          path={[{ ...user1 }, { ...assistant1 }]}
+          transientGeneration={null}
+        />,
+      )
+      expect(scrollIntoView).toHaveBeenCalledTimes(1)
+    })
+
+    it("scrolls when the displayed tail changes or transient content grows", () => {
+      const { rerender } = render(
+        <ConversationPane
+          {...props}
+          path={[user1, assistant1]}
+          transientGeneration={null}
+        />,
+      )
+      expect(scrollIntoView).toHaveBeenCalledTimes(1)
+
+      rerender(
+        <ConversationPane
+          {...props}
+          path={[user1, assistant1, user2]}
+          transientGeneration={null}
+        />,
+      )
+      expect(scrollIntoView).toHaveBeenCalledTimes(2)
+
+      rerender(
+        <ConversationPane
+          {...props}
+          path={[user1, assistant1, user2]}
+          transientGeneration={{ phase: "streaming", content: "PARTIAL" }}
+        />,
+      )
+      expect(scrollIntoView).toHaveBeenCalledTimes(3)
+
+      rerender(
+        <ConversationPane
+          {...props}
+          path={[user1, assistant1, user2]}
+          transientGeneration={{ phase: "streaming", content: "PARTIAL_GROWN" }}
+        />,
+      )
+      expect(scrollIntoView).toHaveBeenCalledTimes(4)
+    })
   })
 })
