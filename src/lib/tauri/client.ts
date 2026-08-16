@@ -28,11 +28,14 @@ import {
   listConversationsRequestSchema,
   loadConversationTreeRequestSchema,
   nodeDtoSchema,
+  setConversationProviderRequestSchema,
+  conversationProviderBindingResultSchema,
   type ActivePathDto,
   type ConversationDto,
   type ConversationSummaryDto,
   type ConversationTreeDto,
   type NodeDto,
+  type ConversationProviderBindingResultDto,
 } from "./schemas"
 
 export const CONVERSATION_COMMANDS = {
@@ -44,6 +47,7 @@ export const CONVERSATION_COMMANDS = {
   loadConversationTree: "load_conversation_tree",
   loadActivePath: "load_active_path",
   archiveConversation: "archive_conversation",
+  setConversationProvider: "set_conversation_provider",
 } as const
 
 export interface InvokeTransport {
@@ -82,8 +86,20 @@ export type EditNodeAsBranchInput = {
   sourceNodeId: string
   content: string
 }
+export type SetConversationProviderInput = {
+  conversationId: string
+  binding: { providerId: string; model: string } | null
+  reasoningEffort: "low" | "medium" | "high" | null
+}
 
-export type ConversationClient = ReturnType<typeof createConversationClient>
+export type ConversationClient = Omit<
+  ReturnType<typeof createConversationClient>,
+  "setConversationProvider"
+> & {
+  setConversationProvider?: ReturnType<
+    typeof createConversationClient
+  >["setConversationProvider"]
+}
 
 export function createConversationClient(
   transport: InvokeTransport = defaultTransport,
@@ -188,6 +204,27 @@ export function createConversationClient(
         mapConversation,
       )
     },
+
+    setConversationProvider(input: SetConversationProviderInput) {
+      return call(
+        transport,
+        CONVERSATION_COMMANDS.setConversationProvider,
+        setConversationProviderRequestSchema,
+        {
+          conversation_id: input.conversationId,
+          binding:
+            input.binding === null
+              ? null
+              : {
+                  provider_id: input.binding.providerId,
+                  model: input.binding.model,
+                },
+          reasoning_effort: input.reasoningEffort,
+        },
+        conversationProviderBindingResultSchema,
+        mapConversationProviderBinding,
+      )
+    },
   }
 }
 
@@ -262,6 +299,9 @@ function mapConversation(dto: ConversationDto): ConversationView {
     title: dto.title,
     rootNodeId: dto.root_node_id,
     isArchived: dto.is_archived,
+    providerId: dto.provider_id ?? null,
+    model: dto.model ?? null,
+    reasoningEffort: dto.reasoning_effort ?? null,
   }
 }
 
@@ -275,6 +315,15 @@ function mapConversationSummary(
 }
 
 export function mapNode(dto: NodeDto): ConversationNodeView {
+  const thinking =
+    dto.role === "assistant" &&
+    dto.metadata !== null &&
+    !Array.isArray(dto.metadata) &&
+    typeof dto.metadata === "object" &&
+    typeof (dto.metadata as Readonly<Record<string, unknown>>).thinking ===
+      "string"
+      ? (dto.metadata as Readonly<Record<string, string>>).thinking
+      : undefined
   return {
     id: dto.id,
     ...(dto.parent_id === null ? {} : { parentId: dto.parent_id }),
@@ -284,6 +333,18 @@ export function mapNode(dto: NodeDto): ConversationNodeView {
     ...(dto.model === null ? {} : { model: dto.model }),
     createdAt: dto.created_at,
     metadata: dto.metadata,
+    ...(thinking === undefined ? {} : { thinking }),
+  }
+}
+
+function mapConversationProviderBinding(
+  dto: ConversationProviderBindingResultDto,
+): Pick<ConversationView, "id" | "providerId" | "model" | "reasoningEffort"> {
+  return {
+    id: dto.conversation_id,
+    providerId: dto.provider_id ?? null,
+    model: dto.model ?? null,
+    reasoningEffort: dto.reasoning_effort ?? null,
   }
 }
 
@@ -376,6 +437,7 @@ function mapActivePath(dto: ActivePathDto): ActivePathView {
     ...(node.model === undefined ? {} : { model: node.model }),
     createdAt: node.createdAt,
     metadata: node.metadata,
+    ...(node.thinking === undefined ? {} : { thinking: node.thinking }),
   }))
   return {
     conversationId: dto.conversation_id,

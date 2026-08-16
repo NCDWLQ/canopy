@@ -125,6 +125,9 @@ function resetStore() {
     isCreatingConversation: false,
     conversationId: null,
     isArchived: false,
+    providerId: null,
+    model: null,
+    reasoningEffort: null,
     rootNodeId: null,
     activeNodeId: null,
     nodesById: {},
@@ -584,6 +587,7 @@ describe("conversation store", () => {
           generationId: "active-gen-id",
           model: "fixture-model",
           phase: "streaming",
+          thinking: "",
           content: "PARTIAL_REPLY",
           priorChildIds: [],
         },
@@ -961,5 +965,110 @@ describe("conversation store", () => {
     expect(state.error?.code).toBe("tree_integrity")
     expect(state.nodesById).toBe(nodesBefore)
     expect(state.nodesById["foreign-node"]).toBeUndefined()
+  })
+
+  it("projects persisted assistant thinking onto the active path", async () => {
+    const thinkingAssistant: ConversationNodeView = {
+      ...assistant,
+      thinking: "REASONING_SENTINEL",
+    }
+    client.loadConversationTree.mockResolvedValueOnce({
+      ...tree,
+      nodes: [root, thinkingAssistant, left, right],
+    })
+    await useConversationStore
+      .getState()
+      .loadConversation(client, conversation.id)
+
+    const projection = selectActivePath(useConversationStore.getState())
+    expect(projection.kind).toBe("ready")
+    if (projection.kind !== "ready") return
+    expect(
+      projection.path.find((node) => node.id === assistant.id)?.thinking,
+    ).toBe("REASONING_SENTINEL")
+    expect(
+      projection.path.find((node) => node.id === root.id)?.thinking,
+    ).toBeUndefined()
+  })
+
+  it("applies the authoritative conversation binding and effort together", async () => {
+    const setConversationProvider = vi
+      .fn<NonNullable<ConversationClient["setConversationProvider"]>>()
+      .mockResolvedValue({
+        id: conversation.id,
+        providerId: "provider-a",
+        model: "provider-a-model",
+        reasoningEffort: "high",
+      })
+    const boundClient = {
+      ...client,
+      setConversationProvider,
+    } satisfies ConversationClient
+    await useConversationStore
+      .getState()
+      .loadConversation(boundClient, conversation.id)
+    useConversationStore.setState({
+      history: { status: "ready", summaries: [summary], error: null },
+    })
+
+    await useConversationStore.getState().setConversationProvider(boundClient, {
+      binding: { providerId: "provider-a", model: "provider-a-model" },
+      reasoningEffort: "high",
+    })
+
+    const state = useConversationStore.getState()
+    expect(state.providerId).toBe("provider-a")
+    expect(state.model).toBe("provider-a-model")
+    expect(state.reasoningEffort).toBe("high")
+    expect(
+      state.history.summaries.find((item) => item.id === conversation.id),
+    ).toMatchObject({
+      providerId: "provider-a",
+      model: "provider-a-model",
+      reasoningEffort: "high",
+    })
+  })
+
+  it("clears the binding while keeping effort, and surfaces binding errors", async () => {
+    const setConversationProvider = vi
+      .fn<NonNullable<ConversationClient["setConversationProvider"]>>()
+      .mockResolvedValueOnce({
+        id: conversation.id,
+        providerId: null,
+        model: null,
+        reasoningEffort: "low",
+      })
+    const boundClient = {
+      ...client,
+      setConversationProvider,
+    } satisfies ConversationClient
+    await useConversationStore
+      .getState()
+      .loadConversation(boundClient, conversation.id)
+
+    await useConversationStore.getState().setConversationProvider(boundClient, {
+      binding: null,
+      reasoningEffort: "low",
+    })
+
+    const cleared = useConversationStore.getState()
+    expect(cleared.providerId).toBeNull()
+    expect(cleared.model).toBeNull()
+    expect(cleared.reasoningEffort).toBe("low")
+
+    setConversationProvider.mockRejectedValueOnce(
+      new ConversationCommandError({
+        code: "not_found",
+        message: "Provider is gone.",
+        retryable: false,
+      }),
+    )
+    await useConversationStore.getState().setConversationProvider(boundClient, {
+      binding: { providerId: "missing", model: "model" },
+      reasoningEffort: null,
+    })
+    const failed = useConversationStore.getState()
+    expect(failed.error?.code).toBe("not_found")
+    expect(failed.providerId).toBeNull()
   })
 })

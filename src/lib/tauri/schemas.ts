@@ -99,6 +99,34 @@ export const loadActivePathRequestSchema = z
   .strict()
 export const archiveConversationRequestSchema =
   loadConversationTreeRequestSchema
+export const setConversationProviderRequestSchema = z
+  .object({
+    conversation_id: idSchema,
+    binding: z
+      .object({ provider_id: idSchema, model: unicodeScalarStringSchema })
+      .strict()
+      .nullable(),
+    reasoning_effort: z.enum(["low", "medium", "high"]).nullable(),
+  })
+  .strict()
+export const conversationProviderBindingResultSchema = z
+  .object({
+    conversation_id: idSchema,
+    provider_id: idSchema.nullable().optional(),
+    model: unicodeScalarStringSchema.nullable().optional(),
+    reasoning_effort: z.enum(["low", "medium", "high"]).nullable().optional(),
+  })
+  .strict()
+  .superRefine((result, context) => {
+    const providerId = result.provider_id ?? null
+    const model = result.model ?? null
+    if ((providerId === null) !== (model === null)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "provider binding is incomplete",
+      })
+    }
+  })
 
 export const commandErrorCodeSchema = z.enum([
   "invalid_input",
@@ -123,16 +151,32 @@ export const commandErrorSchema = z
   })
   .strict()
 
-export const conversationDtoSchema = z
+const conversationDtoBaseSchema = z
   .object({
     id: idSchema,
     title: z.string(),
     root_node_id: idSchema,
     is_archived: z.boolean(),
+    provider_id: idSchema.nullable().optional(),
+    model: unicodeScalarStringSchema.nullable().optional(),
+    reasoning_effort: z.enum(["low", "medium", "high"]).nullable().optional(),
   })
   .strict()
+export const conversationDtoSchema = conversationDtoBaseSchema.superRefine(
+  (conversation, context) => {
+    if (
+      (conversation.provider_id ?? null) === null &&
+      (conversation.model ?? null) !== null
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "provider binding is incomplete",
+      })
+    }
+  },
+)
 
-export const conversationSummaryDtoSchema = conversationDtoSchema.extend({
+export const conversationSummaryDtoSchema = conversationDtoBaseSchema.extend({
   updated_at: z.number().int().safe(),
 })
 
@@ -187,3 +231,6 @@ export type ConversationSummaryDto = z.infer<
 export type NodeDto = z.infer<typeof nodeDtoSchema>
 export type ConversationTreeDto = z.infer<typeof conversationTreeDtoSchema>
 export type ActivePathDto = z.infer<typeof activePathDtoSchema>
+export type ConversationProviderBindingResultDto = z.infer<
+  typeof conversationProviderBindingResultSchema
+>

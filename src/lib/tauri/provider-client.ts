@@ -3,8 +3,11 @@ import { Channel } from "@tauri-apps/api/core"
 import type {
   GenerationEventView,
   GenerationTerminalView,
-  ProviderProfileView,
-  SaveProviderProfileInput,
+  ListProvidersView,
+  ModelListSource,
+  ModelSummaryView,
+  ProviderView,
+  SaveProviderInput,
 } from "@/features/providers/types"
 
 import {
@@ -18,23 +21,33 @@ import {
 import {
   cancelGenerationRequestSchema,
   cancelGenerationResultSchema,
-  deleteProviderProfileResultSchema,
+  deleteProviderRequestSchema,
+  deleteProviderResultSchema,
   emptyProviderRequestSchema,
   generateFromActivePathRequestSchema,
   generationEventDtoSchema,
   generationIdProbeSchema,
   generationTerminalDtoSchema,
-  providerProfileDtoSchema,
-  saveProviderProfileRequestSchema,
+  listProviderModelsRequestSchema,
+  listProviderModelsResultSchema,
+  listProvidersResultSchema,
+  providerDtoSchema,
+  saveProviderRequestSchema,
+  setActiveProviderRequestSchema,
+  setActiveProviderResultSchema,
   type GenerationEventDto,
   type GenerationTerminalDto,
-  type ProviderProfileDto,
+  type ListProvidersResultDto,
+  type ModelSummaryDto,
+  type ProviderDto,
 } from "./provider-schemas"
 
 export const PROVIDER_COMMANDS = {
-  saveProviderProfile: "save_provider_profile",
-  loadProviderProfile: "load_provider_profile",
-  deleteProviderProfile: "delete_provider_profile",
+  listProviders: "list_providers",
+  saveProvider: "save_provider",
+  deleteProvider: "delete_provider",
+  setActiveProvider: "set_active_provider",
+  listProviderModels: "list_provider_models",
   generateFromActivePath: "generate_from_active_path",
   cancelGeneration: "cancel_generation",
 } as const
@@ -76,44 +89,82 @@ export function createProviderClient(
   channelFactory: ChannelFactory = defaultChannelFactory,
 ) {
   return {
-    async saveProviderProfile(
-      input: SaveProviderProfileInput,
-    ): Promise<ProviderProfileView> {
+    async listProviders(): Promise<ListProvidersView> {
       return providerCall(
         transport,
-        PROVIDER_COMMANDS.saveProviderProfile,
-        saveProviderProfileRequestSchema,
+        PROVIDER_COMMANDS.listProviders,
+        emptyProviderRequestSchema,
+        {},
+        listProvidersResultSchema,
+        mapListProviders,
+      )
+    },
+
+    async saveProvider(input: SaveProviderInput): Promise<ProviderView> {
+      return providerCall(
+        transport,
+        PROVIDER_COMMANDS.saveProvider,
+        saveProviderRequestSchema,
         {
+          ...(input.id === undefined ? {} : { id: input.id }),
+          name: input.name,
+          protocol: input.protocol,
           base_endpoint: input.baseEndpoint,
           model: input.model,
+          models: input.models,
           api_key: input.apiKey,
         },
-        providerProfileDtoSchema,
-        mapProviderProfile,
+        // Save results must remain redacted as well.
+        // A separate schema keeps an accidental API-key echo fail-closed.
+        // The provider DTO is the complete authoritative result.
+        providerDtoSchema,
+        mapProvider,
       )
     },
 
-    async loadProviderProfile(): Promise<ProviderProfileView> {
+    async deleteProvider(providerId: string): Promise<boolean> {
       return providerCall(
         transport,
-        PROVIDER_COMMANDS.loadProviderProfile,
-        emptyProviderRequestSchema,
-        {},
-        providerProfileDtoSchema,
-        mapProviderProfile,
+        PROVIDER_COMMANDS.deleteProvider,
+        deleteProviderRequestSchema,
+        { provider_id: providerId },
+        deleteProviderResultSchema,
+        (value) => value.deleted,
       )
     },
 
-    async deleteProviderProfile(): Promise<boolean> {
-      const result = await providerCall(
+    async setActiveProvider(providerId: string): Promise<string> {
+      return providerCall(
         transport,
-        PROVIDER_COMMANDS.deleteProviderProfile,
-        emptyProviderRequestSchema,
-        {},
-        deleteProviderProfileResultSchema,
-        (value) => value,
+        PROVIDER_COMMANDS.setActiveProvider,
+        setActiveProviderRequestSchema,
+        { provider_id: providerId },
+        setActiveProviderResultSchema,
+        (value) => value.active_provider_id,
       )
-      return result.deleted
+    },
+
+    async listProviderModels(
+      source: ModelListSource,
+    ): Promise<readonly ModelSummaryView[]> {
+      return providerCall(
+        transport,
+        PROVIDER_COMMANDS.listProviderModels,
+        listProviderModelsRequestSchema,
+        {
+          source:
+            source.type === "saved"
+              ? { type: "saved", provider_id: source.providerId }
+              : {
+                  type: "draft",
+                  protocol: source.protocol,
+                  base_endpoint: source.baseEndpoint,
+                  api_key: source.apiKey ?? null,
+                },
+        },
+        listProviderModelsResultSchema,
+        (value) => value.models.map(mapModelSummary),
+      )
     },
 
     async generateFromActivePath(
@@ -130,6 +181,7 @@ export function createProviderClient(
       let generationId: string | undefined
       let startedModel: string | undefined
       let streamedBytes = 0
+      let streamedThinkingBytes = 0
       let phase: "waiting" | "streaming" | "terminal" = "waiting"
       let channelFailure: ConversationCommandError | undefined
       let cancellationRequested = false
@@ -176,11 +228,19 @@ export function createProviderClient(
           const deltaBytes = new TextEncoder().encode(
             parsed.data.content,
           ).byteLength
-          if (streamedBytes + deltaBytes > MAX_GENERATED_CONTENT_BYTES) {
+          const previousBytes =
+            parsed.data.type === "thinking_delta"
+              ? streamedThinkingBytes
+              : streamedBytes
+          if (previousBytes + deltaBytes > MAX_GENERATED_CONTENT_BYTES) {
             failClosed()
             return
           }
-          streamedBytes += deltaBytes
+          if (parsed.data.type === "thinking_delta") {
+            streamedThinkingBytes += deltaBytes
+          } else {
+            streamedBytes += deltaBytes
+          }
         }
         onEvent(mapGenerationEvent(parsed.data))
       }
@@ -326,12 +386,33 @@ function readGenerationId(value: unknown): string | undefined {
   return parsed.success ? parsed.data.generation_id : undefined
 }
 
-function mapProviderProfile(dto: ProviderProfileDto): ProviderProfileView {
+function mapProvider(dto: ProviderDto): ProviderView {
   return {
+    id: dto.id,
+    name: dto.name,
+    protocol: dto.protocol,
     baseEndpoint: dto.base_endpoint,
     model: dto.model,
+    models: dto.models,
     hasApiKey: dto.has_api_key,
+    createdAt: dto.created_at,
     updatedAt: dto.updated_at,
+  }
+}
+
+function mapListProviders(dto: ListProvidersResultDto): ListProvidersView {
+  return {
+    providers: dto.providers.map(mapProvider),
+    activeProviderId: dto.active_provider_id ?? null,
+  }
+}
+
+function mapModelSummary(dto: ModelSummaryDto): ModelSummaryView {
+  return {
+    id: dto.id,
+    ...(dto.display_name === undefined
+      ? {}
+      : { displayName: dto.display_name }),
   }
 }
 
@@ -348,6 +429,12 @@ function mapGenerationEvent(dto: GenerationEventDto): GenerationEventView {
     case "delta":
       return {
         type: "delta",
+        generationId: dto.generation_id,
+        content: dto.content,
+      }
+    case "thinking_delta":
+      return {
+        type: "thinking_delta",
         generationId: dto.generation_id,
         content: dto.content,
       }

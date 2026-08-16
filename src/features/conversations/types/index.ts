@@ -13,6 +13,9 @@ export type ConversationView = {
   title: string
   rootNodeId: string
   isArchived: boolean
+  providerId?: string | null
+  model?: string | null
+  reasoningEffort?: "low" | "medium" | "high" | null
 }
 
 export type ConversationSummaryView = ConversationView & {
@@ -28,6 +31,7 @@ export type ConversationNodeView = {
   model?: string
   createdAt: number
   metadata: JsonValue
+  thinking?: string
 }
 
 export type TreeNodeView = {
@@ -52,6 +56,7 @@ export type PathMessageView = {
   model?: string
   createdAt: number
   metadata: JsonValue
+  thinking?: string
 }
 
 export type ActivePathView = {

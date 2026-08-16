@@ -38,7 +38,7 @@ class WireDatabaseError extends Error {
 }
 
 describe("conversation Tauri contract", () => {
-  it("uses the shared exact command list and maps all eight request shapes", async () => {
+  it("uses the shared exact command list and maps all nine request shapes", async () => {
     expect(Object.values(CONVERSATION_COMMANDS)).toEqual(fixture.command_names)
     const transport = resolvingTransport({
       create_conversation: fixture.successes.conversation_tree,
@@ -49,6 +49,7 @@ describe("conversation Tauri contract", () => {
       load_conversation_tree: fixture.successes.conversation_tree,
       load_active_path: fixture.successes.active_path,
       archive_conversation: fixture.successes.archived_conversation,
+      set_conversation_provider: fixture.successes.set_conversation_provider,
     })
     const client = createConversationClient(transport)
 
@@ -82,6 +83,17 @@ describe("conversation Tauri contract", () => {
     await client.archiveConversation(
       fixture.requests.archive_conversation.conversation_id,
     )
+    await client.setConversationProvider({
+      conversationId:
+        fixture.requests.set_conversation_provider.conversation_id,
+      binding: {
+        providerId:
+          fixture.requests.set_conversation_provider.binding.provider_id,
+        model: fixture.requests.set_conversation_provider.binding.model,
+      },
+      reasoningEffort: fixture.requests.set_conversation_provider
+        .reasoning_effort as "low" | "medium" | "high",
+    })
 
     const requests = Object.values(fixture.requests)
     expect(transport.calls).toEqual(
@@ -107,6 +119,9 @@ describe("conversation Tauri contract", () => {
         rootNodeId: "root",
         isArchived: false,
         updatedAt: 1770000002124,
+        providerId: null,
+        model: null,
+        reasoningEffort: null,
       },
       {
         id: "conversation-archived",
@@ -114,6 +129,9 @@ describe("conversation Tauri contract", () => {
         rootNodeId: "archived-root",
         isArchived: true,
         updatedAt: 1760000000000,
+        providerId: null,
+        model: null,
+        reasoningEffort: null,
       },
     ])
 
@@ -155,6 +173,9 @@ describe("conversation Tauri contract", () => {
       title: "Fixture conversation",
       rootNodeId: "root",
       isArchived: false,
+      providerId: null,
+      model: null,
+      reasoningEffort: null,
     })
     expect(tree.nodesById.root?.childIds).toEqual(["assistant-a"])
     expect(tree.nodesById["assistant-a"]?.childIds).toEqual([

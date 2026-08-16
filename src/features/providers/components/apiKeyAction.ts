@@ -1,7 +1,7 @@
-import type { ApiKeyInputAction, ProviderProfileView } from "../types"
+import type { ApiKeyInputAction, ProviderView } from "../types"
 
 export function resolveApiKeyAction(
-  profile: ProviderProfileView | null,
+  profile: ProviderView | null,
   apiKey: string,
   removeKey: boolean,
 ): ApiKeyInputAction {

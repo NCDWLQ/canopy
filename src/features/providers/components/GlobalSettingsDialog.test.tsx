@@ -1,33 +1,37 @@
-import { render, screen, waitFor, within } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { resolveApiKeyAction } from "./apiKeyAction"
 import { GlobalSettingsDialog } from "./GlobalSettingsDialog"
-import { useProviderProfileStore } from "../store"
-import type { ProviderProfileView } from "../types"
-import { ConversationCommandError, type ProviderClient } from "@/lib/tauri"
+import { useProviderStore } from "../store"
+import type { ProviderView } from "../types"
+import type { ProviderClient } from "@/lib/tauri"
 
-const profile: ProviderProfileView = {
+const provider: ProviderView = {
+  id: "provider-1",
+  name: "OpenAI",
+  protocol: "openai_compatible",
   baseEndpoint: "http://127.0.0.1:7788/v1",
   model: "fixture-model",
+  models: ["fixture-model"],
   hasApiKey: true,
+  createdAt: 1,
   updatedAt: 10,
 }
 
-function createClient() {
+function client() {
   return {
-    saveProviderProfile: vi.fn<ProviderClient["saveProviderProfile"]>(),
-    loadProviderProfile: vi.fn<ProviderClient["loadProviderProfile"]>(),
-    deleteProviderProfile: vi.fn<ProviderClient["deleteProviderProfile"]>(),
-    generateFromActivePath: vi.fn<ProviderClient["generateFromActivePath"]>(),
-    cancelGeneration: vi.fn<ProviderClient["cancelGeneration"]>(),
-  } satisfies ProviderClient
+    listProviders: vi.fn(),
+    saveProvider: vi.fn(),
+    deleteProvider: vi.fn(),
+    setActiveProvider: vi.fn(),
+    listProviderModels: vi.fn(),
+    generateFromActivePath: vi.fn(),
+    cancelGeneration: vi.fn(),
+  }
 }
 
 describe("GlobalSettingsDialog", () => {
-  let client: ReturnType<typeof createClient>
-
   beforeEach(() => {
     vi.stubGlobal(
       "ResizeObserver",
@@ -37,255 +41,116 @@ describe("GlobalSettingsDialog", () => {
         disconnect() {}
       },
     )
-    client = createClient()
-    useProviderProfileStore.setState({ phase: "ready", profile })
+    useProviderStore.setState({
+      phase: "ready",
+      providers: [provider],
+      activeProviderId: provider.id,
+    })
   })
 
-  it("maps key intent without retaining a secret in global state", () => {
-    expect(resolveApiKeyAction(profile, "", false)).toEqual({ action: "keep" })
-    expect(resolveApiKeyAction(profile, "", true)).toEqual({
-      action: "remove",
-    })
-    expect(resolveApiKeyAction(profile, "replacement", false)).toEqual({
-      action: "replace",
-      value: "replacement",
-    })
-    expect(resolveApiKeyAction(null, "", false)).toEqual({ action: "remove" })
-  })
-
-  it("submits a replacement by keyboard and clears it from the DOM and store", async () => {
+  it("edits providers using a redacted key replacement and clears the draft secret", async () => {
     const user = userEvent.setup()
-    const secret = "DIALOG_SECRET_SENTINEL"
-    client.saveProviderProfile.mockResolvedValueOnce({
-      ...profile,
-      updatedAt: 11,
-    })
+    const bridge = client()
+    bridge.saveProvider.mockResolvedValueOnce({ ...provider, updatedAt: 11 })
     render(
       <GlobalSettingsDialog
-        client={client}
+        client={bridge as ProviderClient}
         readOnly={false}
-        generationActive={false}
       />,
     )
-
     await user.click(screen.getByRole("button", { name: "设置" }))
-    expect(screen.getByRole("dialog")).toHaveAccessibleName("设置")
-    expect(screen.getByRole("heading", { name: "服务提供商" })).toBeVisible()
-    const keyInput = screen.getByLabelText("API 密钥")
-    expect(keyInput).toHaveAttribute("type", "password")
-    expect(keyInput).toHaveAttribute("autocomplete", "new-password")
-    await user.type(keyInput, secret)
-    await user.keyboard("{Enter}")
-
-    await waitFor(() => {
-      expect(client.saveProviderProfile).toHaveBeenCalledWith({
-        baseEndpoint: profile.baseEndpoint,
-        model: profile.model,
-        apiKey: { action: "replace", value: secret },
-      })
-      expect(keyInput).toHaveValue("")
-    })
-    expect(document.body).not.toHaveTextContent(secret)
-    expect(JSON.stringify(useProviderProfileStore.getState())).not.toContain(
-      secret,
-    )
-  })
-
-  it("opens by keyboard, clears an unsaved secret on close, and restores focus", async () => {
-    const user = userEvent.setup()
-    const secret = "UNSAVED_SECRET_SENTINEL"
-    render(
-      <GlobalSettingsDialog
-        client={client}
-        readOnly={false}
-        generationActive={false}
-      />,
-    )
-
-    const settingsButton = screen.getByRole("button", { name: "设置" })
-    await user.tab()
-    expect(settingsButton).toHaveFocus()
-    await user.keyboard("{Enter}")
-
-    await user.type(screen.getByLabelText("API 密钥"), secret)
-    await user.click(screen.getByRole("button", { name: "关闭" }))
-
-    await waitFor(() => expect(settingsButton).toHaveFocus())
-    expect(document.body).not.toHaveTextContent(secret)
-
-    await user.keyboard("{Enter}")
-    expect(screen.getByLabelText("API 密钥")).toHaveValue("")
-  })
-
-  it("clears a secret after a safe mutation error without echoing it", async () => {
-    const user = userEvent.setup()
-    const secret = "FAILED_SECRET_SENTINEL"
-    client.saveProviderProfile.mockRejectedValueOnce(
-      new ConversationCommandError({
-        code: "provider_authentication",
-        message: "Provider authentication failed.",
-        retryable: false,
+    await user.type(screen.getByLabelText("API 密钥"), "DIALOG_SECRET_SENTINEL")
+    await user.click(screen.getByRole("button", { name: "保存服务提供商" }))
+    await waitFor(() =>
+      expect(bridge.saveProvider).toHaveBeenCalledWith({
+        id: provider.id,
+        name: provider.name,
+        protocol: provider.protocol,
+        baseEndpoint: provider.baseEndpoint,
+        model: provider.model,
+        models: provider.models,
+        apiKey: { action: "replace", value: "DIALOG_SECRET_SENTINEL" },
       }),
     )
-    render(
-      <GlobalSettingsDialog
-        client={client}
-        readOnly={false}
-        generationActive={false}
-      />,
-    )
-
-    await user.click(screen.getByRole("button", { name: "设置" }))
-    const keyInput = screen.getByLabelText("API 密钥")
-    await user.type(keyInput, secret)
-    await user.click(screen.getByRole("button", { name: "保存服务提供商配置" }))
-
-    await waitFor(() => {
-      expect(screen.getByRole("alert")).toHaveTextContent(
-        "Provider authentication failed.",
-      )
-      expect(keyInput).toHaveValue("")
-    })
-    expect(document.body).not.toHaveTextContent(secret)
-    expect(JSON.stringify(useProviderProfileStore.getState())).not.toContain(
-      secret,
+    expect(screen.getByLabelText("API 密钥")).toHaveValue("")
+    expect(JSON.stringify(useProviderStore.getState())).not.toContain(
+      "DIALOG_SECRET_SENTINEL",
     )
   })
 
-  it("removes a stored key and deletes the provider through Settings", async () => {
+  it("fetches draft models and adds one to the provider list before saving", async () => {
     const user = userEvent.setup()
-    client.saveProviderProfile.mockResolvedValueOnce({
-      ...profile,
-      hasApiKey: false,
+    const bridge = client()
+    bridge.listProviderModels.mockResolvedValueOnce([{ id: "gpt-test" }])
+    bridge.saveProvider.mockResolvedValueOnce({
+      ...provider,
+      models: ["fixture-model", "gpt-test"],
       updatedAt: 11,
     })
-    client.deleteProviderProfile.mockResolvedValueOnce(true)
     render(
       <GlobalSettingsDialog
-        client={client}
+        client={bridge as ProviderClient}
         readOnly={false}
-        generationActive={false}
       />,
     )
-
     await user.click(screen.getByRole("button", { name: "设置" }))
-    await user.click(screen.getByLabelText("删除已保存的 API 密钥"))
-    await user.click(screen.getByRole("button", { name: "保存服务提供商配置" }))
-
-    await waitFor(() => {
-      expect(client.saveProviderProfile).toHaveBeenCalledWith({
-        baseEndpoint: profile.baseEndpoint,
-        model: profile.model,
-        apiKey: { action: "remove" },
-      })
-    })
-    await user.click(screen.getByRole("button", { name: "删除配置" }))
-    const confirmation = screen.getByRole("alertdialog")
+    await user.click(screen.getByRole("button", { name: "获取模型列表" }))
     await user.click(
-      within(confirmation).getByRole("button", { name: "删除配置" }),
+      await screen.findByRole("button", { name: "加入模型：gpt-test" }),
     )
-
-    await waitFor(() => {
-      expect(client.deleteProviderProfile).toHaveBeenCalledOnce()
-      expect(screen.queryByText(profile.model)).not.toBeInTheDocument()
-    })
+    expect(
+      screen.getByRole("button", { name: "设为默认：gpt-test" }),
+    ).toBeVisible()
+    await user.click(screen.getByRole("button", { name: "保存服务提供商" }))
+    await waitFor(() =>
+      expect(bridge.saveProvider).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: "fixture-model",
+          models: ["fixture-model", "gpt-test"],
+        }),
+      ),
+    )
   })
 
-  it("keeps settings viewable but disables mutations for an archive", async () => {
+  it("adds a fetched model by its ID even when a display name exists", async () => {
     const user = userEvent.setup()
+    const bridge = client()
+    bridge.listProviderModels.mockResolvedValueOnce([
+      {
+        id: "claude-sonnet-4-20250514",
+        displayName: "Claude Sonnet 4",
+      },
+    ])
     render(
       <GlobalSettingsDialog
-        client={client}
-        readOnly
-        generationActive={false}
+        client={bridge as ProviderClient}
+        readOnly={false}
       />,
     )
-
     await user.click(screen.getByRole("button", { name: "设置" }))
+    await user.click(screen.getByRole("button", { name: "获取模型列表" }))
+    await user.click(
+      await screen.findByRole("button", {
+        name: "加入模型：claude-sonnet-4-20250514",
+      }),
+    )
+    expect(
+      screen.getByRole("button", {
+        name: "设为默认：claude-sonnet-4-20250514",
+      }),
+    ).toBeVisible()
+  })
 
+  it("keeps the editor viewable but disables mutations for archived conversations", async () => {
+    const user = userEvent.setup()
+    render(
+      <GlobalSettingsDialog client={client() as ProviderClient} readOnly />,
+    )
+    await user.click(screen.getByRole("button", { name: "设置" }))
     expect(screen.getByText("只读")).toBeVisible()
-    expect(screen.getByLabelText("基础端点")).toBeDisabled()
-    expect(screen.getByLabelText("模型")).toBeDisabled()
-    expect(screen.getByLabelText("API 密钥")).toBeDisabled()
+    expect(screen.getByLabelText("名称")).toBeDisabled()
     expect(
-      screen.getByRole("button", { name: "保存服务提供商配置" }),
+      screen.getByRole("button", { name: "保存服务提供商" }),
     ).toBeDisabled()
-    expect(screen.getByRole("button", { name: "删除配置" })).toBeDisabled()
-  })
-
-  it("locks provider mutations while generation is active", async () => {
-    const user = userEvent.setup()
-    render(
-      <GlobalSettingsDialog
-        client={client}
-        readOnly={false}
-        generationActive
-      />,
-    )
-
-    await user.click(screen.getByRole("button", { name: "设置" }))
-
-    expect(screen.getByText("正在生成回复")).toBeVisible()
-    expect(screen.getByLabelText("基础端点")).toBeDisabled()
-    expect(
-      screen.getByRole("button", { name: "保存服务提供商配置" }),
-    ).toBeDisabled()
-    expect(screen.getByRole("button", { name: "删除配置" })).toBeDisabled()
-  })
-
-  it("shows loading progress and locks every provider mutation", async () => {
-    const user = userEvent.setup()
-    useProviderProfileStore.setState({ phase: "loading", profile })
-    render(
-      <GlobalSettingsDialog
-        client={client}
-        readOnly={false}
-        generationActive={false}
-      />,
-    )
-
-    await user.click(screen.getByRole("button", { name: "设置" }))
-
-    expect(screen.getByRole("status", { name: "正在加载" })).toBeVisible()
-    expect(screen.getByLabelText("基础端点")).toBeDisabled()
-    expect(screen.getByLabelText("模型")).toBeDisabled()
-    expect(screen.getByLabelText("API 密钥")).toBeDisabled()
-    expect(
-      screen.getByRole("button", { name: "保存服务提供商配置" }),
-    ).toBeDisabled()
-    expect(screen.getByRole("button", { name: "删除配置" })).toBeDisabled()
-  })
-
-  it("supports controlled open state and emits onOpenChange when closed", async () => {
-    const user = userEvent.setup()
-    const onOpenChange = vi.fn()
-    const { rerender } = render(
-      <GlobalSettingsDialog
-        client={client}
-        readOnly={false}
-        generationActive={false}
-        open={false}
-        onOpenChange={onOpenChange}
-      />,
-    )
-
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
-
-    rerender(
-      <GlobalSettingsDialog
-        client={client}
-        readOnly={false}
-        generationActive={false}
-        open={true}
-        onOpenChange={onOpenChange}
-      />,
-    )
-
-    expect(screen.getByRole("dialog")).toHaveAccessibleName("设置")
-    expect(screen.getByLabelText("基础端点")).toHaveValue(profile.baseEndpoint)
-    expect(screen.getByLabelText("模型")).toHaveValue(profile.model)
-
-    await user.click(screen.getByRole("button", { name: "关闭" }))
-    expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 })

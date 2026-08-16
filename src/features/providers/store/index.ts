@@ -1,26 +1,40 @@
 import { create } from "zustand"
 
-import type { ProviderProfileView, SaveProviderProfileInput } from "../types"
+import type { ProviderView, SaveProviderInput } from "../types"
 import type { UiError } from "@/features/conversations/types"
 import { ConversationCommandError, type ProviderClient } from "@/lib/tauri"
-
-export type ProviderProfileState =
-  | { phase: "idle" | "loading"; profile: ProviderProfileView | null }
-  | { phase: "ready"; profile: ProviderProfileView }
-  | { phase: "unconfigured"; profile: null }
+export type ProviderState =
+  | {
+      phase: "idle" | "loading" | "unconfigured"
+      providers: readonly ProviderView[]
+      activeProviderId: string | null
+    }
+  | {
+      phase: "ready"
+      providers: readonly ProviderView[]
+      activeProviderId: string
+    }
   | {
       phase: "error"
-      profile: ProviderProfileView | null
+      providers: readonly ProviderView[]
+      activeProviderId: string | null
       error: UiError
     }
 
-export type ProviderProfileStore = ProviderProfileState & {
-  loadProfile: (client: ProviderClient) => Promise<void>
-  saveProfile: (
+export type ProviderStore = ProviderState & {
+  loadProviders: (client: ProviderClient) => Promise<void>
+  saveProvider: (
     client: ProviderClient,
-    input: SaveProviderProfileInput,
+    input: SaveProviderInput,
+  ) => Promise<ProviderView | null>
+  deleteProvider: (
+    client: ProviderClient,
+    providerId: string,
+  ) => Promise<boolean>
+  setActiveProvider: (
+    client: ProviderClient,
+    providerId: string,
   ) => Promise<void>
-  deleteProfile: (client: ProviderClient) => Promise<void>
 }
 
 const INTERNAL_ERROR: UiError = {
@@ -41,76 +55,110 @@ function normalizeError(error: unknown): UiError {
   return INTERNAL_ERROR
 }
 
-export const useProviderProfileStore = create<ProviderProfileStore>(
-  (set, get) => {
-    let requestEpoch = 0
+function readyOrUnconfigured(
+  providers: readonly ProviderView[],
+  activeProviderId: string | null,
+): ProviderState {
+  if (activeProviderId !== null) {
+    return { phase: "ready", providers, activeProviderId }
+  }
+  return {
+    phase: providers.length === 0 ? "unconfigured" : "idle",
+    providers,
+    activeProviderId: null,
+  }
+}
 
-    const beginRequest = () => {
-      const epoch = ++requestEpoch
-      const previousProfile = get().profile
-      set({ phase: "loading", profile: previousProfile })
-      return { epoch, previousProfile }
-    }
+export const useProviderStore = create<ProviderStore>((set, get) => {
+  let requestEpoch = 0
 
-    const isCurrent = (epoch: number) => epoch === requestEpoch
+  const beginRequest = () => {
+    const epoch = ++requestEpoch
+    const previous = get()
+    set({
+      phase: "loading",
+      providers: previous.providers,
+      activeProviderId: previous.activeProviderId,
+    })
+    return { epoch, previous }
+  }
+  const isCurrent = (epoch: number) => epoch === requestEpoch
+  const fail = (epoch: number, previous: ProviderState, error: unknown) => {
+    if (!isCurrent(epoch)) return
+    set({
+      phase: "error",
+      providers: previous.providers,
+      activeProviderId: previous.activeProviderId,
+      error: normalizeError(error),
+    })
+  }
 
-    return {
-      phase: "idle",
-      profile: null,
+  return {
+    phase: "idle",
+    providers: [],
+    activeProviderId: null,
 
-      loadProfile: async (client) => {
-        const { epoch, previousProfile } = beginRequest()
-        try {
-          const profile = await client.loadProviderProfile()
-          if (isCurrent(epoch)) set({ phase: "ready", profile })
-        } catch (error: unknown) {
-          if (!isCurrent(epoch)) return
-          if (
-            error instanceof ConversationCommandError &&
-            error.code === "not_found"
-          ) {
-            set({ phase: "unconfigured", profile: null })
-            return
-          }
-          set({
-            phase: "error",
-            profile: previousProfile,
-            error: normalizeError(error),
-          })
+    loadProviders: async (client) => {
+      const { epoch, previous } = beginRequest()
+      try {
+        const result = await client.listProviders()
+        if (isCurrent(epoch)) {
+          set(readyOrUnconfigured(result.providers, result.activeProviderId))
         }
-      },
+      } catch (error: unknown) {
+        fail(epoch, previous, error)
+      }
+    },
 
-      saveProfile: async (client, input) => {
-        const { epoch, previousProfile } = beginRequest()
-        try {
-          const profile = await client.saveProviderProfile(input)
-          if (isCurrent(epoch)) set({ phase: "ready", profile })
-        } catch (error: unknown) {
-          if (!isCurrent(epoch)) return
-          set({
-            phase: "error",
-            profile: previousProfile,
-            error: normalizeError(error),
-          })
+    saveProvider: async (client, input) => {
+      const { epoch, previous } = beginRequest()
+      try {
+        const provider = await client.saveProvider(input)
+        if (!isCurrent(epoch)) return null
+        const providers = [
+          ...previous.providers.filter((item) => item.id !== provider.id),
+          provider,
+        ]
+        if (isCurrent(epoch)) {
+          set(readyOrUnconfigured(providers, previous.activeProviderId))
         }
-      },
+        return provider
+      } catch (error: unknown) {
+        fail(epoch, previous, error)
+        return null
+      }
+    },
 
-      deleteProfile: async (client) => {
-        const { epoch, previousProfile } = beginRequest()
-        try {
-          await client.deleteProviderProfile()
-          if (isCurrent(epoch)) {
-            set({ phase: "unconfigured", profile: null })
-          }
-        } catch (error: unknown) {
-          if (!isCurrent(epoch)) return
-          set({
-            phase: "error",
-            profile: previousProfile,
-            error: normalizeError(error),
-          })
+    deleteProvider: async (client, providerId) => {
+      const { epoch, previous } = beginRequest()
+      try {
+        const deleted = await client.deleteProvider(providerId)
+        if (!isCurrent(epoch)) return false
+        const providers = deleted
+          ? previous.providers.filter((provider) => provider.id !== providerId)
+          : previous.providers
+        const activeProviderId =
+          previous.activeProviderId === providerId
+            ? null
+            : previous.activeProviderId
+        set(readyOrUnconfigured(providers, activeProviderId))
+        return deleted
+      } catch (error: unknown) {
+        fail(epoch, previous, error)
+        return false
+      }
+    },
+
+    setActiveProvider: async (client, providerId) => {
+      const { epoch, previous } = beginRequest()
+      try {
+        const activeProviderId = await client.setActiveProvider(providerId)
+        if (isCurrent(epoch)) {
+          set(readyOrUnconfigured(previous.providers, activeProviderId))
         }
-      },
-    }
-  },
-)
+      } catch (error: unknown) {
+        fail(epoch, previous, error)
+      }
+    },
+  }
+})

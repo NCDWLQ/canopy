@@ -11,7 +11,7 @@ import {
   useConversationStore,
 } from "../store"
 import type { ConversationNodeView, ConversationTreeView } from "../types"
-import { useProviderProfileStore } from "@/features/providers/store"
+import { useProviderStore } from "@/features/providers/store"
 import type {
   GenerationEventView,
   GenerationTerminalView,
@@ -55,7 +55,7 @@ export function useWorkspaceGenerationController({
   conversationClient,
   providerClient,
 }: WorkspaceGenerationControllerOptions): WorkspaceGenerationController {
-  const providerPhase = useProviderProfileStore((state) => state.phase)
+  const providerPhase = useProviderStore((state) => state.phase)
   const conversationId = useConversationStore((state) => state.conversationId)
   const activeNodeRole = useConversationStore((state) =>
     state.activeNodeId === null
@@ -266,7 +266,7 @@ export function useWorkspaceGenerationController({
 
   const startGeneration = React.useCallback(
     (expectedTarget?: GenerationTarget) => {
-      if (useProviderProfileStore.getState().phase !== "ready") return
+      if (useProviderStore.getState().phase !== "ready") return
       const store = useConversationStore.getState()
       if (
         expectedTarget !== undefined &&
