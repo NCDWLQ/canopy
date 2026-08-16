@@ -37,6 +37,20 @@ describe("AssistantMarkdown", () => {
     expect(screen.getByRole("table")).toBeVisible()
   })
 
+  it("renders tables with a single scroll wrapper instead of nested cards", () => {
+    const { container } = render(
+      <AssistantMarkdown
+        content={"| 名称 | 值 |\n| --- | --- |\n| Canopy | 可用 |"}
+      />,
+    )
+
+    const table = screen.getByRole("table")
+    expect(
+      container.querySelector('[data-streamdown="table-wrapper"]'),
+    ).toBeNull()
+    expect(table.parentElement).toHaveClass("overflow-x-auto")
+  })
+
   it("preserves standard Markdown soft-break behavior", () => {
     const { container } = render(
       <AssistantMarkdown content={"第一行\n第二行"} />,

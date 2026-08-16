@@ -101,9 +101,25 @@ function ImageAltText(props: MarkdownImageProps) {
   return alt ? <span>{alt}</span> : null
 }
 
+type MarkdownTableProps =
+  ComponentProps<"table"> | (Record<string, unknown> & { children?: ReactNode })
+
+// streamdown 默认给表格套双层卡片(wrapper 卡片 + 内层滚动盒,双层边框/背景/内边距)。
+// controls.table 已关闭,外层卡片无功能,这里收敛为单层滚动容器。
+function LeanTable(props: MarkdownTableProps) {
+  return (
+    <div className="my-4 overflow-x-auto rounded-md border border-border">
+      <table className="w-full divide-y divide-border" data-streamdown="table">
+        {props.children}
+      </table>
+    </div>
+  )
+}
+
 const MARKDOWN_COMPONENTS = {
   a: SafeLink,
   img: ImageAltText,
+  table: LeanTable,
 } satisfies Components
 
 export function AssistantMarkdown({
@@ -112,7 +128,7 @@ export function AssistantMarkdown({
 }: AssistantMarkdownProps) {
   return (
     <Streamdown
-      className="min-w-0 break-words text-sm text-foreground [&_[data-streamdown=code-block-body]]:!overflow-x-auto [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-offset-2 [&_button]:focus-visible:outline-ring"
+      className="assistant-markdown min-w-0 break-words text-sm text-foreground [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-offset-2 [&_button]:focus-visible:outline-ring"
       components={MARKDOWN_COMPONENTS}
       controls={MARKDOWN_CONTROLS}
       isAnimating={isStreaming}

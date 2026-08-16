@@ -135,3 +135,28 @@
     @apply font-sans;
   }
 }
+
+/* streamdown 默认给代码块套双层卡片(外层 chrome 卡片 + 内层 body 卡片,
+   双层边框/背景/内边距)。这里只保留 body 一层卡片:
+   - 外层去掉边框/背景/内边距,退化为纯布局层。不要改 gap 与子元素负边距,
+     复制按钮药丸靠 -mt-10 浮在语言标签行上,布局参数变了会错位。
+   - body 由 overflow-hidden 改为横向滚动(宽代码不裁切)。
+   - 复制按钮药丸去掉 backdrop-blur,减少每个代码块一个合成层。 */
+.assistant-markdown [data-streamdown="code-block"] {
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.assistant-markdown [data-streamdown="code-block-body"] {
+  overflow-x: auto;
+}
+
+.assistant-markdown [data-streamdown="code-block-actions"] {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.assistant-markdown [data-streamdown="code-block-copy-button"]:hover {
+  background: var(--accent);
+}
