@@ -779,15 +779,13 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                   </section>
                 </div>
                 <DialogFooter className="mx-0 mb-0 shrink-0 rounded-none">
-                  {draft.id === undefined && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={resetToList}
-                    >
-                      取消
-                    </Button>
-                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={resetToList}
+                  >
+                    取消
+                  </Button>
                   <Button
                     type="submit"
                     aria-label="保存模型提供商"

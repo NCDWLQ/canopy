@@ -7,6 +7,8 @@ import { useProviderStore } from "../store"
 import type { ProviderView } from "../types"
 import type { ProviderClient } from "@/lib/tauri"
 
+type SaveProviderInput = Parameters<ProviderClient["saveProvider"]>[0]
+
 const provider: ProviderView = {
   id: "provider-1",
   name: "OpenAI",
@@ -104,14 +106,16 @@ describe("GlobalSettingsDialog", () => {
   it("keeps the saved draft values after a successful save", async () => {
     const user = userEvent.setup()
     const bridge = client()
-    bridge.saveProvider.mockImplementation(async (input) => ({
-      ...provider,
-      name: input.name,
-      baseEndpoint: input.baseEndpoint,
-      model: input.model,
-      models: input.models,
-      updatedAt: 11,
-    }))
+    bridge.saveProvider.mockImplementation((input: SaveProviderInput) =>
+      Promise.resolve({
+        ...provider,
+        name: input.name,
+        baseEndpoint: input.baseEndpoint,
+        model: input.model,
+        models: [...input.models],
+        updatedAt: 11,
+      }),
+    )
     render(
       <GlobalSettingsDialog
         client={bridge as ProviderClient}
@@ -352,6 +356,27 @@ describe("GlobalSettingsDialog", () => {
     await user.click(screen.getByRole("button", { name: "取消" }))
     expect(screen.getByRole("heading", { name: "全部提供商" })).toBeVisible()
     expect(screen.queryByLabelText("名称")).not.toBeInTheDocument()
+  })
+
+  it("cancels editing a provider and returns to the list", async () => {
+    const user = userEvent.setup()
+    render(
+      <GlobalSettingsDialog
+        client={client() as ProviderClient}
+        readOnly={false}
+      />,
+    )
+    await openProviderEditor(user)
+    const name = screen.getByLabelText("名称")
+    await user.clear(name)
+    await user.type(name, "Unsaved rename")
+    await user.click(screen.getByRole("button", { name: "取消" }))
+    expect(screen.getByRole("heading", { name: "全部提供商" })).toBeVisible()
+    expect(screen.queryByLabelText("名称")).not.toBeInTheDocument()
+    await user.click(
+      screen.getByRole("button", { name: `编辑：${provider.name}` }),
+    )
+    expect(screen.getByLabelText("名称")).toHaveValue(provider.name)
   })
 
   it("sets the global default from the provider row more menu", async () => {
