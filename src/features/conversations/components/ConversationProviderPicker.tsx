@@ -2,8 +2,12 @@ import * as React from "react"
 import { Check, ChevronDown, Settings2 } from "lucide-react"
 
 import { useProviderStore } from "@/features/providers/store"
-import { useConversationStore } from "@/features/conversations/store"
+import {
+  useConversationStore,
+  type ConversationProviderBinding,
+} from "@/features/conversations/store"
 import type { ReasoningEffort } from "@/features/providers/types"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Popover,
@@ -15,6 +19,8 @@ import type { ConversationClient } from "@/lib/tauri"
 
 export type ConversationProviderPickerProps = {
   conversationClient: ConversationClient
+  /** When true, edits update the new-conversation draft instead of IPC. */
+  draftMode: boolean
   providerId: string | null
   model: string | null
   reasoningEffort: ReasoningEffort | null
@@ -24,6 +30,7 @@ export type ConversationProviderPickerProps = {
 
 export function ConversationProviderPicker({
   conversationClient,
+  draftMode,
   providerId,
   model,
   reasoningEffort,
@@ -35,28 +42,41 @@ export function ConversationProviderPicker({
   const setConversationProvider = useConversationStore(
     (state) => state.setConversationProvider,
   )
+  const setDraftConversationProvider = useConversationStore(
+    (state) => state.setDraftConversationProvider,
+  )
   const [open, setOpen] = React.useState(false)
   const [saving, setSaving] = React.useState(false)
-  const effectiveProviderId = providerId ?? activeProviderId
-  const effectiveProvider = providers.find(
-    (item) => item.id === effectiveProviderId,
+
+  // Highlight uses the session binding when present; otherwise the active
+  // global provider (effective). Choosing anything always snapshots.
+  const highlightedProviderId = providerId ?? activeProviderId
+  const highlightedProvider = providers.find(
+    (item) => item.id === highlightedProviderId,
   )
-  const effectiveModel = model ?? effectiveProvider?.model ?? null
+  const highlightedModel = model ?? highlightedProvider?.model ?? null
   // The model options come from the provider's persisted list only — the
   // picker never fetches over the network (settings maintains the list).
-  const modelOptions = effectiveProvider
-    ? effectiveProvider.models.length > 0
-      ? effectiveProvider.models
-      : [effectiveProvider.model]
+  const modelOptions = highlightedProvider
+    ? highlightedProvider.models.length > 0
+      ? highlightedProvider.models
+      : [highlightedProvider.model]
     : []
 
-  const save = React.useCallback(
+  const persist = React.useCallback(
     async (
-      nextBinding: { providerId: string; model: string } | null,
+      nextBinding: ConversationProviderBinding,
       nextEffort: ReasoningEffort | null,
     ) => {
-      if (readOnly || conversationClient.setConversationProvider === undefined)
+      if (readOnly) return
+      if (draftMode) {
+        setDraftConversationProvider({
+          binding: nextBinding,
+          reasoningEffort: nextEffort,
+        })
         return
+      }
+      if (conversationClient.setConversationProvider === undefined) return
       setSaving(true)
       try {
         await setConversationProvider(conversationClient, {
@@ -67,26 +87,42 @@ export function ConversationProviderPicker({
         setSaving(false)
       }
     },
-    [conversationClient, readOnly, setConversationProvider],
+    [
+      conversationClient,
+      draftMode,
+      readOnly,
+      setConversationProvider,
+      setDraftConversationProvider,
+    ],
   )
+
+  const snapshotBinding = (): ConversationProviderBinding | null => {
+    if (providerId !== null && model !== null) {
+      return { providerId, model }
+    }
+    if (highlightedProviderId === null || highlightedModel === null) {
+      return null
+    }
+    return { providerId: highlightedProviderId, model: highlightedModel }
+  }
 
   const chooseProvider = (id: string) => {
     const provider = providers.find((item) => item.id === id)
     if (provider === undefined) return
-    void save({ providerId: id, model: provider.model }, reasoningEffort)
+    void persist({ providerId: id, model: provider.model }, reasoningEffort)
   }
 
   const chooseModel = (nextModel: string) => {
     const targetId = providerId ?? activeProviderId
     if (targetId === null) return
-    void save({ providerId: targetId, model: nextModel }, reasoningEffort)
+    void persist({ providerId: targetId, model: nextModel }, reasoningEffort)
   }
 
   const chooseEffort = (value: string) => {
     const nextEffort = value === "default" ? null : (value as ReasoningEffort)
-    const binding =
-      providerId === null || model === null ? null : { providerId, model }
-    void save(binding, nextEffort)
+    const binding = snapshotBinding()
+    if (binding === null) return
+    void persist(binding, nextEffort)
   }
 
   return (
@@ -100,8 +136,8 @@ export function ConversationProviderPicker({
           aria-label="选择服务提供商和模型"
         >
           <span className="max-w-40 truncate">
-            {effectiveProvider?.name ?? "未配置服务提供商"}
-            {effectiveModel === null ? "" : ` · ${effectiveModel}`}
+            {highlightedProvider?.name ?? "未配置服务提供商"}
+            {highlightedModel === null ? "" : ` · ${highlightedModel}`}
           </span>
           <ChevronDown data-icon="inline-end" aria-hidden="true" />
         </Button>
@@ -111,36 +147,36 @@ export function ConversationProviderPicker({
           服务提供商
         </p>
         <div className="flex max-h-36 flex-col overflow-y-auto">
-          <Button
-            type="button"
-            variant={providerId === null ? "secondary" : "ghost"}
-            className="justify-start"
-            disabled={readOnly || saving}
-            onClick={() => void save(null, reasoningEffort)}
-          >
-            {providerId === null && (
-              <Check data-icon="inline-start" aria-hidden="true" />
-            )}
-            跟随全局默认
-          </Button>
           {providers.map((provider) => (
             <Button
               key={provider.id}
               type="button"
-              variant={provider.id === providerId ? "secondary" : "ghost"}
+              variant={
+                provider.id === highlightedProviderId ? "secondary" : "ghost"
+              }
               className="justify-start"
               disabled={readOnly || saving}
               onClick={() => chooseProvider(provider.id)}
             >
-              {provider.id === providerId && (
+              {provider.id === highlightedProviderId && (
                 <Check data-icon="inline-start" aria-hidden="true" />
               )}
-              {provider.name}
-              <span className="ml-auto text-xs text-muted-foreground">
+              <span className="truncate">{provider.name}</span>
+              {provider.id === activeProviderId && (
+                <Badge variant="secondary" className="ml-1 shrink-0">
+                  默认
+                </Badge>
+              )}
+              <span className="ml-auto truncate text-xs text-muted-foreground">
                 {provider.model}
               </span>
             </Button>
           ))}
+          {providers.length === 0 && (
+            <p className="px-1 py-2 text-xs text-muted-foreground">
+              尚未配置服务提供商。
+            </p>
+          )}
         </div>
         <div className="border-t pt-2">
           <p className="px-1 text-xs font-medium text-muted-foreground">模型</p>
@@ -149,18 +185,18 @@ export function ConversationProviderPicker({
               <Button
                 key={item}
                 type="button"
-                variant={item === effectiveModel ? "secondary" : "ghost"}
+                variant={item === highlightedModel ? "secondary" : "ghost"}
                 className="justify-start"
-                disabled={readOnly || saving || effectiveProviderId === null}
+                disabled={readOnly || saving || highlightedProviderId === null}
                 onClick={() => chooseModel(item)}
               >
-                {item === effectiveModel && (
+                {item === highlightedModel && (
                   <Check data-icon="inline-start" aria-hidden="true" />
                 )}
                 {item}
               </Button>
             ))}
-            {effectiveProviderId === null && (
+            {highlightedProviderId === null && (
               <p className="px-1 py-2 text-xs text-muted-foreground">
                 选择服务提供商后可选模型。
               </p>

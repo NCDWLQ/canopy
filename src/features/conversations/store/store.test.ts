@@ -128,6 +128,8 @@ function resetStore() {
     providerId: null,
     model: null,
     reasoningEffort: null,
+    draftBinding: null,
+    draftReasoningEffort: null,
     rootNodeId: null,
     activeNodeId: null,
     nodesById: {},

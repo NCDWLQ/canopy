@@ -128,6 +128,8 @@ export function ConversationWorkspace({
       providerId: state.providerId,
       model: state.model,
       reasoningEffort: state.reasoningEffort,
+      draftBinding: state.draftBinding,
+      draftReasoningEffort: state.draftReasoningEffort,
       rootNodeId: state.rootNodeId,
       activeNodeId: state.activeNodeId,
       nodesById: state.nodesById,
@@ -531,13 +533,26 @@ export function ConversationWorkspace({
                 已归档 — 只读
               </Badge>
             )}
-            {!isBlankConversation && store.conversationId !== null && (
+            {(isBlankConversation || store.conversationId !== null) && (
               <ConversationProviderPicker
                 conversationClient={client}
-                providerId={store.providerId}
-                model={store.model}
-                reasoningEffort={store.reasoningEffort}
-                readOnly={store.isArchived}
+                draftMode={isBlankConversation}
+                providerId={
+                  isBlankConversation
+                    ? (store.draftBinding?.providerId ?? null)
+                    : store.providerId
+                }
+                model={
+                  isBlankConversation
+                    ? (store.draftBinding?.model ?? null)
+                    : store.model
+                }
+                reasoningEffort={
+                  isBlankConversation
+                    ? store.draftReasoningEffort
+                    : store.reasoningEffort
+                }
+                readOnly={!isBlankConversation && store.isArchived}
                 onManageProviders={() => setIsSettingsOpen(true)}
               />
             )}

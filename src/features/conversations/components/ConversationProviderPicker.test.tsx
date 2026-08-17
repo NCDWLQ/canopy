@@ -40,10 +40,12 @@ describe("ConversationProviderPicker", () => {
       providerId: null,
       model: null,
       reasoningEffort: null,
+      draftBinding: null,
+      draftReasoningEffort: null,
     })
   })
 
-  it("shows the effective global model and opens workspace settings from the picker", async () => {
+  it("shows the default badge and opens workspace settings from the picker", async () => {
     const user = userEvent.setup()
     const onManageProviders = vi.fn()
     const conversationClient = {
@@ -52,6 +54,7 @@ describe("ConversationProviderPicker", () => {
     render(
       <ConversationProviderPicker
         conversationClient={conversationClient}
+        draftMode={false}
         providerId={null}
         model={null}
         reasoningEffort={null}
@@ -62,7 +65,10 @@ describe("ConversationProviderPicker", () => {
     await user.click(
       screen.getByRole("button", { name: "选择服务提供商和模型" }),
     )
-    expect(screen.getByText("跟随全局默认")).toBeVisible()
+    expect(screen.queryByText("跟随全局默认")).toBeNull()
+    expect(screen.getByRole("button", { name: /OpenAI/ })).toHaveTextContent(
+      "默认",
+    )
     expect(screen.getByRole("button", { name: "gpt-default" })).toBeVisible()
     await user.click(screen.getByRole("button", { name: "管理服务提供商…" }))
     expect(onManageProviders).toHaveBeenCalledOnce()
@@ -81,6 +87,7 @@ describe("ConversationProviderPicker", () => {
     render(
       <ConversationProviderPicker
         conversationClient={conversationClient}
+        draftMode={false}
         providerId={null}
         model={null}
         reasoningEffort={null}
@@ -114,6 +121,7 @@ describe("ConversationProviderPicker", () => {
     render(
       <ConversationProviderPicker
         conversationClient={conversationClient}
+        draftMode={false}
         providerId={null}
         model={null}
         reasoningEffort={null}
@@ -134,22 +142,23 @@ describe("ConversationProviderPicker", () => {
     })
   })
 
-  it("clears the binding back to the global default while keeping effort", async () => {
+  it("snapshots the effective binding when changing effort on an unbound session", async () => {
     const user = userEvent.setup()
     const conversationClient = {
       setConversationProvider: vi.fn().mockResolvedValue({
         id: "conversation-1",
-        providerId: null,
-        model: null,
-        reasoningEffort: "low",
+        providerId: provider.id,
+        model: provider.model,
+        reasoningEffort: "high",
       }),
     } as unknown as ConversationClient
     render(
       <ConversationProviderPicker
         conversationClient={conversationClient}
-        providerId={provider.id}
-        model={provider.model}
-        reasoningEffort="low"
+        draftMode={false}
+        providerId={null}
+        model={null}
+        reasoningEffort={null}
         readOnly={false}
         onManageProviders={vi.fn()}
       />,
@@ -158,12 +167,12 @@ describe("ConversationProviderPicker", () => {
     await user.click(
       screen.getByRole("button", { name: "选择服务提供商和模型" }),
     )
-    await user.click(screen.getByRole("button", { name: "跟随全局默认" }))
+    await user.click(screen.getByRole("radio", { name: "高" }))
 
     expect(conversationClient.setConversationProvider).toHaveBeenCalledWith({
       conversationId: "conversation-1",
-      binding: null,
-      reasoningEffort: "low",
+      binding: { providerId: provider.id, model: provider.model },
+      reasoningEffort: "high",
     })
   })
 
@@ -180,6 +189,7 @@ describe("ConversationProviderPicker", () => {
     const view = render(
       <ConversationProviderPicker
         conversationClient={conversationClient}
+        draftMode={false}
         providerId={provider.id}
         model={provider.model}
         reasoningEffort={null}
@@ -199,11 +209,10 @@ describe("ConversationProviderPicker", () => {
       reasoningEffort: "high",
     })
 
-    // 未选择（默认）不发参数：切换回「默认」提交 null。保存成功后 store
-    // 会把持久化的 effort 回灌为 prop（此处用 rerender 模拟父组件重渲染）。
     view.rerender(
       <ConversationProviderPicker
         conversationClient={conversationClient}
+        draftMode={false}
         providerId={provider.id}
         model={provider.model}
         reasoningEffort="high"
@@ -221,6 +230,37 @@ describe("ConversationProviderPicker", () => {
     )
   })
 
+  it("writes draft state instead of IPC while composing a new conversation", async () => {
+    const user = userEvent.setup()
+    const setConversationProvider = vi.fn()
+    const conversationClient = {
+      setConversationProvider,
+    } as unknown as ConversationClient
+    useConversationStore.setState({ conversationId: null })
+    render(
+      <ConversationProviderPicker
+        conversationClient={conversationClient}
+        draftMode
+        providerId={null}
+        model={null}
+        reasoningEffort={null}
+        readOnly={false}
+        onManageProviders={vi.fn()}
+      />,
+    )
+
+    await user.click(
+      screen.getByRole("button", { name: "选择服务提供商和模型" }),
+    )
+    await user.click(screen.getByRole("button", { name: "gpt-alt" }))
+
+    expect(setConversationProvider).not.toHaveBeenCalled()
+    expect(useConversationStore.getState().draftBinding).toEqual({
+      providerId: provider.id,
+      model: "gpt-alt",
+    })
+  })
+
   it("disables every binding control for archived conversations", async () => {
     const user = userEvent.setup()
     const setConversationProvider = vi.fn()
@@ -230,6 +270,7 @@ describe("ConversationProviderPicker", () => {
     render(
       <ConversationProviderPicker
         conversationClient={conversationClient}
+        draftMode={false}
         providerId={null}
         model={null}
         reasoningEffort={null}

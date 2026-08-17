@@ -68,6 +68,11 @@ export type ActiveGenerationRun = Extract<
   { phase: "starting" | "streaming" }
 >
 
+export type ConversationProviderBinding = {
+  providerId: string
+  model: string
+}
+
 export type ConversationTreeState = {
   isCreatingConversation: boolean
   conversationId: string | null
@@ -75,6 +80,11 @@ export type ConversationTreeState = {
   providerId: string | null
   model: string | null
   reasoningEffort: "low" | "medium" | "high" | null
+  // Blank/new-conversation picker draft. Null binding means "snapshot the
+  // active provider at create time"; UI never clears a chosen draft back to
+  // follow-global.
+  draftBinding: ConversationProviderBinding | null
+  draftReasoningEffort: "low" | "medium" | "high" | null
   rootNodeId: string | null
   activeNodeId: string | null
   nodesById: Readonly<Record<string, TreeNodeView>>
@@ -144,6 +154,10 @@ export type ConversationStore = ConversationTreeState & {
     client: ConversationClient,
     input: Omit<SetConversationProviderInput, "conversationId">,
   ) => Promise<void>
+  setDraftConversationProvider: (input: {
+    binding: ConversationProviderBinding | null
+    reasoningEffort: "low" | "medium" | "high" | null
+  }) => void
   clearError: () => void
   beginGeneration: (explicitParentNodeId?: string) => number | null
   acceptGenerationStarted: (
@@ -222,6 +236,8 @@ const initialState: ConversationTreeState = {
   providerId: null,
   model: null,
   reasoningEffort: null,
+  draftBinding: null,
+  draftReasoningEffort: null,
   rootNodeId: null,
   activeNodeId: null,
   nodesById: emptyRecord(),
@@ -326,6 +342,8 @@ function loadedTreeState(
     providerId: tree.conversation.providerId ?? null,
     model: tree.conversation.model ?? null,
     reasoningEffort: tree.conversation.reasoningEffort ?? null,
+    draftBinding: null,
+    draftReasoningEffort: null,
     rootNodeId: tree.rootNodeId,
     activeNodeId,
     nodesById: copyRecord(tree.nodesById),
@@ -570,6 +588,8 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
       requestEpoch += 1
       set({
         isCreatingConversation: true,
+        draftBinding: null,
+        draftReasoningEffort: null,
         status: state.conversationId === null ? "idle" : "ready",
         error: null,
       })
@@ -1291,6 +1311,13 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
           set({ error: normalizeUiError(error) })
         }
       }
+    },
+
+    setDraftConversationProvider: (input) => {
+      set({
+        draftBinding: input.binding,
+        draftReasoningEffort: input.reasoningEffort,
+      })
     },
 
     archiveConversation: async (client, targetId) => {
