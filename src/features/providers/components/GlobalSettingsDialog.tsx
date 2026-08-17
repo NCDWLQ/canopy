@@ -8,9 +8,10 @@ import {
   EyeOff,
   KeyRound,
   Plus,
-  Radio,
   Settings2,
+  Star,
   Trash2,
+  EllipsisVertical,
   X,
 } from "lucide-react"
 
@@ -365,12 +366,12 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                       providers.map((provider) => (
                         <div
                           key={provider.id}
-                          className="flex items-center gap-1"
+                          className="flex items-center rounded-md hover:bg-muted"
                         >
                           <Button
                             type="button"
                             variant="ghost"
-                            className="min-w-0 flex-1 justify-start"
+                            className="min-w-0 flex-1 justify-start hover:bg-transparent"
                             aria-label={`编辑：${provider.name}`}
                             onClick={() => openEditor(provider.id)}
                           >
@@ -388,21 +389,31 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                               )}
                             </span>
                           </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            aria-label={`设为全局默认：${provider.name}`}
-                            disabled={
-                              mutationDisabled ||
-                              provider.id === activeProviderId
-                            }
-                            onClick={() =>
-                              void setActiveProvider(client, provider.id)
-                            }
-                          >
-                            <Radio className="size-4" />
-                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="shrink-0 hover:bg-transparent"
+                                aria-label={`更多操作：${provider.name}`}
+                                disabled={mutationDisabled}
+                              >
+                                <EllipsisVertical />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-auto min-w-44">
+                              <DropdownMenuItem
+                                disabled={provider.id === activeProviderId}
+                                onClick={() =>
+                                  void setActiveProvider(client, provider.id)
+                                }
+                              >
+                                <Star />
+                                设为默认
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       ))
                     )}

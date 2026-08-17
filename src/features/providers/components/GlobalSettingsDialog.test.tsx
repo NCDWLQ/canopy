@@ -278,6 +278,38 @@ describe("GlobalSettingsDialog", () => {
     await user.click(
       screen.getByRole("button", { name: "返回模型提供商列表" }),
     )
+    expect(screen.getByRole("heading", { name: "模型提供商" })).toBeVisible()
     expect(screen.queryByLabelText("名称")).not.toBeInTheDocument()
+  })
+
+  it("sets the global default from the provider row more menu", async () => {
+    const user = userEvent.setup()
+    const bridge = client()
+    const other: ProviderView = {
+      ...provider,
+      id: "provider-2",
+      name: "Anthropic",
+      hasApiKey: false,
+    }
+    useProviderStore.setState({
+      phase: "ready",
+      providers: [provider, other],
+      activeProviderId: provider.id,
+    })
+    bridge.setActiveProvider.mockResolvedValueOnce(other.id)
+    render(
+      <GlobalSettingsDialog
+        client={bridge as ProviderClient}
+        readOnly={false}
+      />,
+    )
+    await user.click(screen.getByRole("button", { name: "设置" }))
+    await user.click(
+      screen.getByRole("button", { name: "更多操作：Anthropic" }),
+    )
+    await user.click(screen.getByRole("menuitem", { name: "设为默认" }))
+    await waitFor(() =>
+      expect(bridge.setActiveProvider).toHaveBeenCalledWith(other.id),
+    )
   })
 })

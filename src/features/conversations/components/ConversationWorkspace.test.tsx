@@ -1567,8 +1567,9 @@ describe("ConversationWorkspace", () => {
       screen.getByRole("button", { name: "返回模型提供商列表" }),
     )
     await user.click(
-      screen.getByRole("button", { name: "设为全局默认：Fixture provider" }),
+      screen.getByRole("button", { name: "更多操作：Fixture provider" }),
     )
+    await user.click(screen.getByRole("menuitem", { name: "设为默认" }))
 
     await user.click(screen.getByRole("button", { name: "关闭" }))
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
