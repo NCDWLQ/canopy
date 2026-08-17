@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Check, ChevronDown, Settings2 } from "lucide-react"
+import { ChevronDown, Settings2 } from "lucide-react"
 
 import { useProviderStore } from "@/features/providers/store"
 import {
@@ -7,7 +7,6 @@ import {
   type ConversationProviderBinding,
 } from "@/features/conversations/store"
 import type { ReasoningEffort } from "@/features/providers/types"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Popover,
@@ -165,19 +164,18 @@ export function ConversationProviderPicker({
                 variant={
                   provider.id === highlightedProviderId ? "secondary" : "ghost"
                 }
-                className="justify-start"
+                className="w-full justify-start"
                 disabled={readOnly || saving}
                 onClick={() => chooseProvider(provider.id)}
               >
-                {provider.id === highlightedProviderId && (
-                  <Check data-icon="inline-start" aria-hidden="true" />
-                )}
-                <span className="truncate">{provider.name}</span>
-                {provider.id === activeProviderId && (
-                  <Badge variant="secondary" className="ml-1 shrink-0">
-                    默认
-                  </Badge>
-                )}
+                <span className="flex w-full min-w-0 items-baseline gap-1.5">
+                  <span className="min-w-0 truncate">{provider.name}</span>
+                  {provider.id === activeProviderId && (
+                    <span className="ml-auto shrink-0 text-xs font-normal text-muted-foreground">
+                      默认
+                    </span>
+                  )}
+                </span>
               </Button>
             ))}
             {providers.length === 0 && (
@@ -207,19 +205,18 @@ export function ConversationProviderPicker({
                 role="option"
                 aria-selected={item === highlightedModel}
                 variant={item === highlightedModel ? "secondary" : "ghost"}
-                className="justify-start"
+                className="w-full justify-start"
                 disabled={readOnly || saving || highlightedProviderId === null}
                 onClick={() => chooseModel(item)}
               >
-                {item === highlightedModel && (
-                  <Check data-icon="inline-start" aria-hidden="true" />
-                )}
-                <span className="truncate">{item}</span>
-                {item === highlightedProvider?.model && (
-                  <Badge variant="secondary" className="ml-1 shrink-0">
-                    默认
-                  </Badge>
-                )}
+                <span className="flex w-full min-w-0 items-baseline gap-1.5">
+                  <span className="min-w-0 truncate">{item}</span>
+                  {item === highlightedProvider?.model && (
+                    <span className="ml-auto shrink-0 text-xs font-normal text-muted-foreground">
+                      默认
+                    </span>
+                  )}
+                </span>
               </Button>
             ))}
             {highlightedProviderId === null && (
