@@ -1,0 +1,5 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Settings dialog ownership, accessible names, and provider UI contracts"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Feature ownership for providers components vs generic ui"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend validation bar for dialog refactor"}
+{"file": ".trellis/tasks/08-17-settings-dual-column-dialog/design.md", "reason": "List-to-detail settings shell layout and navigation contracts"}
