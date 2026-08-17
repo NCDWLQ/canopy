@@ -101,6 +101,36 @@ describe("GlobalSettingsDialog", () => {
     expect(screen.getByText("alpha, beta 等 2 个")).toBeVisible()
   })
 
+  it("keeps the saved draft values after a successful save", async () => {
+    const user = userEvent.setup()
+    const bridge = client()
+    bridge.saveProvider.mockImplementation(async (input) => ({
+      ...provider,
+      name: input.name,
+      baseEndpoint: input.baseEndpoint,
+      model: input.model,
+      models: input.models,
+      updatedAt: 11,
+    }))
+    render(
+      <GlobalSettingsDialog
+        client={bridge as ProviderClient}
+        readOnly={false}
+      />,
+    )
+    await openProviderEditor(user)
+    const name = screen.getByLabelText("名称")
+    await user.clear(name)
+    await user.type(name, "Renamed")
+    await user.click(screen.getByRole("button", { name: "保存模型提供商" }))
+    await waitFor(() =>
+      expect(bridge.saveProvider).toHaveBeenCalledWith(
+        expect.objectContaining({ name: "Renamed" }),
+      ),
+    )
+    expect(screen.getByLabelText("名称")).toHaveValue("Renamed")
+  })
+
   it("reveals the saved key masked, toggles visibility, and keeps it when unchanged", async () => {
     const user = userEvent.setup()
     const bridge = client()

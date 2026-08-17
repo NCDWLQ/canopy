@@ -171,9 +171,13 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
   }, [clearEphemeralKeyState])
 
   const openEditor = React.useCallback(
-    (providerId: string | null) => {
+    (providerId: string | null, snapshot?: ProviderView) => {
       selectedIdRef.current = providerId
-      const provider = providers.find((item) => item.id === providerId)
+      const provider =
+        snapshot ??
+        (providerId === null
+          ? undefined
+          : providers.find((item) => item.id === providerId))
       setDraft(
         provider === undefined ? emptyDraft() : draftFromProvider(provider),
       )
@@ -280,7 +284,7 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
       models: draft.models,
       apiKey: resolveApiKeyAction(existing, apiKey, savedApiKey),
     })
-    if (saved !== null) openEditor(saved.id)
+    if (saved !== null) openEditor(saved.id, saved)
   }
 
   const handleDelete = async (providerId: string) => {
