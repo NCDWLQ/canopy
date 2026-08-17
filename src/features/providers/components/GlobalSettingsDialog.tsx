@@ -284,7 +284,7 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
           设置
         </Button>
       </DialogTrigger>
-      <DialogContent className="flex max-h-[min(720px,calc(100dvh-2rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl">
+      <DialogContent className="flex h-[min(36rem,calc(100dvh-2rem))] max-h-[min(720px,calc(100dvh-2rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl">
         <DialogHeader className="sr-only">
           <DialogTitle>设置</DialogTitle>
           <DialogDescription>工作区设置</DialogDescription>
