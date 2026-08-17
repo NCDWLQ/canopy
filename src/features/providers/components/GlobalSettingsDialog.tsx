@@ -375,7 +375,7 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <h2 id="provider-list-title" className="font-medium">
-                      模型提供商
+                      全部提供商
                     </h2>
                     <Button
                       type="button"

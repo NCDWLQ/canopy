@@ -324,7 +324,7 @@ describe("ConversationWorkspace", () => {
 
     await user.click(settingsButton)
     expect(screen.getByRole("dialog")).toHaveAccessibleName("设置")
-    expect(screen.getByRole("heading", { name: "模型提供商" })).toBeVisible()
+    expect(screen.getByRole("heading", { name: "全部提供商" })).toBeVisible()
     await user.click(screen.getByRole("button", { name: "关闭" }))
 
     await user.click(screen.getByRole("button", { name: "收起侧栏" }))

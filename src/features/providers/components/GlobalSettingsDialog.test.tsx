@@ -73,7 +73,7 @@ describe("GlobalSettingsDialog", () => {
     expect(
       screen.getByRole("button", { name: "模型提供商", current: "page" }),
     ).toBeVisible()
-    expect(screen.getByRole("heading", { name: "模型提供商" })).toBeVisible()
+    expect(screen.getByRole("heading", { name: "全部提供商" })).toBeVisible()
     expect(screen.getByLabelText("当前全局默认")).toHaveTextContent("默认")
     expect(screen.getByText("fixture-model")).toBeVisible()
     expect(screen.queryByLabelText("名称")).not.toBeInTheDocument()
@@ -301,7 +301,7 @@ describe("GlobalSettingsDialog", () => {
     await user.click(
       screen.getByRole("button", { name: "返回模型提供商列表" }),
     )
-    expect(screen.getByRole("heading", { name: "模型提供商" })).toBeVisible()
+    expect(screen.getByRole("heading", { name: "全部提供商" })).toBeVisible()
     expect(screen.queryByLabelText("名称")).not.toBeInTheDocument()
   })
 
@@ -320,7 +320,7 @@ describe("GlobalSettingsDialog", () => {
     ).toBeVisible()
     await user.type(screen.getByLabelText("名称"), "draft")
     await user.click(screen.getByRole("button", { name: "取消" }))
-    expect(screen.getByRole("heading", { name: "模型提供商" })).toBeVisible()
+    expect(screen.getByRole("heading", { name: "全部提供商" })).toBeVisible()
     expect(screen.queryByLabelText("名称")).not.toBeInTheDocument()
   })
 
