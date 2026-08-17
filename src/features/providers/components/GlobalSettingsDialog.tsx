@@ -3,7 +3,6 @@ import {
   Bot,
   Check,
   ChevronDown,
-  ChevronRight,
   Eye,
   EyeOff,
   KeyRound,
@@ -31,6 +30,14 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -318,35 +325,40 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
             </Button>
           </nav>
           <div className="flex min-h-0 min-w-0 flex-col">
-            <div className="flex items-center gap-1 border-b px-4 py-3 pr-12 text-sm">
-              <span className="text-muted-foreground">设置</span>
-              <ChevronRight
-                className="size-3.5 shrink-0 text-muted-foreground"
-                aria-hidden="true"
-              />
-              {view === "list" ? (
-                <span className="font-medium text-foreground">模型提供商</span>
-              ) : (
-                <>
-                  <Button
-                    type="button"
-                    variant="link"
-                    size="sm"
-                    className="h-auto p-0 text-muted-foreground"
-                    aria-label="返回模型提供商列表"
-                    onClick={resetToList}
-                  >
-                    模型提供商
-                  </Button>
-                  <ChevronRight
-                    className="size-3.5 shrink-0 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                  <span className="min-w-0 truncate font-medium text-foreground">
-                    {detailCrumbLabel}
-                  </span>
-                </>
-              )}
+            <div className="border-b px-4 py-3 pr-12">
+              <Breadcrumb aria-label="面包屑">
+                <BreadcrumbList>
+                  <BreadcrumbItem>
+                    <span>设置</span>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator />
+                  {view === "list" ? (
+                    <BreadcrumbItem>
+                      <BreadcrumbPage>模型提供商</BreadcrumbPage>
+                    </BreadcrumbItem>
+                  ) : (
+                    <>
+                      <BreadcrumbItem>
+                        <BreadcrumbLink asChild>
+                          <button
+                            type="button"
+                            aria-label="返回模型提供商列表"
+                            onClick={resetToList}
+                          >
+                            模型提供商
+                          </button>
+                        </BreadcrumbLink>
+                      </BreadcrumbItem>
+                      <BreadcrumbSeparator />
+                      <BreadcrumbItem className="min-w-0">
+                        <BreadcrumbPage className="truncate">
+                          {detailCrumbLabel}
+                        </BreadcrumbPage>
+                      </BreadcrumbItem>
+                    </>
+                  )}
+                </BreadcrumbList>
+              </Breadcrumb>
             </div>
             {view === "list" ? (
               <div className="min-h-0 flex-1 overflow-y-auto p-4">
