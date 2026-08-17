@@ -32,6 +32,14 @@ function client() {
   }
 }
 
+async function openProviderEditor(
+  user: ReturnType<typeof userEvent.setup>,
+  providerName = provider.name,
+) {
+  await user.click(screen.getByRole("button", { name: "设置" }))
+  await user.click(screen.getByRole("button", { name: `编辑：${providerName}` }))
+}
+
 describe("GlobalSettingsDialog", () => {
   beforeEach(() => {
     vi.stubGlobal(
@@ -49,6 +57,27 @@ describe("GlobalSettingsDialog", () => {
     })
   })
 
+  it("opens on the provider list with category nav and breadcrumb", async () => {
+    const user = userEvent.setup()
+    render(
+      <GlobalSettingsDialog
+        client={client() as ProviderClient}
+        readOnly={false}
+      />,
+    )
+    await user.click(screen.getByRole("button", { name: "设置" }))
+    expect(screen.getByRole("dialog")).toHaveAccessibleName("设置")
+    expect(
+      screen.getByRole("navigation", { name: "设置分类" }),
+    ).toBeVisible()
+    expect(
+      screen.getByRole("button", { name: "模型提供商", current: "page" }),
+    ).toBeVisible()
+    expect(screen.getByRole("heading", { name: "模型提供商" })).toBeVisible()
+    expect(screen.getByLabelText("当前全局默认")).toHaveTextContent("默认")
+    expect(screen.queryByLabelText("名称")).not.toBeInTheDocument()
+  })
+
   it("reveals the saved key masked, toggles visibility, and keeps it when unchanged", async () => {
     const user = userEvent.setup()
     const bridge = client()
@@ -60,8 +89,7 @@ describe("GlobalSettingsDialog", () => {
         readOnly={false}
       />,
     )
-    await user.click(screen.getByRole("button", { name: "设置" }))
-    expect(screen.getByLabelText("当前全局默认")).toHaveTextContent("默认")
+    await openProviderEditor(user)
     expect(bridge.revealProviderApiKey).toHaveBeenCalledWith(provider.id)
     const field = screen.getByLabelText("API 密钥")
     await waitFor(() => expect(field).toHaveValue("STORED_SECRET_SENTINEL"))
@@ -71,7 +99,7 @@ describe("GlobalSettingsDialog", () => {
     expect(field).toHaveAttribute("type", "text")
     expect(screen.getByRole("button", { name: "隐藏 API 密钥" })).toBeVisible()
 
-    await user.click(screen.getByRole("button", { name: "保存服务提供商" }))
+    await user.click(screen.getByRole("button", { name: "保存模型提供商" }))
     await waitFor(() =>
       expect(bridge.saveProvider).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -99,12 +127,12 @@ describe("GlobalSettingsDialog", () => {
         readOnly={false}
       />,
     )
-    await user.click(screen.getByRole("button", { name: "设置" }))
+    await openProviderEditor(user)
     const field = screen.getByLabelText("API 密钥")
     await waitFor(() => expect(field).toHaveValue("OLD_SECRET_SENTINEL"))
     await user.clear(field)
     await user.type(field, "DIALOG_SECRET_SENTINEL")
-    await user.click(screen.getByRole("button", { name: "保存服务提供商" }))
+    await user.click(screen.getByRole("button", { name: "保存模型提供商" }))
     await waitFor(() =>
       expect(bridge.saveProvider).toHaveBeenCalledWith({
         id: provider.id,
@@ -129,29 +157,31 @@ describe("GlobalSettingsDialog", () => {
         readOnly={false}
       />,
     )
-    await user.click(screen.getByRole("button", { name: "设置" }))
+    await openProviderEditor(user)
     const field = screen.getByLabelText("API 密钥")
     await waitFor(() => expect(field).toHaveValue("OLD_SECRET_SENTINEL"))
     await user.clear(field)
-    await user.click(screen.getByRole("button", { name: "保存服务提供商" }))
+    await user.click(screen.getByRole("button", { name: "保存模型提供商" }))
     await waitFor(() =>
       expect(bridge.saveProvider).toHaveBeenCalledWith(
         expect.objectContaining({ apiKey: { action: "remove" } }),
       ),
     )
 
-    // Second edit: reveal fails, so an empty field must keep the stored key.
+    // Return to list, then re-open; reveal fails so empty field must keep.
     bridge.revealProviderApiKey.mockRejectedValueOnce(new Error("keyring"))
     bridge.saveProvider.mockClear()
-    await user.click(screen.getByRole("button", { name: "新建" }))
-    const providerButton = screen.getByLabelText("当前全局默认").closest("button")
-    expect(providerButton).not.toBeNull()
-    await user.click(providerButton!)
+    await user.click(
+      screen.getByRole("button", { name: "返回模型提供商列表" }),
+    )
+    await user.click(
+      screen.getByRole("button", { name: `编辑：${provider.name}` }),
+    )
     await waitFor(() =>
       expect(bridge.revealProviderApiKey).toHaveBeenCalledTimes(3),
     )
     expect(field).toHaveValue("")
-    await user.click(screen.getByRole("button", { name: "保存服务提供商" }))
+    await user.click(screen.getByRole("button", { name: "保存模型提供商" }))
     await waitFor(() =>
       expect(bridge.saveProvider).toHaveBeenCalledWith(
         expect.objectContaining({ apiKey: { action: "keep" } }),
@@ -174,7 +204,7 @@ describe("GlobalSettingsDialog", () => {
         readOnly={false}
       />,
     )
-    await user.click(screen.getByRole("button", { name: "设置" }))
+    await openProviderEditor(user)
     await user.click(screen.getByRole("button", { name: "获取模型列表" }))
     await user.click(
       await screen.findByRole("button", { name: "加入模型：gpt-test" }),
@@ -182,7 +212,7 @@ describe("GlobalSettingsDialog", () => {
     expect(
       screen.getByRole("button", { name: "设为默认：gpt-test" }),
     ).toBeVisible()
-    await user.click(screen.getByRole("button", { name: "保存服务提供商" }))
+    await user.click(screen.getByRole("button", { name: "保存模型提供商" }))
     await waitFor(() =>
       expect(bridge.saveProvider).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -208,7 +238,7 @@ describe("GlobalSettingsDialog", () => {
         readOnly={false}
       />,
     )
-    await user.click(screen.getByRole("button", { name: "设置" }))
+    await openProviderEditor(user)
     await user.click(screen.getByRole("button", { name: "获取模型列表" }))
     await user.click(
       await screen.findByRole("button", {
@@ -227,11 +257,27 @@ describe("GlobalSettingsDialog", () => {
     render(
       <GlobalSettingsDialog client={client() as ProviderClient} readOnly />,
     )
-    await user.click(screen.getByRole("button", { name: "设置" }))
+    await openProviderEditor(user)
     expect(screen.getByText("只读")).toBeVisible()
     expect(screen.getByLabelText("名称")).toBeDisabled()
     expect(
-      screen.getByRole("button", { name: "保存服务提供商" }),
+      screen.getByRole("button", { name: "保存模型提供商" }),
     ).toBeDisabled()
+  })
+
+  it("returns to the list via the model-provider breadcrumb", async () => {
+    const user = userEvent.setup()
+    render(
+      <GlobalSettingsDialog
+        client={client() as ProviderClient}
+        readOnly={false}
+      />,
+    )
+    await openProviderEditor(user)
+    expect(screen.getByLabelText("名称")).toBeVisible()
+    await user.click(
+      screen.getByRole("button", { name: "返回模型提供商列表" }),
+    )
+    expect(screen.queryByLabelText("名称")).not.toBeInTheDocument()
   })
 })

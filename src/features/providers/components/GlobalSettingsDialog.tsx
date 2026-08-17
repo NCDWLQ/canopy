@@ -1,7 +1,9 @@
 import * as React from "react"
 import {
+  Bot,
   Check,
   ChevronDown,
+  ChevronRight,
   Eye,
   EyeOff,
   KeyRound,
@@ -81,6 +83,8 @@ type ProviderDraft = {
   hasApiKey: boolean
 }
 
+type SettingsView = "list" | "edit"
+
 const emptyDraft = (): ProviderDraft => ({
   name: "",
   protocol: "openai_compatible",
@@ -114,7 +118,7 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
   const deleteProvider = useProviderStore((state) => state.deleteProvider)
   const setActiveProvider = useProviderStore((state) => state.setActiveProvider)
   const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false)
-  const [selectedId, setSelectedId] = React.useState<string | null>(null)
+  const [view, setView] = React.useState<SettingsView>("list")
   const [draft, setDraft] = React.useState<ProviderDraft>(emptyDraft)
   const [apiKey, setApiKey] = React.useState("")
   // The revealed key the field was seeded with; null while unknown (new
@@ -130,10 +134,25 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
   const open = isControlled ? props.open : uncontrolledOpen
   const mutationDisabled = readOnly || phase === "loading"
 
-  const selectDraft = React.useCallback(
+  const clearEphemeralKeyState = React.useCallback(() => {
+    setApiKey("")
+    setSavedApiKey(null)
+    setShowApiKey(false)
+  }, [])
+
+  const resetToList = React.useCallback(() => {
+    selectedIdRef.current = null
+    setDraft(emptyDraft())
+    clearEphemeralKeyState()
+    setModels([])
+    setModelsError(null)
+    setModelAddition("")
+    setView("list")
+  }, [clearEphemeralKeyState])
+
+  const openEditor = React.useCallback(
     (providerId: string | null) => {
       selectedIdRef.current = providerId
-      setSelectedId(providerId)
       const provider = providers.find((item) => item.id === providerId)
       setDraft(
         provider === undefined ? emptyDraft() : draftFromProvider(provider),
@@ -143,6 +162,8 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
       setShowApiKey(false)
       setModels([])
       setModelsError(null)
+      setModelAddition("")
+      setView("edit")
       if (providerId === null) return
       void client
         .revealProviderApiKey(providerId)
@@ -162,12 +183,8 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
   const handleOpenChange = (nextOpen: boolean) => {
     if (!isControlled) setUncontrolledOpen(nextOpen)
     props.onOpenChange?.(nextOpen)
-    if (nextOpen) selectDraft(activeProviderId ?? providers[0]?.id ?? null)
-    else {
-      setApiKey("")
-      setSavedApiKey(null)
-      setShowApiKey(false)
-    }
+    if (nextOpen) resetToList()
+    else clearEphemeralKeyState()
   }
 
   const updateDraft = <K extends keyof ProviderDraft>(
@@ -201,10 +218,10 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
     if (model === "" || mutationDisabled) return
     setDraft((current) => {
       if (current.models.includes(model)) return current
-      const models = [...current.models, model]
+      const nextModels = [...current.models, model]
       return {
         ...current,
-        models,
+        models: nextModels,
         model: current.model === "" ? model : current.model,
       }
     })
@@ -215,11 +232,11 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
     if (mutationDisabled) return
     setDraft((current) => {
       if (current.models.length <= 1) return current
-      const models = current.models.filter((item) => item !== model)
+      const nextModels = current.models.filter((item) => item !== model)
       return {
         ...current,
-        models,
-        model: current.model === model ? (models[0] ?? "") : current.model,
+        models: nextModels,
+        model: current.model === model ? (nextModels[0] ?? "") : current.model,
       }
     })
   }
@@ -240,13 +257,20 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
       models: draft.models,
       apiKey: resolveApiKeyAction(existing, apiKey, savedApiKey),
     })
-    if (saved !== null) selectDraft(saved.id)
+    if (saved !== null) openEditor(saved.id)
   }
 
   const handleDelete = async () => {
     if (mutationDisabled || draft.id === undefined) return
-    if (await deleteProvider(client, draft.id)) selectDraft(null)
+    if (await deleteProvider(client, draft.id)) resetToList()
   }
+
+  const detailCrumbLabel =
+    draft.id === undefined
+      ? "新建"
+      : draft.name.trim() !== ""
+        ? draft.name
+        : (providers.find((item) => item.id === draft.id)?.name ?? "编辑")
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -260,382 +284,462 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
           设置
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[min(720px,calc(100dvh-2rem))] overflow-y-auto sm:max-w-4xl">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[min(720px,calc(100dvh-2rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl">
+        <DialogHeader className="sr-only">
           <DialogTitle>设置</DialogTitle>
-          <DialogDescription>
-            管理应用于整个工作区的服务提供商和默认模型。
-          </DialogDescription>
+          <DialogDescription>工作区设置</DialogDescription>
         </DialogHeader>
-        <div className="grid gap-6 md:grid-cols-[minmax(12rem,0.8fr)_minmax(0,1.2fr)]">
-          <section
-            aria-labelledby="provider-list-title"
-            className="flex flex-col gap-2"
+        <div className="grid min-h-0 flex-1 md:grid-cols-[12rem_minmax(0,1fr)]">
+          <nav
+            aria-label="设置分类"
+            className="flex flex-col gap-1 border-b p-2 md:border-r md:border-b-0"
           >
-            <div className="flex items-center justify-between">
-              <h2 id="provider-list-title" className="font-medium">
-                服务提供商
-              </h2>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={mutationDisabled}
-                onClick={() => selectDraft(null)}
-              >
-                <Plus data-icon="inline-start" />
-                新建
-              </Button>
-            </div>
-            <div className="flex max-h-72 flex-col gap-1 overflow-y-auto rounded-lg border p-1">
-              {providers.length === 0 ? (
-                <p className="p-3 text-sm text-muted-foreground">
-                  尚未添加服务提供商。
-                </p>
-              ) : (
-                providers.map((provider) => (
-                  <div key={provider.id} className="flex items-center gap-1">
-                    <Button
-                      type="button"
-                      variant={
-                        selectedId === provider.id ? "secondary" : "ghost"
-                      }
-                      className="min-w-0 flex-1 justify-start"
-                      onClick={() => selectDraft(provider.id)}
-                    >
-                      <span className="flex w-full min-w-0 items-baseline gap-1.5">
-                        <span className="min-w-0 truncate">
-                          {provider.name}
-                        </span>
-                        {provider.id === activeProviderId && (
-                          <span
-                            className="ml-auto shrink-0 text-xs font-normal text-muted-foreground"
-                            aria-label="当前全局默认"
-                          >
-                            默认
-                          </span>
-                        )}
-                      </span>
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`设为全局默认：${provider.name}`}
-                      disabled={
-                        mutationDisabled || provider.id === activeProviderId
-                      }
-                      onClick={() =>
-                        void setActiveProvider(client, provider.id)
-                      }
-                    >
-                      <Radio className="size-4" />
-                    </Button>
-                  </div>
-                ))
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              选择全局默认后，未单独设置的会话将使用它。
-            </p>
-          </section>
-          <section
-            aria-labelledby="provider-settings-title"
-            className="min-w-0"
-          >
-            <h2 id="provider-settings-title" className="font-medium">
-              {draft.id === undefined ? "新建服务提供商" : "编辑服务提供商"}
-            </h2>
-            {storeError !== null && (
-              <Alert variant="destructive" className="mt-3">
-                <AlertTitle>操作未完成</AlertTitle>
-                <AlertDescription>{storeError.message}</AlertDescription>
-              </Alert>
-            )}
-            {readOnly && (
-              <Alert className="mt-3">
-                <AlertTitle>只读</AlertTitle>
-                <AlertDescription>
-                  查看已归档会话时无法修改服务提供商设置。
-                </AlertDescription>
-              </Alert>
-            )}
-            <form
-              className="mt-4 flex flex-col gap-4"
-              onSubmit={(event) => void handleSubmit(event)}
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full justify-start"
+              aria-current="page"
             >
-              <FieldGroup>
-                <Field data-disabled={mutationDisabled}>
-                  <FieldLabel htmlFor="provider-name">名称</FieldLabel>
-                  <Input
-                    id="provider-name"
-                    value={draft.name}
-                    onChange={(event) =>
-                      updateDraft("name", event.target.value)
-                    }
-                    disabled={mutationDisabled}
-                    maxLength={100}
-                    required
+              <Bot data-icon="inline-start" />
+              模型提供商
+            </Button>
+          </nav>
+          <div className="flex min-h-0 min-w-0 flex-col">
+            <div className="flex items-center gap-1 border-b px-4 py-3 pr-12 text-sm">
+              <span className="text-muted-foreground">设置</span>
+              <ChevronRight
+                className="size-3.5 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
+              {view === "list" ? (
+                <span className="font-medium text-foreground">模型提供商</span>
+              ) : (
+                <>
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="sm"
+                    className="h-auto p-0 text-muted-foreground"
+                    aria-label="返回模型提供商列表"
+                    onClick={resetToList}
+                  >
+                    模型提供商
+                  </Button>
+                  <ChevronRight
+                    className="size-3.5 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
                   />
-                </Field>
-                <Field data-disabled={mutationDisabled}>
-                  <FieldLabel>协议</FieldLabel>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild disabled={mutationDisabled}>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="w-full justify-between"
-                        disabled={mutationDisabled}
-                      >
-                        {draft.protocol === "anthropic"
-                          ? "Anthropic Messages"
-                          : "OpenAI 兼容"}
-                        <ChevronDown className="size-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="start"
-                      className="w-[var(--radix-dropdown-menu-trigger-width)]"
-                    >
-                      <DropdownMenuItem
-                        onClick={() =>
-                          updateDraft("protocol", "openai_compatible")
-                        }
-                      >
-                        {draft.protocol === "openai_compatible" && (
-                          <Check className="size-4" />
-                        )}
-                        OpenAI 兼容
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => updateDraft("protocol", "anthropic")}
-                      >
-                        {draft.protocol === "anthropic" && (
-                          <Check className="size-4" />
-                        )}
-                        Anthropic Messages
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </Field>
-                <Field data-disabled={mutationDisabled}>
-                  <FieldLabel htmlFor="provider-endpoint">基础端点</FieldLabel>
-                  <Input
-                    id="provider-endpoint"
-                    type="url"
-                    value={draft.baseEndpoint}
-                    onChange={(event) =>
-                      updateDraft("baseEndpoint", event.target.value)
-                    }
-                    placeholder={
-                      draft.protocol === "anthropic"
-                        ? "https://api.anthropic.com"
-                        : "https://api.example.com/v1"
-                    }
-                    disabled={mutationDisabled}
-                    required
-                  />
-                  {draft.protocol === "anthropic" && (
-                    <FieldDescription>
-                      Anthropic 兼容网关需带各自前缀，如 DeepSeek 填
-                      https://api.deepseek.com/anthropic。
-                    </FieldDescription>
-                  )}
-                </Field>
-                <Field data-disabled={mutationDisabled}>
-                  <FieldLabel htmlFor="provider-model-add">模型列表</FieldLabel>
-                  <div className="flex gap-2">
-                    <Input
-                      id="provider-model-add"
-                      value={modelAddition}
-                      onChange={(event) => setModelAddition(event.target.value)}
-                      placeholder="手动输入模型名"
+                  <span className="min-w-0 truncate font-medium text-foreground">
+                    {detailCrumbLabel}
+                  </span>
+                </>
+              )}
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              {view === "list" ? (
+                <section
+                  aria-labelledby="provider-list-title"
+                  className="flex flex-col gap-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <h2 id="provider-list-title" className="font-medium">
+                      模型提供商
+                    </h2>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
                       disabled={mutationDisabled}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={mutationDisabled || !modelAddition.trim()}
-                      onClick={() => addModel(modelAddition)}
+                      onClick={() => openEditor(null)}
                     >
-                      添加
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={
-                        mutationDisabled ||
-                        modelsLoading ||
-                        !draft.baseEndpoint.trim()
-                      }
-                      onClick={() => void fetchModels()}
-                    >
-                      {modelsLoading && <Spinner data-icon="inline-start" />}
-                      获取模型列表
+                      <Plus data-icon="inline-start" />
+                      新建
                     </Button>
                   </div>
-                  <FieldDescription>
-                    会话中的模型选择器只使用此列表；点选列表项设为默认模型。
-                  </FieldDescription>
-                  {modelsError !== null && (
-                    <FieldDescription className="text-destructive">
-                      {modelsError}
-                    </FieldDescription>
-                  )}
-                  {draft.models.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {draft.models.map((model) => (
-                        <span key={model} className="inline-flex items-center">
-                          <Button
-                            type="button"
-                            size="xs"
-                            variant={
-                              model === draft.model ? "secondary" : "outline"
-                            }
-                            aria-label={`设为默认：${model}`}
-                            disabled={mutationDisabled}
-                            onClick={() => updateDraft("model", model)}
-                          >
-                            {model === draft.model && (
-                              <Check
-                                data-icon="inline-start"
-                                aria-hidden="true"
-                              />
-                            )}
-                            {model}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-xs"
-                            aria-label={`移除 ${model}`}
-                            disabled={
-                              mutationDisabled || draft.models.length <= 1
-                            }
-                            onClick={() => removeModel(model)}
-                          >
-                            <X aria-hidden="true" />
-                          </Button>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  {models.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {models
-                        .filter((model) => !draft.models.includes(model.id))
-                        .map((model) => (
-                          <Button
-                            key={model.id}
-                            type="button"
-                            size="xs"
-                            variant="ghost"
-                            aria-label={`加入模型：${model.id}`}
-                            disabled={mutationDisabled}
-                            onClick={() => addModel(model.id)}
-                          >
-                            <Plus data-icon="inline-start" aria-hidden="true" />
-                            {model.displayName ?? model.id}
-                          </Button>
-                        ))}
-                    </div>
-                  )}
-                </Field>
-                <Field data-disabled={mutationDisabled}>
-                  <FieldLabel htmlFor="provider-api-key">API 密钥</FieldLabel>
-                  <InputGroup>
-                    <InputGroupInput
-                      id="provider-api-key"
-                      type={showApiKey ? "text" : "password"}
-                      autoComplete="new-password"
-                      value={apiKey}
-                      onChange={(event) => setApiKey(event.target.value)}
-                      placeholder={
-                        draft.id !== undefined && draft.hasApiKey
-                          ? undefined
-                          : "可选"
-                      }
-                      disabled={mutationDisabled}
-                    />
-                    <InputGroupAddon align="inline-end">
-                      <InputGroupButton
-                        size="icon-sm"
-                        aria-label={
-                          showApiKey ? "隐藏 API 密钥" : "显示 API 密钥"
-                        }
-                        disabled={mutationDisabled}
-                        onClick={() => setShowApiKey((visible) => !visible)}
-                      >
-                        {showApiKey ? (
-                          <EyeOff aria-hidden="true" />
-                        ) : (
-                          <Eye aria-hidden="true" />
-                        )}
-                      </InputGroupButton>
-                    </InputGroupAddon>
-                  </InputGroup>
-                  <FieldDescription>
-                    已保存的密钥会显示在此处，默认以星号遮蔽，可切换为明文；清空后保存将删除已保存的密钥。
-                  </FieldDescription>
-                </Field>
-              </FieldGroup>
-              {draft.id !== undefined && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Badge variant="outline">
-                    <KeyRound data-icon="inline-start" />
-                    {draft.hasApiKey ? "已保存 API 密钥" : "未保存 API 密钥"}
-                  </Badge>
-                  <Badge variant="secondary">
-                    {draft.protocol === "anthropic"
-                      ? "Anthropic"
-                      : "OpenAI 兼容"}
-                  </Badge>
-                </div>
-              )}
-              <DialogFooter>
-                {draft.id !== undefined && (
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        disabled={mutationDisabled}
-                      >
-                        <Trash2 data-icon="inline-start" />
-                        删除
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>删除服务提供商？</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          使用它的会话将回退到全局默认。删除当前全局默认后，不会自动选择替代项。
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>取消</AlertDialogCancel>
-                        <AlertDialogAction
-                          variant="destructive"
-                          onClick={() => void handleDelete()}
+                  <div className="flex flex-col gap-1 rounded-lg border p-1">
+                    {providers.length === 0 ? (
+                      <p className="p-3 text-sm text-muted-foreground">
+                        尚未添加模型提供商。
+                      </p>
+                    ) : (
+                      providers.map((provider) => (
+                        <div
+                          key={provider.id}
+                          className="flex items-center gap-1"
                         >
-                          删除
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                )}
-                <Button
-                  type="submit"
-                  aria-label="保存服务提供商"
-                  disabled={mutationDisabled}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            className="min-w-0 flex-1 justify-start"
+                            aria-label={`编辑：${provider.name}`}
+                            onClick={() => openEditor(provider.id)}
+                          >
+                            <span className="flex w-full min-w-0 items-baseline gap-1.5">
+                              <span className="min-w-0 truncate">
+                                {provider.name}
+                              </span>
+                              {provider.id === activeProviderId && (
+                                <span
+                                  className="ml-auto shrink-0 text-xs font-normal text-muted-foreground"
+                                  aria-label="当前全局默认"
+                                >
+                                  默认
+                                </span>
+                              )}
+                            </span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`设为全局默认：${provider.name}`}
+                            disabled={
+                              mutationDisabled ||
+                              provider.id === activeProviderId
+                            }
+                            onClick={() =>
+                              void setActiveProvider(client, provider.id)
+                            }
+                          >
+                            <Radio className="size-4" />
+                          </Button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </section>
+              ) : (
+                <section
+                  aria-labelledby="provider-settings-title"
+                  className="min-w-0"
                 >
-                  {phase === "loading" && <Spinner data-icon="inline-start" />}
-                  保存
-                </Button>
-              </DialogFooter>
-            </form>
-          </section>
+                  <h2 id="provider-settings-title" className="font-medium">
+                    {draft.id === undefined
+                      ? "新建模型提供商"
+                      : "编辑模型提供商"}
+                  </h2>
+                  {storeError !== null && (
+                    <Alert variant="destructive" className="mt-3">
+                      <AlertTitle>操作未完成</AlertTitle>
+                      <AlertDescription>{storeError.message}</AlertDescription>
+                    </Alert>
+                  )}
+                  {readOnly && (
+                    <Alert className="mt-3">
+                      <AlertTitle>只读</AlertTitle>
+                      <AlertDescription>
+                        查看已归档会话时无法修改模型提供商设置。
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                  <form
+                    className="mt-4 flex flex-col gap-4"
+                    onSubmit={(event) => void handleSubmit(event)}
+                  >
+                    <FieldGroup>
+                      <Field data-disabled={mutationDisabled}>
+                        <FieldLabel htmlFor="provider-name">名称</FieldLabel>
+                        <Input
+                          id="provider-name"
+                          value={draft.name}
+                          onChange={(event) =>
+                            updateDraft("name", event.target.value)
+                          }
+                          disabled={mutationDisabled}
+                          maxLength={100}
+                          required
+                        />
+                      </Field>
+                      <Field data-disabled={mutationDisabled}>
+                        <FieldLabel>协议</FieldLabel>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            asChild
+                            disabled={mutationDisabled}
+                          >
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="w-full justify-between"
+                              disabled={mutationDisabled}
+                            >
+                              {draft.protocol === "anthropic"
+                                ? "Anthropic Messages"
+                                : "OpenAI 兼容"}
+                              <ChevronDown className="size-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent
+                            align="start"
+                            className="w-[var(--radix-dropdown-menu-trigger-width)]"
+                          >
+                            <DropdownMenuItem
+                              onClick={() =>
+                                updateDraft("protocol", "openai_compatible")
+                              }
+                            >
+                              {draft.protocol === "openai_compatible" && (
+                                <Check className="size-4" />
+                              )}
+                              OpenAI 兼容
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() =>
+                                updateDraft("protocol", "anthropic")
+                              }
+                            >
+                              {draft.protocol === "anthropic" && (
+                                <Check className="size-4" />
+                              )}
+                              Anthropic Messages
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </Field>
+                      <Field data-disabled={mutationDisabled}>
+                        <FieldLabel htmlFor="provider-endpoint">
+                          基础端点
+                        </FieldLabel>
+                        <Input
+                          id="provider-endpoint"
+                          type="url"
+                          value={draft.baseEndpoint}
+                          onChange={(event) =>
+                            updateDraft("baseEndpoint", event.target.value)
+                          }
+                          placeholder={
+                            draft.protocol === "anthropic"
+                              ? "https://api.anthropic.com"
+                              : "https://api.example.com/v1"
+                          }
+                          disabled={mutationDisabled}
+                          required
+                        />
+                        {draft.protocol === "anthropic" && (
+                          <FieldDescription>
+                            Anthropic 兼容网关需带各自前缀，如 DeepSeek 填
+                            https://api.deepseek.com/anthropic。
+                          </FieldDescription>
+                        )}
+                      </Field>
+                      <Field data-disabled={mutationDisabled}>
+                        <FieldLabel htmlFor="provider-model-add">
+                          模型列表
+                        </FieldLabel>
+                        <div className="flex gap-2">
+                          <Input
+                            id="provider-model-add"
+                            value={modelAddition}
+                            onChange={(event) =>
+                              setModelAddition(event.target.value)
+                            }
+                            placeholder="手动输入模型名"
+                            disabled={mutationDisabled}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={
+                              mutationDisabled || !modelAddition.trim()
+                            }
+                            onClick={() => addModel(modelAddition)}
+                          >
+                            添加
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={
+                              mutationDisabled ||
+                              modelsLoading ||
+                              !draft.baseEndpoint.trim()
+                            }
+                            onClick={() => void fetchModels()}
+                          >
+                            {modelsLoading && (
+                              <Spinner data-icon="inline-start" />
+                            )}
+                            获取模型列表
+                          </Button>
+                        </div>
+                        {modelsError !== null && (
+                          <FieldDescription className="text-destructive">
+                            {modelsError}
+                          </FieldDescription>
+                        )}
+                        {draft.models.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {draft.models.map((model) => (
+                              <span
+                                key={model}
+                                className="inline-flex items-center"
+                              >
+                                <Button
+                                  type="button"
+                                  size="xs"
+                                  variant={
+                                    model === draft.model
+                                      ? "secondary"
+                                      : "outline"
+                                  }
+                                  aria-label={`设为默认：${model}`}
+                                  disabled={mutationDisabled}
+                                  onClick={() => updateDraft("model", model)}
+                                >
+                                  {model === draft.model && (
+                                    <Check
+                                      data-icon="inline-start"
+                                      aria-hidden="true"
+                                    />
+                                  )}
+                                  {model}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  aria-label={`移除 ${model}`}
+                                  disabled={
+                                    mutationDisabled || draft.models.length <= 1
+                                  }
+                                  onClick={() => removeModel(model)}
+                                >
+                                  <X aria-hidden="true" />
+                                </Button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {models.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {models
+                              .filter(
+                                (model) => !draft.models.includes(model.id),
+                              )
+                              .map((model) => (
+                                <Button
+                                  key={model.id}
+                                  type="button"
+                                  size="xs"
+                                  variant="ghost"
+                                  aria-label={`加入模型：${model.id}`}
+                                  disabled={mutationDisabled}
+                                  onClick={() => addModel(model.id)}
+                                >
+                                  <Plus
+                                    data-icon="inline-start"
+                                    aria-hidden="true"
+                                  />
+                                  {model.displayName ?? model.id}
+                                </Button>
+                              ))}
+                          </div>
+                        )}
+                      </Field>
+                      <Field data-disabled={mutationDisabled}>
+                        <FieldLabel htmlFor="provider-api-key">
+                          API 密钥
+                        </FieldLabel>
+                        <InputGroup>
+                          <InputGroupInput
+                            id="provider-api-key"
+                            type={showApiKey ? "text" : "password"}
+                            autoComplete="new-password"
+                            value={apiKey}
+                            onChange={(event) => setApiKey(event.target.value)}
+                            placeholder={
+                              draft.id !== undefined && draft.hasApiKey
+                                ? undefined
+                                : "可选"
+                            }
+                            disabled={mutationDisabled}
+                          />
+                          <InputGroupAddon align="inline-end">
+                            <InputGroupButton
+                              size="icon-sm"
+                              aria-label={
+                                showApiKey ? "隐藏 API 密钥" : "显示 API 密钥"
+                              }
+                              disabled={mutationDisabled}
+                              onClick={() =>
+                                setShowApiKey((visible) => !visible)
+                              }
+                            >
+                              {showApiKey ? (
+                                <EyeOff aria-hidden="true" />
+                              ) : (
+                                <Eye aria-hidden="true" />
+                              )}
+                            </InputGroupButton>
+                          </InputGroupAddon>
+                        </InputGroup>
+                      </Field>
+                    </FieldGroup>
+                    {draft.id !== undefined && (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Badge variant="outline">
+                          <KeyRound data-icon="inline-start" />
+                          {draft.hasApiKey
+                            ? "已保存 API 密钥"
+                            : "未保存 API 密钥"}
+                        </Badge>
+                        <Badge variant="secondary">
+                          {draft.protocol === "anthropic"
+                            ? "Anthropic"
+                            : "OpenAI 兼容"}
+                        </Badge>
+                      </div>
+                    )}
+                    <DialogFooter>
+                      {draft.id !== undefined && (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              disabled={mutationDisabled}
+                            >
+                              <Trash2 data-icon="inline-start" />
+                              删除
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>
+                                删除模型提供商？
+                              </AlertDialogTitle>
+                              <AlertDialogDescription>
+                                使用它的会话将回退到全局默认。删除当前全局默认后，不会自动选择替代项。
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>取消</AlertDialogCancel>
+                              <AlertDialogAction
+                                variant="destructive"
+                                onClick={() => void handleDelete()}
+                              >
+                                删除
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      )}
+                      <Button
+                        type="submit"
+                        aria-label="保存模型提供商"
+                        disabled={mutationDisabled}
+                      >
+                        {phase === "loading" && (
+                          <Spinner data-icon="inline-start" />
+                        )}
+                        保存
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </section>
+              )}
+            </div>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

@@ -324,7 +324,7 @@ describe("ConversationWorkspace", () => {
 
     await user.click(settingsButton)
     expect(screen.getByRole("dialog")).toHaveAccessibleName("设置")
-    expect(screen.getByRole("heading", { name: "服务提供商" })).toBeVisible()
+    expect(screen.getByRole("heading", { name: "模型提供商" })).toBeVisible()
     await user.click(screen.getByRole("button", { name: "关闭" }))
 
     await user.click(screen.getByRole("button", { name: "收起侧栏" }))
@@ -1542,6 +1542,7 @@ describe("ConversationWorkspace", () => {
 
     await user.click(configButton)
     expect(screen.getByRole("dialog")).toHaveAccessibleName("设置")
+    await user.click(screen.getByRole("button", { name: "新建" }))
 
     await user.type(screen.getByLabelText("名称"), "Fixture provider")
     await user.type(
@@ -1550,7 +1551,7 @@ describe("ConversationWorkspace", () => {
     )
     await user.type(screen.getByLabelText("模型列表"), "fixture-model")
     await user.click(screen.getByRole("button", { name: "添加" }))
-    await user.click(screen.getByRole("button", { name: "保存服务提供商" }))
+    await user.click(screen.getByRole("button", { name: "保存模型提供商" }))
 
     await waitFor(() => {
       expect(providerClient.saveProvider).toHaveBeenCalledWith({
@@ -1562,6 +1563,9 @@ describe("ConversationWorkspace", () => {
         apiKey: { action: "remove" },
       })
     })
+    await user.click(
+      screen.getByRole("button", { name: "返回模型提供商列表" }),
+    )
     await user.click(
       screen.getByRole("button", { name: "设为全局默认：Fixture provider" }),
     )
