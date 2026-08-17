@@ -559,3 +559,24 @@ multi-provider 任务收尾：修复 tree_persistence 迁移目录断言（补 0
 ### Status
 
 [OK] **Completed**
+
+
+## Session 26: Settings dual-column dialog
+
+**Date**: 2026-08-17
+**Task**: Settings dual-column dialog
+**Branch**: `main`
+
+### Summary
+
+Rebuilt global Settings into a dual-column list-detail dialog (category nav, breadcrumbs, provider CRUD polish), squash-merged as PR #6.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9f6c781` | (see git log) |
+
+### Status
+
+[OK] **Completed**

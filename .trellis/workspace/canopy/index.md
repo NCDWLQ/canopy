@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 25
+- **Total Sessions**: 26
 - **Last Active**: 2026-08-17
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~561 | Active |
+| `journal-1.md` | ~582 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 26 | 2026-08-17 | Settings dual-column dialog | `9f6c781` | `main` |
 | 25 | 2026-08-17 | 多 Provider 支持：提交、PR 与验收收尾 | `92d5a99`, `f3f744c`, `5af255b` | `main` |
 | 24 | 2026-08-16 | 后台生成：跨会话切换与多路并发生成 | `6499828` | `main` |
 | 23 | 2026-08-16 | Flatten markdown block chrome and unify copy buttons | `6848a98`, `cf5dabc`, `137b6b1`, `1a8929f`, `cbfb716` | `main` |
