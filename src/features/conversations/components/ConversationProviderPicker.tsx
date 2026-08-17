@@ -125,6 +125,17 @@ export function ConversationProviderPicker({
     void persist(binding, nextEffort)
   }
 
+  const effortLabel =
+    reasoningEffort === null
+      ? null
+      : ({ low: "低", medium: "中", high: "高" } as const)[reasoningEffort]
+  const triggerLabel =
+    highlightedModel === null
+      ? "未配置服务提供商"
+      : effortLabel === null
+        ? highlightedModel
+        : `${highlightedModel} · ${effortLabel}`
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -133,12 +144,9 @@ export function ConversationProviderPicker({
           variant="ghost"
           size="sm"
           disabled={readOnly}
-          aria-label="选择服务提供商和模型"
+          aria-label="选择模型与推理强度"
         >
-          <span className="max-w-40 truncate">
-            {highlightedProvider?.name ?? "未配置服务提供商"}
-            {highlightedModel === null ? "" : ` · ${highlightedModel}`}
-          </span>
+          <span className="max-w-40 truncate">{triggerLabel}</span>
           <ChevronDown data-icon="inline-end" aria-hidden="true" />
         </Button>
       </PopoverTrigger>

@@ -363,7 +363,7 @@ describe("ConversationWorkspace", () => {
     expect(screen.getByTestId("blank-conversation-pane")).toBeVisible()
     expect(useConversationStore.getState().isCreatingConversation).toBe(true)
     expect(
-      screen.getByRole("button", { name: "选择服务提供商和模型" }),
+      screen.getByRole("button", { name: "选择模型与推理强度" }),
     ).toBeVisible()
   })
 
