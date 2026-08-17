@@ -75,7 +75,30 @@ describe("GlobalSettingsDialog", () => {
     ).toBeVisible()
     expect(screen.getByRole("heading", { name: "模型提供商" })).toBeVisible()
     expect(screen.getByLabelText("当前全局默认")).toHaveTextContent("默认")
+    expect(screen.getByText("fixture-model")).toBeVisible()
     expect(screen.queryByLabelText("名称")).not.toBeInTheDocument()
+  })
+
+  it("summarizes long model lists on each provider row", async () => {
+    const user = userEvent.setup()
+    useProviderStore.setState({
+      phase: "ready",
+      providers: [
+        {
+          ...provider,
+          models: ["alpha", "beta", "gamma", "delta"],
+        },
+      ],
+      activeProviderId: provider.id,
+    })
+    render(
+      <GlobalSettingsDialog
+        client={client() as ProviderClient}
+        readOnly={false}
+      />,
+    )
+    await user.click(screen.getByRole("button", { name: "设置" }))
+    expect(screen.getByText("alpha, beta 等 2 个")).toBeVisible()
   })
 
   it("reveals the saved key masked, toggles visibility, and keeps it when unchanged", async () => {

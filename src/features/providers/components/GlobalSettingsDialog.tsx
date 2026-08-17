@@ -107,6 +107,18 @@ function draftFromProvider(provider: ProviderView): ProviderDraft {
   }
 }
 
+/** Short list row summary: first few model ids, then “等 N 个” for the rest. */
+function formatProviderModelsSummary(
+  models: readonly string[],
+  visibleCount = 2,
+): string {
+  if (models.length === 0) return "未添加模型"
+  const shown = models.slice(0, visibleCount)
+  const remaining = models.length - shown.length
+  const head = shown.join(", ")
+  return remaining > 0 ? `${head} 等 ${remaining} 个` : head
+}
+
 export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
   const { client, readOnly } = props
   const phase = useProviderStore((state) => state.phase)
@@ -371,17 +383,22 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                           <Button
                             type="button"
                             variant="ghost"
-                            className="min-w-0 flex-1 justify-start hover:bg-transparent"
+                            className="h-auto min-w-0 flex-1 justify-start py-2 hover:bg-transparent"
                             aria-label={`编辑：${provider.name}`}
                             onClick={() => openEditor(provider.id)}
                           >
-                            <span className="flex w-full min-w-0 items-baseline gap-1.5">
-                              <span className="min-w-0 truncate">
-                                {provider.name}
+                            <span className="flex w-full min-w-0 items-start gap-2">
+                              <span className="flex min-w-0 flex-1 flex-col items-start gap-0.5 text-left">
+                                <span className="w-full truncate">
+                                  {provider.name}
+                                </span>
+                                <span className="w-full truncate text-xs font-normal text-muted-foreground">
+                                  {formatProviderModelsSummary(provider.models)}
+                                </span>
                               </span>
                               {provider.id === activeProviderId && (
                                 <span
-                                  className="ml-auto shrink-0 text-xs font-normal text-muted-foreground"
+                                  className="shrink-0 self-center text-xs font-normal text-muted-foreground"
                                   aria-label="当前全局默认"
                                 >
                                   默认
