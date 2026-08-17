@@ -26,7 +26,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -66,6 +65,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import type { ProviderClient } from "@/lib/tauri"
@@ -149,6 +149,8 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
   const [modelsError, setModelsError] = React.useState<string | null>(null)
   const [modelsLoading, setModelsLoading] = React.useState(false)
   const [modelAddition, setModelAddition] = React.useState("")
+  const [providerPendingDelete, setProviderPendingDelete] =
+    React.useState<ProviderView | null>(null)
   const selectedIdRef = React.useRef<string | null>(null)
   const isControlled = props.open !== undefined
   const open = isControlled ? props.open : uncontrolledOpen
@@ -204,7 +206,10 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
     if (!isControlled) setUncontrolledOpen(nextOpen)
     props.onOpenChange?.(nextOpen)
     if (nextOpen) resetToList()
-    else clearEphemeralKeyState()
+    else {
+      clearEphemeralKeyState()
+      setProviderPendingDelete(null)
+    }
   }
 
   const updateDraft = <K extends keyof ProviderDraft>(
@@ -280,9 +285,11 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
     if (saved !== null) openEditor(saved.id)
   }
 
-  const handleDelete = async () => {
-    if (mutationDisabled || draft.id === undefined) return
-    if (await deleteProvider(client, draft.id)) resetToList()
+  const handleDelete = async (providerId: string) => {
+    if (mutationDisabled) return
+    if (!(await deleteProvider(client, providerId))) return
+    setProviderPendingDelete(null)
+    if (view === "edit" && selectedIdRef.current === providerId) resetToList()
   }
 
   const detailCrumbLabel =
@@ -443,6 +450,16 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                               >
                                 <Star />
                                 设为默认
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                variant="destructive"
+                                onSelect={() =>
+                                  setProviderPendingDelete(provider)
+                                }
+                              >
+                                <Trash2 />
+                                删除
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -740,37 +757,6 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                   </section>
                 </div>
                 <DialogFooter className="mx-0 mb-0 shrink-0 rounded-none">
-                  {draft.id !== undefined && (
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          disabled={mutationDisabled}
-                        >
-                          <Trash2 data-icon="inline-start" />
-                          删除
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>删除模型提供商？</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            使用它的会话将回退到全局默认。删除当前全局默认后，不会自动选择替代项。
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>取消</AlertDialogCancel>
-                          <AlertDialogAction
-                            variant="destructive"
-                            onClick={() => void handleDelete()}
-                          >
-                            删除
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  )}
                   <Button
                     type="submit"
                     aria-label="保存模型提供商"
@@ -786,6 +772,38 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
             )}
           </div>
         </div>
+        <AlertDialog
+          open={providerPendingDelete !== null}
+          onOpenChange={(nextOpen) => {
+            if (!nextOpen) setProviderPendingDelete(null)
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {providerPendingDelete === null
+                  ? "删除模型提供商？"
+                  : `删除「${providerPendingDelete.name}」？`}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                使用它的会话将回退到全局默认。删除当前全局默认后，不会自动选择替代项。
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>取消</AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
+                disabled={mutationDisabled || providerPendingDelete === null}
+                onClick={() => {
+                  if (providerPendingDelete === null) return
+                  void handleDelete(providerPendingDelete.id)
+                }}
+              >
+                删除
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   )

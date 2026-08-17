@@ -335,4 +335,42 @@ describe("GlobalSettingsDialog", () => {
       expect(bridge.setActiveProvider).toHaveBeenCalledWith(other.id),
     )
   })
+
+  it("deletes a provider from the provider row more menu after confirmation", async () => {
+    const user = userEvent.setup()
+    const bridge = client()
+    const other: ProviderView = {
+      ...provider,
+      id: "provider-2",
+      name: "Anthropic",
+      hasApiKey: false,
+    }
+    useProviderStore.setState({
+      phase: "ready",
+      providers: [provider, other],
+      activeProviderId: provider.id,
+    })
+    bridge.deleteProvider.mockResolvedValueOnce(true)
+    render(
+      <GlobalSettingsDialog
+        client={bridge as ProviderClient}
+        readOnly={false}
+      />,
+    )
+    await user.click(screen.getByRole("button", { name: "设置" }))
+    await user.click(
+      screen.getByRole("button", { name: "更多操作：Anthropic" }),
+    )
+    await user.click(screen.getByRole("menuitem", { name: "删除" }))
+    expect(
+      screen.getByRole("heading", { name: "删除「Anthropic」？" }),
+    ).toBeVisible()
+    await user.click(screen.getByRole("button", { name: "删除" }))
+    await waitFor(() =>
+      expect(bridge.deleteProvider).toHaveBeenCalledWith(other.id),
+    )
+    expect(
+      screen.queryByRole("button", { name: "编辑：Anthropic" }),
+    ).not.toBeInTheDocument()
+  })
 })
