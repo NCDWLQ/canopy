@@ -793,9 +793,6 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                     aria-label="保存模型提供商"
                     disabled={mutationDisabled}
                   >
-                    {phase === "loading" && (
-                      <Spinner data-icon="inline-start" />
-                    )}
                     保存
                   </Button>
                 </DialogFooter>
