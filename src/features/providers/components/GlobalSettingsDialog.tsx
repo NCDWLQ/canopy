@@ -348,8 +348,8 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                 </>
               )}
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">
-              {view === "list" ? (
+            {view === "list" ? (
+              <div className="min-h-0 flex-1 overflow-y-auto p-4">
                 <section
                   aria-labelledby="provider-list-title"
                   className="flex flex-col gap-3"
@@ -419,7 +419,10 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                                 <EllipsisVertical />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-auto min-w-44">
+                            <DropdownMenuContent
+                              align="end"
+                              className="w-auto min-w-44"
+                            >
                               <DropdownMenuItem
                                 disabled={provider.id === activeProviderId}
                                 onClick={() =>
@@ -436,34 +439,38 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                     )}
                   </div>
                 </section>
-              ) : (
-                <section
-                  aria-labelledby="provider-settings-title"
-                  className="min-w-0"
-                >
-                  <h2 id="provider-settings-title" className="font-medium">
-                    {draft.id === undefined
-                      ? "新建模型提供商"
-                      : "编辑模型提供商"}
-                  </h2>
-                  {storeError !== null && (
-                    <Alert variant="destructive" className="mt-3">
-                      <AlertTitle>操作未完成</AlertTitle>
-                      <AlertDescription>{storeError.message}</AlertDescription>
-                    </Alert>
-                  )}
-                  {readOnly && (
-                    <Alert className="mt-3">
-                      <AlertTitle>只读</AlertTitle>
-                      <AlertDescription>
-                        查看已归档会话时无法修改模型提供商设置。
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                  <form
-                    className="mt-4 flex flex-col gap-4"
-                    onSubmit={(event) => void handleSubmit(event)}
+              </div>
+            ) : (
+              <form
+                className="flex min-h-0 flex-1 flex-col"
+                onSubmit={(event) => void handleSubmit(event)}
+              >
+                <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                  <section
+                    aria-labelledby="provider-settings-title"
+                    className="flex min-w-0 flex-col gap-4"
                   >
+                    <h2 id="provider-settings-title" className="font-medium">
+                      {draft.id === undefined
+                        ? "新建模型提供商"
+                        : "编辑模型提供商"}
+                    </h2>
+                    {storeError !== null && (
+                      <Alert variant="destructive">
+                        <AlertTitle>操作未完成</AlertTitle>
+                        <AlertDescription>
+                          {storeError.message}
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                    {readOnly && (
+                      <Alert>
+                        <AlertTitle>只读</AlertTitle>
+                        <AlertDescription>
+                          查看已归档会话时无法修改模型提供商设置。
+                        </AlertDescription>
+                      </Alert>
+                    )}
                     <FieldGroup>
                       <Field data-disabled={mutationDisabled}>
                         <FieldLabel htmlFor="provider-name">名称</FieldLabel>
@@ -718,55 +725,53 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                         </Badge>
                       </div>
                     )}
-                    <DialogFooter>
-                      {draft.id !== undefined && (
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="destructive"
-                              disabled={mutationDisabled}
-                            >
-                              <Trash2 data-icon="inline-start" />
-                              删除
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>
-                                删除模型提供商？
-                              </AlertDialogTitle>
-                              <AlertDialogDescription>
-                                使用它的会话将回退到全局默认。删除当前全局默认后，不会自动选择替代项。
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>取消</AlertDialogCancel>
-                              <AlertDialogAction
-                                variant="destructive"
-                                onClick={() => void handleDelete()}
-                              >
-                                删除
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      )}
-                      <Button
-                        type="submit"
-                        aria-label="保存模型提供商"
-                        disabled={mutationDisabled}
-                      >
-                        {phase === "loading" && (
-                          <Spinner data-icon="inline-start" />
-                        )}
-                        保存
-                      </Button>
-                    </DialogFooter>
-                  </form>
-                </section>
-              )}
-            </div>
+                  </section>
+                </div>
+                <DialogFooter className="mx-0 mb-0 shrink-0 rounded-none">
+                  {draft.id !== undefined && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          disabled={mutationDisabled}
+                        >
+                          <Trash2 data-icon="inline-start" />
+                          删除
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>删除模型提供商？</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            使用它的会话将回退到全局默认。删除当前全局默认后，不会自动选择替代项。
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>取消</AlertDialogCancel>
+                          <AlertDialogAction
+                            variant="destructive"
+                            onClick={() => void handleDelete()}
+                          >
+                            删除
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
+                  <Button
+                    type="submit"
+                    aria-label="保存模型提供商"
+                    disabled={mutationDisabled}
+                  >
+                    {phase === "loading" && (
+                      <Spinner data-icon="inline-start" />
+                    )}
+                    保存
+                  </Button>
+                </DialogFooter>
+              </form>
+            )}
           </div>
         </div>
       </DialogContent>
