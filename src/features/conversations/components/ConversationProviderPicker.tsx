@@ -14,6 +14,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
+import { Separator } from "@/components/ui/separator"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import type { ConversationClient } from "@/lib/tauri"
 
@@ -143,48 +144,68 @@ export function ConversationProviderPicker({
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-80">
-        <p className="px-1 text-xs font-medium text-muted-foreground">
-          服务提供商
-        </p>
-        <div className="flex max-h-36 flex-col overflow-y-auto">
-          {providers.map((provider) => (
-            <Button
-              key={provider.id}
-              type="button"
-              variant={
-                provider.id === highlightedProviderId ? "secondary" : "ghost"
-              }
-              className="justify-start"
-              disabled={readOnly || saving}
-              onClick={() => chooseProvider(provider.id)}
-            >
-              {provider.id === highlightedProviderId && (
-                <Check data-icon="inline-start" aria-hidden="true" />
-              )}
-              <span className="truncate">{provider.name}</span>
-              {provider.id === activeProviderId && (
-                <Badge variant="secondary" className="ml-1 shrink-0">
-                  默认
-                </Badge>
-              )}
-              <span className="ml-auto truncate text-xs text-muted-foreground">
-                {provider.model}
-              </span>
-            </Button>
-          ))}
-          {providers.length === 0 && (
-            <p className="px-1 py-2 text-xs text-muted-foreground">
-              尚未配置服务提供商。
-            </p>
-          )}
+        <div>
+          <p
+            id="conversation-provider-picker-providers-label"
+            className="px-1 text-xs font-medium text-muted-foreground"
+          >
+            服务提供商
+          </p>
+          <div
+            role="listbox"
+            aria-labelledby="conversation-provider-picker-providers-label"
+            className="flex max-h-36 flex-col overflow-y-auto"
+          >
+            {providers.map((provider) => (
+              <Button
+                key={provider.id}
+                type="button"
+                role="option"
+                aria-selected={provider.id === highlightedProviderId}
+                variant={
+                  provider.id === highlightedProviderId ? "secondary" : "ghost"
+                }
+                className="justify-start"
+                disabled={readOnly || saving}
+                onClick={() => chooseProvider(provider.id)}
+              >
+                {provider.id === highlightedProviderId && (
+                  <Check data-icon="inline-start" aria-hidden="true" />
+                )}
+                <span className="truncate">{provider.name}</span>
+                {provider.id === activeProviderId && (
+                  <Badge variant="secondary" className="ml-1 shrink-0">
+                    默认
+                  </Badge>
+                )}
+              </Button>
+            ))}
+            {providers.length === 0 && (
+              <p className="px-1 py-2 text-xs text-muted-foreground">
+                尚未配置服务提供商。
+              </p>
+            )}
+          </div>
         </div>
-        <div className="border-t pt-2">
-          <p className="px-1 text-xs font-medium text-muted-foreground">模型</p>
-          <div className="mt-1 flex max-h-32 flex-col overflow-y-auto">
+        <Separator />
+        <div>
+          <p
+            id="conversation-provider-picker-models-label"
+            className="px-1 text-xs font-medium text-muted-foreground"
+          >
+            模型
+          </p>
+          <div
+            role="listbox"
+            aria-labelledby="conversation-provider-picker-models-label"
+            className="flex max-h-36 flex-col overflow-y-auto"
+          >
             {modelOptions.map((item) => (
               <Button
                 key={item}
                 type="button"
+                role="option"
+                aria-selected={item === highlightedModel}
                 variant={item === highlightedModel ? "secondary" : "ghost"}
                 className="justify-start"
                 disabled={readOnly || saving || highlightedProviderId === null}
@@ -193,7 +214,12 @@ export function ConversationProviderPicker({
                 {item === highlightedModel && (
                   <Check data-icon="inline-start" aria-hidden="true" />
                 )}
-                {item}
+                <span className="truncate">{item}</span>
+                {item === highlightedProvider?.model && (
+                  <Badge variant="secondary" className="ml-1 shrink-0">
+                    默认
+                  </Badge>
+                )}
               </Button>
             ))}
             {highlightedProviderId === null && (
@@ -203,7 +229,8 @@ export function ConversationProviderPicker({
             )}
           </div>
         </div>
-        <div className="border-t pt-2">
+        <Separator />
+        <div>
           <p className="px-1 text-xs font-medium text-muted-foreground">
             推理强度
           </p>
@@ -215,7 +242,7 @@ export function ConversationProviderPicker({
             }}
             size="sm"
             spacing={0}
-            className="mt-1 w-full"
+            className="w-full"
             disabled={readOnly || saving}
           >
             <ToggleGroupItem value="default" aria-label="默认">
@@ -232,20 +259,19 @@ export function ConversationProviderPicker({
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
-        <div className="border-t pt-2">
-          <Button
-            type="button"
-            variant="ghost"
-            className="w-full justify-start"
-            onClick={() => {
-              setOpen(false)
-              onManageProviders()
-            }}
-          >
-            <Settings2 data-icon="inline-start" />
-            管理服务提供商…
-          </Button>
-        </div>
+        <Separator />
+        <Button
+          type="button"
+          variant="ghost"
+          className="w-full justify-start"
+          onClick={() => {
+            setOpen(false)
+            onManageProviders()
+          }}
+        >
+          <Settings2 data-icon="inline-start" />
+          管理服务提供商…
+        </Button>
       </PopoverContent>
     </Popover>
   )

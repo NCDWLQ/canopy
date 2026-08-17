@@ -66,10 +66,16 @@ describe("ConversationProviderPicker", () => {
       screen.getByRole("button", { name: "选择服务提供商和模型" }),
     )
     expect(screen.queryByText("跟随全局默认")).toBeNull()
-    expect(screen.getByRole("button", { name: /OpenAI/ })).toHaveTextContent(
-      "默认",
-    )
-    expect(screen.getByRole("button", { name: "gpt-default" })).toBeVisible()
+    expect(screen.getByRole("listbox", { name: "服务提供商" })).toBeVisible()
+    expect(screen.getByRole("listbox", { name: "模型" })).toBeVisible()
+    const providerOption = screen.getByRole("option", { name: /OpenAI/ })
+    expect(providerOption).toHaveAttribute("aria-selected", "true")
+    expect(providerOption).toHaveTextContent("默认")
+    expect(providerOption).not.toHaveTextContent("gpt-default")
+    const defaultModel = screen.getByRole("option", { name: /gpt-default/ })
+    expect(defaultModel).toHaveAttribute("aria-selected", "true")
+    expect(defaultModel).toHaveTextContent("默认")
+    expect(screen.getByRole("option", { name: "gpt-alt" })).toBeVisible()
     await user.click(screen.getByRole("button", { name: "管理服务提供商…" }))
     expect(onManageProviders).toHaveBeenCalledOnce()
   })
@@ -99,7 +105,7 @@ describe("ConversationProviderPicker", () => {
     await user.click(
       screen.getByRole("button", { name: "选择服务提供商和模型" }),
     )
-    await user.click(screen.getByRole("button", { name: /OpenAI/ }))
+    await user.click(screen.getByRole("option", { name: /OpenAI/ }))
 
     expect(conversationClient.setConversationProvider).toHaveBeenCalledWith({
       conversationId: "conversation-1",
@@ -133,7 +139,7 @@ describe("ConversationProviderPicker", () => {
     await user.click(
       screen.getByRole("button", { name: "选择服务提供商和模型" }),
     )
-    await user.click(screen.getByRole("button", { name: "gpt-alt" }))
+    await user.click(screen.getByRole("option", { name: "gpt-alt" }))
 
     expect(conversationClient.setConversationProvider).toHaveBeenCalledWith({
       conversationId: "conversation-1",
@@ -252,7 +258,7 @@ describe("ConversationProviderPicker", () => {
     await user.click(
       screen.getByRole("button", { name: "选择服务提供商和模型" }),
     )
-    await user.click(screen.getByRole("button", { name: "gpt-alt" }))
+    await user.click(screen.getByRole("option", { name: "gpt-alt" }))
 
     expect(setConversationProvider).not.toHaveBeenCalled()
     expect(useConversationStore.getState().draftBinding).toEqual({

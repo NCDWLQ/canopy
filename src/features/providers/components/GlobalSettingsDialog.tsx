@@ -305,10 +305,13 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                     >
                       <span className="min-w-0 truncate">{provider.name}</span>
                       {provider.id === activeProviderId && (
-                        <Radio
-                          className="ml-auto size-3.5 text-primary"
+                        <Badge
+                          variant="secondary"
+                          className="ml-auto"
                           aria-label="当前全局默认"
-                        />
+                        >
+                          默认
+                        </Badge>
                       )}
                     </Button>
                     <Button
