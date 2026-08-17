@@ -9,4 +9,4 @@ pub use domain::{
     ReasoningEffort, Role, UnknownRole, ValidatedPath,
 };
 pub use error::PersistenceError;
-pub use service::ConversationPersistenceService;
+pub use service::{AutoTitleContext, ConversationPersistenceService};

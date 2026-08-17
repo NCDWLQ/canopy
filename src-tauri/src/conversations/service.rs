@@ -15,6 +15,13 @@ pub struct ConversationPersistenceService {
     pool: SqlitePool,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct AutoTitleContext {
+    pub conversation: Conversation,
+    pub first_user_content: String,
+    pub assistant_content: String,
+}
+
 impl ConversationPersistenceService {
     pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
@@ -326,6 +333,53 @@ impl ConversationPersistenceService {
         .await?;
         transaction.commit().await?;
         Ok(stored)
+    }
+
+    pub async fn load_auto_title_context(
+        &self,
+        conversation_id: &str,
+    ) -> Result<Option<AutoTitleContext>, PersistenceError> {
+        let mut transaction = self.pool.begin().await?;
+        let conversation =
+            ConversationRepository::load_conversation(&mut transaction, conversation_id)
+                .await?
+                .ok_or(PersistenceError::NotFound {
+                    entity: "conversation",
+                })?;
+        let nodes = ConversationRepository::load_nodes(&mut transaction, conversation_id).await?;
+        let mut users = nodes.iter().filter(|node| node.role == Role::User);
+        let first_user_content = users.next().map(|node| node.content.clone());
+        let assistants = nodes
+            .iter()
+            .filter(|node| node.role == Role::Assistant)
+            .collect::<Vec<_>>();
+        transaction.commit().await?;
+        let Some(first_user_content) = first_user_content else {
+            return Ok(None);
+        };
+        let [assistant] = assistants.as_slice() else {
+            return Ok(None);
+        };
+        Ok(Some(AutoTitleContext {
+            conversation,
+            first_user_content,
+            assistant_content: assistant.content.clone(),
+        }))
+    }
+
+    pub async fn update_title(
+        &self,
+        conversation_id: &str,
+        title: &str,
+    ) -> Result<(), PersistenceError> {
+        let mut transaction = self.pool.begin().await?;
+        if !ConversationRepository::update_title(&mut transaction, conversation_id, title).await? {
+            return Err(PersistenceError::NotFound {
+                entity: "conversation",
+            });
+        }
+        transaction.commit().await?;
+        Ok(())
     }
 
     pub async fn archive_conversation(

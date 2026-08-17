@@ -9,6 +9,7 @@ import {
   type UserGenerationAction,
 } from "./ConversationPane"
 import { OutlineTree } from "./OutlineTree"
+import { useConversationTitleUpdates } from "../hooks/useConversationTitleUpdates"
 import { useWorkspaceGenerationController } from "../hooks/useWorkspaceGenerationController"
 import {
   isRunActive,
@@ -110,6 +111,7 @@ export function ConversationWorkspace({
   conversationClient: injectedConversationClient,
   providerClient: injectedProviderClient,
 }: ConversationWorkspaceProps = {}) {
+  useConversationTitleUpdates()
   const client = React.useMemo(
     () => injectedConversationClient ?? createConversationClient(),
     [injectedConversationClient],
@@ -123,6 +125,7 @@ export function ConversationWorkspace({
   const store = useConversationStore(
     useShallow((state) => ({
       conversationId: state.conversationId,
+      title: state.title,
       isCreatingConversation: state.isCreatingConversation,
       isArchived: state.isArchived,
       providerId: state.providerId,

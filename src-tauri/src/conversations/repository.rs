@@ -194,6 +194,23 @@ impl ConversationRepository {
         .await?)
     }
 
+    pub(crate) async fn update_title(
+        connection: &mut SqliteConnection,
+        conversation_id: &str,
+        title: &str,
+    ) -> Result<bool, PersistenceError> {
+        Ok(
+            sqlx::query("UPDATE conversations SET title = ?1 WHERE id = ?2")
+                .bind(title)
+                .bind(conversation_id)
+                .execute(connection)
+                .await
+                .map_err(|error| PersistenceError::from_write("update_conversation_title", error))?
+                .rows_affected()
+                > 0,
+        )
+    }
+
     pub(crate) async fn archive_conversation(
         connection: &mut SqliteConnection,
         conversation_id: &str,

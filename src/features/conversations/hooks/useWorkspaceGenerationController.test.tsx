@@ -254,10 +254,14 @@ function createProviderClient() {
     listProviders: vi.fn<ProviderClient["listProviders"]>().mockResolvedValue({
       providers: [provider],
       activeProviderId: provider.id,
+      autoGenerateTitle: true,
+      titleModelBinding: null,
     }),
     saveProvider: vi.fn<ProviderClient["saveProvider"]>(),
     deleteProvider: vi.fn<ProviderClient["deleteProvider"]>(),
     setActiveProvider: vi.fn<ProviderClient["setActiveProvider"]>(),
+    setAutoGenerateTitle: vi.fn<ProviderClient["setAutoGenerateTitle"]>(),
+    setTitleModelBinding: vi.fn<ProviderClient["setTitleModelBinding"]>(),
     revealProviderApiKey: vi
       .fn<ProviderClient["revealProviderApiKey"]>()
       .mockResolvedValue(null),
@@ -273,6 +277,7 @@ function resetConversationStore() {
   useConversationStore.setState({
     isCreatingConversation: false,
     conversationId: null,
+    title: null,
     isArchived: false,
     providerId: null,
     model: null,

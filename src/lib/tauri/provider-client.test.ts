@@ -49,6 +49,13 @@ describe("provider Tauri contract", () => {
       save_provider: fixture.successes.provider,
       delete_provider: fixture.successes.delete,
       set_active_provider: fixture.successes.active,
+      set_auto_generate_title: { enabled: false },
+      set_title_model_binding: {
+        binding: {
+          provider_id: "provider-fixture",
+          model: "fixture-model",
+        },
+      },
       reveal_provider_api_key: fixture.successes.reveal_api_key,
       list_provider_models: { models: [{ id: "fixture-model" }] },
       cancel_generation: fixture.successes.cancel,
@@ -65,6 +72,8 @@ describe("provider Tauri contract", () => {
         }),
       ],
       activeProviderId: "provider-fixture",
+      autoGenerateTitle: true,
+      titleModelBinding: null,
     })
     await expect(
       client.saveProvider({
@@ -80,6 +89,16 @@ describe("provider Tauri contract", () => {
     await expect(client.setActiveProvider("provider-fixture")).resolves.toBe(
       "provider-fixture",
     )
+    await expect(client.setAutoGenerateTitle(false)).resolves.toBe(false)
+    await expect(
+      client.setTitleModelBinding({
+        providerId: "provider-fixture",
+        model: "fixture-model",
+      }),
+    ).resolves.toEqual({
+      providerId: "provider-fixture",
+      model: "fixture-model",
+    })
     await expect(client.revealProviderApiKey("provider-fixture")).resolves.toBe(
       "fixture-revealed-key-sentinel",
     )

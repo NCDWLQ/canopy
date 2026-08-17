@@ -32,6 +32,8 @@ pub struct ChatCompletionRequest {
     stream: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     reasoning_effort: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_tokens: Option<u32>,
 }
 
 pub fn build_request(
@@ -78,6 +80,20 @@ pub fn build_request(
         messages,
         stream: true,
         reasoning_effort: reasoning_effort.map(ReasoningEffort::as_str),
+        max_tokens: None,
+    })
+}
+
+fn build_title_request(model: &str, prompt: &str) -> Result<ChatCompletionRequest, ProviderError> {
+    Ok(ChatCompletionRequest {
+        model: validate_model(model)?,
+        messages: vec![ChatMessage {
+            role: "user",
+            content: prompt.to_owned(),
+        }],
+        stream: true,
+        reasoning_effort: None,
+        max_tokens: Some(60),
     })
 }
 
@@ -157,6 +173,45 @@ impl OpenAiCompatibleClient {
     pub async fn stream_with_thinking<F, T>(
         &self,
         request: StreamingRequest<'_>,
+        on_delta: F,
+        on_thinking: T,
+    ) -> Result<GeneratedContent, ProviderError>
+    where
+        F: FnMut(&str) -> Result<(), ProviderError>,
+        T: FnMut(&str) -> Result<(), ProviderError>,
+    {
+        let body = build_request(request.path, request.model, request.reasoning_effort)?;
+        self.stream_chat_completion(
+            request.endpoint,
+            request.secret,
+            request.cancellation,
+            body,
+            on_delta,
+            on_thinking,
+        )
+        .await
+    }
+
+    pub async fn stream_title(
+        &self,
+        endpoint: &ValidatedEndpoint,
+        model: &str,
+        secret: Option<&SecretString>,
+        cancellation: &CancellationToken,
+        prompt: &str,
+    ) -> Result<String, ProviderError> {
+        let body = build_title_request(model, prompt)?;
+        self.stream_chat_completion(endpoint, secret, cancellation, body, |_| Ok(()), |_| Ok(()))
+            .await
+            .map(|generated| generated.content)
+    }
+
+    async fn stream_chat_completion<F, T>(
+        &self,
+        endpoint: &ValidatedEndpoint,
+        secret: Option<&SecretString>,
+        cancellation: &CancellationToken,
+        body: ChatCompletionRequest,
         mut on_delta: F,
         mut on_thinking: T,
     ) -> Result<GeneratedContent, ProviderError>
@@ -164,20 +219,15 @@ impl OpenAiCompatibleClient {
         F: FnMut(&str) -> Result<(), ProviderError>,
         T: FnMut(&str) -> Result<(), ProviderError>,
     {
-        let body = build_request(request.path, request.model, request.reasoning_effort)?;
         let mut builder = self
             .client
-            .post(request.endpoint.chat_completions_url().clone())
+            .post(endpoint.chat_completions_url().clone())
             .json(&body);
-        if let Some(secret) = request.secret {
+        if let Some(secret) = secret {
             builder = builder.bearer_auth(secret.expose_secret());
         }
 
-        let response = match select(
-            request.cancellation.cancelled().boxed(),
-            builder.send().boxed(),
-        )
-        .await
+        let response = match select(cancellation.cancelled().boxed(), builder.send().boxed()).await
         {
             Either::Left(_) => return Err(ProviderError::Cancelled),
             Either::Right((response, _)) => response.map_err(map_transport_error)?,
@@ -193,12 +243,7 @@ impl OpenAiCompatibleClient {
         let mut finished = false;
         let mut done = false;
         loop {
-            let next = match select(
-                request.cancellation.cancelled().boxed(),
-                events.next().boxed(),
-            )
-            .await
-            {
+            let next = match select(cancellation.cancelled().boxed(), events.next().boxed()).await {
                 Either::Left(_) => return Err(ProviderError::Cancelled),
                 Either::Right((event, _)) => event,
             };
@@ -321,7 +366,7 @@ mod tests {
 
     use crate::conversations::{NewNode, Node, ReasoningEffort, Role, ValidatedPath};
 
-    use super::build_request;
+    use super::{build_request, build_title_request};
 
     fn node(id: &str, parent_id: Option<&str>, role: Role, content: &str) -> Node {
         let node = NewNode {
@@ -373,6 +418,16 @@ mod tests {
             })
         );
         assert!(!request.to_string().contains("SIBLING_SENTINEL"));
+    }
+
+    #[test]
+    fn title_request_is_bounded_and_disables_reasoning() {
+        let request =
+            serde_json::to_value(build_title_request("fixture-model", "TITLE_PROMPT").unwrap())
+                .unwrap();
+        assert_eq!(request["max_tokens"], 60);
+        assert!(request.get("reasoning_effort").is_none());
+        assert_eq!(request["messages"][0]["content"], "TITLE_PROMPT");
     }
 
     #[test]

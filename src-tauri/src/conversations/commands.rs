@@ -392,7 +392,7 @@ impl<S: IdentityTimeSource> ConversationCommandService<S> {
     }
 }
 
-fn validate_title(title: &str) -> Result<String, CommandError> {
+pub(crate) fn validate_title(title: &str) -> Result<String, CommandError> {
     let title = title.trim();
     if title.is_empty() {
         return Err(CommandError::invalid_input("title", "blank"));

@@ -1,4 +1,5 @@
 use secrecy::SecretString;
+use serde::{Deserialize, Serialize};
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 use url::{Host, Url};
@@ -85,6 +86,13 @@ pub struct RedactedProvider {
     pub has_api_key: bool,
     pub created_at: i64,
     pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct TitleModelBinding {
+    pub provider_id: String,
+    pub model: String,
 }
 
 #[derive(Debug, Clone)]
@@ -247,7 +255,10 @@ pub fn validate_name(name: &str) -> Result<String, ProviderError> {
 /// Provider-level selectable model list. Rules: 1..=50 entries, each passes
 /// `validate_model`, order-preserving dedup, and the provider's default model
 /// must be a member (the conversation picker chooses offline from this list).
-pub fn validate_models(models: &[String], default_model: &str) -> Result<Vec<String>, ProviderError> {
+pub fn validate_models(
+    models: &[String],
+    default_model: &str,
+) -> Result<Vec<String>, ProviderError> {
     if models.is_empty() || models.len() > 50 {
         return Err(ProviderError::invalid_input("models", "size"));
     }

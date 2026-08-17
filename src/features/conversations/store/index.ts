@@ -76,6 +76,7 @@ export type ConversationProviderBinding = {
 export type ConversationTreeState = {
   isCreatingConversation: boolean
   conversationId: string | null
+  title: string | null
   isArchived: boolean
   providerId: string | null
   model: string | null
@@ -159,6 +160,7 @@ export type ConversationStore = ConversationTreeState & {
     reasoningEffort: "low" | "medium" | "high" | null
   }) => void
   clearError: () => void
+  applyTitleUpdate: (update: { conversationId: string; title: string }) => void
   beginGeneration: (explicitParentNodeId?: string) => number | null
   acceptGenerationStarted: (
     runId: number,
@@ -232,6 +234,7 @@ export function normalizeUiError(error: unknown): UiError {
 const initialState: ConversationTreeState = {
   isCreatingConversation: false,
   conversationId: null,
+  title: null,
   isArchived: false,
   providerId: null,
   model: null,
@@ -338,6 +341,7 @@ function loadedTreeState(
   return {
     isCreatingConversation: false,
     conversationId: tree.conversation.id,
+    title: tree.conversation.title,
     isArchived: tree.conversation.isArchived,
     providerId: tree.conversation.providerId ?? null,
     model: tree.conversation.model ?? null,
@@ -592,6 +596,28 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
         draftReasoningEffort: null,
         status: state.conversationId === null ? "idle" : "ready",
         error: null,
+      })
+    },
+
+    applyTitleUpdate: ({ conversationId, title }) => {
+      const state = get()
+      const current = state.history.summaries.find(
+        (summary) => summary.id === conversationId,
+      )
+      set({
+        ...(state.conversationId === conversationId ? { title } : {}),
+        ...(current === undefined
+          ? {}
+          : {
+              history: {
+                status: "ready" as const,
+                summaries: upsertSummary(state.history.summaries, {
+                  ...current,
+                  title,
+                }),
+                error: null,
+              },
+            }),
       })
     },
 

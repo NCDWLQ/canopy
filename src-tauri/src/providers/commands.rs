@@ -16,7 +16,7 @@ use super::model_list::{list_models, ModelSummary};
 use super::{
     generation::{prepare_generation, GenerationOutcome, GenerationStage},
     ApiKeyAction, GenerationRuntime, NativeCredentialStore, Protocol, ProviderError, ProviderInput,
-    ProviderService, RedactedProvider,
+    ProviderService, RedactedProvider, TitleModelBinding,
 };
 
 pub const PROVIDER_COMMAND_NAMES: &[&str] = &[
@@ -24,6 +24,8 @@ pub const PROVIDER_COMMAND_NAMES: &[&str] = &[
     "save_provider",
     "delete_provider",
     "set_active_provider",
+    "set_auto_generate_title",
+    "set_title_model_binding",
     "reveal_provider_api_key",
     "list_provider_models",
     "generate_from_active_path",
@@ -151,6 +153,57 @@ pub struct ListProvidersResult {
     pub providers: Vec<ProviderDto>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_provider_id: Option<String>,
+    pub auto_generate_title: bool,
+    pub title_model_binding: Option<TitleModelBindingDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct TitleModelBindingDto {
+    pub provider_id: String,
+    pub model: String,
+}
+
+impl From<TitleModelBinding> for TitleModelBindingDto {
+    fn from(binding: TitleModelBinding) -> Self {
+        Self {
+            provider_id: binding.provider_id,
+            model: binding.model,
+        }
+    }
+}
+
+impl From<TitleModelBindingDto> for TitleModelBinding {
+    fn from(binding: TitleModelBindingDto) -> Self {
+        Self {
+            provider_id: binding.provider_id,
+            model: binding.model,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct SetAutoGenerateTitleRequest {
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct SetAutoGenerateTitleResult {
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct SetTitleModelBindingRequest {
+    pub binding: Option<TitleModelBindingDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct SetTitleModelBindingResult {
+    pub binding: Option<TitleModelBindingDto>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -261,14 +314,58 @@ pub async fn list_providers(
     let pool = managed_sqlite_pool(instances.inner())
         .await
         .map_err(CommandError::from)?;
-    let (providers, active_provider_id) = production_service(pool)
-        .list_providers()
+    let service = production_service(pool);
+    let (providers, active_provider_id) =
+        service.list_providers().await.map_err(CommandError::from)?;
+    let auto_generate_title = service
+        .get_auto_generate_title()
+        .await
+        .map_err(CommandError::from)?;
+    let title_model_binding = service
+        .get_title_model_binding()
         .await
         .map_err(CommandError::from)?;
     Ok(ListProvidersResult {
         providers: providers.into_iter().map(ProviderDto::from).collect(),
         active_provider_id,
+        auto_generate_title,
+        title_model_binding: title_model_binding.map(Into::into),
     })
+}
+
+#[tauri::command]
+pub async fn set_auto_generate_title(
+    request: SetAutoGenerateTitleRequest,
+    instances: State<'_, DbInstances>,
+) -> Result<SetAutoGenerateTitleResult, CommandError> {
+    let pool = managed_sqlite_pool(instances.inner())
+        .await
+        .map_err(CommandError::from)?;
+    production_service(pool)
+        .set_auto_generate_title(request.enabled)
+        .await
+        .map(|enabled| SetAutoGenerateTitleResult { enabled })
+        .map_err(CommandError::from)
+}
+
+#[tauri::command]
+pub async fn set_title_model_binding(
+    request: SetTitleModelBindingRequest,
+    instances: State<'_, DbInstances>,
+) -> Result<SetTitleModelBindingResult, CommandError> {
+    if let Some(binding) = request.binding.as_ref() {
+        validate_id("provider_id", &binding.provider_id)?;
+    }
+    let pool = managed_sqlite_pool(instances.inner())
+        .await
+        .map_err(CommandError::from)?;
+    production_service(pool)
+        .set_title_model_binding(request.binding.map(Into::into))
+        .await
+        .map(|binding| SetTitleModelBindingResult {
+            binding: binding.map(Into::into),
+        })
+        .map_err(CommandError::from)
 }
 
 #[tauri::command]
@@ -400,9 +497,10 @@ pub async fn list_provider_models(
 }
 
 #[tauri::command]
-pub async fn generate_from_active_path(
+pub async fn generate_from_active_path<R: tauri::Runtime>(
     request: GenerateFromActivePathRequest,
     on_event: Channel<GenerationEventDto>,
+    app: tauri::AppHandle<R>,
     instances: State<'_, DbInstances>,
     runtime: State<'_, GenerationRuntime>,
 ) -> Result<GenerationTerminalDto, CommandError> {
@@ -414,7 +512,7 @@ pub async fn generate_from_active_path(
     let profile_service = production_service(pool.clone());
     let generation_id = Uuid::new_v4().to_string();
     let prepared = prepare_generation(
-        pool,
+        pool.clone(),
         &profile_service,
         runtime.inner(),
         request.conversation_id.clone(),
@@ -461,10 +559,18 @@ pub async fn generate_from_active_path(
         .await;
 
     Ok(match run_result.outcome {
-        GenerationOutcome::Completed(node) => GenerationTerminalDto::Completed {
-            generation_id,
-            node: node.into(),
-        },
+        GenerationOutcome::Completed(node) => {
+            super::titles::spawn_auto_title(
+                pool,
+                profile_service,
+                app,
+                node.conversation_id.clone(),
+            );
+            GenerationTerminalDto::Completed {
+                generation_id,
+                node: node.into(),
+            }
+        }
         GenerationOutcome::Failed { stage, error } => GenerationTerminalDto::Failed {
             generation_id,
             stage: match stage {

@@ -160,6 +160,49 @@ describe("conversation store", () => {
     resetStore()
   })
 
+  it("applies title events to history and the loaded conversation only", () => {
+    useConversationStore.setState({
+      conversationId: "conversation-1",
+      title: "占位标题",
+      history: {
+        status: "ready",
+        summaries: [
+          {
+            id: "conversation-1",
+            title: "占位标题",
+            rootNodeId: "root-1",
+            isArchived: false,
+            updatedAt: 10,
+          },
+          {
+            id: "conversation-2",
+            title: "其他标题",
+            rootNodeId: "root-2",
+            isArchived: false,
+            updatedAt: 20,
+          },
+        ],
+        error: null,
+      },
+    })
+
+    useConversationStore.getState().applyTitleUpdate({
+      conversationId: "conversation-1",
+      title: "生成的标题",
+    })
+
+    const state = useConversationStore.getState()
+    expect(state.title).toBe("生成的标题")
+    expect(
+      state.history.summaries.find((summary) => summary.id === "conversation-1")
+        ?.title,
+    ).toBe("生成的标题")
+    expect(
+      state.history.summaries.find((summary) => summary.id === "conversation-2")
+        ?.title,
+    ).toBe("其他标题")
+  })
+
   it("loads the authoritative tree with the newest deterministic leaf selected", async () => {
     await useConversationStore
       .getState()

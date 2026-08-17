@@ -8,11 +8,13 @@ pub mod model_list;
 pub mod openai_compatible;
 mod repository;
 pub mod service;
+mod title_prompt;
+mod titles;
 
 pub use credentials::{CredentialStore, NativeCredentialStore};
 pub use domain::{
-    ApiKeyAction, Protocol, Provider, ProviderInput, RedactedProvider, ValidatedEndpoint,
-    MIGRATED_PROVIDER_ID, MIGRATED_PROVIDER_NAME,
+    ApiKeyAction, Protocol, Provider, ProviderInput, RedactedProvider, TitleModelBinding,
+    ValidatedEndpoint, MIGRATED_PROVIDER_ID, MIGRATED_PROVIDER_NAME,
 };
 pub use error::ProviderError;
 pub use generation::GenerationRuntime;

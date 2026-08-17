@@ -21,3 +21,10 @@ export {
   type ChannelLike,
   type ProviderClient,
 } from "./provider-client"
+
+export {
+  CONVERSATION_TITLE_UPDATED_EVENT,
+  decodeConversationTitleUpdate,
+  listenForConversationTitleUpdates,
+  type ConversationTitleUpdate,
+} from "./title-events"

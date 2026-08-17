@@ -10,6 +10,7 @@ use serde_json::Value;
 use crate::conversations::{ReasoningEffort, Role, ValidatedPath};
 
 use super::{
+    domain::validate_model,
     openai_compatible::{
         map_status, map_transport_error, GeneratedContent, OpenAiCompatibleClient,
         StreamingRequest, MAX_RESPONSE_BYTES,
@@ -39,7 +40,8 @@ struct Request {
     system: Option<String>,
     messages: Vec<Message>,
     max_tokens: u32,
-    thinking: Thinking,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    thinking: Option<Thinking>,
     stream: bool,
 }
 
@@ -99,14 +101,29 @@ pub fn build_request(
         Some(_) => budget_tokens + 4096,
     };
     serde_json::to_value(Request {
-        model: model.trim().to_owned(),
+        model: validate_model(model)?,
         system: (!system.is_empty()).then(|| system.join("\n\n")),
         messages,
         max_tokens,
-        thinking: Thinking {
+        thinking: Some(Thinking {
             kind: "enabled",
             budget_tokens,
-        },
+        }),
+        stream: true,
+    })
+    .map_err(|_| ProviderError::Protocol)
+}
+
+fn build_title_request(model: &str, prompt: &str) -> Result<Value, ProviderError> {
+    serde_json::to_value(Request {
+        model: model.trim().to_owned(),
+        system: None,
+        messages: vec![Message {
+            role: "user",
+            content: prompt.to_owned(),
+        }],
+        max_tokens: 60,
+        thinking: None,
         stream: true,
     })
     .map_err(|_| ProviderError::Protocol)
@@ -115,6 +132,53 @@ pub fn build_request(
 pub async fn stream<F, T>(
     client: &OpenAiCompatibleClient,
     request: StreamingRequest<'_>,
+    on_delta: F,
+    on_thinking: T,
+) -> Result<GeneratedContent, ProviderError>
+where
+    F: FnMut(&str) -> Result<(), ProviderError>,
+    T: FnMut(&str) -> Result<(), ProviderError>,
+{
+    let body = build_request(request.path, request.model, request.reasoning_effort)?;
+    stream_body(
+        client,
+        request.endpoint,
+        request.secret,
+        request.cancellation,
+        body,
+        on_delta,
+        on_thinking,
+    )
+    .await
+}
+
+pub async fn stream_title(
+    client: &OpenAiCompatibleClient,
+    endpoint: &super::ValidatedEndpoint,
+    model: &str,
+    secret: Option<&secrecy::SecretString>,
+    cancellation: &tokio_util::sync::CancellationToken,
+    prompt: &str,
+) -> Result<String, ProviderError> {
+    stream_body(
+        client,
+        endpoint,
+        secret,
+        cancellation,
+        build_title_request(model, prompt)?,
+        |_| Ok(()),
+        |_| Ok(()),
+    )
+    .await
+    .map(|generated| generated.content)
+}
+
+async fn stream_body<F, T>(
+    client: &OpenAiCompatibleClient,
+    endpoint: &super::ValidatedEndpoint,
+    secret: Option<&secrecy::SecretString>,
+    cancellation: &tokio_util::sync::CancellationToken,
+    body: Value,
     mut on_delta: F,
     mut on_thinking: T,
 ) -> Result<GeneratedContent, ProviderError>
@@ -124,18 +188,14 @@ where
 {
     let mut http_request = client
         .http_client()
-        .post(request.endpoint.messages_url().clone())
+        .post(endpoint.messages_url().clone())
         .header("anthropic-version", ANTHROPIC_VERSION)
-        .json(&build_request(
-            request.path,
-            request.model,
-            request.reasoning_effort,
-        )?);
-    if let Some(secret) = request.secret {
+        .json(&body);
+    if let Some(secret) = secret {
         http_request = http_request.header("x-api-key", secret.expose_secret());
     }
     let response = match select(
-        request.cancellation.cancelled().boxed(),
+        cancellation.cancelled().boxed(),
         http_request.send().boxed(),
     )
     .await
@@ -153,15 +213,12 @@ where
     let mut thinking = String::new();
     let mut stop_reason = false;
     let mut stopped = false;
-    while let Some(event) = match select(
-        request.cancellation.cancelled().boxed(),
-        events.next().boxed(),
-    )
-    .await
+    while let Some(event) =
+        match select(cancellation.cancelled().boxed(), events.next().boxed()).await {
+            Either::Left(_) => return Err(ProviderError::Cancelled),
+            Either::Right((event, _)) => event,
+        }
     {
-        Either::Left(_) => return Err(ProviderError::Cancelled),
-        Either::Right((event, _)) => event,
-    } {
         let event = event.map_err(|_| ProviderError::Protocol)?;
         let value: Value =
             serde_json::from_str(&event.data).map_err(|_| ProviderError::Protocol)?;
@@ -229,7 +286,7 @@ mod tests {
 
     use crate::conversations::{NewNode, Node, ReasoningEffort, Role, ValidatedPath};
 
-    use super::build_request;
+    use super::{build_request, build_title_request};
 
     fn node(id: &str, parent_id: Option<&str>, role: Role, content: &str) -> Node {
         let node = NewNode {
@@ -258,14 +315,14 @@ mod tests {
         ValidatedPath::new(vec![
             node("system-a", None, Role::System, "first policy"),
             node("user", Some("system-a"), Role::User, "question"),
-            node(
-                "assistant",
-                Some("user"),
-                Role::Assistant,
-                "interim answer",
-            ),
+            node("assistant", Some("user"), Role::Assistant, "interim answer"),
             node("system-b", Some("assistant"), Role::System, "second policy"),
-            node("follow-up", Some("system-b"), Role::User, "SELECTED_SENTINEL"),
+            node(
+                "follow-up",
+                Some("system-b"),
+                Role::User,
+                "SELECTED_SENTINEL",
+            ),
         ])
     }
 
@@ -287,6 +344,14 @@ mod tests {
                 "stream": true
             })
         );
+    }
+
+    #[test]
+    fn title_request_disables_thinking_and_limits_output() {
+        let request = build_title_request("fixture-model", "TITLE_PROMPT").unwrap();
+        assert_eq!(request["max_tokens"], 60);
+        assert!(request.get("thinking").is_none());
+        assert_eq!(request["messages"][0]["content"], "TITLE_PROMPT");
     }
 
     #[test]
@@ -313,13 +378,10 @@ mod tests {
 
     #[test]
     fn tool_blank_and_non_user_terminal_paths_are_rejected() {
-        let tool_path =
-            ValidatedPath::new(vec![node("tool", None, Role::Tool, "tool content")]);
+        let tool_path = ValidatedPath::new(vec![node("tool", None, Role::Tool, "tool content")]);
         assert!(build_request(&tool_path, "model", None).is_err());
 
-        let blank_path = ValidatedPath::new(vec![
-            node("user", None, Role::User, "  \n\t "),
-        ]);
+        let blank_path = ValidatedPath::new(vec![node("user", None, Role::User, "  \n\t ")]);
         assert!(build_request(&blank_path, "model", None).is_err());
 
         let assistant_terminal =

@@ -6,6 +6,7 @@ import {
   Eye,
   EyeOff,
   Plus,
+  MessageSquare,
   Settings2,
   Star,
   Trash2,
@@ -90,6 +91,7 @@ type ProviderDraft = {
 }
 
 type SettingsView = "list" | "edit"
+type SettingsCategory = "providers" | "conversation"
 
 const emptyDraft = (): ProviderDraft => ({
   name: "",
@@ -129,14 +131,23 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
   const phase = useProviderStore((state) => state.phase)
   const providers = useProviderStore((state) => state.providers)
   const activeProviderId = useProviderStore((state) => state.activeProviderId)
+  const autoGenerateTitle = useProviderStore((state) => state.autoGenerateTitle)
+  const titleModelBinding = useProviderStore((state) => state.titleModelBinding)
   const storeError = useProviderStore((state) =>
     state.phase === "error" ? state.error : null,
   )
   const saveProvider = useProviderStore((state) => state.saveProvider)
   const deleteProvider = useProviderStore((state) => state.deleteProvider)
   const setActiveProvider = useProviderStore((state) => state.setActiveProvider)
+  const setAutoGenerateTitle = useProviderStore(
+    (state) => state.setAutoGenerateTitle,
+  )
+  const setTitleModelBinding = useProviderStore(
+    (state) => state.setTitleModelBinding,
+  )
   const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false)
   const [view, setView] = React.useState<SettingsView>("list")
+  const [category, setCategory] = React.useState<SettingsCategory>("providers")
   const [draft, setDraft] = React.useState<ProviderDraft>(emptyDraft)
   const [apiKey, setApiKey] = React.useState("")
   // The revealed key the field was seeded with; null while unknown (new
@@ -169,6 +180,11 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
     setModelAddition("")
     setView("list")
   }, [clearEphemeralKeyState])
+
+  const selectCategory = (nextCategory: SettingsCategory) => {
+    resetToList()
+    setCategory(nextCategory)
+  }
 
   const openEditor = React.useCallback(
     (providerId: string | null, snapshot?: ProviderView) => {
@@ -207,8 +223,10 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
   const handleOpenChange = (nextOpen: boolean) => {
     if (!isControlled) setUncontrolledOpen(nextOpen)
     props.onOpenChange?.(nextOpen)
-    if (nextOpen) resetToList()
-    else {
+    if (nextOpen) {
+      resetToList()
+      setCategory("providers")
+    } else {
       clearEphemeralKeyState()
       setProviderPendingDelete(null)
     }
@@ -300,6 +318,17 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
       : draft.name.trim() !== ""
         ? draft.name
         : (providers.find((item) => item.id === draft.id)?.name ?? "编辑")
+  const titleModelLabel =
+    titleModelBinding === null
+      ? "跟随会话"
+      : (() => {
+          const provider = providers.find(
+            (item) => item.id === titleModelBinding.providerId,
+          )
+          return provider === undefined
+            ? "跟随会话"
+            : `${provider.name} · ${titleModelBinding.model}`
+        })()
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -325,12 +354,23 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
           >
             <Button
               type="button"
-              variant="secondary"
+              variant={category === "providers" ? "secondary" : "ghost"}
               className="w-full justify-start"
-              aria-current="page"
+              aria-current={category === "providers" ? "page" : undefined}
+              onClick={() => selectCategory("providers")}
             >
               <Bot data-icon="inline-start" />
               模型提供商
+            </Button>
+            <Button
+              type="button"
+              variant={category === "conversation" ? "secondary" : "ghost"}
+              className="w-full justify-start"
+              aria-current={category === "conversation" ? "page" : undefined}
+              onClick={() => selectCategory("conversation")}
+            >
+              <MessageSquare data-icon="inline-start" />
+              会话
             </Button>
           </nav>
           <div className="flex min-h-0 min-w-0 flex-col">
@@ -341,7 +381,11 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                     <span>设置</span>
                   </BreadcrumbItem>
                   <BreadcrumbSeparator />
-                  {view === "list" ? (
+                  {category === "conversation" ? (
+                    <BreadcrumbItem>
+                      <BreadcrumbPage>会话</BreadcrumbPage>
+                    </BreadcrumbItem>
+                  ) : view === "list" ? (
                     <BreadcrumbItem>
                       <BreadcrumbPage>模型提供商</BreadcrumbPage>
                     </BreadcrumbItem>
@@ -369,7 +413,103 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                 </BreadcrumbList>
               </Breadcrumb>
             </div>
-            {view === "list" ? (
+            {category === "conversation" ? (
+              <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                <section
+                  aria-labelledby="conversation-settings-title"
+                  className="flex flex-col gap-4"
+                >
+                  <h2 id="conversation-settings-title" className="font-medium">
+                    会话
+                  </h2>
+                  <FieldGroup>
+                    <Field
+                      orientation="horizontal"
+                      data-disabled={mutationDisabled}
+                    >
+                      <FieldLabel htmlFor="auto-generate-title">
+                        自动生成会话标题
+                      </FieldLabel>
+                      <button
+                        id="auto-generate-title"
+                        type="button"
+                        role="switch"
+                        aria-checked={autoGenerateTitle}
+                        disabled={mutationDisabled}
+                        className={`ml-auto inline-flex h-6 w-11 items-center rounded-full p-0.5 transition-colors ${
+                          autoGenerateTitle ? "bg-primary" : "bg-muted"
+                        }`}
+                        onClick={() =>
+                          void setAutoGenerateTitle(client, !autoGenerateTitle)
+                        }
+                      >
+                        <span
+                          className={`size-5 rounded-full bg-background shadow-sm transition-transform ${
+                            autoGenerateTitle
+                              ? "translate-x-5"
+                              : "translate-x-0"
+                          }`}
+                        />
+                      </button>
+                    </Field>
+                    <Field
+                      data-disabled={mutationDisabled || !autoGenerateTitle}
+                    >
+                      <FieldLabel>标题模型</FieldLabel>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="w-full justify-between"
+                            disabled={mutationDisabled || !autoGenerateTitle}
+                          >
+                            {titleModelLabel}
+                            <ChevronDown className="size-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          align="start"
+                          className="w-[var(--radix-dropdown-menu-trigger-width)]"
+                        >
+                          <DropdownMenuItem
+                            onClick={() =>
+                              void setTitleModelBinding(client, null)
+                            }
+                          >
+                            {titleModelBinding === null && (
+                              <Check className="size-4" />
+                            )}
+                            跟随会话
+                          </DropdownMenuItem>
+                          {providers.flatMap((provider) =>
+                            provider.models.map((model) => {
+                              const selected =
+                                titleModelBinding?.providerId === provider.id &&
+                                titleModelBinding.model === model
+                              return (
+                                <DropdownMenuItem
+                                  key={`${provider.id}:${model}`}
+                                  onClick={() =>
+                                    void setTitleModelBinding(client, {
+                                      providerId: provider.id,
+                                      model,
+                                    })
+                                  }
+                                >
+                                  {selected && <Check className="size-4" />}
+                                  {provider.name} · {model}
+                                </DropdownMenuItem>
+                              )
+                            }),
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </Field>
+                  </FieldGroup>
+                </section>
+              </div>
+            ) : view === "list" ? (
               <div className="min-h-0 flex-1 overflow-y-auto p-4">
                 <section
                   aria-labelledby="provider-list-title"
@@ -399,107 +539,112 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                       providers.map((provider) => {
                         const isDefault = provider.id === activeProviderId
                         return (
-                        <div
-                          key={provider.id}
-                          className="flex items-center rounded-md hover:bg-muted"
-                        >
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            className="h-auto min-w-0 flex-1 justify-start py-2 hover:bg-transparent"
-                            aria-label={`编辑：${provider.name}`}
-                            onClick={() => openEditor(provider.id)}
+                          <div
+                            key={provider.id}
+                            className="flex items-center rounded-md hover:bg-muted"
                           >
-                            <span className="flex w-full min-w-0 items-start gap-2">
-                              <span className="flex min-w-0 flex-1 flex-col items-start gap-0.5 text-left">
-                                <span className="w-full truncate">
-                                  {provider.name}
-                                </span>
-                                <span className="w-full truncate text-xs font-normal text-muted-foreground">
-                                  {formatProviderModelsSummary(provider.models)}
-                                </span>
-                              </span>
-                              {isDefault && (
-                                <span
-                                  className="shrink-0 self-center text-xs font-normal text-muted-foreground"
-                                  aria-label="当前全局默认"
-                                >
-                                  默认
-                                </span>
-                              )}
-                            </span>
-                          </Button>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="shrink-0 hover:bg-transparent"
-                                aria-label={`更多操作：${provider.name}`}
-                                disabled={mutationDisabled}
-                              >
-                                <EllipsisVertical />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent
-                              align="end"
-                              className="w-auto min-w-44"
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="h-auto min-w-0 flex-1 justify-start py-2 hover:bg-transparent"
+                              aria-label={`编辑：${provider.name}`}
+                              onClick={() => openEditor(provider.id)}
                             >
-                              {isDefault ? (
-                                <span
-                                  className="flex w-full"
-                                  title="已是当前默认提供商"
+                              <span className="flex w-full min-w-0 items-start gap-2">
+                                <span className="flex min-w-0 flex-1 flex-col items-start gap-0.5 text-left">
+                                  <span className="w-full truncate">
+                                    {provider.name}
+                                  </span>
+                                  <span className="w-full truncate text-xs font-normal text-muted-foreground">
+                                    {formatProviderModelsSummary(
+                                      provider.models,
+                                    )}
+                                  </span>
+                                </span>
+                                {isDefault && (
+                                  <span
+                                    className="shrink-0 self-center text-xs font-normal text-muted-foreground"
+                                    aria-label="当前全局默认"
+                                  >
+                                    默认
+                                  </span>
+                                )}
+                              </span>
+                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="shrink-0 hover:bg-transparent"
+                                  aria-label={`更多操作：${provider.name}`}
+                                  disabled={mutationDisabled}
                                 >
+                                  <EllipsisVertical />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent
+                                align="end"
+                                className="w-auto min-w-44"
+                              >
+                                {isDefault ? (
+                                  <span
+                                    className="flex w-full"
+                                    title="已是当前默认提供商"
+                                  >
+                                    <DropdownMenuItem
+                                      disabled
+                                      className="w-full"
+                                      aria-label="设为默认（已是当前默认提供商）"
+                                    >
+                                      <Star />
+                                      设为默认
+                                    </DropdownMenuItem>
+                                  </span>
+                                ) : (
                                   <DropdownMenuItem
-                                    disabled
-                                    className="w-full"
-                                    aria-label="设为默认（已是当前默认提供商）"
+                                    onClick={() =>
+                                      void setActiveProvider(
+                                        client,
+                                        provider.id,
+                                      )
+                                    }
                                   >
                                     <Star />
                                     设为默认
                                   </DropdownMenuItem>
-                                </span>
-                              ) : (
-                                <DropdownMenuItem
-                                  onClick={() =>
-                                    void setActiveProvider(client, provider.id)
-                                  }
-                                >
-                                  <Star />
-                                  设为默认
-                                </DropdownMenuItem>
-                              )}
-                              <DropdownMenuSeparator />
-                              {isDefault ? (
-                                <span
-                                  className="flex w-full"
-                                  title="当前为默认提供商，无法删除"
-                                >
+                                )}
+                                <DropdownMenuSeparator />
+                                {isDefault ? (
+                                  <span
+                                    className="flex w-full"
+                                    title="当前为默认提供商，无法删除"
+                                  >
+                                    <DropdownMenuItem
+                                      variant="destructive"
+                                      disabled
+                                      className="w-full"
+                                      aria-label="删除（当前为默认提供商，无法删除）"
+                                    >
+                                      <Trash2 />
+                                      删除
+                                    </DropdownMenuItem>
+                                  </span>
+                                ) : (
                                   <DropdownMenuItem
                                     variant="destructive"
-                                    disabled
-                                    className="w-full"
-                                    aria-label="删除（当前为默认提供商，无法删除）"
+                                    onSelect={() =>
+                                      setProviderPendingDelete(provider)
+                                    }
                                   >
                                     <Trash2 />
                                     删除
                                   </DropdownMenuItem>
-                                </span>
-                              ) : (
-                                <DropdownMenuItem
-                                  variant="destructive"
-                                  onSelect={() =>
-                                    setProviderPendingDelete(provider)
-                                  }
-                                >
-                                  <Trash2 />
-                                  删除
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         )
                       })
                     )}
@@ -640,9 +785,7 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                           <Button
                             type="button"
                             variant="outline"
-                            disabled={
-                              mutationDisabled || !modelAddition.trim()
-                            }
+                            disabled={mutationDisabled || !modelAddition.trim()}
                             onClick={() => addModel(modelAddition)}
                           >
                             添加
@@ -779,11 +922,7 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                   </section>
                 </div>
                 <DialogFooter className="mx-0 mb-0 shrink-0 rounded-none">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={resetToList}
-                  >
+                  <Button type="button" variant="outline" onClick={resetToList}>
                     取消
                   </Button>
                   <Button
