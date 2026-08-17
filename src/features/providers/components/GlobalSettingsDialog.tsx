@@ -286,7 +286,7 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
   }
 
   const handleDelete = async (providerId: string) => {
-    if (mutationDisabled) return
+    if (mutationDisabled || providerId === activeProviderId) return
     if (!(await deleteProvider(client, providerId))) return
     setProviderPendingDelete(null)
     if (view === "edit" && selectedIdRef.current === providerId) resetToList()
@@ -394,7 +394,9 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                         尚未添加模型提供商。
                       </p>
                     ) : (
-                      providers.map((provider) => (
+                      providers.map((provider) => {
+                        const isDefault = provider.id === activeProviderId
+                        return (
                         <div
                           key={provider.id}
                           className="flex items-center rounded-md hover:bg-muted"
@@ -415,7 +417,7 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                                   {formatProviderModelsSummary(provider.models)}
                                 </span>
                               </span>
-                              {provider.id === activeProviderId && (
+                              {isDefault && (
                                 <span
                                   className="shrink-0 self-center text-xs font-normal text-muted-foreground"
                                   aria-label="当前全局默认"
@@ -442,29 +444,62 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                               align="end"
                               className="w-auto min-w-44"
                             >
-                              <DropdownMenuItem
-                                disabled={provider.id === activeProviderId}
-                                onClick={() =>
-                                  void setActiveProvider(client, provider.id)
-                                }
-                              >
-                                <Star />
-                                设为默认
-                              </DropdownMenuItem>
+                              {isDefault ? (
+                                <span
+                                  className="flex w-full"
+                                  title="已是当前默认提供商"
+                                >
+                                  <DropdownMenuItem
+                                    disabled
+                                    className="w-full"
+                                    aria-label="设为默认（已是当前默认提供商）"
+                                  >
+                                    <Star />
+                                    设为默认
+                                  </DropdownMenuItem>
+                                </span>
+                              ) : (
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    void setActiveProvider(client, provider.id)
+                                  }
+                                >
+                                  <Star />
+                                  设为默认
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                variant="destructive"
-                                onSelect={() =>
-                                  setProviderPendingDelete(provider)
-                                }
-                              >
-                                <Trash2 />
-                                删除
-                              </DropdownMenuItem>
+                              {isDefault ? (
+                                <span
+                                  className="flex w-full"
+                                  title="当前为默认提供商，无法删除"
+                                >
+                                  <DropdownMenuItem
+                                    variant="destructive"
+                                    disabled
+                                    className="w-full"
+                                    aria-label="删除（当前为默认提供商，无法删除）"
+                                  >
+                                    <Trash2 />
+                                    删除
+                                  </DropdownMenuItem>
+                                </span>
+                              ) : (
+                                <DropdownMenuItem
+                                  variant="destructive"
+                                  onSelect={() =>
+                                    setProviderPendingDelete(provider)
+                                  }
+                                >
+                                  <Trash2 />
+                                  删除
+                                </DropdownMenuItem>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
-                      ))
+                        )
+                      })
                     )}
                   </div>
                 </section>
@@ -757,6 +792,15 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                   </section>
                 </div>
                 <DialogFooter className="mx-0 mb-0 shrink-0 rounded-none">
+                  {draft.id === undefined && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={resetToList}
+                    >
+                      取消
+                    </Button>
+                  )}
                   <Button
                     type="submit"
                     aria-label="保存模型提供商"
@@ -786,14 +830,18 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                   : `删除「${providerPendingDelete.name}」？`}
               </AlertDialogTitle>
               <AlertDialogDescription>
-                使用它的会话将回退到全局默认。删除当前全局默认后，不会自动选择替代项。
+                使用它的会话将回退到全局默认。
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>取消</AlertDialogCancel>
               <AlertDialogAction
                 variant="destructive"
-                disabled={mutationDisabled || providerPendingDelete === null}
+                disabled={
+                  mutationDisabled ||
+                  providerPendingDelete === null ||
+                  providerPendingDelete.id === activeProviderId
+                }
                 onClick={() => {
                   if (providerPendingDelete === null) return
                   void handleDelete(providerPendingDelete.id)

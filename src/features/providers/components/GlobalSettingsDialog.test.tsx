@@ -305,6 +305,25 @@ describe("GlobalSettingsDialog", () => {
     expect(screen.queryByLabelText("名称")).not.toBeInTheDocument()
   })
 
+  it("cancels creating a provider and returns to the list", async () => {
+    const user = userEvent.setup()
+    render(
+      <GlobalSettingsDialog
+        client={client() as ProviderClient}
+        readOnly={false}
+      />,
+    )
+    await user.click(screen.getByRole("button", { name: "设置" }))
+    await user.click(screen.getByRole("button", { name: "新建" }))
+    expect(
+      screen.getByRole("heading", { name: "新建模型提供商" }),
+    ).toBeVisible()
+    await user.type(screen.getByLabelText("名称"), "draft")
+    await user.click(screen.getByRole("button", { name: "取消" }))
+    expect(screen.getByRole("heading", { name: "模型提供商" })).toBeVisible()
+    expect(screen.queryByLabelText("名称")).not.toBeInTheDocument()
+  })
+
   it("sets the global default from the provider row more menu", async () => {
     const user = userEvent.setup()
     const bridge = client()
@@ -333,6 +352,36 @@ describe("GlobalSettingsDialog", () => {
     await user.click(screen.getByRole("menuitem", { name: "设为默认" }))
     await waitFor(() =>
       expect(bridge.setActiveProvider).toHaveBeenCalledWith(other.id),
+    )
+  })
+
+  it("disables default-provider actions with accessible reasons and native titles", async () => {
+    const user = userEvent.setup()
+    render(
+      <GlobalSettingsDialog
+        client={client() as ProviderClient}
+        readOnly={false}
+      />,
+    )
+    await user.click(screen.getByRole("button", { name: "设置" }))
+    await user.click(
+      screen.getByRole("button", { name: `更多操作：${provider.name}` }),
+    )
+    const setDefault = screen.getByRole("menuitem", {
+      name: "设为默认（已是当前默认提供商）",
+    })
+    const remove = screen.getByRole("menuitem", {
+      name: "删除（当前为默认提供商，无法删除）",
+    })
+    expect(setDefault).toHaveAttribute("data-disabled", "")
+    expect(setDefault.closest("span")).toHaveAttribute(
+      "title",
+      "已是当前默认提供商",
+    )
+    expect(remove).toHaveAttribute("data-disabled", "")
+    expect(remove.closest("span")).toHaveAttribute(
+      "title",
+      "当前为默认提供商，无法删除",
     )
   })
 
