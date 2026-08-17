@@ -61,6 +61,7 @@ describe("GlobalSettingsDialog", () => {
       />,
     )
     await user.click(screen.getByRole("button", { name: "设置" }))
+    expect(screen.getByLabelText("当前全局默认")).toHaveTextContent("默认")
     expect(bridge.revealProviderApiKey).toHaveBeenCalledWith(provider.id)
     const field = screen.getByLabelText("API 密钥")
     await waitFor(() => expect(field).toHaveValue("STORED_SECRET_SENTINEL"))
@@ -143,10 +144,8 @@ describe("GlobalSettingsDialog", () => {
     bridge.revealProviderApiKey.mockRejectedValueOnce(new Error("keyring"))
     bridge.saveProvider.mockClear()
     await user.click(screen.getByRole("button", { name: "新建" }))
-    const providerButton = screen
-      .getAllByRole("button", { name: /OpenAI/ })
-      .find((button) => button.textContent === "OpenAI")
-    expect(providerButton).toBeDefined()
+    const providerButton = screen.getByLabelText("当前全局默认").closest("button")
+    expect(providerButton).not.toBeNull()
     await user.click(providerButton!)
     await waitFor(() =>
       expect(bridge.revealProviderApiKey).toHaveBeenCalledTimes(3),

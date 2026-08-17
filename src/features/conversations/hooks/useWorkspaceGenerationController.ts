@@ -385,6 +385,21 @@ export function useWorkspaceGenerationController({
         .archiveConversation(conversationClient, target)
     },
     createConversation: async (content) => {
+      const prior = useConversationStore.getState()
+      let binding = prior.draftBinding
+      const reasoningEffort = prior.draftReasoningEffort
+      if (binding === null) {
+        const providers = useProviderStore.getState()
+        if (providers.activeProviderId !== null) {
+          const active = providers.providers.find(
+            (item) => item.id === providers.activeProviderId,
+          )
+          if (active !== undefined) {
+            binding = { providerId: active.id, model: active.model }
+          }
+        }
+      }
+
       let authoritativeTree: ConversationTreeView | undefined
       const trackingClient: ConversationClient = {
         ...conversationClient,
@@ -409,6 +424,23 @@ export function useWorkspaceGenerationController({
       ) {
         return false
       }
+
+      if (
+        (binding !== null || reasoningEffort !== null) &&
+        conversationClient.setConversationProvider !== undefined
+      ) {
+        await useConversationStore.getState().setConversationProvider(
+          conversationClient,
+          {
+            binding,
+            reasoningEffort,
+          },
+        )
+        if (useConversationStore.getState().error !== null) {
+          return false
+        }
+      }
+
       startGeneration({
         conversationId: authoritativeTree.conversation.id,
         parentNodeId: authoritativeTree.rootNodeId,

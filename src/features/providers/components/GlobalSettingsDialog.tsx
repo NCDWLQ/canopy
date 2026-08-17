@@ -303,13 +303,19 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                       className="min-w-0 flex-1 justify-start"
                       onClick={() => selectDraft(provider.id)}
                     >
-                      <span className="min-w-0 truncate">{provider.name}</span>
-                      {provider.id === activeProviderId && (
-                        <Radio
-                          className="ml-auto size-3.5 text-primary"
-                          aria-label="当前全局默认"
-                        />
-                      )}
+                      <span className="flex w-full min-w-0 items-baseline gap-1.5">
+                        <span className="min-w-0 truncate">
+                          {provider.name}
+                        </span>
+                        {provider.id === activeProviderId && (
+                          <span
+                            className="ml-auto shrink-0 text-xs font-normal text-muted-foreground"
+                            aria-label="当前全局默认"
+                          >
+                            默认
+                          </span>
+                        )}
+                      </span>
                     </Button>
                     <Button
                       type="button"

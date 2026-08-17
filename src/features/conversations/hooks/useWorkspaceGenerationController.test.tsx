@@ -236,6 +236,16 @@ function createConversationClient() {
       .mockResolvedValue(tree),
     loadActivePath: vi.fn<ConversationClient["loadActivePath"]>(),
     archiveConversation: vi.fn<ConversationClient["archiveConversation"]>(),
+    setConversationProvider: vi
+      .fn<NonNullable<ConversationClient["setConversationProvider"]>>()
+      .mockImplementation((input) =>
+        Promise.resolve({
+          id: input.conversationId,
+          providerId: input.binding?.providerId ?? null,
+          model: input.binding?.model ?? null,
+          reasoningEffort: input.reasoningEffort,
+        }),
+      ),
   } satisfies ConversationClient
 }
 
@@ -264,6 +274,11 @@ function resetConversationStore() {
     isCreatingConversation: false,
     conversationId: null,
     isArchived: false,
+    providerId: null,
+    model: null,
+    reasoningEffort: null,
+    draftBinding: null,
+    draftReasoningEffort: null,
     rootNodeId: null,
     activeNodeId: null,
     nodesById: {},
@@ -443,12 +458,41 @@ describe("workspace generation controller", () => {
     })
 
     expect(useConversationStore.getState().activeNodeId).toBe(createdRoot.id)
+    expect(conversationClient.setConversationProvider).toHaveBeenCalledWith({
+      conversationId: createdConversation.id,
+      binding: { providerId: provider.id, model: provider.model },
+      reasoningEffort: null,
+    })
     expect(providerClient.generateFromActivePath).toHaveBeenCalledTimes(1)
     expect(providerClient.generateFromActivePath).toHaveBeenCalledWith(
       createdConversation.id,
       createdRoot.id,
       expect.any(Function),
     )
+  })
+
+  it("does not generate when binding the created conversation fails", async () => {
+    resetConversationStore()
+    conversationClient.createConversation.mockResolvedValueOnce(createdTree)
+    conversationClient.setConversationProvider.mockRejectedValueOnce(
+      new ConversationCommandError({
+        code: "database_unavailable",
+        message: "Binding failed.",
+        retryable: true,
+      }),
+    )
+    const { result } = renderHook(() =>
+      useWorkspaceGenerationController({ conversationClient, providerClient }),
+    )
+
+    await act(async () => {
+      await result.current.createConversation(createdRoot.content)
+    })
+
+    expect(useConversationStore.getState().error?.message).toBe(
+      "Binding failed.",
+    )
+    expect(providerClient.generateFromActivePath).not.toHaveBeenCalled()
   })
 
   it("does not generate when conversation creation fails", async () => {

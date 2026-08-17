@@ -362,6 +362,9 @@ describe("ConversationWorkspace", () => {
 
     expect(screen.getByTestId("blank-conversation-pane")).toBeVisible()
     expect(useConversationStore.getState().isCreatingConversation).toBe(true)
+    expect(
+      screen.getByRole("button", { name: "选择模型与推理强度" }),
+    ).toBeVisible()
   })
 
   it("switches history without leaking nodes from the prior conversation", async () => {
