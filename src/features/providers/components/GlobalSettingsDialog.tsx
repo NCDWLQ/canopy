@@ -5,7 +5,6 @@ import {
   ChevronDown,
   Eye,
   EyeOff,
-  KeyRound,
   Plus,
   Settings2,
   Star,
@@ -28,7 +27,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -774,21 +772,6 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                         </InputGroup>
                       </Field>
                     </FieldGroup>
-                    {draft.id !== undefined && (
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Badge variant="outline">
-                          <KeyRound data-icon="inline-start" />
-                          {draft.hasApiKey
-                            ? "已保存 API 密钥"
-                            : "未保存 API 密钥"}
-                        </Badge>
-                        <Badge variant="secondary">
-                          {draft.protocol === "anthropic"
-                            ? "Anthropic"
-                            : "OpenAI 兼容"}
-                        </Badge>
-                      </div>
-                    )}
                   </section>
                 </div>
                 <DialogFooter className="mx-0 mb-0 shrink-0 rounded-none">
