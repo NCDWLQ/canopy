@@ -580,3 +580,24 @@ Rebuilt global Settings into a dual-column list-detail dialog (category nav, bre
 ### Status
 
 [OK] **Completed**
+
+
+## Session 27: 会话标题自动生成
+
+**Date**: 2026-08-17
+**Task**: 会话标题自动生成
+**Branch**: `feat/auto-title`
+
+### Summary
+
+实现首轮回复后自动生成会话标题：默认开启开关、可选标题模型、独立 title_prompt（英文+转义防注入）、成对引号清洗、全局 title-updated 事件与设置「会话」页；落地于 feat/auto-title。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b1e4d4d` | (see git log) |
+
+### Status
+
+[OK] **Completed**
