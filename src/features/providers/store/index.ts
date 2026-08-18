@@ -5,8 +5,8 @@ import type {
   SaveProviderInput,
   TitleModelBinding,
 } from "../types"
-import type { UiError } from "@/features/conversations/types"
 import { ConversationCommandError, type ProviderClient } from "@/lib/tauri"
+import type { UiError } from "@/lib/tauri/types"
 export type ProviderState = (
   | {
       phase: "idle" | "loading" | "unconfigured"

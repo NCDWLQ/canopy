@@ -30,7 +30,9 @@ ConversationWorkspace
 
 `features/settings` must not import `features/conversations`. The conversation
 category represents global conversation preferences inside the settings
-surface; it does not render or mutate conversation-tree state.
+surface; it does not render or mutate conversation-tree state. Shared IPC-safe
+error and JSON helper types belong in `lib/tauri/types.ts`, not in a
+feature-owned `types/` module, so the wider feature graph remains acyclic.
 
 ## State ownership
 

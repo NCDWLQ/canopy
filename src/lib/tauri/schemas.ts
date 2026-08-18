@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-import type { JsonValue } from "@/features/conversations/types"
+import type { JsonValue } from "./types"
 
 function isRustWhitespace(codePoint: number): boolean {
   return (

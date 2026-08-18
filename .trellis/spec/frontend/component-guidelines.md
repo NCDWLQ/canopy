@@ -457,9 +457,11 @@ action in the expanded conversation sidebar. Import `SettingsDialog` from
 navigation, and open/reset behavior. Compose provider editing through
 `ProviderSettingsPanel` (`features/providers/components`) and global
 conversation preferences through `ConversationSettingsPanel`
-(`features/settings/components`). Dependency direction is
+(`features/settings/components`). UI dependency direction is
 `conversations → settings → providers`; `features/settings` must not import
-from `features/conversations`. Keep one dialog instance and allow the owning
+from `features/conversations`, and cross-feature error/JSON helper types must
+live in `lib/tauri` rather than a feature-owned `types/` module so providers
+do not depend back on conversations. Keep one dialog instance and allow the owning
 workspace to control its `open` / `onOpenChange` state so the contextual
 `配置服务提供商以生成` action can open the same surface. Provider state, secret
 handling, and typed client calls remain in the Provider feature/store.

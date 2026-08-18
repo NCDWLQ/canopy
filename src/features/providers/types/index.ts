@@ -1,7 +1,5 @@
-import type {
-  ConversationNodeView,
-  UiError,
-} from "@/features/conversations/types"
+import type { ConversationNodeView } from "@/lib/tauri/types"
+import type { UiError } from "@/lib/tauri/types"
 
 export type ProviderProtocol = "openai_compatible" | "anthropic"
 

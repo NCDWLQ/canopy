@@ -28,3 +28,11 @@ export {
   listenForConversationTitleUpdates,
   type ConversationTitleUpdate,
 } from "./title-events"
+
+export type {
+  ConversationNodeView,
+  JsonValue,
+  NodeRole,
+  UiError,
+  UiErrorCode,
+} from "./types"

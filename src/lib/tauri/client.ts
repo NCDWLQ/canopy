@@ -3,15 +3,13 @@ import type { z } from "zod"
 
 import type {
   ActivePathView,
-  ConversationNodeView,
   ConversationSummaryView,
   ConversationTreeView,
   ConversationView,
   PathMessageView,
   TreeNodeView,
-  UiError,
-  UiErrorCode,
 } from "@/features/conversations/types"
+import type { ConversationNodeView, UiError, UiErrorCode } from "./types"
 
 import {
   activePathDtoSchema,

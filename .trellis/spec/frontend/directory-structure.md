@@ -45,7 +45,7 @@ src/
 │       └── components/               # provider list/editor panels and model selection UI
 ├── hooks/                            # only hooks shared across features
 ├── lib/
-│   ├── tauri/                        # raw invoke, decoding, error normalization
+│   ├── tauri/                        # raw invoke, decoding, error normalization, shared IPC-safe types
 │   └── utils.ts                      # genuinely cross-feature utilities
 └── test/                             # global setup and shared test-only helpers
 ```
@@ -61,7 +61,8 @@ only cross-feature IPC contract fixtures may live under a shared test path.
 - `features/<feature>` owns product behavior, view models, components, actions,
   state, and feature-local tests.
 - `lib/tauri` is the only raw Tauri invoke boundary. It validates unknown IPC
-  payloads before returning frontend types.
+  payloads before returning frontend types, and owns shared IPC-safe types
+  such as `UiError`/`JsonValue` that multiple features consume.
 - `app` composes features and providers; it must not become a second location
   for feature business logic.
 - `hooks` is reserved for truly cross-feature hooks. Feature-specific hooks
