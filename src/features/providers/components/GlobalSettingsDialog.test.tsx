@@ -104,6 +104,12 @@ describe("GlobalSettingsDialog", () => {
       name: "自动生成会话标题",
     })
     expect(toggle).toHaveAttribute("aria-checked", "true")
+    expect(toggle.closest("fieldset")).toContainElement(
+      screen.getByText("标题模型"),
+    )
+    expect(
+      screen.getByText("标题模型").closest("[data-slot=field]"),
+    ).toHaveClass("pl-4")
     await user.click(screen.getByRole("button", { name: "跟随会话" }))
     await user.click(
       screen.getByRole("menuitem", {

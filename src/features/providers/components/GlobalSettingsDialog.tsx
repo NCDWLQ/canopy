@@ -51,6 +51,7 @@ import {
   FieldDescription,
   FieldGroup,
   FieldLabel,
+  FieldSet,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
@@ -60,6 +61,7 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group"
 import { Spinner } from "@/components/ui/spinner"
+import { Switch } from "@/components/ui/switch"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -423,89 +425,81 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                     会话
                   </h2>
                   <FieldGroup>
-                    <Field
-                      orientation="horizontal"
-                      data-disabled={mutationDisabled}
-                    >
-                      <FieldLabel htmlFor="auto-generate-title">
-                        自动生成会话标题
-                      </FieldLabel>
-                      <button
-                        id="auto-generate-title"
-                        type="button"
-                        role="switch"
-                        aria-checked={autoGenerateTitle}
-                        disabled={mutationDisabled}
-                        className={`ml-auto inline-flex h-6 w-11 items-center rounded-full p-0.5 transition-colors ${
-                          autoGenerateTitle ? "bg-primary" : "bg-muted"
-                        }`}
-                        onClick={() =>
-                          void setAutoGenerateTitle(client, !autoGenerateTitle)
-                        }
+                    <FieldSet>
+                      <Field
+                        orientation="horizontal"
+                        data-disabled={mutationDisabled}
                       >
-                        <span
-                          className={`size-5 rounded-full bg-background shadow-sm transition-transform ${
-                            autoGenerateTitle
-                              ? "translate-x-5"
-                              : "translate-x-0"
-                          }`}
+                        <FieldLabel htmlFor="auto-generate-title">
+                          自动生成会话标题
+                        </FieldLabel>
+                        <Switch
+                          id="auto-generate-title"
+                          className="ml-auto"
+                          checked={autoGenerateTitle}
+                          disabled={mutationDisabled}
+                          onCheckedChange={(checked) =>
+                            void setAutoGenerateTitle(client, checked)
+                          }
                         />
-                      </button>
-                    </Field>
-                    <Field
-                      data-disabled={mutationDisabled || !autoGenerateTitle}
-                    >
-                      <FieldLabel>标题模型</FieldLabel>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="w-full justify-between"
-                            disabled={mutationDisabled || !autoGenerateTitle}
+                      </Field>
+                      <Field
+                        className="pl-4"
+                        data-disabled={mutationDisabled || !autoGenerateTitle}
+                      >
+                        <FieldLabel>标题模型</FieldLabel>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="w-full justify-between"
+                              disabled={mutationDisabled || !autoGenerateTitle}
+                            >
+                              {titleModelLabel}
+                              <ChevronDown className="size-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent
+                            align="start"
+                            className="w-[var(--radix-dropdown-menu-trigger-width)]"
                           >
-                            {titleModelLabel}
-                            <ChevronDown className="size-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="start"
-                          className="w-[var(--radix-dropdown-menu-trigger-width)]"
-                        >
-                          <DropdownMenuItem
-                            onClick={() =>
-                              void setTitleModelBinding(client, null)
-                            }
-                          >
-                            {titleModelBinding === null && (
-                              <Check className="size-4" />
+                            <DropdownMenuItem
+                              onClick={() =>
+                                void setTitleModelBinding(client, null)
+                              }
+                            >
+                              {titleModelBinding === null && (
+                                <Check className="size-4" />
+                              )}
+                              跟随会话
+                            </DropdownMenuItem>
+                            {providers.flatMap((provider) =>
+                              provider.models.map((model) => {
+                                const selected =
+                                  titleModelBinding?.providerId ===
+                                    provider.id &&
+                                  titleModelBinding.model === model
+                                return (
+                                  <DropdownMenuItem
+                                    key={`${provider.id}:${model}`}
+                                    onClick={() =>
+                                      void setTitleModelBinding(client, {
+                                        providerId: provider.id,
+                                        model,
+                                      })
+                                    }
+                                  >
+                                    {selected && <Check className="size-4" />}
+                                    {provider.name} · {model}
+                                  </DropdownMenuItem>
+                                )
+                              }),
                             )}
-                            跟随会话
-                          </DropdownMenuItem>
-                          {providers.flatMap((provider) =>
-                            provider.models.map((model) => {
-                              const selected =
-                                titleModelBinding?.providerId === provider.id &&
-                                titleModelBinding.model === model
-                              return (
-                                <DropdownMenuItem
-                                  key={`${provider.id}:${model}`}
-                                  onClick={() =>
-                                    void setTitleModelBinding(client, {
-                                      providerId: provider.id,
-                                      model,
-                                    })
-                                  }
-                                >
-                                  {selected && <Check className="size-4" />}
-                                  {provider.name} · {model}
-                                </DropdownMenuItem>
-                              )
-                            }),
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </Field>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </Field>
+                    </FieldSet>
                   </FieldGroup>
                 </section>
               </div>
