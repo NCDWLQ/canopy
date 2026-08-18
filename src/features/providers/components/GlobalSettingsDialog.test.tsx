@@ -56,6 +56,10 @@ describe("GlobalSettingsDialog", () => {
         disconnect() {}
       },
     )
+    Element.prototype.hasPointerCapture = () => false
+    Element.prototype.setPointerCapture = () => {}
+    Element.prototype.releasePointerCapture = () => {}
+    Element.prototype.scrollIntoView = () => {}
     useProviderStore.setState({
       phase: "ready",
       providers: [provider],
@@ -101,21 +105,24 @@ describe("GlobalSettingsDialog", () => {
     await user.click(screen.getByRole("button", { name: "会话" }))
 
     const toggle = screen.getByRole("switch", {
-      name: "自动生成会话标题",
+      name: "自动生成标题",
     })
     expect(toggle).toHaveAttribute("aria-checked", "true")
+    expect(
+      screen.getByText("首轮对话后，使用下方配置的模型自动生成标题"),
+    ).toBeVisible()
     expect(toggle.closest("fieldset")).toContainElement(
       screen.getByText("标题模型"),
     )
     expect(
       screen.getByText("标题模型").closest("[data-slot=field]"),
     ).toHaveClass("pl-4")
-    await user.click(screen.getByRole("button", { name: "跟随会话" }))
-    await user.click(
-      screen.getByRole("menuitem", {
-        name: `${provider.name} · ${provider.model}`,
-      }),
-    )
+    await user.click(screen.getByRole("combobox", { name: "标题模型" }))
+    expect(
+      await screen.findByRole("option", { name: "跟随会话" }),
+    ).toBeVisible()
+    expect(screen.getByRole("group", { name: provider.name })).toBeVisible()
+    await user.click(await screen.findByRole("option", { name: provider.model }))
     await waitFor(() =>
       expect(bridge.setTitleModelBinding).toHaveBeenCalledWith({
         providerId: provider.id,
@@ -124,19 +131,14 @@ describe("GlobalSettingsDialog", () => {
     )
     await waitFor(() =>
       expect(
-        screen.getByRole("button", {
-          name: `${provider.name} · ${provider.model}`,
-        }),
-      ).toBeEnabled(),
+        screen.getByRole("combobox", { name: "标题模型" }),
+      ).toHaveTextContent(provider.model),
     )
+    expect(screen.getByRole("combobox", { name: "标题模型" })).toBeEnabled()
 
     useProviderStore.setState({ autoGenerateTitle: false })
     await waitFor(() =>
-      expect(
-        screen.getByRole("button", {
-          name: `${provider.name} · ${provider.model}`,
-        }),
-      ).toBeDisabled(),
+      expect(screen.getByRole("combobox", { name: "标题模型" })).toBeDisabled(),
     )
   })
 

@@ -16,7 +16,12 @@ import {
 
 import { resolveApiKeyAction } from "./apiKeyAction"
 import { useProviderStore } from "../store"
-import type { ModelSummaryView, ProviderProtocol, ProviderView } from "../types"
+import type {
+  ModelSummaryView,
+  ProviderProtocol,
+  ProviderView,
+  TitleModelBinding,
+} from "../types"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,6 +53,7 @@ import {
 } from "@/components/ui/dialog"
 import {
   Field,
+  FieldContent,
   FieldDescription,
   FieldGroup,
   FieldLabel,
@@ -62,6 +68,16 @@ import {
 } from "@/components/ui/input-group"
 import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -94,6 +110,22 @@ type ProviderDraft = {
 
 type SettingsView = "list" | "edit"
 type SettingsCategory = "providers" | "conversation"
+
+const FOLLOW_SESSION_TITLE_MODEL = "follow"
+
+function titleModelBindingValue(binding: TitleModelBinding): string {
+  return `${binding.providerId}\u001f${binding.model}`
+}
+
+function parseTitleModelValue(value: string): TitleModelBinding | null {
+  if (value === FOLLOW_SESSION_TITLE_MODEL) return null
+  const separator = value.indexOf("\u001f")
+  if (separator === -1) return null
+  return {
+    providerId: value.slice(0, separator),
+    model: value.slice(separator + 1),
+  }
+}
 
 const emptyDraft = (): ProviderDraft => ({
   name: "",
@@ -320,17 +352,10 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
       : draft.name.trim() !== ""
         ? draft.name
         : (providers.find((item) => item.id === draft.id)?.name ?? "编辑")
-  const titleModelLabel =
+  const titleModelValue =
     titleModelBinding === null
-      ? "跟随会话"
-      : (() => {
-          const provider = providers.find(
-            (item) => item.id === titleModelBinding.providerId,
-          )
-          return provider === undefined
-            ? "跟随会话"
-            : `${provider.name} · ${titleModelBinding.model}`
-        })()
+      ? FOLLOW_SESSION_TITLE_MODEL
+      : titleModelBindingValue(titleModelBinding)
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -430,9 +455,14 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                         orientation="horizontal"
                         data-disabled={mutationDisabled}
                       >
-                        <FieldLabel htmlFor="auto-generate-title">
-                          自动生成会话标题
-                        </FieldLabel>
+                        <FieldContent>
+                          <FieldLabel htmlFor="auto-generate-title">
+                            自动生成标题
+                          </FieldLabel>
+                          <FieldDescription>
+                            首轮对话后，使用下方配置的模型自动生成标题
+                          </FieldDescription>
+                        </FieldContent>
                         <Switch
                           id="auto-generate-title"
                           className="ml-auto"
@@ -447,57 +477,49 @@ export function GlobalSettingsDialog(props: GlobalSettingsDialogProps) {
                         className="pl-4"
                         data-disabled={mutationDisabled || !autoGenerateTitle}
                       >
-                        <FieldLabel>标题模型</FieldLabel>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              className="w-full justify-between"
-                              disabled={mutationDisabled || !autoGenerateTitle}
-                            >
-                              {titleModelLabel}
-                              <ChevronDown className="size-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent
-                            align="start"
-                            className="w-[var(--radix-dropdown-menu-trigger-width)]"
-                          >
-                            <DropdownMenuItem
-                              onClick={() =>
-                                void setTitleModelBinding(client, null)
-                              }
-                            >
-                              {titleModelBinding === null && (
-                                <Check className="size-4" />
-                              )}
-                              跟随会话
-                            </DropdownMenuItem>
-                            {providers.flatMap((provider) =>
-                              provider.models.map((model) => {
-                                const selected =
-                                  titleModelBinding?.providerId ===
-                                    provider.id &&
-                                  titleModelBinding.model === model
-                                return (
-                                  <DropdownMenuItem
-                                    key={`${provider.id}:${model}`}
-                                    onClick={() =>
-                                      void setTitleModelBinding(client, {
+                        <FieldLabel htmlFor="title-model">标题模型</FieldLabel>
+                        <Select
+                          value={titleModelValue}
+                          disabled={mutationDisabled || !autoGenerateTitle}
+                          onValueChange={(value) =>
+                            void setTitleModelBinding(
+                              client,
+                              parseTitleModelValue(value),
+                            )
+                          }
+                        >
+                          <SelectTrigger id="title-model" className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent position="popper" align="start">
+                            <SelectGroup>
+                              <SelectItem value={FOLLOW_SESSION_TITLE_MODEL}>
+                                跟随会话
+                              </SelectItem>
+                            </SelectGroup>
+                            {providers.some(
+                              (provider) => provider.models.length > 0,
+                            ) && <SelectSeparator />}
+                            {providers.map((provider) =>
+                              provider.models.length === 0 ? null : (
+                                <SelectGroup key={provider.id}>
+                                  <SelectLabel>{provider.name}</SelectLabel>
+                                  {provider.models.map((model) => (
+                                    <SelectItem
+                                      key={`${provider.id}:${model}`}
+                                      value={titleModelBindingValue({
                                         providerId: provider.id,
                                         model,
-                                      })
-                                    }
-                                  >
-                                    {selected && <Check className="size-4" />}
-                                    {provider.name} · {model}
-                                  </DropdownMenuItem>
-                                )
-                              }),
+                                      })}
+                                    >
+                                      {model}
+                                    </SelectItem>
+                                  ))}
+                                </SelectGroup>
+                              ),
                             )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                          </SelectContent>
+                        </Select>
                       </Field>
                     </FieldSet>
                   </FieldGroup>
