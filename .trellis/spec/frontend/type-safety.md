@@ -401,6 +401,87 @@ listen(CONVERSATION_TITLE_UPDATED_EVENT, (event) => {
 })
 ```
 
+## Scenario: Diagnostics Settings Commands
+
+### 1. Scope / Trigger
+
+Use this contract when changing logging-settings IPC, `src/lib/tauri/diagnostics-*`,
+or `DiagnosticsPanel`. Owning files: `diagnostics-schemas.ts`,
+`diagnostics-client.ts`, and `src/features/settings/components/DiagnosticsPanel.tsx`.
+
+### 2. Signatures
+
+```ts
+getLoggingSettings(): Promise<LoggingSettingsView>
+saveLoggingSettings(maxFileMib: number, maxFiles: number): Promise<LoggingSettingsView>
+openLogDirectory(): Promise<boolean>
+```
+
+Commands: `get_logging_settings`, `save_logging_settings`, `open_log_directory`.
+
+### 3. Contracts
+
+- Every invoke sends `{ request: <strict snake_case DTO> }`. Open/get use `{}`.
+- Save accepts positive integers `max_file_mib` (1–20) and `max_files` (1–10)
+  whose product is at most 100. The backend re-validates the same hard limits.
+- Results include `configured`, `active`, `limits`, `config_status`
+  (`default` / `custom` / `recovered` / `invalid_fallback`), `sink_status`
+  (`persistent` / `console_fallback` / `disabled`), and `restart_required`.
+  No local path crosses IPC. Open success is `{ opened: true }`.
+- A config-dir resolver failure is a retryable command error. Missing slots
+  still decode as defaults. Get/save must not invent a confirmed policy when
+  the config directory cannot be resolved.
+- `ConversationWorkspace` / `SettingsDialog` accept an optional
+  `DiagnosticsClient` with an internal default. Do not extend `ProviderClient`.
+
+### 4. Validation & Error Matrix
+
+| Condition | Frontend result |
+|---|---|
+| Non-integer, out-of-range, or over-budget save | local `invalid_input`; no invoke |
+| Malformed success/rejection | safe non-retryable `internal` |
+| Valid rejected `CommandError` | preserve code/retryability/safe message |
+| Config-dir resolution failure | normalized retryable error; `settings` stays `null`; Save/Restore stay disabled; Open Log Directory remains available |
+| Open/save failure after a confirmed load | normalized error; keep last confirmed settings |
+| Other load failure | normalized error; do not treat placeholder 5/5 inputs as a confirmed policy |
+
+### 5. Good / Base / Bad Cases
+
+- **Good**: get returns configured vs active policy, limits literals, sink
+  status, and `restart_required`; save of 8/8 persists and still reports the
+  previous active policy until restart.
+- **Base**: missing slots decode as 5 MiB / 5 files with `config_status:
+  default`; open returns `{ opened: true }` with no path field.
+- **Bad**: treating a config-dir failure as defaults, returning `app_log_dir`
+  over IPC, or enabling Save before `settings` is non-null.
+
+### 6. Tests Required
+
+- Assert the three command names, empty get/open wrappers, snake-case save
+  fields, integer bounds, combined-budget rejection, and exact settings DTO
+  keys through an injected transport.
+- Reject extra/missing fields, non-integers, `0`, over-budget products, and
+  unknown `config_status` / `sink_status` values.
+- Panel tests: Save/Restore disabled until confirmed load; load failure keeps
+  Open enabled; per-operation pending/error isolation and retry.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const settings = await invoke<LoggingSettingsView>("get_logging_settings")
+```
+
+#### Correct
+
+```ts
+const client = createDiagnosticsClient(injectedTransport)
+const settings = await client.getLoggingSettings()
+```
+
+The bridge decodes the unknown payload and never exposes a filesystem path.
+
 ## Forbidden Patterns
 
 - `any`, `@ts-ignore`, unchecked double assertions, or broad casts from

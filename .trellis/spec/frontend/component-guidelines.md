@@ -100,7 +100,7 @@ src/
     actions/                        # branch/edit/select orchestration
     store/                          # Zustand normalized tree and active selection
     types/                          # frontend projections and component contracts
-  features/settings/components/     # SettingsDialog shell and global preference panels
+  features/settings/components/     # SettingsDialog, ConversationSettingsPanel, DiagnosticsPanel
   features/providers/components/   # provider list/editor panels and model selection
   lib/tauri/                        # typed invoke bridge and error normalization
 ```
@@ -455,9 +455,16 @@ actions.
 action in the expanded conversation sidebar. Import `SettingsDialog` from
 `features/settings/components`; the shell owns dialog chrome, category
 navigation, and open/reset behavior. Compose provider editing through
-`ProviderSettingsPanel` (`features/providers/components`) and global
-conversation preferences through `ConversationSettingsPanel`
-(`features/settings/components`). UI dependency direction is
+`ProviderSettingsPanel` (`features/providers/components`), global
+conversation preferences through `ConversationSettingsPanel`, and logging
+settings through `DiagnosticsPanel` (`features/settings/components`). The
+诊断 category stays enabled for archived conversations. Numeric retention
+controls use shadcn `Field`/`Input` with `data-invalid`/`aria-invalid` and
+`FieldError`; combined budget over 100 MiB is blocked locally and again in
+Rust. Save and Restore stay disabled until a confirmed policy is loaded
+(`settings !== null`); a load failure must not leave those actions enabled on
+the placeholder 5/5 values. Open Log Directory stays available independently
+and pending/error state is isolated per load/save/open operation. UI dependency direction is
 `conversations → settings → providers`; `features/settings` must not import
 from `features/conversations`, and cross-feature error/JSON helper types must
 live in `lib/tauri` rather than a feature-owned `types/` module so providers

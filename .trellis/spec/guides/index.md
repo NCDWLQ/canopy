@@ -36,6 +36,8 @@ These guides help you **ask the right questions before coding**.
 - [ ] You're not sure where to put some logic
 - [ ] You are adding an event kind, JSONL record, RPC payload, config field,
       `app_settings` key, or a global Tauri `emit` (non-Channel)
+- [ ] You are adding a log directory opener, logging-policy IPC field, or
+      process-global logger registration
 - [ ] UI / command code starts casting raw payload fields directly
 - [ ] A backend side effect looks like generation but must not use
       `GenerationRuntime` (auto-title is the current example)

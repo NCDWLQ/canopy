@@ -40,7 +40,7 @@ src/
 │   │   ├── store/                    # Zustand state, actions, selectors
 │   │   └── types/                    # frontend domain projections
 │   ├── settings/
-│   │   └── components/               # SettingsDialog shell and global preference panels
+│   │   └── components/               # SettingsDialog, preference panels, DiagnosticsPanel
 │   └── providers/
 │       └── components/               # provider list/editor panels and model selection UI
 ├── hooks/                            # only hooks shared across features
@@ -62,7 +62,7 @@ only cross-feature IPC contract fixtures may live under a shared test path.
   state, and feature-local tests.
 - `lib/tauri` is the only raw Tauri invoke boundary. It validates unknown IPC
   payloads before returning frontend types, and owns shared IPC-safe types
-  such as `UiError`/`JsonValue` that multiple features consume.
+  such as `UiError`/`JsonValue` plus the diagnostics client/schemas.
 - `app` composes features and providers; it must not become a second location
   for feature business logic.
 - `hooks` is reserved for truly cross-feature hooks. Feature-specific hooks

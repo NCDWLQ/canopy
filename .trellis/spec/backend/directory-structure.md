@@ -16,6 +16,11 @@ src-tauri/
 │   └── 0003_conversation_archive.sql
 ├── src/
 │   ├── error.rs               # stable public CommandError mapping
+│   ├── identifiers.rs         # canonical UUIDv4 predicate
+│   ├── diagnostics/
+│   │   ├── commands.rs        # logging settings and open-directory IPC
+│   │   ├── config.rs          # LoggingPolicy, dual-slot store, hard limits
+│   │   └── logging.rs         # typed events, target filter, split/attach bootstrap
 │   ├── conversations/
 │   │   ├── commands.rs        # typed DTO and Tauri boundary
 │   │   ├── domain.rs         # durable records and ValidatedPath
@@ -46,6 +51,12 @@ domain. The conversation implementation establishes this pattern:
 src-tauri/src/
 ├── lib.rs
 ├── error.rs                  # application errors and CommandError mapping
+├── identifiers.rs            # shared canonical UUIDv4 check
+├── diagnostics/
+│   ├── mod.rs
+│   ├── logging.rs            # typed events, target filter, split/attach bootstrap
+│   ├── config.rs             # LoggingPolicy, app_config_dir dual-slot persistence
+│   └── commands.rs           # get/save settings and open_log_directory
 ├── conversations/
 │   ├── mod.rs
 │   ├── domain.rs             # Node, Conversation, validated path types

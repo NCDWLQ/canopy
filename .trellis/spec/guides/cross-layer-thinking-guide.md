@@ -147,6 +147,11 @@ After implementation:
       plus a typed decoder — not `GenerationRuntime` and not a Channel
 - [ ] Global event payloads are decoded in `src/lib/tauri` before the store;
       one workspace/app listener, not per-row `listen`
+- [ ] Logging/diagnostics IPC never returns local paths; a config-dir
+      resolution failure is an error, not invented defaults
+- [ ] Process-global loggers are attached with `Builder::split` +
+      `attach_logger` from a first-registered plugin, never via
+      `handle().plugin` inside setup
 
 ---
 
