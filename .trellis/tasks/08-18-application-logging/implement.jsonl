@@ -1,0 +1,11 @@
+{"file":".trellis/spec/backend/index.md","reason":"Backend checklist and authoritative Rust/Tauri guide routing."}
+{"file":".trellis/spec/backend/logging-guidelines.md","reason":"Existing Rust logging ownership, levels, redaction, and no-duplicate-event conventions."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Stable CommandError mapping and separation between protected diagnostics and frontend errors."}
+{"file":".trellis/spec/backend/directory-structure.md","reason":"Rust/Tauri module ownership and thin lib.rs/main.rs conventions."}
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend checklist and authoritative React/IPC guide routing."}
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Feature settings ownership and single typed Tauri bridge boundary."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Strict unknown-to-typed IPC decoding requirements for the diagnostics client."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Existing settings dialog composition and accessible shadcn UI conventions."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"End-to-end Rust/IPC/settings data-flow and permission-boundary checklist."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Reuse the existing canonical UUID validator and keep logging policy/constants single-sourced."}
+{"file":".trellis/tasks/08-18-application-logging/research/tauri-log-and-opener.md","reason":"Verified plugin versions, rotation semantics, startup ordering, opener API, permissions, and UI component baseline."}

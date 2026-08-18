@@ -1,0 +1,12 @@
+{"file":".trellis/spec/backend/index.md","reason":"Check backend work against the complete package checklist."}
+{"file":".trellis/spec/backend/logging-guidelines.md","reason":"Audit event levels, duplicate logging, release sink behavior, and sensitive-data redaction."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Ensure source errors and unsafe details do not cross logging or IPC boundaries."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Apply backend test, lint, and forbidden-pattern checks."}
+{"file":".trellis/spec/frontend/index.md","reason":"Check frontend work against the complete package checklist."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Verify strict diagnostics request/result decoding and normalized failures."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Verify settings navigation, pending state, failure feedback, and accessibility behavior."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Apply frontend tests, accessibility queries, and console/sensitive-data audit."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Trace log production, storage, directory opening, IPC response, UI state, and capability restrictions end to end."}
+{"file":".trellis/tasks/08-18-application-logging/research/tauri-log-and-opener.md","reason":"Verify implementation matches official plugin behavior and the researched permission/rotation constraints."}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Verify the new diagnostics module placement and thin lib.rs conventions."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Check that UUID validation and error mapping reuse existing helpers instead of duplicating them."}
