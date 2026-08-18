@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Verify settings shell and panel ownership after extraction"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Verify features/settings appears in approved layout"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Lint/type/test expectations for check phase"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Verify settings does not introduce a feature dependency cycle"}
+{"file": ".trellis/tasks/08-18-extract-settings-feature/prd.md", "reason": "Acceptance criteria for rename and feature extraction"}
+{"file": ".trellis/tasks/08-18-extract-settings-feature/design.md", "reason": "Verify component split and data-flow boundaries"}

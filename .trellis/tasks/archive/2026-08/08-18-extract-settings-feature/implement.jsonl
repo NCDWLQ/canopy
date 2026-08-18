@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Settings dialog ownership and provider/conversation UI boundaries to update after extraction"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Feature ownership rules; add features/settings and adjust providers scope"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend validation bar for refactor"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Keep feature dependencies one-way while extracting the settings composition boundary"}
+{"file": ".trellis/tasks/archive/2026-08/08-17-settings-dual-column-dialog/design.md", "reason": "Existing settings shell navigation, breadcrumb, and list/detail contracts"}
+{"file": ".trellis/tasks/archive/2026-08/08-17-auto-title/implement.md", "reason": "Conversation category settings behavior and test expectations"}

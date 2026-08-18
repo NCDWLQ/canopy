@@ -638,3 +638,24 @@ Rebuilt global Settings into a dual-column list-detail dialog (category nav, bre
 ### Next Steps
 
 - 确认后推送 feat/auto-title 并更新 PR #8
+
+
+## Session 29: Extract settings feature and rename SettingsDialog
+
+**Date**: 2026-08-18
+**Task**: Extract settings feature and rename SettingsDialog
+**Branch**: `feat/extract-settings-feature`
+
+### Summary
+
+Moved GlobalSettingsDialog out of features/providers into a new features/settings module. SettingsDialog now owns dialog chrome and category navigation; ProviderSettingsPanel/List/Editor own provider-specific state; ConversationSettingsPanel lives under settings with no conversations dependency. Migrated all 16 existing behavior tests plus added regressions for store errors, controlled/uncontrolled open, reopen reset, secret cleanup, and stale API-key reveal guard. 191/191 tests pass, pnpm check green. Updated frontend spec docs for new ownership boundary.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9be55e9` | (see git log) |
+
+### Status
+
+[OK] **Completed**
