@@ -1,8 +1,8 @@
-import { render, screen, waitFor } from "@testing-library/react"
+import { act, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { GlobalSettingsDialog } from "./GlobalSettingsDialog"
+import { ProviderSettingsPanel } from "./ProviderSettingsPanel"
 import { useProviderStore } from "../store"
 import type { ProviderView } from "../types"
 import type { ProviderClient } from "@/lib/tauri"
@@ -36,30 +36,33 @@ function client() {
   }
 }
 
+function setupDom() {
+  vi.stubGlobal(
+    "ResizeObserver",
+    class ResizeObserverStub {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  )
+  Element.prototype.hasPointerCapture = () => false
+  Element.prototype.setPointerCapture = () => {}
+  Element.prototype.releasePointerCapture = () => {}
+  Element.prototype.scrollIntoView = () => {}
+}
+
 async function openProviderEditor(
   user: ReturnType<typeof userEvent.setup>,
   providerName = provider.name,
 ) {
-  await user.click(screen.getByRole("button", { name: "设置" }))
   await user.click(
     screen.getByRole("button", { name: `编辑：${providerName}` }),
   )
 }
 
-describe("GlobalSettingsDialog", () => {
+describe("ProviderSettingsPanel", () => {
   beforeEach(() => {
-    vi.stubGlobal(
-      "ResizeObserver",
-      class ResizeObserverStub {
-        observe() {}
-        unobserve() {}
-        disconnect() {}
-      },
-    )
-    Element.prototype.hasPointerCapture = () => false
-    Element.prototype.setPointerCapture = () => {}
-    Element.prototype.releasePointerCapture = () => {}
-    Element.prototype.scrollIntoView = () => {}
+    setupDom()
     useProviderStore.setState({
       phase: "ready",
       providers: [provider],
@@ -69,81 +72,7 @@ describe("GlobalSettingsDialog", () => {
     })
   })
 
-  it("opens on the provider list with category nav and breadcrumb", async () => {
-    const user = userEvent.setup()
-    render(
-      <GlobalSettingsDialog
-        client={client() as ProviderClient}
-        readOnly={false}
-      />,
-    )
-    await user.click(screen.getByRole("button", { name: "设置" }))
-    expect(screen.getByRole("dialog")).toHaveAccessibleName("设置")
-    expect(screen.getByRole("navigation", { name: "设置分类" })).toBeVisible()
-    expect(
-      screen.getByRole("button", { name: "模型提供商", current: "page" }),
-    ).toBeVisible()
-    expect(screen.getByRole("heading", { name: "全部提供商" })).toBeVisible()
-    expect(screen.getByLabelText("当前全局默认")).toHaveTextContent("默认")
-    expect(screen.getByText("fixture-model")).toBeVisible()
-    expect(screen.queryByLabelText("名称")).not.toBeInTheDocument()
-  })
-
-  it("configures automatic titles in the conversation category", async () => {
-    const user = userEvent.setup()
-    const bridge = client()
-    bridge.setTitleModelBinding.mockImplementation((binding) =>
-      Promise.resolve(binding),
-    )
-    render(
-      <GlobalSettingsDialog
-        client={bridge as ProviderClient}
-        readOnly={false}
-      />,
-    )
-    await user.click(screen.getByRole("button", { name: "设置" }))
-    await user.click(screen.getByRole("button", { name: "会话" }))
-
-    const toggle = screen.getByRole("switch", {
-      name: "自动生成标题",
-    })
-    expect(toggle).toHaveAttribute("aria-checked", "true")
-    expect(
-      screen.getByText("首轮对话后，使用下方配置的模型自动生成标题"),
-    ).toBeVisible()
-    expect(toggle.closest("fieldset")).toContainElement(
-      screen.getByText("标题模型"),
-    )
-    expect(
-      screen.getByText("标题模型").closest("[data-slot=field]"),
-    ).toHaveClass("pl-4")
-    await user.click(screen.getByRole("combobox", { name: "标题模型" }))
-    expect(
-      await screen.findByRole("option", { name: "跟随会话" }),
-    ).toBeVisible()
-    expect(screen.getByRole("group", { name: provider.name })).toBeVisible()
-    await user.click(await screen.findByRole("option", { name: provider.model }))
-    await waitFor(() =>
-      expect(bridge.setTitleModelBinding).toHaveBeenCalledWith({
-        providerId: provider.id,
-        model: provider.model,
-      }),
-    )
-    await waitFor(() =>
-      expect(
-        screen.getByRole("combobox", { name: "标题模型" }),
-      ).toHaveTextContent(provider.model),
-    )
-    expect(screen.getByRole("combobox", { name: "标题模型" })).toBeEnabled()
-
-    useProviderStore.setState({ autoGenerateTitle: false })
-    await waitFor(() =>
-      expect(screen.getByRole("combobox", { name: "标题模型" })).toBeDisabled(),
-    )
-  })
-
-  it("summarizes long model lists on each provider row", async () => {
-    const user = userEvent.setup()
+  it("summarizes long model lists on each provider row", () => {
     useProviderStore.setState({
       phase: "ready",
       providers: [
@@ -155,12 +84,11 @@ describe("GlobalSettingsDialog", () => {
       activeProviderId: provider.id,
     })
     render(
-      <GlobalSettingsDialog
+      <ProviderSettingsPanel
         client={client() as ProviderClient}
         readOnly={false}
       />,
     )
-    await user.click(screen.getByRole("button", { name: "设置" }))
     expect(screen.getByText("alpha, beta 等 2 个")).toBeVisible()
   })
 
@@ -178,7 +106,7 @@ describe("GlobalSettingsDialog", () => {
       }),
     )
     render(
-      <GlobalSettingsDialog
+      <ProviderSettingsPanel
         client={bridge as ProviderClient}
         readOnly={false}
       />,
@@ -202,7 +130,7 @@ describe("GlobalSettingsDialog", () => {
     bridge.revealProviderApiKey.mockResolvedValue("STORED_SECRET_SENTINEL")
     bridge.saveProvider.mockResolvedValue({ ...provider, updatedAt: 11 })
     render(
-      <GlobalSettingsDialog
+      <ProviderSettingsPanel
         client={bridge as ProviderClient}
         readOnly={false}
       />,
@@ -225,9 +153,12 @@ describe("GlobalSettingsDialog", () => {
         }),
       ),
     )
-    // A successful save reselects the provider, which reveals the key again.
     await waitFor(() =>
       expect(bridge.revealProviderApiKey).toHaveBeenCalledTimes(2),
+    )
+    expect(screen.getByLabelText("API 密钥")).toHaveAttribute(
+      "type",
+      "password",
     )
     expect(JSON.stringify(useProviderStore.getState())).not.toContain(
       "STORED_SECRET_SENTINEL",
@@ -240,7 +171,7 @@ describe("GlobalSettingsDialog", () => {
     bridge.revealProviderApiKey.mockResolvedValue("OLD_SECRET_SENTINEL")
     bridge.saveProvider.mockResolvedValue({ ...provider, updatedAt: 11 })
     render(
-      <GlobalSettingsDialog
+      <ProviderSettingsPanel
         client={bridge as ProviderClient}
         readOnly={false}
       />,
@@ -270,7 +201,7 @@ describe("GlobalSettingsDialog", () => {
     bridge.revealProviderApiKey.mockResolvedValueOnce("OLD_SECRET_SENTINEL")
     bridge.saveProvider.mockResolvedValue({ ...provider, updatedAt: 11 })
     render(
-      <GlobalSettingsDialog
+      <ProviderSettingsPanel
         client={bridge as ProviderClient}
         readOnly={false}
       />,
@@ -286,7 +217,6 @@ describe("GlobalSettingsDialog", () => {
       ),
     )
 
-    // Return to list, then re-open; reveal fails so empty field must keep.
     bridge.revealProviderApiKey.mockRejectedValueOnce(new Error("keyring"))
     bridge.saveProvider.mockClear()
     await user.click(screen.getByRole("button", { name: "返回模型提供商列表" }))
@@ -296,13 +226,54 @@ describe("GlobalSettingsDialog", () => {
     await waitFor(() =>
       expect(bridge.revealProviderApiKey).toHaveBeenCalledTimes(3),
     )
-    expect(field).toHaveValue("")
+    expect(screen.getByLabelText("API 密钥")).toHaveValue("")
     await user.click(screen.getByRole("button", { name: "保存模型提供商" }))
     await waitFor(() =>
       expect(bridge.saveProvider).toHaveBeenCalledWith(
         expect.objectContaining({ apiKey: { action: "keep" } }),
       ),
     )
+  })
+
+  it("ignores a late API-key reveal after leaving the editor", async () => {
+    const user = userEvent.setup()
+    const bridge = client()
+    const other: ProviderView = {
+      ...provider,
+      id: "provider-2",
+      name: "Anthropic",
+      hasApiKey: false,
+    }
+    useProviderStore.setState({
+      phase: "ready",
+      providers: [provider, other],
+      activeProviderId: provider.id,
+    })
+    const resolvers: Array<(value: string) => void> = []
+    bridge.revealProviderApiKey.mockImplementation(
+      () =>
+        new Promise<string>((resolve) => {
+          resolvers.push(resolve)
+        }),
+    )
+    render(
+      <ProviderSettingsPanel
+        client={bridge as ProviderClient}
+        readOnly={false}
+      />,
+    )
+    await openProviderEditor(user)
+    await user.click(screen.getByRole("button", { name: "返回模型提供商列表" }))
+    await openProviderEditor(user, other.name)
+    await waitFor(() => expect(resolvers).toHaveLength(2))
+    await act(async () => {
+      resolvers[0]?.("LATE_SECRET_SENTINEL")
+      await Promise.resolve()
+    })
+    expect(JSON.stringify(useProviderStore.getState())).not.toContain(
+      "LATE_SECRET_SENTINEL",
+    )
+    expect(screen.getByLabelText("API 密钥")).toHaveValue("")
   })
 
   it("fetches draft models and adds one to the provider list before saving", async () => {
@@ -315,7 +286,7 @@ describe("GlobalSettingsDialog", () => {
       updatedAt: 11,
     })
     render(
-      <GlobalSettingsDialog
+      <ProviderSettingsPanel
         client={bridge as ProviderClient}
         readOnly={false}
       />,
@@ -349,7 +320,7 @@ describe("GlobalSettingsDialog", () => {
       },
     ])
     render(
-      <GlobalSettingsDialog
+      <ProviderSettingsPanel
         client={bridge as ProviderClient}
         readOnly={false}
       />,
@@ -371,7 +342,7 @@ describe("GlobalSettingsDialog", () => {
   it("keeps the editor viewable but disables mutations for archived conversations", async () => {
     const user = userEvent.setup()
     render(
-      <GlobalSettingsDialog client={client() as ProviderClient} readOnly />,
+      <ProviderSettingsPanel client={client() as ProviderClient} readOnly />,
     )
     await openProviderEditor(user)
     expect(screen.getByText("只读")).toBeVisible()
@@ -381,10 +352,33 @@ describe("GlobalSettingsDialog", () => {
     ).toBeDisabled()
   })
 
+  it("shows provider store errors in the editor", async () => {
+    const user = userEvent.setup()
+    useProviderStore.setState({
+      phase: "error",
+      error: {
+        code: "internal",
+        message: "保存失败，请稍后重试。",
+        retryable: false,
+      },
+      providers: [provider],
+      activeProviderId: provider.id,
+    })
+    render(
+      <ProviderSettingsPanel
+        client={client() as ProviderClient}
+        readOnly={false}
+      />,
+    )
+    await openProviderEditor(user)
+    expect(screen.getByText("操作未完成")).toBeVisible()
+    expect(screen.getByText("保存失败，请稍后重试。")).toBeVisible()
+  })
+
   it("returns to the list via the model-provider breadcrumb", async () => {
     const user = userEvent.setup()
     render(
-      <GlobalSettingsDialog
+      <ProviderSettingsPanel
         client={client() as ProviderClient}
         readOnly={false}
       />,
@@ -399,12 +393,11 @@ describe("GlobalSettingsDialog", () => {
   it("cancels creating a provider and returns to the list", async () => {
     const user = userEvent.setup()
     render(
-      <GlobalSettingsDialog
+      <ProviderSettingsPanel
         client={client() as ProviderClient}
         readOnly={false}
       />,
     )
-    await user.click(screen.getByRole("button", { name: "设置" }))
     await user.click(screen.getByRole("button", { name: "新建" }))
     expect(
       screen.getByRole("heading", { name: "新建模型提供商" }),
@@ -418,7 +411,7 @@ describe("GlobalSettingsDialog", () => {
   it("cancels editing a provider and returns to the list", async () => {
     const user = userEvent.setup()
     render(
-      <GlobalSettingsDialog
+      <ProviderSettingsPanel
         client={client() as ProviderClient}
         readOnly={false}
       />,
@@ -452,12 +445,11 @@ describe("GlobalSettingsDialog", () => {
     })
     bridge.setActiveProvider.mockResolvedValueOnce(other.id)
     render(
-      <GlobalSettingsDialog
+      <ProviderSettingsPanel
         client={bridge as ProviderClient}
         readOnly={false}
       />,
     )
-    await user.click(screen.getByRole("button", { name: "设置" }))
     await user.click(
       screen.getByRole("button", { name: "更多操作：Anthropic" }),
     )
@@ -470,12 +462,11 @@ describe("GlobalSettingsDialog", () => {
   it("disables default-provider actions with accessible reasons and native titles", async () => {
     const user = userEvent.setup()
     render(
-      <GlobalSettingsDialog
+      <ProviderSettingsPanel
         client={client() as ProviderClient}
         readOnly={false}
       />,
     )
-    await user.click(screen.getByRole("button", { name: "设置" }))
     await user.click(
       screen.getByRole("button", { name: `更多操作：${provider.name}` }),
     )
@@ -513,12 +504,11 @@ describe("GlobalSettingsDialog", () => {
     })
     bridge.deleteProvider.mockResolvedValueOnce(true)
     render(
-      <GlobalSettingsDialog
+      <ProviderSettingsPanel
         client={bridge as ProviderClient}
         readOnly={false}
       />,
     )
-    await user.click(screen.getByRole("button", { name: "设置" }))
     await user.click(
       screen.getByRole("button", { name: "更多操作：Anthropic" }),
     )

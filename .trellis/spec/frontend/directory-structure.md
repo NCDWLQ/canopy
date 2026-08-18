@@ -39,8 +39,10 @@ src/
 │   │   ├── components/               # outline, messages, composer
 │   │   ├── store/                    # Zustand state, actions, selectors
 │   │   └── types/                    # frontend domain projections
+│   ├── settings/
+│   │   └── components/               # SettingsDialog shell and global preference panels
 │   └── providers/
-│       └── components/               # settings and model selection UI
+│       └── components/               # provider list/editor panels and model selection UI
 ├── hooks/                            # only hooks shared across features
 ├── lib/
 │   ├── tauri/                        # raw invoke, decoding, error normalization

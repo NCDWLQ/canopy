@@ -100,7 +100,8 @@ src/
     actions/                        # branch/edit/select orchestration
     store/                          # Zustand normalized tree and active selection
     types/                          # frontend projections and component contracts
-  features/providers/components/   # provider settings and model selection
+  features/settings/components/     # SettingsDialog shell and global preference panels
+  features/providers/components/   # provider list/editor panels and model selection
   lib/tauri/                        # typed invoke bridge and error normalization
 ```
 
@@ -451,11 +452,17 @@ configuration the wrong ownership and competes with conversation-scoped
 actions.
 
 **Decision**: Expose workspace-global Settings through one persistent footer
-action in the expanded conversation sidebar. Keep one dialog instance and allow
-the owning workspace to control its `open` / `onOpenChange` state so the
-contextual `配置服务提供商以生成` action can open the same surface. Open a titled
-Radix/shadcn dialog and compose feature-owned settings content inside it; keep
-Provider state, secret handling, and typed client calls in the Provider feature.
+action in the expanded conversation sidebar. Import `SettingsDialog` from
+`features/settings/components`; the shell owns dialog chrome, category
+navigation, and open/reset behavior. Compose provider editing through
+`ProviderSettingsPanel` (`features/providers/components`) and global
+conversation preferences through `ConversationSettingsPanel`
+(`features/settings/components`). Dependency direction is
+`conversations → settings → providers`; `features/settings` must not import
+from `features/conversations`. Keep one dialog instance and allow the owning
+workspace to control its `open` / `onOpenChange` state so the contextual
+`配置服务提供商以生成` action can open the same surface. Provider state, secret
+handling, and typed client calls remain in the Provider feature/store.
 Low-frequency sidebar footer actions use the flat `ghost` treatment with muted
 default text and foreground hover emphasis so they remain subordinate to
 history and tree navigation.

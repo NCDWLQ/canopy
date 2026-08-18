@@ -342,6 +342,19 @@ describe("ConversationWorkspace", () => {
     expect(within(sidebar).getByRole("button", { name: "设置" })).toBeVisible()
   })
 
+  it("opens SettingsDialog from the provider picker manage action", async () => {
+    const user = userEvent.setup()
+    render(<ConversationWorkspace />)
+    await user.click(
+      await screen.findByRole("button", { name: "选择模型与推理强度" }),
+    )
+    await user.click(screen.getByRole("button", { name: "管理服务提供商…" }))
+    expect(screen.getByRole("dialog")).toHaveAccessibleName("设置")
+    expect(screen.getByRole("heading", { name: "全部提供商" })).toBeVisible()
+    await user.click(screen.getByRole("button", { name: "关闭" }))
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+  })
+
   it("renders new conversation button in main header when sidebar is collapsed and triggers conversation creation", async () => {
     const user = userEvent.setup()
     client.listConversations.mockResolvedValueOnce([
@@ -1515,7 +1528,7 @@ describe("ConversationWorkspace", () => {
     expect(useConversationStore.getState().isArchived).toBe(true)
   })
 
-  it("opens GlobalSettingsDialog via contextual '配置服务提供商以生成' and updates to '生成回复' after choosing a global default", async () => {
+  it("opens SettingsDialog via contextual '配置服务提供商以生成' and updates to '生成回复' after choosing a global default", async () => {
     const user = userEvent.setup()
     clearActiveProvider()
     providerClient.listProviders.mockResolvedValue({

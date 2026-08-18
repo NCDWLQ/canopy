@@ -39,7 +39,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { GlobalSettingsDialog } from "@/features/providers/components"
+import { SettingsDialog } from "@/features/settings/components"
 import { ConversationProviderPicker } from "./ConversationProviderPicker"
 import { useProviderStore } from "@/features/providers/store"
 import {
@@ -481,7 +481,7 @@ export function ConversationWorkspace({
           </section>
         </div>
         <footer className="shrink-0 p-2">
-          <GlobalSettingsDialog
+          <SettingsDialog
             client={providerClient}
             readOnly={!isBlankConversation && store.isArchived}
             open={isSettingsOpen}
