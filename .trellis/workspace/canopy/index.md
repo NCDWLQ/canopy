@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 27
-- **Last Active**: 2026-08-17
+- **Total Sessions**: 28
+- **Last Active**: 2026-08-18
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~603 | Active |
+| `journal-1.md` | ~640 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 28 | 2026-08-18 | 会话标题自动生成：spec 收尾 | `4394a82`, `594b7d1`, `c07181e` | `feat/auto-title` |
 | 27 | 2026-08-17 | 会话标题自动生成 | `b1e4d4d` | `feat/auto-title` |
 | 26 | 2026-08-17 | Settings dual-column dialog | `9f6c781` | `main` |
 | 25 | 2026-08-17 | 多 Provider 支持：提交、PR 与验收收尾 | `92d5a99`, `f3f744c`, `5af255b` | `main` |
