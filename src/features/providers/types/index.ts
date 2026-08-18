@@ -17,6 +17,11 @@ export type ProviderView = {
   updatedAt: number
 }
 
+export type TitleModelBinding = {
+  providerId: string
+  model: string
+}
+
 export type ApiKeyInputAction =
   | { action: "keep" }
   | { action: "replace"; value: string }
@@ -35,6 +40,8 @@ export type SaveProviderInput = {
 export type ListProvidersView = {
   providers: readonly ProviderView[]
   activeProviderId: string | null
+  autoGenerateTitle: boolean
+  titleModelBinding: TitleModelBinding | null
 }
 
 export type ModelSummaryView = {

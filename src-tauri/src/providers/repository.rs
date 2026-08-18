@@ -6,6 +6,8 @@ use super::{
 };
 
 pub(crate) const ACTIVE_PROVIDER_SETTING_KEY: &str = "active_provider_id";
+pub(crate) const AUTO_GENERATE_TITLE_SETTING_KEY: &str = "auto_generate_title";
+pub(crate) const TITLE_MODEL_BINDING_SETTING_KEY: &str = "title_model_binding";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CredentialOperationKind {
@@ -207,6 +209,17 @@ impl ProviderRepository {
         sqlx::query("DELETE FROM app_settings WHERE key = ?1 AND value = ?2")
             .bind(key)
             .bind(value)
+            .execute(connection)
+            .await?;
+        Ok(())
+    }
+
+    pub(crate) async fn delete_setting(
+        connection: &mut SqliteConnection,
+        key: &str,
+    ) -> Result<(), ProviderError> {
+        sqlx::query("DELETE FROM app_settings WHERE key = ?1")
+            .bind(key)
             .execute(connection)
             .await?;
         Ok(())

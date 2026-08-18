@@ -16,11 +16,11 @@ Canopy foundation and first-week architecture.
 | Guide | Description | Status |
 |-------|-------------|--------|
 | [Directory Structure](./directory-structure.md) | Feature-oriented modules and ownership | Initial |
-| [Component Guidelines](./component-guidelines.md) | Component patterns, props, composition | Initial |
+| [Component Guidelines](./component-guidelines.md) | Component patterns, shadcn/ReUI settings controls, composition | Current |
 | [Hook Guidelines](./hook-guidelines.md) | Custom hooks, Zustand selectors, and effects | Initial |
-| [State Management](./state-management.md) | SQLite durability and normalized Zustand state | Initial |
+| [State Management](./state-management.md) | SQLite durability and normalized Zustand state | Current |
 | [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | Initial |
-| [Type Safety](./type-safety.md) | Strict TypeScript and IPC runtime validation | Initial |
+| [Type Safety](./type-safety.md) | Strict TypeScript and IPC runtime validation | Current |
 
 ---
 

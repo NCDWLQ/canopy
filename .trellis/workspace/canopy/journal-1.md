@@ -580,3 +580,61 @@ Rebuilt global Settings into a dual-column list-detail dialog (category nav, bre
 ### Status
 
 [OK] **Completed**
+
+
+## Session 27: 会话标题自动生成
+
+**Date**: 2026-08-17
+**Task**: 会话标题自动生成
+**Branch**: `feat/auto-title`
+
+### Summary
+
+实现首轮回复后自动生成会话标题：默认开启开关、可选标题模型、独立 title_prompt（英文+转义防注入）、成对引号清洗、全局 title-updated 事件与设置「会话」页；落地于 feat/auto-title。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b1e4d4d` | (see git log) |
+
+### Status
+
+[OK] **Completed**
+
+
+## Session 28: 会话标题自动生成：spec 收尾
+
+**Date**: 2026-08-18
+**Task**: 会话标题自动生成：spec 收尾
+**Branch**: `feat/auto-title`
+
+### Summary
+
+自动标题任务收尾：写入 GenerationRuntime 外的标题路径、全局 title-updated 解码，以及 Switch/Select/无句号 helptext 约定；设置 UI 已用官方 Switch 与分组 Select。任务此前已归档。
+
+### Main Changes
+
+- Spec：auto-title 不走 GenerationRuntime；conversation://title-updated 先 Zod 再 applyTitleUpdate
+- Spec：app_settings auto_generate_title / title_model_binding；prompt 转义；成对引号清洗
+- Spec：ReUI 注册表、官方 Switch、分组 Select、FieldDescription 无句号
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4394a82` | (see git log) |
+| `594b7d1` | (see git log) |
+| `c07181e` | (see git log) |
+
+### Testing
+
+- [OK] 未重跑产品测试；本轮仅 spec
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 确认后推送 feat/auto-title 并更新 PR #8

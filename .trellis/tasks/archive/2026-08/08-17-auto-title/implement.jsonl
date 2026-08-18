@@ -1,0 +1,8 @@
+{"file": ".trellis/spec/backend/provider-guidelines.md", "reason": "标题生成复用 provider 协议客户端与凭证存储，须遵守生成提交与脱敏契约"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "新增 app_settings 键、UPDATE title 与节点计数查询，须符合 repository/migration 约定"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "标题链路全静默回退，错误类型与 redaction 需符合跨层契约"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "失败仅 log，需遵守诊断事件级别与脱敏规范"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "store 新增事件监听与 summary upsert，须符合 SQLite 权威 + 规范化 Zustand 模式"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "新 IPC 命令与 Tauri 事件 payload 需运行时校验"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "事件监听注册/清理须遵守 hook 与 effect 约定"}
+{"file": ".trellis/tasks/08-17-auto-title/design.md", "reason": "任务自身技术设计：架构、契约、取舍"}

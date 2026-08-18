@@ -8,6 +8,7 @@ import type {
   ModelSummaryView,
   ProviderView,
   SaveProviderInput,
+  TitleModelBinding,
 } from "@/features/providers/types"
 
 import {
@@ -37,6 +38,10 @@ import {
   saveProviderRequestSchema,
   setActiveProviderRequestSchema,
   setActiveProviderResultSchema,
+  setAutoGenerateTitleRequestSchema,
+  setAutoGenerateTitleResultSchema,
+  setTitleModelBindingRequestSchema,
+  setTitleModelBindingResultSchema,
   type GenerationEventDto,
   type GenerationTerminalDto,
   type ListProvidersResultDto,
@@ -49,6 +54,8 @@ export const PROVIDER_COMMANDS = {
   saveProvider: "save_provider",
   deleteProvider: "delete_provider",
   setActiveProvider: "set_active_provider",
+  setAutoGenerateTitle: "set_auto_generate_title",
+  setTitleModelBinding: "set_title_model_binding",
   revealProviderApiKey: "reveal_provider_api_key",
   listProviderModels: "list_provider_models",
   generateFromActivePath: "generate_from_active_path",
@@ -144,6 +151,44 @@ export function createProviderClient(
         { provider_id: providerId },
         setActiveProviderResultSchema,
         (value) => value.active_provider_id,
+      )
+    },
+
+    async setAutoGenerateTitle(enabled: boolean): Promise<boolean> {
+      return providerCall(
+        transport,
+        PROVIDER_COMMANDS.setAutoGenerateTitle,
+        setAutoGenerateTitleRequestSchema,
+        { enabled },
+        setAutoGenerateTitleResultSchema,
+        (value) => value.enabled,
+      )
+    },
+
+    async setTitleModelBinding(
+      binding: TitleModelBinding | null,
+    ): Promise<TitleModelBinding | null> {
+      return providerCall(
+        transport,
+        PROVIDER_COMMANDS.setTitleModelBinding,
+        setTitleModelBindingRequestSchema,
+        {
+          binding:
+            binding === null
+              ? null
+              : {
+                  provider_id: binding.providerId,
+                  model: binding.model,
+                },
+        },
+        setTitleModelBindingResultSchema,
+        (value) =>
+          value.binding === null
+            ? null
+            : {
+                providerId: value.binding.provider_id,
+                model: value.binding.model,
+              },
       )
     },
 
@@ -418,6 +463,14 @@ function mapListProviders(dto: ListProvidersResultDto): ListProvidersView {
   return {
     providers: dto.providers.map(mapProvider),
     activeProviderId: dto.active_provider_id ?? null,
+    autoGenerateTitle: dto.auto_generate_title,
+    titleModelBinding:
+      dto.title_model_binding === null
+        ? null
+        : {
+            providerId: dto.title_model_binding.provider_id,
+            model: dto.title_model_binding.model,
+          },
   }
 }
 

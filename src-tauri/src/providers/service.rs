@@ -7,12 +7,12 @@ use sqlx::SqlitePool;
 use super::{
     domain::{
         validate_model, validate_models, validate_name, ApiKeyAction, Provider, ProviderInput,
-        RedactedProvider,
-        ValidatedEndpoint,
+        RedactedProvider, TitleModelBinding, ValidatedEndpoint,
     },
     repository::{
         CredentialOperation, CredentialOperationKind, ProviderRepository,
-        ACTIVE_PROVIDER_SETTING_KEY,
+        ACTIVE_PROVIDER_SETTING_KEY, AUTO_GENERATE_TITLE_SETTING_KEY,
+        TITLE_MODEL_BINDING_SETTING_KEY,
     },
     CredentialStore, ProviderError,
 };
@@ -67,6 +67,81 @@ impl ProviderService {
                 .collect(),
             active,
         ))
+    }
+
+    pub async fn get_auto_generate_title(&self) -> Result<bool, ProviderError> {
+        let _guard = self.operation_lock.lock().await;
+        let mut transaction = self.pool.begin().await?;
+        let enabled = read_auto_generate_title(&mut transaction).await?;
+        transaction.commit().await?;
+        Ok(enabled)
+    }
+
+    pub async fn set_auto_generate_title(&self, enabled: bool) -> Result<bool, ProviderError> {
+        let _guard = self.operation_lock.lock().await;
+        let mut transaction = self.pool.begin().await?;
+        ProviderRepository::set_setting(
+            &mut transaction,
+            AUTO_GENERATE_TITLE_SETTING_KEY,
+            if enabled { "true" } else { "false" },
+        )
+        .await?;
+        transaction.commit().await?;
+        Ok(enabled)
+    }
+
+    pub async fn get_title_model_binding(
+        &self,
+    ) -> Result<Option<TitleModelBinding>, ProviderError> {
+        let _guard = self.operation_lock.lock().await;
+        let mut transaction = self.pool.begin().await?;
+        let binding = read_title_model_binding(&mut transaction).await?;
+        transaction.commit().await?;
+        Ok(binding)
+    }
+
+    pub async fn set_title_model_binding(
+        &self,
+        binding: Option<TitleModelBinding>,
+    ) -> Result<Option<TitleModelBinding>, ProviderError> {
+        let _guard = self.operation_lock.lock().await;
+        self.reconcile_inner().await?;
+        let mut transaction = self.pool.begin().await?;
+        let stored_binding = match binding.as_ref() {
+            Some(binding) => {
+                let provider =
+                    ProviderRepository::get_by_id(&mut transaction, &binding.provider_id)
+                        .await?
+                        .ok_or(ProviderError::ProfileNotFound)?;
+                let model = validate_model(&binding.model)?;
+                if !provider.models.iter().any(|candidate| candidate == &model) {
+                    return Err(ProviderError::invalid_input("model", "not_in_models"));
+                }
+                let normalized = TitleModelBinding {
+                    provider_id: binding.provider_id.clone(),
+                    model,
+                };
+                let value =
+                    serde_json::to_string(&normalized).map_err(|_| ProviderError::Protocol)?;
+                ProviderRepository::set_setting(
+                    &mut transaction,
+                    TITLE_MODEL_BINDING_SETTING_KEY,
+                    &value,
+                )
+                .await?;
+                Some(normalized)
+            }
+            None => {
+                ProviderRepository::delete_setting(
+                    &mut transaction,
+                    TITLE_MODEL_BINDING_SETTING_KEY,
+                )
+                .await?;
+                None
+            }
+        };
+        transaction.commit().await?;
+        Ok(stored_binding)
     }
 
     /// Saves one provider. `provider_id` addresses the row: an absent row is
@@ -124,6 +199,12 @@ impl ProviderService {
                     updated_at: now_millis,
                 };
                 ProviderRepository::upsert_provider(&mut transaction, &provider).await?;
+                clear_invalid_title_binding_for_provider(
+                    &mut transaction,
+                    provider_id,
+                    &provider.models,
+                )
+                .await?;
                 transaction.commit().await?;
             }
             ApiKeyAction::Replace(secret) => {
@@ -148,6 +229,12 @@ impl ProviderService {
                     updated_at: now_millis,
                 };
                 ProviderRepository::upsert_provider(&mut transaction, &staged).await?;
+                clear_invalid_title_binding_for_provider(
+                    &mut transaction,
+                    provider_id,
+                    &staged.models,
+                )
+                .await?;
                 let operation = CredentialOperation {
                     id: operation_id,
                     provider_id: provider_id.to_owned(),
@@ -183,6 +270,12 @@ impl ProviderService {
                         updated_at: now_millis,
                     };
                     ProviderRepository::upsert_provider(&mut transaction, &provider).await?;
+                    clear_invalid_title_binding_for_provider(
+                        &mut transaction,
+                        provider_id,
+                        &provider.models,
+                    )
+                    .await?;
                     transaction.commit().await?;
                 } else {
                     let staged = Provider {
@@ -199,6 +292,12 @@ impl ProviderService {
                         updated_at: now_millis,
                     };
                     ProviderRepository::upsert_provider(&mut transaction, &staged).await?;
+                    clear_invalid_title_binding_for_provider(
+                        &mut transaction,
+                        provider_id,
+                        &staged.models,
+                    )
+                    .await?;
                     let operation = CredentialOperation {
                         id: operation_id,
                         provider_id: provider_id.to_owned(),
@@ -246,6 +345,7 @@ impl ProviderService {
                 provider_id,
             )
             .await?;
+            clear_title_binding_for_provider(&mut transaction, provider_id).await?;
             transaction.commit().await?;
             return Ok(deleted);
         }
@@ -427,6 +527,7 @@ impl ProviderService {
             &operation.provider_id,
         )
         .await?;
+        clear_title_binding_for_provider(&mut transaction, &operation.provider_id).await?;
         transaction.commit().await?;
         Ok(())
     }
@@ -484,4 +585,56 @@ fn redact_provider(provider: Provider, has_api_key: bool) -> RedactedProvider {
         created_at: provider.created_at,
         updated_at: provider.updated_at,
     }
+}
+
+async fn read_auto_generate_title(
+    connection: &mut sqlx::SqliteConnection,
+) -> Result<bool, ProviderError> {
+    match ProviderRepository::get_setting(connection, AUTO_GENERATE_TITLE_SETTING_KEY)
+        .await?
+        .as_deref()
+    {
+        None | Some("true") => Ok(true),
+        Some("false") => Ok(false),
+        Some(_) => Err(ProviderError::Protocol),
+    }
+}
+
+async fn read_title_model_binding(
+    connection: &mut sqlx::SqliteConnection,
+) -> Result<Option<TitleModelBinding>, ProviderError> {
+    ProviderRepository::get_setting(connection, TITLE_MODEL_BINDING_SETTING_KEY)
+        .await?
+        .map(|value| serde_json::from_str(&value).map_err(|_| ProviderError::Protocol))
+        .transpose()
+}
+
+async fn clear_title_binding_for_provider(
+    connection: &mut sqlx::SqliteConnection,
+    provider_id: &str,
+) -> Result<(), ProviderError> {
+    if read_title_model_binding(connection)
+        .await?
+        .is_some_and(|binding| binding.provider_id == provider_id)
+    {
+        ProviderRepository::delete_setting(connection, TITLE_MODEL_BINDING_SETTING_KEY).await?;
+    }
+    Ok(())
+}
+
+async fn clear_invalid_title_binding_for_provider(
+    connection: &mut sqlx::SqliteConnection,
+    provider_id: &str,
+    models: &[String],
+) -> Result<(), ProviderError> {
+    if read_title_model_binding(connection)
+        .await?
+        .is_some_and(|binding| {
+            binding.provider_id == provider_id
+                && !models.iter().any(|model| model == &binding.model)
+        })
+    {
+        ProviderRepository::delete_setting(connection, TITLE_MODEL_BINDING_SETTING_KEY).await?;
+    }
+    Ok(())
 }

@@ -192,10 +192,14 @@ function createMockProviderClient() {
     listProviders: vi.fn<ProviderClient["listProviders"]>().mockResolvedValue({
       providers: [provider],
       activeProviderId: provider.id,
+      autoGenerateTitle: true,
+      titleModelBinding: null,
     }),
     saveProvider: vi.fn<ProviderClient["saveProvider"]>(),
     deleteProvider: vi.fn<ProviderClient["deleteProvider"]>(),
     setActiveProvider: vi.fn<ProviderClient["setActiveProvider"]>(),
+    setAutoGenerateTitle: vi.fn<ProviderClient["setAutoGenerateTitle"]>(),
+    setTitleModelBinding: vi.fn<ProviderClient["setTitleModelBinding"]>(),
     revealProviderApiKey: vi
       .fn<ProviderClient["revealProviderApiKey"]>()
       .mockResolvedValue(null),
@@ -211,6 +215,7 @@ function resetStore() {
   useConversationStore.setState({
     isCreatingConversation: false,
     conversationId: null,
+    title: null,
     isArchived: false,
     rootNodeId: null,
     activeNodeId: null,
@@ -226,6 +231,8 @@ function resetStore() {
     phase: "idle",
     providers: [],
     activeProviderId: null,
+    autoGenerateTitle: true,
+    titleModelBinding: null,
   })
 }
 
@@ -716,6 +723,8 @@ describe("ConversationWorkspace", () => {
     providerClient.listProviders.mockResolvedValue({
       providers: [],
       activeProviderId: null,
+      autoGenerateTitle: true,
+      titleModelBinding: null,
     })
     client.createConversation.mockResolvedValueOnce(rootOnlyTree)
     render(<ConversationWorkspace />)
@@ -1512,6 +1521,8 @@ describe("ConversationWorkspace", () => {
     providerClient.listProviders.mockResolvedValue({
       providers: [],
       activeProviderId: null,
+      autoGenerateTitle: true,
+      titleModelBinding: null,
     })
     providerClient.saveProvider = vi.fn().mockResolvedValueOnce({
       id: "provider-1",
@@ -1563,9 +1574,7 @@ describe("ConversationWorkspace", () => {
         apiKey: { action: "remove" },
       })
     })
-    await user.click(
-      screen.getByRole("button", { name: "返回模型提供商列表" }),
-    )
+    await user.click(screen.getByRole("button", { name: "返回模型提供商列表" }))
     await user.click(
       screen.getByRole("button", { name: "更多操作：Fixture provider" }),
     )

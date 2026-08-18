@@ -4,6 +4,8 @@
     "save_provider",
     "delete_provider",
     "set_active_provider",
+    "set_auto_generate_title",
+    "set_title_model_binding",
     "reveal_provider_api_key",
     "list_provider_models",
     "generate_from_active_path",
@@ -27,6 +29,12 @@
     },
     "set_active_provider": {
       "provider_id": "provider-fixture"
+    },
+    "set_auto_generate_title": {
+      "enabled": true
+    },
+    "set_title_model_binding": {
+      "binding": null
     },
     "reveal_provider_api_key": {
       "provider_id": "provider-fixture"
@@ -73,7 +81,9 @@
           "updated_at": 1770000001123
         }
       ],
-      "active_provider_id": "provider-fixture"
+      "active_provider_id": "provider-fixture",
+      "auto_generate_title": true,
+      "title_model_binding": null
     },
     "active": {
       "active_provider_id": "provider-fixture"

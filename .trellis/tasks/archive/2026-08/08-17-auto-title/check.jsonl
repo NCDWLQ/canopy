@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "后端验证门槛：fmt/clippy -D warnings/cargo test 全绿"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "前端验证门槛：pnpm check 全量测试通过"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "功能跨设置存储→后端生成→事件→store→UI 五层，核对跨层数据流清单"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "核对静默回退未泄漏错误弹窗，redaction 契约保持"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "核对事件驱动的 summary 更新不违反单一数据源与历史通道错误边界"}
+{"file": ".trellis/tasks/08-17-auto-title/prd.md", "reason": "验收标准对照"}
+{"file": ".trellis/tasks/08-17-auto-title/design.md", "reason": "设计契约对照：事件 payload、绑定回退链、触发条件"}

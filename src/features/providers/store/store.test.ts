@@ -21,6 +21,8 @@ function client() {
     saveProvider: vi.fn(),
     deleteProvider: vi.fn(),
     setActiveProvider: vi.fn(),
+    setAutoGenerateTitle: vi.fn(),
+    setTitleModelBinding: vi.fn(),
     revealProviderApiKey: vi.fn(),
     listProviderModels: vi.fn(),
     generateFromActivePath: vi.fn(),
@@ -34,6 +36,8 @@ describe("provider store", () => {
       phase: "idle",
       providers: [],
       activeProviderId: null,
+      autoGenerateTitle: true,
+      titleModelBinding: null,
     })
   })
 
@@ -42,6 +46,8 @@ describe("provider store", () => {
     bridge.listProviders.mockResolvedValueOnce({
       providers: [provider],
       activeProviderId: provider.id,
+      autoGenerateTitle: true,
+      titleModelBinding: null,
     })
     await useProviderStore.getState().loadProviders(bridge)
     expect(useProviderStore.getState()).toMatchObject({
@@ -85,6 +91,34 @@ describe("provider store", () => {
       phase: "unconfigured",
       providers: [],
       activeProviderId: null,
+    })
+  })
+
+  it("persists the automatic-title toggle and model binding", async () => {
+    const bridge = client()
+    bridge.setAutoGenerateTitle.mockResolvedValueOnce(false)
+    bridge.setTitleModelBinding.mockResolvedValueOnce({
+      providerId: provider.id,
+      model: provider.model,
+    })
+    useProviderStore.setState({
+      phase: "ready",
+      providers: [provider],
+      activeProviderId: provider.id,
+    })
+
+    await useProviderStore.getState().setAutoGenerateTitle(bridge, false)
+    await useProviderStore.getState().setTitleModelBinding(bridge, {
+      providerId: provider.id,
+      model: provider.model,
+    })
+
+    expect(useProviderStore.getState()).toMatchObject({
+      autoGenerateTitle: false,
+      titleModelBinding: {
+        providerId: provider.id,
+        model: provider.model,
+      },
     })
   })
 })

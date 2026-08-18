@@ -1,9 +1,13 @@
 import { create } from "zustand"
 
-import type { ProviderView, SaveProviderInput } from "../types"
+import type {
+  ProviderView,
+  SaveProviderInput,
+  TitleModelBinding,
+} from "../types"
 import type { UiError } from "@/features/conversations/types"
 import { ConversationCommandError, type ProviderClient } from "@/lib/tauri"
-export type ProviderState =
+export type ProviderState = (
   | {
       phase: "idle" | "loading" | "unconfigured"
       providers: readonly ProviderView[]
@@ -20,6 +24,10 @@ export type ProviderState =
       activeProviderId: string | null
       error: UiError
     }
+) & {
+  autoGenerateTitle: boolean
+  titleModelBinding: TitleModelBinding | null
+}
 
 export type ProviderStore = ProviderState & {
   loadProviders: (client: ProviderClient) => Promise<void>
@@ -34,6 +42,14 @@ export type ProviderStore = ProviderState & {
   setActiveProvider: (
     client: ProviderClient,
     providerId: string,
+  ) => Promise<void>
+  setAutoGenerateTitle: (
+    client: ProviderClient,
+    enabled: boolean,
+  ) => Promise<void>
+  setTitleModelBinding: (
+    client: ProviderClient,
+    binding: TitleModelBinding | null,
   ) => Promise<void>
 }
 
@@ -58,14 +74,24 @@ function normalizeError(error: unknown): UiError {
 function readyOrUnconfigured(
   providers: readonly ProviderView[],
   activeProviderId: string | null,
+  autoGenerateTitle: boolean,
+  titleModelBinding: TitleModelBinding | null,
 ): ProviderState {
   if (activeProviderId !== null) {
-    return { phase: "ready", providers, activeProviderId }
+    return {
+      phase: "ready",
+      providers,
+      activeProviderId,
+      autoGenerateTitle,
+      titleModelBinding,
+    }
   }
   return {
     phase: providers.length === 0 ? "unconfigured" : "idle",
     providers,
     activeProviderId: null,
+    autoGenerateTitle,
+    titleModelBinding,
   }
 }
 
@@ -79,6 +105,8 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
       phase: "loading",
       providers: previous.providers,
       activeProviderId: previous.activeProviderId,
+      autoGenerateTitle: previous.autoGenerateTitle,
+      titleModelBinding: previous.titleModelBinding,
     })
     return { epoch, previous }
   }
@@ -89,6 +117,8 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
       phase: "error",
       providers: previous.providers,
       activeProviderId: previous.activeProviderId,
+      autoGenerateTitle: previous.autoGenerateTitle,
+      titleModelBinding: previous.titleModelBinding,
       error: normalizeError(error),
     })
   }
@@ -97,13 +127,22 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
     phase: "idle",
     providers: [],
     activeProviderId: null,
+    autoGenerateTitle: true,
+    titleModelBinding: null,
 
     loadProviders: async (client) => {
       const { epoch, previous } = beginRequest()
       try {
         const result = await client.listProviders()
         if (isCurrent(epoch)) {
-          set(readyOrUnconfigured(result.providers, result.activeProviderId))
+          set(
+            readyOrUnconfigured(
+              result.providers,
+              result.activeProviderId,
+              result.autoGenerateTitle,
+              result.titleModelBinding,
+            ),
+          )
         }
       } catch (error: unknown) {
         fail(epoch, previous, error)
@@ -120,7 +159,14 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
           provider,
         ]
         if (isCurrent(epoch)) {
-          set(readyOrUnconfigured(providers, previous.activeProviderId))
+          set(
+            readyOrUnconfigured(
+              providers,
+              previous.activeProviderId,
+              previous.autoGenerateTitle,
+              previous.titleModelBinding,
+            ),
+          )
         }
         return provider
       } catch (error: unknown) {
@@ -141,7 +187,16 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
           previous.activeProviderId === providerId
             ? null
             : previous.activeProviderId
-        set(readyOrUnconfigured(providers, activeProviderId))
+        set(
+          readyOrUnconfigured(
+            providers,
+            activeProviderId,
+            previous.autoGenerateTitle,
+            previous.titleModelBinding?.providerId === providerId
+              ? null
+              : previous.titleModelBinding,
+          ),
+        )
         return deleted
       } catch (error: unknown) {
         fail(epoch, previous, error)
@@ -154,7 +209,52 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
       try {
         const activeProviderId = await client.setActiveProvider(providerId)
         if (isCurrent(epoch)) {
-          set(readyOrUnconfigured(previous.providers, activeProviderId))
+          set(
+            readyOrUnconfigured(
+              previous.providers,
+              activeProviderId,
+              previous.autoGenerateTitle,
+              previous.titleModelBinding,
+            ),
+          )
+        }
+      } catch (error: unknown) {
+        fail(epoch, previous, error)
+      }
+    },
+
+    setAutoGenerateTitle: async (client, enabled) => {
+      const { epoch, previous } = beginRequest()
+      try {
+        const autoGenerateTitle = await client.setAutoGenerateTitle(enabled)
+        if (isCurrent(epoch)) {
+          set(
+            readyOrUnconfigured(
+              previous.providers,
+              previous.activeProviderId,
+              autoGenerateTitle,
+              previous.titleModelBinding,
+            ),
+          )
+        }
+      } catch (error: unknown) {
+        fail(epoch, previous, error)
+      }
+    },
+
+    setTitleModelBinding: async (client, binding) => {
+      const { epoch, previous } = beginRequest()
+      try {
+        const titleModelBinding = await client.setTitleModelBinding(binding)
+        if (isCurrent(epoch)) {
+          set(
+            readyOrUnconfigured(
+              previous.providers,
+              previous.activeProviderId,
+              previous.autoGenerateTitle,
+              titleModelBinding,
+            ),
+          )
         }
       } catch (error: unknown) {
         fail(epoch, previous, error)

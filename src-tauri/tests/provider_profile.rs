@@ -10,7 +10,7 @@ use canopy_lib::conversations::{
 };
 use canopy_lib::providers::{
     ApiKeyAction, CredentialStore, Protocol, ProviderError, ProviderInput, ProviderService,
-    RedactedProvider,
+    RedactedProvider, TitleModelBinding,
 };
 use secrecy::{ExposeSecret, SecretString};
 use serde_json::json;
@@ -92,6 +92,70 @@ fn assert_duplicate_name(result: Result<RedactedProvider, ProviderError>) {
             reason: "duplicate",
         })
     ));
+}
+
+#[test]
+fn automatic_title_settings_default_and_validate_model_bindings() {
+    run_async(async {
+        let pool = migrated_pool().await;
+        let service = ProviderService::new(pool, Arc::new(FakeCredentialStore::default()));
+
+        assert!(service.get_auto_generate_title().await.unwrap());
+        assert_eq!(service.get_title_model_binding().await.unwrap(), None);
+        assert!(!service.set_auto_generate_title(false).await.unwrap());
+        assert!(!service.get_auto_generate_title().await.unwrap());
+
+        service
+            .save(
+                "provider-title",
+                input("Title provider", ApiKeyAction::Keep),
+                "operation-title".to_owned(),
+                "credential-title".to_owned(),
+                100,
+            )
+            .await
+            .unwrap();
+        let binding = TitleModelBinding {
+            provider_id: "provider-title".to_owned(),
+            model: "fixture-model".to_owned(),
+        };
+        assert_eq!(
+            service
+                .set_title_model_binding(Some(binding.clone()))
+                .await
+                .unwrap(),
+            Some(binding.clone())
+        );
+        assert_eq!(
+            service.get_title_model_binding().await.unwrap(),
+            Some(binding)
+        );
+        assert!(service
+            .set_title_model_binding(Some(TitleModelBinding {
+                provider_id: "provider-title".to_owned(),
+                model: "missing-model".to_owned(),
+            }))
+            .await
+            .is_err());
+
+        service
+            .save(
+                "provider-title",
+                ProviderInput {
+                    model: "replacement-model".to_owned(),
+                    models: vec!["replacement-model".to_owned()],
+                    ..input("Title provider", ApiKeyAction::Keep)
+                },
+                "operation-title-update".to_owned(),
+                "credential-title-update".to_owned(),
+                101,
+            )
+            .await
+            .unwrap();
+        assert_eq!(service.get_title_model_binding().await.unwrap(), None);
+
+        assert_eq!(service.set_title_model_binding(None).await.unwrap(), None);
+    });
 }
 
 #[test]
@@ -783,7 +847,9 @@ fn model_list_is_validated_deduplicated_and_persisted() {
         // Empty and oversized lists are rejected.
         for models in [
             Vec::new(),
-            (0..51).map(|index| format!("m-{index}")).collect::<Vec<_>>(),
+            (0..51)
+                .map(|index| format!("m-{index}"))
+                .collect::<Vec<_>>(),
         ] {
             let result = service
                 .save(
@@ -798,7 +864,13 @@ fn model_list_is_validated_deduplicated_and_persisted() {
                 )
                 .await;
             assert!(
-                matches!(result, Err(ProviderError::InvalidInput { field: "models", .. })),
+                matches!(
+                    result,
+                    Err(ProviderError::InvalidInput {
+                        field: "models",
+                        ..
+                    })
+                ),
                 "list size must be enforced"
             );
         }

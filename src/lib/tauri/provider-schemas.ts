@@ -80,6 +80,19 @@ export const deleteProviderRequestSchema = z
   .object({ provider_id: idSchema })
   .strict()
 export const setActiveProviderRequestSchema = deleteProviderRequestSchema
+export const setAutoGenerateTitleRequestSchema = z
+  .object({ enabled: z.boolean() })
+  .strict()
+export const setAutoGenerateTitleResultSchema =
+  setAutoGenerateTitleRequestSchema
+export const titleModelBindingDtoSchema = z
+  .object({ provider_id: idSchema, model: modelSchema })
+  .strict()
+export const setTitleModelBindingRequestSchema = z
+  .object({ binding: titleModelBindingDtoSchema.nullable() })
+  .strict()
+export const setTitleModelBindingResultSchema =
+  setTitleModelBindingRequestSchema
 export const revealProviderApiKeyRequestSchema = deleteProviderRequestSchema
 export const revealProviderApiKeyResultSchema = z
   .object({ api_key: secretSchema.nullable() })
@@ -123,6 +136,8 @@ export const listProvidersResultSchema = z
   .object({
     providers: z.array(providerDtoSchema),
     active_provider_id: idSchema.nullable().optional(),
+    auto_generate_title: z.boolean(),
+    title_model_binding: titleModelBindingDtoSchema.nullable(),
   })
   .strict()
   .superRefine((result, context) => {

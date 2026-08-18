@@ -21,7 +21,8 @@ without turning a generic primitive task into product UI work.
 ### 2. Signatures
 
 `components.json` uses `style: "radix-nova"`, `baseColor: "neutral"`, CSS
-variables, Lucide icons, and the `@/*` aliases rooted at `src/`.
+variables, Lucide icons, the `@/*` aliases rooted at `src/`, and the ReUI
+registry `@reui` → `https://reui.io/r/{style}/{name}.json`.
 
 ### 3. Contracts
 
@@ -36,6 +37,9 @@ variables, Lucide icons, and the `@/*` aliases rooted at `src/`.
   temporary dependency graph can fail independently of the locked project.
 - Generated primitives remain generic under `src/components/ui`; feature UI
   remains separately owned under `src/features`.
+- Extra primitives come from ReUI: `pnpm exec shadcn add @reui/<item>`.
+  Inspect diffs and decline overwrites of authored `label` / `field` / similar
+  files. Do not keep unused `src/components/examples/` copies of ReUI demos.
 
 ### 4. Validation & Error Matrix
 
@@ -353,6 +357,12 @@ The correct form is deterministic, fixture-driven, and independent of SQLite and
 
 - Use Tailwind tokens and CSS variables from the shared theme; do not hard-code one-off hex colors in feature components.
 - Preserve shadcn primitives as upgradeable building blocks; wrap them instead of editing generated internals for domain behavior.
+- Boolean settings use the official shadcn `Switch`, not a homemade
+  `role="switch"` button.
+- Closed-choice settings (protocol, title model, grouped lists) use shadcn
+  `Select` with `SelectGroup` / `SelectLabel` / `SelectSeparator` as needed.
+  Do not fake a select with `DropdownMenu` + checkmarks.
+- `FieldDescription` helptext has no trailing period (or `。`).
 - The outline uses tree/treeitem semantics or an equivalent tested Radix pattern, visible focus, correct expanded/selected state, and roving keyboard focus.
 - Every icon-only action has an accessible name. Menus, dialogs, and tooltips use Radix focus management.
 - Canopy is currently a single-locale Simplified Chinese product. User-visible
@@ -505,6 +515,10 @@ action rather than an item belonging strictly to the history list.
 - Rendering transient output as a warning/status card or exposing `Not saved`,
   commit, local-storage, or database vocabulary in the successful path.
 - Wrapping assistant messages inside card borders or adding redundant visible role headers ("用户"/"助手") instead of accessible `aria-label` attributes.
+- Rebuilding `Switch` or `Select` (including DropdownMenu-as-select) instead of
+  the shadcn primitive.
+- Leaving unused ReUI example files under `src/components/examples/`.
+- Putting a period at the end of `FieldDescription` helptext.
 
 ## Scenario: Conversation Message Rendering (Bubble vs. Direct Output)
 

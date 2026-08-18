@@ -27,6 +27,8 @@ function client() {
     saveProvider: vi.fn(),
     deleteProvider: vi.fn(),
     setActiveProvider: vi.fn(),
+    setAutoGenerateTitle: vi.fn().mockResolvedValue(true),
+    setTitleModelBinding: vi.fn().mockResolvedValue(null),
     revealProviderApiKey: vi.fn().mockResolvedValue(null),
     listProviderModels: vi.fn(),
     generateFromActivePath: vi.fn(),
@@ -39,7 +41,9 @@ async function openProviderEditor(
   providerName = provider.name,
 ) {
   await user.click(screen.getByRole("button", { name: "设置" }))
-  await user.click(screen.getByRole("button", { name: `编辑：${providerName}` }))
+  await user.click(
+    screen.getByRole("button", { name: `编辑：${providerName}` }),
+  )
 }
 
 describe("GlobalSettingsDialog", () => {
@@ -52,10 +56,16 @@ describe("GlobalSettingsDialog", () => {
         disconnect() {}
       },
     )
+    Element.prototype.hasPointerCapture = () => false
+    Element.prototype.setPointerCapture = () => {}
+    Element.prototype.releasePointerCapture = () => {}
+    Element.prototype.scrollIntoView = () => {}
     useProviderStore.setState({
       phase: "ready",
       providers: [provider],
       activeProviderId: provider.id,
+      autoGenerateTitle: true,
+      titleModelBinding: null,
     })
   })
 
@@ -69,9 +79,7 @@ describe("GlobalSettingsDialog", () => {
     )
     await user.click(screen.getByRole("button", { name: "设置" }))
     expect(screen.getByRole("dialog")).toHaveAccessibleName("设置")
-    expect(
-      screen.getByRole("navigation", { name: "设置分类" }),
-    ).toBeVisible()
+    expect(screen.getByRole("navigation", { name: "设置分类" })).toBeVisible()
     expect(
       screen.getByRole("button", { name: "模型提供商", current: "page" }),
     ).toBeVisible()
@@ -79,6 +87,59 @@ describe("GlobalSettingsDialog", () => {
     expect(screen.getByLabelText("当前全局默认")).toHaveTextContent("默认")
     expect(screen.getByText("fixture-model")).toBeVisible()
     expect(screen.queryByLabelText("名称")).not.toBeInTheDocument()
+  })
+
+  it("configures automatic titles in the conversation category", async () => {
+    const user = userEvent.setup()
+    const bridge = client()
+    bridge.setTitleModelBinding.mockImplementation((binding) =>
+      Promise.resolve(binding),
+    )
+    render(
+      <GlobalSettingsDialog
+        client={bridge as ProviderClient}
+        readOnly={false}
+      />,
+    )
+    await user.click(screen.getByRole("button", { name: "设置" }))
+    await user.click(screen.getByRole("button", { name: "会话" }))
+
+    const toggle = screen.getByRole("switch", {
+      name: "自动生成标题",
+    })
+    expect(toggle).toHaveAttribute("aria-checked", "true")
+    expect(
+      screen.getByText("首轮对话后，使用下方配置的模型自动生成标题"),
+    ).toBeVisible()
+    expect(toggle.closest("fieldset")).toContainElement(
+      screen.getByText("标题模型"),
+    )
+    expect(
+      screen.getByText("标题模型").closest("[data-slot=field]"),
+    ).toHaveClass("pl-4")
+    await user.click(screen.getByRole("combobox", { name: "标题模型" }))
+    expect(
+      await screen.findByRole("option", { name: "跟随会话" }),
+    ).toBeVisible()
+    expect(screen.getByRole("group", { name: provider.name })).toBeVisible()
+    await user.click(await screen.findByRole("option", { name: provider.model }))
+    await waitFor(() =>
+      expect(bridge.setTitleModelBinding).toHaveBeenCalledWith({
+        providerId: provider.id,
+        model: provider.model,
+      }),
+    )
+    await waitFor(() =>
+      expect(
+        screen.getByRole("combobox", { name: "标题模型" }),
+      ).toHaveTextContent(provider.model),
+    )
+    expect(screen.getByRole("combobox", { name: "标题模型" })).toBeEnabled()
+
+    useProviderStore.setState({ autoGenerateTitle: false })
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "标题模型" })).toBeDisabled(),
+    )
   })
 
   it("summarizes long model lists on each provider row", async () => {
@@ -228,9 +289,7 @@ describe("GlobalSettingsDialog", () => {
     // Return to list, then re-open; reveal fails so empty field must keep.
     bridge.revealProviderApiKey.mockRejectedValueOnce(new Error("keyring"))
     bridge.saveProvider.mockClear()
-    await user.click(
-      screen.getByRole("button", { name: "返回模型提供商列表" }),
-    )
+    await user.click(screen.getByRole("button", { name: "返回模型提供商列表" }))
     await user.click(
       screen.getByRole("button", { name: `编辑：${provider.name}` }),
     )
@@ -332,9 +391,7 @@ describe("GlobalSettingsDialog", () => {
     )
     await openProviderEditor(user)
     expect(screen.getByLabelText("名称")).toBeVisible()
-    await user.click(
-      screen.getByRole("button", { name: "返回模型提供商列表" }),
-    )
+    await user.click(screen.getByRole("button", { name: "返回模型提供商列表" }))
     expect(screen.getByRole("heading", { name: "全部提供商" })).toBeVisible()
     expect(screen.queryByLabelText("名称")).not.toBeInTheDocument()
   })

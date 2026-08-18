@@ -34,8 +34,11 @@ These guides help you **ask the right questions before coding**.
 - [ ] Data format changes between layers
 - [ ] Multiple consumers need the same data
 - [ ] You're not sure where to put some logic
-- [ ] You are adding an event kind, JSONL record, RPC payload, or config field
+- [ ] You are adding an event kind, JSONL record, RPC payload, config field,
+      `app_settings` key, or a global Tauri `emit` (non-Channel)
 - [ ] UI / command code starts casting raw payload fields directly
+- [ ] A backend side effect looks like generation but must not use
+      `GenerationRuntime` (auto-title is the current example)
 
 → Read [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md)
 
