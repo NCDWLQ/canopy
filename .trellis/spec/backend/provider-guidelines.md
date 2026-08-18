@@ -209,3 +209,106 @@ late cancellation.
 - Thinking streams on a separate callback channel (`on_thinking`), surfaces as
   a `thinking_delta` event with its own 1MB budget, and persists into
   `nodes.metadata.thinking` only when non-empty.
+
+## Scenario: Auto-Title After First Assistant Persist
+
+### 1. Scope / Trigger
+
+Use this contract when changing title generation, `app_settings` keys
+`auto_generate_title` / `title_model_binding`, `title_prompt.rs`, title
+sanitization, or the global `conversation://title-updated` emit. Owning files:
+`src-tauri/src/providers/titles.rs`, `title_prompt.rs`, `providers/service.rs`,
+and `conversations::service::{load_auto_title_context, update_title}`.
+
+This path is a provider-service side effect. It must not use
+`GenerationRuntime`, occupy a generation lock, write JSONL nodes, or emit
+`generation://event`.
+
+### 2. Signatures
+
+```text
+list_providers({}) -> { providers, active_provider_id, auto_generate_title,
+                         title_model_binding }
+set_auto_generate_title({ enabled }) -> { enabled }
+set_title_model_binding({ binding: { provider_id, model } | null })
+  -> { binding }
+app.emit("conversation://title-updated", { conversation_id, title })
+build_title_prompt(user, assistant) -> String
+```
+
+Settings keys in `app_settings`: `auto_generate_title` (`"true"` / `"false"`;
+missing key = on); `title_model_binding` (JSON `{ "provider_id", "model" }`
+or absent = follow conversation).
+
+### 3. Contracts
+
+- Spawn after a `Completed` assistant persist (`spawn_auto_title`). Context
+  loads only when the conversation has exactly one assistant node and at least
+  one user node; otherwise skip HTTP.
+- Binding resolve: stored settings binding if that provider+model still
+  exists, else conversation `provider_id`/`model`, else active provider.
+- `save_provider` / `delete_provider` that drop the bound provider or model
+  must clear `title_model_binding` in the same transaction.
+- Prompt lives only in `providers/title_prompt.rs`. Wrap excerpts in
+  `<conversation><user>…</user><assistant>…</assistant></conversation>`.
+  Truncate each excerpt to 2000 Unicode scalars, then escape `&`, `<`, `>`
+  before interpolation. Model returns plain title text, not JSON.
+- The prompt forbids `Title:` / `标题：` prefixes; sanitization does not
+  strip them. `clean_title` collapses whitespace, then strips **paired**
+  wrapping quotes only (`"` `'` `“”` `‘’`). Never `trim_end` a quote
+  character. Empty or >200 chars after sanitize → keep the existing
+  truncated placeholder; do not emit.
+- Success: `UPDATE conversations.title`, then emit snake_case
+  `{ conversation_id, title }`.
+- Failure: log only; leave the existing title; no error UI.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+|---|---|
+| `auto_generate_title` missing or `"true"` | Treat as on |
+| `auto_generate_title` `"false"` | No title HTTP |
+| Unknown `auto_generate_title` value | `Protocol` |
+| Assistant count ≠ 1, or no user node | No title HTTP |
+| Settings binding's provider/model gone | Fall through to conversation, then active |
+| HTTP / sanitize / persist / emit failure | Log; keep placeholder; no UI error |
+| User text contains `</conversation>` or `<` | Escaped as data; not treated as instructions |
+
+### 5. Good / Base / Bad Cases
+
+- **Good**: first completed assistant, toggle on, sanitized title persisted,
+  event emitted; HTTP failure leaves the placeholder.
+- **Base**: toggle off, or a second assistant persist → no title HTTP.
+- **Bad**: title call inside `GenerationRuntime`; interpolating raw user text
+  into markup; `trim_end_matches(['"', '”'])` turning `要求输出“HACKED”`
+  into `要求输出“HACKED`.
+
+### 6. Tests Required
+
+- Prompt: 2000-char bound per excerpt; `&` / `<` / `>` escaped; instructions
+  remain outside the data block; `</conversation>` in user text cannot close
+  the wrapper.
+- `clean_title`: paired wrappers stripped; inner quotes in
+  `要求输出“HACKED”` preserved; blank / 201-char rejected.
+- Settings: missing key defaults on; binding JSON round-trip; `save_provider`
+  clearing a stale binding in the same transaction.
+- Persist path: first assistant + on → HTTP + UPDATE + emit; off / second
+  assistant → no HTTP.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```rust
+generation_runtime.spawn(title_prompt); // occupies the generation lock
+title.trim_end_matches(['"', '”']);
+format!("<user>\n{user}\n</user>") // user may contain </conversation>
+```
+
+#### Correct
+
+```rust
+tokio::spawn(generate_conversation_title(...)); // no GenerationRuntime
+strip_wrapping_quotes(title); // paired wrappers only
+escape_markup(&truncate(user)) // then interpolate
+```

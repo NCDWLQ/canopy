@@ -56,6 +56,12 @@ decoded and projected before entering the store.
   toggle expansion, append, create a branch, edit as a branch, and archive.
 - Persistence actions call the typed Tauri bridge, then merge the returned
   authoritative DTO. They do not mutate durable history optimistically.
+- Global non-Channel events (today: `conversation://title-updated`) are
+  subscribed in a workspace/app hook, decoded in `src/lib/tauri`, then applied
+  through `applyTitleUpdate`. That action patches the matching history
+  summary title and, if loaded, `state.title`. It does not invent summary
+  rows, touch `nodesById` or `generationRuns`, or take a mutation lock.
+  Stores still never call `listen`.
 - Selectors are pure, narrow, and exported from the store module.
 - Keep one owner for root-to-active projection. It must preserve order and
   exclude siblings; malformed state returns an explicit integrity state rather

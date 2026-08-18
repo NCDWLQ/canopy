@@ -197,10 +197,14 @@ generateFromActivePath(
 cancelGeneration(generationId: string): Promise<CancelGenerationView>
 ```
 
-The frozen command list contains exactly five commands: three profile
-operations plus `generate_from_active_path` and `cancel_generation` (there is
-no separate save/commit command). Generation alone creates one
-`Channel<unknown>` and validates values before invoking `onEvent`.
+The generation-path freeze is still: no extra **generation** command and no
+terminal Channel event (profile CRUD plus `generate_from_active_path` and
+`cancel_generation`). Later additive provider-settings commands
+(`list_providers`, `save_provider`, `delete_provider`, `set_active_provider`,
+`set_auto_generate_title`, `set_title_model_binding`, and related model/key
+helpers) are allowed. Generation alone creates one `Channel<unknown>` and
+validates values before invoking `onEvent`. Title updates use a separate
+global event; see the auto-title scenario below.
 
 ### 3. Contracts
 
@@ -301,6 +305,101 @@ const result = await providerClient.generateFromActivePath(
 
 The bridge is the sole trust boundary and returns only validated projections;
 the controller merges durable history only from the terminal result or reload.
+
+## Scenario: Auto-Title Settings Commands And Global Title Event
+
+### 1. Scope / Trigger
+
+Use this contract when changing title settings IPC, `list_providers` title
+fields, or the global `conversation://title-updated` listen path. Owning
+files: `src/lib/tauri/provider-client.ts`, `provider-schemas.ts`,
+`title-events.ts`, and `src/features/conversations/hooks/useConversationTitleUpdates.ts`.
+
+The generation path stays Channel-only. Title updates are a separate global
+Tauri event. Settings round-trip through invoke, not localStorage.
+
+### 2. Signatures
+
+```ts
+listProviders(): Promise<{
+  autoGenerateTitle: boolean
+  titleModelBinding: { providerId: string; model: string } | null
+  /* plus providers / activeProviderId */
+}>
+setAutoGenerateTitle(enabled: boolean): Promise<boolean>
+setTitleModelBinding(
+  binding: { providerId: string; model: string } | null,
+): Promise<{ providerId: string; model: string } | null>
+listenForConversationTitleUpdates(
+  onUpdate: (update: { conversationId: string; title: string }) => void,
+): Promise<UnlistenFn>
+```
+
+Commands: `list_providers`, `set_auto_generate_title`,
+`set_title_model_binding`. Event name: `conversation://title-updated`.
+
+### 3. Contracts
+
+- Every invoke still sends `{ request: <strict snake_case DTO> }`.
+- `list_providers` returns `auto_generate_title: boolean` and
+  `title_model_binding: { provider_id, model } | null`. Frontend must not
+  require extra commands to read the toggle after a successful list.
+- `set_title_model_binding` wires follow-conversation as JSON `null`, not an
+  omitted field or a sentinel string.
+- Event payload is snake_case `{ conversation_id, title }`. Decode in
+  `title-events.ts` (strict Zod; title 1..=200 Unicode scalars after Rust
+  whitespace trim) then map to `{ conversationId, title }` before
+  `applyTitleUpdate`.
+- Decode failure: ignore the event; do not write the store.
+- One listen at workspace/app mount (`useConversationTitleUpdates`); unlisten
+  on unmount. Per-row listeners are forbidden. Stores never call `listen`.
+- Title event does not mutate node maps or generation records.
+
+### 4. Validation & Error Matrix
+
+| Condition | Frontend result |
+|---|---|
+| Malformed `list_providers` / set result | safe non-retryable `internal`; no store write |
+| `title_model_binding` JSON null | follow conversation (`null`) |
+| Event payload missing/extra fields, blank title, or title >200 chars | drop event |
+| Valid event for a known summary | patch that summary title; also patch loaded `title` when IDs match |
+| Valid event for an unknown conversation | no-op (no invented summary row) |
+
+### 5. Good / Base / Bad Cases
+
+- **Good**: list hydrates toggle + binding; set round-trips; decoded event
+  updates the matching summary and, if loaded, the conversation title.
+- **Base**: malformed event dropped; follow-conversation is `null`.
+- **Bad**: `listen` in a sidebar row; `event.payload as { conversationId }`;
+  assuming camelCase on the wire.
+
+### 6. Tests Required
+
+- Decode fixture `conversation_id` / `title`; reject extra/missing fields
+  via `.strict()`.
+- Store `applyTitleUpdate` updates the matching summary and loaded
+  conversation only.
+- Settings tests drive `list_providers` / `set_*` fakes, not raw invoke.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+listen("conversation://title-updated", (event) => {
+  applyTitleUpdate(event.payload as { conversationId: string; title: string })
+})
+```
+
+#### Correct
+
+```ts
+listen(CONVERSATION_TITLE_UPDATED_EVENT, (event) => {
+  const update = decodeConversationTitleUpdate(event.payload)
+  if (update === null) return
+  applyTitleUpdate(update)
+})
+```
 
 ## Forbidden Patterns
 

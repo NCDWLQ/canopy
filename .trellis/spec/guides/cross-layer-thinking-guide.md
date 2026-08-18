@@ -142,7 +142,11 @@ After implementation:
 - [ ] For durable data projected into memory, tested cold-start discovery from
       an empty process/store without carrying IDs from the writer session
 - [ ] Distinguished "no durable records" from "discovery failed" and kept the
-      UI in loading until the selected authoritative record is installed
+  UI in loading until the selected authoritative record is installed
+- [ ] If the UI needs a non-generation notify, used a global Tauri `emit`
+      plus a typed decoder — not `GenerationRuntime` and not a Channel
+- [ ] Global event payloads are decoded in `src/lib/tauri` before the store;
+      one workspace/app listener, not per-row `listen`
 
 ---
 
@@ -319,6 +323,23 @@ Create detailed flow docs when:
 - Multiple teams are involved
 - Data format is complex
 - Feature has caused bugs before
+
+---
+
+## Global Tauri Emit vs Generation Channel
+
+A backend side effect that looks like “call a model” is not automatically a
+generation. Before adding HTTP or an event:
+
+- [ ] Does this create or replace a conversation node? If yes, it belongs on
+      `GenerationRuntime` + Channel. If no, do **not** take a generation lock.
+- [ ] Is the notify global (title, settings) rather than a streaming run?
+      Use `app.emit` + one decoded frontend listener.
+- [ ] Are user strings interpolated into prompt markup? Escape `& < >` so
+      data cannot close a wrapper tag.
+
+→ Specs: `.trellis/spec/backend/provider-guidelines.md` (auto-title),
+`.trellis/spec/frontend/type-safety.md` (title event).
 
 ---
 

@@ -77,6 +77,10 @@ const activePath = useConversationStore(selectActivePath)
   projection if reload cannot prove one exact assistant.
 - Do not use an effect to derive values that can be computed during render by a
   pure selector.
+- Global Tauri `listen` belongs in one workspace/app hook (for example
+  `useConversationTitleUpdates`). Decode in `src/lib/tauri` first. Do not
+  subscribe per conversation row.
+
 
 ## Testing
 
@@ -102,3 +106,5 @@ const activePath = useConversationStore(selectActivePath)
 - Disabling hook lint rules to force an effect lifecycle.
 - Treating a transport rejection as proof of either success or failure before
   the controller has performed its one-shot durable reload.
+- Calling `listen` per conversation row instead of one workspace/app hook
+  that decodes in `src/lib/tauri` first.
