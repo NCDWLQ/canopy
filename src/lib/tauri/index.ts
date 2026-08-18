@@ -29,6 +29,13 @@ export {
   type ConversationTitleUpdate,
 } from "./title-events"
 
+export {
+  DIAGNOSTICS_COMMANDS,
+  createDiagnosticsClient,
+  type DiagnosticsClient,
+  type LoggingSettingsView,
+} from "./diagnostics-client"
+
 export type {
   ConversationNodeView,
   JsonValue,

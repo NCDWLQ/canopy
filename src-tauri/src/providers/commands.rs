@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Instant;
 
 use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
@@ -9,7 +10,12 @@ use uuid::Uuid;
 use crate::{
     conversations::commands::{IdentityTimeSource, NodeDto, SystemIdentityTimeSource},
     database::managed_sqlite_pool,
+    diagnostics::{
+        logging::{command_result, log_command},
+        record_generation, DiagnosticId,
+    },
     error::CommandError,
+    identifiers::is_canonical_uuid_v4,
 };
 
 use super::model_list::{list_models, ModelSummary};
@@ -311,26 +317,29 @@ pub async fn list_providers(
     _request: ListProvidersRequest,
     instances: State<'_, DbInstances>,
 ) -> Result<ListProvidersResult, CommandError> {
-    let pool = managed_sqlite_pool(instances.inner())
-        .await
-        .map_err(CommandError::from)?;
-    let service = production_service(pool);
-    let (providers, active_provider_id) =
-        service.list_providers().await.map_err(CommandError::from)?;
-    let auto_generate_title = service
-        .get_auto_generate_title()
-        .await
-        .map_err(CommandError::from)?;
-    let title_model_binding = service
-        .get_title_model_binding()
-        .await
-        .map_err(CommandError::from)?;
-    Ok(ListProvidersResult {
-        providers: providers.into_iter().map(ProviderDto::from).collect(),
-        active_provider_id,
-        auto_generate_title,
-        title_model_binding: title_model_binding.map(Into::into),
+    log_command("list_providers", None, None, async {
+        let pool = managed_sqlite_pool(instances.inner())
+            .await
+            .map_err(CommandError::from)?;
+        let service = production_service(pool);
+        let (providers, active_provider_id) =
+            service.list_providers().await.map_err(CommandError::from)?;
+        let auto_generate_title = service
+            .get_auto_generate_title()
+            .await
+            .map_err(CommandError::from)?;
+        let title_model_binding = service
+            .get_title_model_binding()
+            .await
+            .map_err(CommandError::from)?;
+        Ok(ListProvidersResult {
+            providers: providers.into_iter().map(ProviderDto::from).collect(),
+            active_provider_id,
+            auto_generate_title,
+            title_model_binding: title_model_binding.map(Into::into),
+        })
     })
+    .await
 }
 
 #[tauri::command]
@@ -338,14 +347,17 @@ pub async fn set_auto_generate_title(
     request: SetAutoGenerateTitleRequest,
     instances: State<'_, DbInstances>,
 ) -> Result<SetAutoGenerateTitleResult, CommandError> {
-    let pool = managed_sqlite_pool(instances.inner())
-        .await
-        .map_err(CommandError::from)?;
-    production_service(pool)
-        .set_auto_generate_title(request.enabled)
-        .await
-        .map(|enabled| SetAutoGenerateTitleResult { enabled })
-        .map_err(CommandError::from)
+    log_command("set_auto_generate_title", Some("completed"), None, async {
+        let pool = managed_sqlite_pool(instances.inner())
+            .await
+            .map_err(CommandError::from)?;
+        production_service(pool)
+            .set_auto_generate_title(request.enabled)
+            .await
+            .map(|enabled| SetAutoGenerateTitleResult { enabled })
+            .map_err(CommandError::from)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -353,19 +365,22 @@ pub async fn set_title_model_binding(
     request: SetTitleModelBindingRequest,
     instances: State<'_, DbInstances>,
 ) -> Result<SetTitleModelBindingResult, CommandError> {
-    if let Some(binding) = request.binding.as_ref() {
-        validate_id("provider_id", &binding.provider_id)?;
-    }
-    let pool = managed_sqlite_pool(instances.inner())
-        .await
-        .map_err(CommandError::from)?;
-    production_service(pool)
-        .set_title_model_binding(request.binding.map(Into::into))
-        .await
-        .map(|binding| SetTitleModelBindingResult {
-            binding: binding.map(Into::into),
-        })
-        .map_err(CommandError::from)
+    log_command("set_title_model_binding", Some("completed"), None, async {
+        if let Some(binding) = request.binding.as_ref() {
+            validate_id("provider_id", &binding.provider_id)?;
+        }
+        let pool = managed_sqlite_pool(instances.inner())
+            .await
+            .map_err(CommandError::from)?;
+        production_service(pool)
+            .set_title_model_binding(request.binding.map(Into::into))
+            .await
+            .map(|binding| SetTitleModelBindingResult {
+                binding: binding.map(Into::into),
+            })
+            .map_err(CommandError::from)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -373,32 +388,46 @@ pub async fn save_provider(
     request: SaveProviderRequest,
     instances: State<'_, DbInstances>,
 ) -> Result<ProviderDto, CommandError> {
-    let source = SystemIdentityTimeSource;
+    let created = request.id.is_none();
     let provider_id = request.id.unwrap_or_else(|| Uuid::new_v4().to_string());
-    validate_id("id", &provider_id)?;
-    let protocol = Protocol::from_db_text(&request.protocol).map_err(CommandError::from)?;
-    let pool = managed_sqlite_pool(instances.inner())
-        .await
-        .map_err(CommandError::from)?;
-    let service = production_service(pool);
-    service
-        .save(
-            &provider_id,
-            ProviderInput {
-                name: request.name,
-                protocol,
-                base_endpoint: request.base_endpoint,
-                model: request.model,
-                models: request.models,
-                api_key: request.api_key.into(),
-            },
-            Uuid::new_v4().to_string(),
-            Uuid::new_v4().to_string(),
-            source.now_millis(),
-        )
-        .await
-        .map(ProviderDto::from)
-        .map_err(CommandError::from)
+    let correlation = if created {
+        DiagnosticId::parse(&provider_id)
+    } else {
+        None
+    };
+    log_command(
+        "save_provider",
+        Some(if created { "created" } else { "updated" }),
+        correlation,
+        async {
+            validate_id("id", &provider_id)?;
+            let protocol = Protocol::from_db_text(&request.protocol).map_err(CommandError::from)?;
+            let pool = managed_sqlite_pool(instances.inner())
+                .await
+                .map_err(CommandError::from)?;
+            let service = production_service(pool);
+            let source = SystemIdentityTimeSource;
+            service
+                .save(
+                    &provider_id,
+                    ProviderInput {
+                        name: request.name,
+                        protocol,
+                        base_endpoint: request.base_endpoint,
+                        model: request.model,
+                        models: request.models,
+                        api_key: request.api_key.into(),
+                    },
+                    Uuid::new_v4().to_string(),
+                    Uuid::new_v4().to_string(),
+                    source.now_millis(),
+                )
+                .await
+                .map(ProviderDto::from)
+                .map_err(CommandError::from)
+        },
+    )
+    .await
 }
 
 #[tauri::command]
@@ -406,15 +435,18 @@ pub async fn delete_provider(
     request: DeleteProviderRequest,
     instances: State<'_, DbInstances>,
 ) -> Result<DeleteProviderResult, CommandError> {
-    validate_id("provider_id", &request.provider_id)?;
-    let pool = managed_sqlite_pool(instances.inner())
-        .await
-        .map_err(CommandError::from)?;
-    production_service(pool)
-        .delete(&request.provider_id, Uuid::new_v4().to_string())
-        .await
-        .map(|deleted| DeleteProviderResult { deleted })
-        .map_err(CommandError::from)
+    log_command("delete_provider", Some("completed"), None, async {
+        validate_id("provider_id", &request.provider_id)?;
+        let pool = managed_sqlite_pool(instances.inner())
+            .await
+            .map_err(CommandError::from)?;
+        production_service(pool)
+            .delete(&request.provider_id, Uuid::new_v4().to_string())
+            .await
+            .map(|deleted| DeleteProviderResult { deleted })
+            .map_err(CommandError::from)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -422,15 +454,18 @@ pub async fn set_active_provider(
     request: SetActiveProviderRequest,
     instances: State<'_, DbInstances>,
 ) -> Result<SetActiveProviderResult, CommandError> {
-    validate_id("provider_id", &request.provider_id)?;
-    let pool = managed_sqlite_pool(instances.inner())
-        .await
-        .map_err(CommandError::from)?;
-    production_service(pool)
-        .set_active(&request.provider_id)
-        .await
-        .map(|active_provider_id| SetActiveProviderResult { active_provider_id })
-        .map_err(CommandError::from)
+    log_command("set_active_provider", Some("completed"), None, async {
+        validate_id("provider_id", &request.provider_id)?;
+        let pool = managed_sqlite_pool(instances.inner())
+            .await
+            .map_err(CommandError::from)?;
+        production_service(pool)
+            .set_active(&request.provider_id)
+            .await
+            .map(|active_provider_id| SetActiveProviderResult { active_provider_id })
+            .map_err(CommandError::from)
+    })
+    .await
 }
 
 /// Returns one stored provider's API key in plaintext for the settings
@@ -441,18 +476,21 @@ pub async fn reveal_provider_api_key(
     request: RevealProviderApiKeyRequest,
     instances: State<'_, DbInstances>,
 ) -> Result<RevealProviderApiKeyResult, CommandError> {
-    validate_id("provider_id", &request.provider_id)?;
-    let pool = managed_sqlite_pool(instances.inner())
-        .await
-        .map_err(CommandError::from)?;
-    let (_, secret) = production_service(pool)
-        .load_by_id_with_secret(&request.provider_id)
-        .await
-        .map_err(CommandError::from)?;
-    use secrecy::ExposeSecret;
-    Ok(RevealProviderApiKeyResult {
-        api_key: secret.map(|secret| secret.expose_secret().to_owned()),
+    log_command("reveal_provider_api_key", None, None, async {
+        validate_id("provider_id", &request.provider_id)?;
+        let pool = managed_sqlite_pool(instances.inner())
+            .await
+            .map_err(CommandError::from)?;
+        let (_, secret) = production_service(pool)
+            .load_by_id_with_secret(&request.provider_id)
+            .await
+            .map_err(CommandError::from)?;
+        use secrecy::ExposeSecret;
+        Ok(RevealProviderApiKeyResult {
+            api_key: secret.map(|secret| secret.expose_secret().to_owned()),
+        })
     })
+    .await
 }
 
 #[tauri::command]
@@ -460,40 +498,43 @@ pub async fn list_provider_models(
     request: ListProviderModelsRequest,
     instances: State<'_, DbInstances>,
 ) -> Result<ListProviderModelsResult, CommandError> {
-    let pool = managed_sqlite_pool(instances.inner())
-        .await
-        .map_err(CommandError::from)?;
-    let service = production_service(pool);
-    let models = match request.source {
-        ModelListSourceRequest::Saved { provider_id } => {
-            validate_id("provider_id", &provider_id)?;
-            let (provider, secret) = service
-                .load_by_id_with_secret(&provider_id)
-                .await
-                .map_err(CommandError::from)?;
-            let endpoint =
-                super::ValidatedEndpoint::parse(&provider.base_endpoint, provider.protocol)
+    log_command("list_provider_models", None, None, async {
+        let pool = managed_sqlite_pool(instances.inner())
+            .await
+            .map_err(CommandError::from)?;
+        let service = production_service(pool);
+        let models = match request.source {
+            ModelListSourceRequest::Saved { provider_id } => {
+                validate_id("provider_id", &provider_id)?;
+                let (provider, secret) = service
+                    .load_by_id_with_secret(&provider_id)
+                    .await
                     .map_err(CommandError::from)?;
-            list_models(provider.protocol, &endpoint, secret.as_ref()).await
+                let endpoint =
+                    super::ValidatedEndpoint::parse(&provider.base_endpoint, provider.protocol)
+                        .map_err(CommandError::from)?;
+                list_models(provider.protocol, &endpoint, secret.as_ref()).await
+            }
+            ModelListSourceRequest::Draft {
+                protocol,
+                base_endpoint,
+                api_key,
+            } => {
+                let protocol = Protocol::from_db_text(&protocol).map_err(CommandError::from)?;
+                let endpoint = super::ValidatedEndpoint::parse(&base_endpoint, protocol)
+                    .map_err(CommandError::from)?;
+                let secret = api_key
+                    .filter(|key| !key.is_empty())
+                    .map(SecretString::from);
+                list_models(protocol, &endpoint, secret.as_ref()).await
+            }
         }
-        ModelListSourceRequest::Draft {
-            protocol,
-            base_endpoint,
-            api_key,
-        } => {
-            let protocol = Protocol::from_db_text(&protocol).map_err(CommandError::from)?;
-            let endpoint = super::ValidatedEndpoint::parse(&base_endpoint, protocol)
-                .map_err(CommandError::from)?;
-            let secret = api_key
-                .filter(|key| !key.is_empty())
-                .map(SecretString::from);
-            list_models(protocol, &endpoint, secret.as_ref()).await
-        }
-    }
-    .map_err(CommandError::from)?;
-    Ok(ListProviderModelsResult {
-        models: models.into_iter().map(ModelSummaryDto::from).collect(),
+        .map_err(CommandError::from)?;
+        Ok(ListProviderModelsResult {
+            models: models.into_iter().map(ModelSummaryDto::from).collect(),
+        })
     })
+    .await
 }
 
 #[tauri::command]
@@ -506,81 +547,127 @@ pub async fn generate_from_active_path<R: tauri::Runtime>(
 ) -> Result<GenerationTerminalDto, CommandError> {
     validate_id("conversation_id", &request.conversation_id)?;
     validate_id("active_node_id", &request.active_node_id)?;
-    let pool = managed_sqlite_pool(instances.inner())
+    let generation_uuid = Uuid::new_v4();
+    let diagnostic_id = DiagnosticId::from_uuid(generation_uuid);
+    let generation_id = generation_uuid.to_string();
+    let started_at = Instant::now();
+    let result = async {
+        let pool = managed_sqlite_pool(instances.inner())
+            .await
+            .map_err(CommandError::from)?;
+        let profile_service = production_service(pool.clone());
+        let prepared = prepare_generation(
+            pool.clone(),
+            &profile_service,
+            runtime.inner(),
+            request.conversation_id.clone(),
+            request.active_node_id.clone(),
+            generation_id.clone(),
+        )
         .await
         .map_err(CommandError::from)?;
-    let profile_service = production_service(pool.clone());
-    let generation_id = Uuid::new_v4().to_string();
-    let prepared = prepare_generation(
-        pool.clone(),
-        &profile_service,
-        runtime.inner(),
-        request.conversation_id.clone(),
-        request.active_node_id.clone(),
-        generation_id.clone(),
-    )
-    .await
-    .map_err(CommandError::from)?;
 
-    let started = GenerationEventDto::Started {
-        generation_id: generation_id.clone(),
-        conversation_id: prepared.conversation_id().to_owned(),
-        active_node_id: prepared.active_node_id().to_owned(),
-        model: prepared.model().to_owned(),
-    };
-    if on_event.send(started).is_err() {
-        let _ = runtime.inner().cancel(&generation_id);
-        return Ok(GenerationTerminalDto::Cancelled { generation_id });
-    }
-
-    let delta_channel = on_event.clone();
-    let delta_generation_id = generation_id.clone();
-    let thinking_channel = on_event.clone();
-    let thinking_generation_id = generation_id.clone();
-    let run_result = prepared
-        .run(
-            move |content| {
-                delta_channel
-                    .send(GenerationEventDto::Delta {
-                        generation_id: delta_generation_id.clone(),
-                        content: content.to_owned(),
-                    })
-                    .map_err(|_| ProviderError::Cancelled)
-            },
-            move |content| {
-                thinking_channel
-                    .send(GenerationEventDto::ThinkingDelta {
-                        generation_id: thinking_generation_id.clone(),
-                        content: content.to_owned(),
-                    })
-                    .map_err(|_| ProviderError::Cancelled)
-            },
-        )
-        .await;
-
-    Ok(match run_result.outcome {
-        GenerationOutcome::Completed(node) => {
-            super::titles::spawn_auto_title(
-                pool,
-                profile_service,
-                app,
-                node.conversation_id.clone(),
+        let started = GenerationEventDto::Started {
+            generation_id: generation_id.clone(),
+            conversation_id: prepared.conversation_id().to_owned(),
+            active_node_id: prepared.active_node_id().to_owned(),
+            model: prepared.model().to_owned(),
+        };
+        if on_event.send(started).is_err() {
+            let _ = runtime.inner().cancel(&generation_id);
+            record_generation(
+                "generate_from_active_path",
+                "cancelled",
+                diagnostic_id.clone(),
+                Some(elapsed_ms(started_at)),
             );
-            GenerationTerminalDto::Completed {
-                generation_id,
-                node: node.into(),
-            }
+            return Ok(GenerationTerminalDto::Cancelled { generation_id });
         }
-        GenerationOutcome::Failed { stage, error } => GenerationTerminalDto::Failed {
-            generation_id,
-            stage: match stage {
-                GenerationStage::Generation => GenerationFailureStage::Generation,
-                GenerationStage::Persistence => GenerationFailureStage::Persistence,
-            },
-            error: CommandError::from(error),
-        },
-        GenerationOutcome::Cancelled => GenerationTerminalDto::Cancelled { generation_id },
-    })
+        record_generation(
+            "generate_from_active_path",
+            "started",
+            diagnostic_id.clone(),
+            None,
+        );
+
+        let delta_channel = on_event.clone();
+        let delta_generation_id = generation_id.clone();
+        let thinking_channel = on_event.clone();
+        let thinking_generation_id = generation_id.clone();
+        let run_result = prepared
+            .run(
+                move |content| {
+                    delta_channel
+                        .send(GenerationEventDto::Delta {
+                            generation_id: delta_generation_id.clone(),
+                            content: content.to_owned(),
+                        })
+                        .map_err(|_| ProviderError::Cancelled)
+                },
+                move |content| {
+                    thinking_channel
+                        .send(GenerationEventDto::ThinkingDelta {
+                            generation_id: thinking_generation_id.clone(),
+                            content: content.to_owned(),
+                        })
+                        .map_err(|_| ProviderError::Cancelled)
+                },
+            )
+            .await;
+
+        let duration_ms = Some(elapsed_ms(started_at));
+        Ok(match run_result.outcome {
+            GenerationOutcome::Completed(node) => {
+                record_generation(
+                    "generate_from_active_path",
+                    "completed",
+                    diagnostic_id.clone(),
+                    duration_ms,
+                );
+                super::titles::spawn_auto_title(
+                    pool,
+                    profile_service,
+                    app,
+                    node.conversation_id.clone(),
+                );
+                GenerationTerminalDto::Completed {
+                    generation_id,
+                    node: node.into(),
+                }
+            }
+            GenerationOutcome::Failed { stage, error } => {
+                let code = match stage {
+                    GenerationStage::Generation => "generation_failed",
+                    GenerationStage::Persistence => "persistence_failed",
+                };
+                record_generation(
+                    "generate_from_active_path",
+                    code,
+                    diagnostic_id.clone(),
+                    duration_ms,
+                );
+                GenerationTerminalDto::Failed {
+                    generation_id,
+                    stage: match stage {
+                        GenerationStage::Generation => GenerationFailureStage::Generation,
+                        GenerationStage::Persistence => GenerationFailureStage::Persistence,
+                    },
+                    error: CommandError::from(error),
+                }
+            }
+            GenerationOutcome::Cancelled => {
+                record_generation(
+                    "generate_from_active_path",
+                    "cancelled",
+                    diagnostic_id.clone(),
+                    duration_ms,
+                );
+                GenerationTerminalDto::Cancelled { generation_id }
+            }
+        })
+    }
+    .await;
+    command_result("generate_from_active_path", result, Some(diagnostic_id))
 }
 
 #[tauri::command]
@@ -588,11 +675,21 @@ pub fn cancel_generation(
     request: CancelGenerationRequest,
     runtime: State<'_, GenerationRuntime>,
 ) -> Result<CancelGenerationResult, CommandError> {
-    validate_uuid_v4("generation_id", &request.generation_id)?;
-    runtime
-        .cancel(&request.generation_id)
-        .map(|accepted| CancelGenerationResult { accepted })
-        .map_err(CommandError::from)
+    command_result(
+        "cancel_generation",
+        (|| {
+            validate_uuid_v4("generation_id", &request.generation_id)?;
+            runtime
+                .cancel(&request.generation_id)
+                .map(|accepted| CancelGenerationResult { accepted })
+                .map_err(CommandError::from)
+        })(),
+        DiagnosticId::parse(&request.generation_id),
+    )
+}
+
+fn elapsed_ms(started_at: Instant) -> u64 {
+    u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX)
 }
 
 fn validate_id(field: &'static str, value: &str) -> Result<(), CommandError> {
@@ -609,14 +706,6 @@ fn validate_uuid_v4(field: &'static str, value: &str) -> Result<(), CommandError
     } else {
         Ok(())
     }
-}
-
-fn is_canonical_uuid_v4(value: &str) -> bool {
-    Uuid::parse_str(value)
-        .ok()
-        .filter(|parsed| parsed.get_version() == Some(uuid::Version::Random))
-        .filter(|parsed| parsed.get_variant() == uuid::Variant::RFC4122)
-        .is_some_and(|parsed| parsed.to_string() == value)
 }
 
 fn deserialize_uuid_v4<'de, D>(deserializer: D) -> Result<String, D::Error>

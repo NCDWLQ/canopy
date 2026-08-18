@@ -10,8 +10,10 @@ use super::{
     Conversation, ConversationPersistenceService, ConversationSummary, ConversationTree,
     NewConversation, NewNode, Node, ReasoningEffort, Role, ValidatedPath,
 };
+use crate::database::managed_sqlite_pool;
+use crate::diagnostics::logging::log_command;
+use crate::error::CommandError;
 use crate::providers::domain::validate_model;
-use crate::{database::managed_sqlite_pool, error::CommandError};
 
 const MAX_TITLE_CHARS: usize = 200;
 const MAX_CONTENT_BYTES: usize = 1024 * 1024;
@@ -570,10 +572,13 @@ pub async fn create_conversation(
     request: CreateConversationRequest,
     instances: State<'_, DbInstances>,
 ) -> Result<ConversationTreeDto, CommandError> {
-    production_service(instances.inner())
-        .await?
-        .create_conversation(request)
-        .await
+    log_command("create_conversation", Some("completed"), None, async {
+        production_service(instances.inner())
+            .await?
+            .create_conversation(request)
+            .await
+    })
+    .await
 }
 
 #[tauri::command]
@@ -581,10 +586,13 @@ pub async fn append_node(
     request: AppendNodeRequest,
     instances: State<'_, DbInstances>,
 ) -> Result<NodeDto, CommandError> {
-    production_service(instances.inner())
-        .await?
-        .append_node(request)
-        .await
+    log_command("append_node", Some("completed"), None, async {
+        production_service(instances.inner())
+            .await?
+            .append_node(request)
+            .await
+    })
+    .await
 }
 
 #[tauri::command]
@@ -592,10 +600,13 @@ pub async fn create_branch(
     request: CreateBranchRequest,
     instances: State<'_, DbInstances>,
 ) -> Result<NodeDto, CommandError> {
-    production_service(instances.inner())
-        .await?
-        .create_branch(request)
-        .await
+    log_command("create_branch", Some("completed"), None, async {
+        production_service(instances.inner())
+            .await?
+            .create_branch(request)
+            .await
+    })
+    .await
 }
 
 #[tauri::command]
@@ -603,10 +614,13 @@ pub async fn edit_node_as_branch(
     request: EditNodeAsBranchRequest,
     instances: State<'_, DbInstances>,
 ) -> Result<NodeDto, CommandError> {
-    production_service(instances.inner())
-        .await?
-        .edit_node_as_branch(request)
-        .await
+    log_command("edit_node_as_branch", Some("completed"), None, async {
+        production_service(instances.inner())
+            .await?
+            .edit_node_as_branch(request)
+            .await
+    })
+    .await
 }
 
 #[tauri::command]
@@ -614,10 +628,13 @@ pub async fn load_conversation_tree(
     request: LoadConversationTreeRequest,
     instances: State<'_, DbInstances>,
 ) -> Result<ConversationTreeDto, CommandError> {
-    production_service(instances.inner())
-        .await?
-        .load_conversation_tree(request)
-        .await
+    log_command("load_conversation_tree", None, None, async {
+        production_service(instances.inner())
+            .await?
+            .load_conversation_tree(request)
+            .await
+    })
+    .await
 }
 
 #[tauri::command]
@@ -625,10 +642,13 @@ pub async fn list_conversations(
     request: ListConversationsRequest,
     instances: State<'_, DbInstances>,
 ) -> Result<Vec<ConversationSummaryDto>, CommandError> {
-    production_service(instances.inner())
-        .await?
-        .list_conversations(request)
-        .await
+    log_command("list_conversations", None, None, async {
+        production_service(instances.inner())
+            .await?
+            .list_conversations(request)
+            .await
+    })
+    .await
 }
 
 #[tauri::command]
@@ -636,10 +656,13 @@ pub async fn load_active_path(
     request: LoadActivePathRequest,
     instances: State<'_, DbInstances>,
 ) -> Result<ActivePathDto, CommandError> {
-    production_service(instances.inner())
-        .await?
-        .load_active_path(request)
-        .await
+    log_command("load_active_path", None, None, async {
+        production_service(instances.inner())
+            .await?
+            .load_active_path(request)
+            .await
+    })
+    .await
 }
 
 #[tauri::command]
@@ -647,10 +670,13 @@ pub async fn archive_conversation(
     request: ArchiveConversationRequest,
     instances: State<'_, DbInstances>,
 ) -> Result<ConversationDto, CommandError> {
-    production_service(instances.inner())
-        .await?
-        .archive_conversation(request)
-        .await
+    log_command("archive_conversation", Some("completed"), None, async {
+        production_service(instances.inner())
+            .await?
+            .archive_conversation(request)
+            .await
+    })
+    .await
 }
 
 #[tauri::command]
@@ -658,10 +684,18 @@ pub async fn set_conversation_provider(
     request: SetConversationProviderRequest,
     instances: State<'_, DbInstances>,
 ) -> Result<ConversationProviderBindingResult, CommandError> {
-    production_service(instances.inner())
-        .await?
-        .set_conversation_provider(request)
-        .await
+    log_command(
+        "set_conversation_provider",
+        Some("completed"),
+        None,
+        async {
+            production_service(instances.inner())
+                .await?
+                .set_conversation_provider(request)
+                .await
+        },
+    )
+    .await
 }
 
 #[cfg(test)]

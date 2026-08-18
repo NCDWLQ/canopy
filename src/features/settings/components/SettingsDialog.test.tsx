@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { SettingsDialog } from "./SettingsDialog"
 import { useProviderStore } from "@/features/providers/store"
 import type { ProviderView } from "@/features/providers/types"
-import type { ProviderClient } from "@/lib/tauri"
+import type { DiagnosticsClient, ProviderClient } from "@/lib/tauri"
 
 const provider: ProviderView = {
   id: "provider-1",
@@ -17,6 +17,27 @@ const provider: ProviderView = {
   hasApiKey: true,
   createdAt: 1,
   updatedAt: 10,
+}
+
+function diagnosticsClient(): DiagnosticsClient {
+  return {
+    getLoggingSettings: vi.fn().mockResolvedValue({
+      configured: { maxFileMib: 5, maxFiles: 5 },
+      active: { maxFileMib: 5, maxFiles: 5 },
+      limits: {
+        defaultMaxFileMib: 5,
+        defaultMaxFiles: 5,
+        maxFileMib: 20,
+        maxFiles: 10,
+        maxTotalMib: 100,
+      },
+      configStatus: "default",
+      sinkStatus: "persistent",
+      restartRequired: false,
+    }),
+    saveLoggingSettings: vi.fn(),
+    openLogDirectory: vi.fn(),
+  }
 }
 
 function client() {
@@ -138,7 +159,11 @@ describe("SettingsDialog", () => {
     const bridge = client()
     bridge.revealProviderApiKey.mockResolvedValue("STORED_SECRET_SENTINEL")
     render(
-      <SettingsDialog client={bridge as ProviderClient} readOnly={false} />,
+      <SettingsDialog
+        client={bridge as ProviderClient}
+        diagnosticsClient={diagnosticsClient()}
+        readOnly={false}
+      />,
     )
     await user.click(screen.getByRole("button", { name: "设置" }))
     await user.click(
@@ -150,8 +175,28 @@ describe("SettingsDialog", () => {
     expect(screen.getByRole("heading", { name: "会话" })).toBeVisible()
     expect(screen.getByRole("switch", { name: "自动生成标题" })).toBeVisible()
     expect(screen.queryByLabelText("API 密钥")).not.toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "诊断" }))
+    expect(screen.getByRole("heading", { name: "诊断" })).toBeVisible()
     await user.click(screen.getByRole("button", { name: "模型提供商" }))
     expect(screen.getByRole("heading", { name: "全部提供商" })).toBeVisible()
     expect(screen.queryByLabelText("API 密钥")).not.toBeInTheDocument()
+  })
+
+  it("keeps diagnostics available when conversation settings are read-only", async () => {
+    const user = userEvent.setup()
+    render(
+      <SettingsDialog
+        client={client() as ProviderClient}
+        diagnosticsClient={diagnosticsClient()}
+        readOnly
+      />,
+    )
+    await user.click(screen.getByRole("button", { name: "设置" }))
+    await user.click(screen.getByRole("button", { name: "诊断" }))
+    expect(screen.getByRole("heading", { name: "诊断" })).toBeVisible()
+    expect(screen.getByRole("button", { name: "打开日志目录" })).toBeEnabled()
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "保存" })).toBeEnabled(),
+    )
   })
 })

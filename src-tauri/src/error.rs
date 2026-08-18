@@ -29,6 +29,24 @@ pub struct CommandError {
     pub details: Option<Value>,
 }
 
+impl CommandErrorCode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::InvalidInput => "invalid_input",
+            Self::NotFound => "not_found",
+            Self::TreeIntegrity => "tree_integrity",
+            Self::DatabaseUnavailable => "database_unavailable",
+            Self::MigrationFailure => "migration_failure",
+            Self::ProviderAuthentication => "provider_authentication",
+            Self::RateLimited => "rate_limited",
+            Self::ProviderUnavailable => "provider_unavailable",
+            Self::NetworkFailure => "network_failure",
+            Self::Cancelled => "cancelled",
+            Self::Internal => "internal",
+        }
+    }
+}
+
 impl CommandError {
     pub fn invalid_input(field: &'static str, reason: &'static str) -> Self {
         Self {

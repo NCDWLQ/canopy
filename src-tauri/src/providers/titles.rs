@@ -5,6 +5,7 @@ use tokio_util::sync::CancellationToken;
 use crate::conversations::{
     commands::validate_title, AutoTitleContext, ConversationPersistenceService,
 };
+use crate::diagnostics::record_lifecycle;
 
 use super::{
     anthropic, openai_compatible::OpenAiCompatibleClient, title_prompt::build_title_prompt,
@@ -30,9 +31,7 @@ pub(crate) fn spawn_auto_title<R: Runtime>(
             .await
             .is_err()
         {
-            log::warn!(
-                "operation=auto_generate_title code=title_generation_skipped conversation_id={conversation_id}"
-            );
+            record_lifecycle("auto_generate_title", "title_generation_skipped", None);
         }
     });
 }

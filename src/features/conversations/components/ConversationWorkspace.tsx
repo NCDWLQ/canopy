@@ -46,12 +46,14 @@ import {
   createConversationClient,
   createProviderClient,
   type ConversationClient,
+  type DiagnosticsClient,
   type ProviderClient,
 } from "@/lib/tauri"
 
 export type ConversationWorkspaceProps = {
   conversationClient?: ConversationClient
   providerClient?: ProviderClient
+  diagnosticsClient?: DiagnosticsClient
 }
 
 type AssistantRegenerationTarget = {
@@ -110,6 +112,7 @@ function resolveAssistantRegenerationTarget(
 export function ConversationWorkspace({
   conversationClient: injectedConversationClient,
   providerClient: injectedProviderClient,
+  diagnosticsClient: injectedDiagnosticsClient,
 }: ConversationWorkspaceProps = {}) {
   useConversationTitleUpdates()
   const client = React.useMemo(
@@ -483,6 +486,7 @@ export function ConversationWorkspace({
         <footer className="shrink-0 p-2">
           <SettingsDialog
             client={providerClient}
+            diagnosticsClient={injectedDiagnosticsClient}
             readOnly={!isBlankConversation && store.isArchived}
             open={isSettingsOpen}
             onOpenChange={setIsSettingsOpen}

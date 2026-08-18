@@ -1,9 +1,12 @@
 pub mod conversations;
 pub mod database;
+pub mod diagnostics;
 pub mod error;
+pub mod identifiers;
 pub mod providers;
 
 use database::{plugin_migrations, DATABASE_URL};
+use diagnostics::{record_lifecycle, record_startup_failure};
 
 #[cfg(test)]
 fn register_conversation_commands<R: tauri::Runtime>(
@@ -43,34 +46,38 @@ fn register_commands<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Bu
         providers::commands::generate_from_active_path,
         providers::commands::cancel_generation,
         providers::commands::list_provider_models,
+        diagnostics::commands::get_logging_settings,
+        diagnostics::commands::save_logging_settings,
+        diagnostics::commands::open_log_directory,
     ])
 }
 
 fn app_builder() -> tauri::Builder<tauri::Wry> {
     register_commands(tauri::Builder::default())
         .manage(providers::GenerationRuntime::default())
+        .plugin(diagnostics::diagnostics_bootstrap_plugin())
+        .plugin(
+            tauri_plugin_opener::Builder::new()
+                .open_js_links_on_click(false)
+                .build(),
+        )
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations(DATABASE_URL, plugin_migrations())
                 .build(),
         )
-        .setup(|app| {
-            if cfg!(debug_assertions) {
-                app.handle().plugin(
-                    tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
-                        .build(),
-                )?;
-            }
+        .setup(|_app| {
+            record_lifecycle("run_application", "ready", None);
             Ok(())
         })
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    app_builder()
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+    if let Err(error) = app_builder().run(tauri::generate_context!()) {
+        record_startup_failure(&error);
+        panic!("Canopy failed to start.");
+    }
 }
 
 #[cfg(test)]

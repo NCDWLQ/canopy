@@ -1,7 +1,8 @@
 import * as React from "react"
-import { Bot, MessageSquare, Settings2 } from "lucide-react"
+import { Bot, HeartPulse, MessageSquare, Settings2 } from "lucide-react"
 
 import { ConversationSettingsPanel } from "./ConversationSettingsPanel"
+import { DiagnosticsPanel } from "./DiagnosticsPanel"
 import { ProviderSettingsPanel } from "@/features/providers/components/ProviderSettingsPanel"
 import { Button } from "@/components/ui/button"
 import {
@@ -12,10 +13,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import type { ProviderClient } from "@/lib/tauri"
+import type { DiagnosticsClient, ProviderClient } from "@/lib/tauri"
 
 type SettingsDialogBaseProps = {
   client: ProviderClient
+  diagnosticsClient?: DiagnosticsClient
   readOnly: boolean
 }
 
@@ -25,10 +27,10 @@ export type SettingsDialogProps = SettingsDialogBaseProps &
     | { open: boolean; onOpenChange: (open: boolean) => void }
   )
 
-type SettingsCategory = "providers" | "conversation"
+type SettingsCategory = "providers" | "conversation" | "diagnostics"
 
 export function SettingsDialog(props: SettingsDialogProps) {
-  const { client, readOnly } = props
+  const { client, diagnosticsClient, readOnly } = props
   const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false)
   const [category, setCategory] = React.useState<SettingsCategory>("providers")
   const [providerSessionKey, setProviderSessionKey] = React.useState(0)
@@ -95,6 +97,16 @@ export function SettingsDialog(props: SettingsDialogProps) {
               <MessageSquare data-icon="inline-start" />
               会话
             </Button>
+            <Button
+              type="button"
+              variant={category === "diagnostics" ? "secondary" : "ghost"}
+              className="w-full justify-start"
+              aria-current={category === "diagnostics" ? "page" : undefined}
+              onClick={() => selectCategory("diagnostics")}
+            >
+              <HeartPulse data-icon="inline-start" />
+              诊断
+            </Button>
           </nav>
           <div className="flex min-h-0 min-w-0 flex-col">
             {open &&
@@ -103,6 +115,8 @@ export function SettingsDialog(props: SettingsDialogProps) {
                   client={client}
                   readOnly={readOnly}
                 />
+              ) : category === "diagnostics" ? (
+                <DiagnosticsPanel client={diagnosticsClient} />
               ) : (
                 <ProviderSettingsPanel
                   key={providerSessionKey}
