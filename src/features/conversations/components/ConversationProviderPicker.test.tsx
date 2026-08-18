@@ -68,9 +68,7 @@ describe("ConversationProviderPicker", () => {
     expect(
       screen.getByRole("button", { name: "选择模型与推理强度" }),
     ).not.toHaveTextContent("OpenAI")
-    await user.click(
-      screen.getByRole("button", { name: "选择模型与推理强度" }),
-    )
+    await user.click(screen.getByRole("button", { name: "选择模型与推理强度" }))
     expect(screen.queryByText("跟随全局默认")).toBeNull()
     expect(screen.getByRole("listbox", { name: "服务提供商" })).toBeVisible()
     expect(screen.getByRole("listbox", { name: "模型" })).toBeVisible()
@@ -108,9 +106,7 @@ describe("ConversationProviderPicker", () => {
       />,
     )
 
-    await user.click(
-      screen.getByRole("button", { name: "选择模型与推理强度" }),
-    )
+    await user.click(screen.getByRole("button", { name: "选择模型与推理强度" }))
     await user.click(screen.getByRole("option", { name: /OpenAI/ }))
 
     expect(conversationClient.setConversationProvider).toHaveBeenCalledWith({
@@ -142,9 +138,7 @@ describe("ConversationProviderPicker", () => {
       />,
     )
 
-    await user.click(
-      screen.getByRole("button", { name: "选择模型与推理强度" }),
-    )
+    await user.click(screen.getByRole("button", { name: "选择模型与推理强度" }))
     await user.click(screen.getByRole("option", { name: "gpt-alt" }))
 
     expect(conversationClient.setConversationProvider).toHaveBeenCalledWith({
@@ -176,9 +170,7 @@ describe("ConversationProviderPicker", () => {
       />,
     )
 
-    await user.click(
-      screen.getByRole("button", { name: "选择模型与推理强度" }),
-    )
+    await user.click(screen.getByRole("button", { name: "选择模型与推理强度" }))
     await user.click(screen.getByRole("radio", { name: "高" }))
 
     expect(conversationClient.setConversationProvider).toHaveBeenCalledWith({
@@ -210,9 +202,7 @@ describe("ConversationProviderPicker", () => {
       />,
     )
 
-    await user.click(
-      screen.getByRole("button", { name: "选择模型与推理强度" }),
-    )
+    await user.click(screen.getByRole("button", { name: "选择模型与推理强度" }))
     await user.click(screen.getByRole("radio", { name: "高" }))
 
     expect(conversationClient.setConversationProvider).toHaveBeenCalledWith({
@@ -264,9 +254,7 @@ describe("ConversationProviderPicker", () => {
       />,
     )
 
-    await user.click(
-      screen.getByRole("button", { name: "选择模型与推理强度" }),
-    )
+    await user.click(screen.getByRole("button", { name: "选择模型与推理强度" }))
     await user.click(screen.getByRole("option", { name: "gpt-alt" }))
 
     expect(setConversationProvider).not.toHaveBeenCalled()
@@ -297,9 +285,7 @@ describe("ConversationProviderPicker", () => {
     expect(
       screen.getByRole("button", { name: "选择模型与推理强度" }),
     ).toBeDisabled()
-    await user.click(
-      screen.getByRole("button", { name: "选择模型与推理强度" }),
-    )
+    await user.click(screen.getByRole("button", { name: "选择模型与推理强度" }))
     expect(setConversationProvider).not.toHaveBeenCalled()
   })
 })

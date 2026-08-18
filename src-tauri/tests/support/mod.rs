@@ -80,9 +80,7 @@ impl TestServer {
                         return;
                     }
                     bytes.extend_from_slice(&buffer[..count]);
-                    if let Some(index) =
-                        bytes.windows(4).position(|window| window == b"\r\n\r\n")
-                    {
+                    if let Some(index) = bytes.windows(4).position(|window| window == b"\r\n\r\n") {
                         break index + 4;
                     }
                 };

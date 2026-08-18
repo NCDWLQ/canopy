@@ -296,11 +296,10 @@ fn provider_models_migration_backfills_each_default_model() {
             .expect("provider-models migration is registered");
         sqlx::raw_sql(migration.sql).execute(&pool).await.unwrap();
 
-        let (models,): (String,) =
-            sqlx::query_as("SELECT models FROM providers WHERE id = 'p1'")
-                .fetch_one(&pool)
-                .await
-                .unwrap();
+        let (models,): (String,) = sqlx::query_as("SELECT models FROM providers WHERE id = 'p1'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
         assert_eq!(models, r#"["one-model"]"#);
     });
 }

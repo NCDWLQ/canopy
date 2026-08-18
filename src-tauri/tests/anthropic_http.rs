@@ -64,10 +64,7 @@ async fn protocol_path() -> ValidatedPath {
 
 fn anthropic_events() -> Vec<Vec<u8>> {
     vec![
-        sse_event(
-            "message_start",
-            r#"{"type":"message_start","message":{}}"#,
-        ),
+        sse_event("message_start", r#"{"type":"message_start","message":{}}"#),
         sse_event(
             "content_block_start",
             r#"{"type":"content_block_start","index":0,"content_block":{"type":"thinking"}}"#,
@@ -180,8 +177,7 @@ fn anthropic_stream_maps_effort_to_the_budget_ladder() {
                 &[("Content-Type", "text/event-stream")],
                 anthropic_events(),
             );
-            let endpoint =
-                ValidatedEndpoint::parse(&server.endpoint, Protocol::Anthropic).unwrap();
+            let endpoint = ValidatedEndpoint::parse(&server.endpoint, Protocol::Anthropic).unwrap();
             let client = OpenAiCompatibleClient::new().unwrap();
             anthropic::stream(
                 &client,
@@ -226,8 +222,7 @@ fn anthropic_stream_accepts_max_tokens_stop_reason_and_closes_without_done() {
             ),
             sse_event("message_stop", r#"{"type":"message_stop"}"#),
         ];
-        let server =
-            TestServer::spawn("200 OK", &[("Content-Type", "text/event-stream")], events);
+        let server = TestServer::spawn("200 OK", &[("Content-Type", "text/event-stream")], events);
         let endpoint = ValidatedEndpoint::parse(&server.endpoint, Protocol::Anthropic).unwrap();
         let client = OpenAiCompatibleClient::new().unwrap();
         let generated = anthropic::stream(
@@ -334,8 +329,7 @@ fn anthropic_stream_failures_fail_closed_as_protocol_errors() {
         for chunks in cases {
             let server =
                 TestServer::spawn("200 OK", &[("Content-Type", "text/event-stream")], chunks);
-            let endpoint =
-                ValidatedEndpoint::parse(&server.endpoint, Protocol::Anthropic).unwrap();
+            let endpoint = ValidatedEndpoint::parse(&server.endpoint, Protocol::Anthropic).unwrap();
             let result = anthropic::stream(
                 &client,
                 StreamingRequest {
@@ -375,8 +369,7 @@ fn openai_stream_captures_reasoning_content_and_reasoning_thinking() {
             ),
             sse("[DONE]"),
         ];
-        let server =
-            TestServer::spawn("200 OK", &[("Content-Type", "text/event-stream")], chunks);
+        let server = TestServer::spawn("200 OK", &[("Content-Type", "text/event-stream")], chunks);
         let endpoint =
             ValidatedEndpoint::parse(&server.endpoint, Protocol::OpenAiCompatible).unwrap();
         let client = OpenAiCompatibleClient::new().unwrap();
@@ -422,16 +415,13 @@ fn openai_stream_prefers_reasoning_content_and_skips_empty_thinking() {
             sse(
                 r#"{"choices":[{"index":0,"delta":{"reasoning":"openrouter","reasoning_content":"preferred"},"finish_reason":null}]}"#,
             ),
-            sse(
-                r#"{"choices":[{"index":0,"delta":{"reasoning":"-tail"},"finish_reason":null}]}"#,
-            ),
+            sse(r#"{"choices":[{"index":0,"delta":{"reasoning":"-tail"},"finish_reason":null}]}"#),
             sse(
                 r#"{"choices":[{"index":0,"delta":{"content":"Generated answer"},"finish_reason":"stop"}]}"#,
             ),
             sse("[DONE]"),
         ];
-        let server =
-            TestServer::spawn("200 OK", &[("Content-Type", "text/event-stream")], chunks);
+        let server = TestServer::spawn("200 OK", &[("Content-Type", "text/event-stream")], chunks);
         let endpoint =
             ValidatedEndpoint::parse(&server.endpoint, Protocol::OpenAiCompatible).unwrap();
         let client = OpenAiCompatibleClient::new().unwrap();
@@ -474,8 +464,7 @@ fn openai_stream_without_thinking_fields_stays_a_plain_content_stream() {
             ),
             sse("[DONE]"),
         ];
-        let server =
-            TestServer::spawn("200 OK", &[("Content-Type", "text/event-stream")], chunks);
+        let server = TestServer::spawn("200 OK", &[("Content-Type", "text/event-stream")], chunks);
         let endpoint =
             ValidatedEndpoint::parse(&server.endpoint, Protocol::OpenAiCompatible).unwrap();
         let client = OpenAiCompatibleClient::new().unwrap();
@@ -612,10 +601,7 @@ fn model_lists_are_sorted_bounded_and_parsed_per_protocol() {
         let endpoint =
             ValidatedEndpoint::parse(&server.endpoint, Protocol::OpenAiCompatible).unwrap();
         let result = list_models(Protocol::OpenAiCompatible, &endpoint, None).await;
-        assert!(matches!(
-            result,
-            Err(ProviderError::Protocol)
-        ));
+        assert!(matches!(result, Err(ProviderError::Protocol)));
         server.finish();
     });
 }

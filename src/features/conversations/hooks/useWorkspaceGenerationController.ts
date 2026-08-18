@@ -429,13 +429,12 @@ export function useWorkspaceGenerationController({
         (binding !== null || reasoningEffort !== null) &&
         conversationClient.setConversationProvider !== undefined
       ) {
-        await useConversationStore.getState().setConversationProvider(
-          conversationClient,
-          {
+        await useConversationStore
+          .getState()
+          .setConversationProvider(conversationClient, {
             binding,
             reasoningEffort,
-          },
-        )
+          })
         if (useConversationStore.getState().error !== null) {
           return false
         }
