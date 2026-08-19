@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Check, ChevronDown, Eye, EyeOff, Plus, X } from "lucide-react"
+import { Check, Eye, EyeOff, Plus, X } from "lucide-react"
 
 import { resolveApiKeyAction } from "./apiKeyAction"
 import { useProviderStore } from "../store"
@@ -22,11 +22,13 @@ import {
 } from "@/components/ui/input-group"
 import { Spinner } from "@/components/ui/spinner"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import type { ProviderClient } from "@/lib/tauri"
 
 type ProviderDraft = {
@@ -274,43 +276,24 @@ export function ProviderSettingsEditor({
               />
             </Field>
             <Field data-disabled={mutationDisabled}>
-              <FieldLabel>协议</FieldLabel>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild disabled={mutationDisabled}>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full justify-between"
-                    disabled={mutationDisabled}
-                  >
-                    {draft.protocol === "anthropic"
-                      ? "Anthropic Messages"
-                      : "OpenAI 兼容"}
-                    <ChevronDown className="size-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="start"
-                  className="w-[var(--radix-dropdown-menu-trigger-width)]"
-                >
-                  <DropdownMenuItem
-                    onClick={() => updateDraft("protocol", "openai_compatible")}
-                  >
-                    {draft.protocol === "openai_compatible" && (
-                      <Check className="size-4" />
-                    )}
-                    OpenAI 兼容
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => updateDraft("protocol", "anthropic")}
-                  >
-                    {draft.protocol === "anthropic" && (
-                      <Check className="size-4" />
-                    )}
-                    Anthropic Messages
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <FieldLabel htmlFor="provider-protocol">协议</FieldLabel>
+              <Select
+                value={draft.protocol}
+                disabled={mutationDisabled}
+                onValueChange={(value) =>
+                  updateDraft("protocol", value as ProviderProtocol)
+                }
+              >
+                <SelectTrigger id="provider-protocol" className="w-full">
+                  <SelectValue placeholder="选择协议" />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  <SelectGroup>
+                    <SelectItem value="openai_compatible">OpenAI 兼容</SelectItem>
+                    <SelectItem value="anthropic">Anthropic Messages</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
             </Field>
             <Field data-disabled={mutationDisabled}>
               <FieldLabel htmlFor="provider-endpoint">基础端点</FieldLabel>
