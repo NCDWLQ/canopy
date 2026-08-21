@@ -414,9 +414,13 @@ export function ProviderSettingsEditor({
             >
               <FieldLabel htmlFor="provider-default-model">默认模型</FieldLabel>
               <Select
-                value={draft.model}
+                value={
+                  draft.models.includes(draft.model) ? draft.model : undefined
+                }
                 disabled={mutationDisabled || draft.models.length === 0}
-                onValueChange={(value) => updateDraft("model", value)}
+                onValueChange={(value) => {
+                  if (value !== "") updateDraft("model", value)
+                }}
               >
                 <SelectTrigger id="provider-default-model" className="w-full">
                   <SelectValue placeholder="选择默认模型" />
