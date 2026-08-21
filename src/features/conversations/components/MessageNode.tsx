@@ -14,6 +14,7 @@ import { MessageBubble } from "./MessageBubble"
 import { ThinkingBlock } from "./ThinkingBlock"
 import type { PathMessageView } from "../types"
 import { Button } from "@/components/ui/button"
+import { Textarea } from "@/components/ui/textarea"
 
 export type UserGenerationAction =
   | { kind: "generate"; onSelect: () => void }
@@ -53,11 +54,23 @@ export function MessageNode({
   const copyResetRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
 
   React.useEffect(() => {
-    if (isEditing) editInputRef.current?.focus()
+    if (isEditing) {
+      const el = editInputRef.current
+      if (el) {
+        el.focus()
+        el.setSelectionRange(el.value.length, el.value.length)
+      }
+    }
   }, [isEditing])
 
   React.useEffect(() => {
-    if (isBranching) branchInputRef.current?.focus()
+    if (isBranching) {
+      const el = branchInputRef.current
+      if (el) {
+        el.focus()
+        el.setSelectionRange(el.value.length, el.value.length)
+      }
+    }
   }, [isBranching])
 
   React.useEffect(() => {
@@ -113,7 +126,42 @@ export function MessageNode({
     <MessageBubble
       role={message.role}
       footer={
-        showGenerationAction ? (
+        isEditing ? (
+          <div className="flex justify-end gap-2 mt-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsEditing(false)}
+            >
+              <X className="size-3.5 mr-1" aria-hidden="true" /> 取消
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleEditSubmit}
+              disabled={!editContent.trim()}
+            >
+              <Check className="size-3.5 mr-1" aria-hidden="true" />{" "}
+              保存为新分支
+            </Button>
+          </div>
+        ) : isBranching ? (
+          <div className="flex justify-end gap-2 mt-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsBranching(false)}
+            >
+              <X className="size-3.5 mr-1" aria-hidden="true" /> 取消
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleBranchSubmit}
+              disabled={!branchContent.trim()}
+            >
+              <Check className="size-3.5 mr-1" aria-hidden="true" /> 创建分支
+            </Button>
+          </div>
+        ) : showGenerationAction ? (
           <div className="flex items-center justify-end">
             <Button
               variant="ghost"
@@ -203,59 +251,22 @@ export function MessageNode({
       }
     >
       {isEditing && canEdit ? (
-        <div className="w-full min-w-[260px] sm:min-w-[360px]">
-          <textarea
-            ref={editInputRef}
-            className="min-h-[100px] w-full resize-y rounded-md border bg-background p-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
-            value={editContent}
-            onChange={(e) => setEditContent(e.target.value)}
-            aria-label="编辑消息内容"
-          />
-          <div className="flex justify-end gap-2 mt-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsEditing(false)}
-            >
-              <X className="size-3.5 mr-1" aria-hidden="true" /> 取消
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleEditSubmit}
-              disabled={!editContent.trim()}
-            >
-              <Check className="size-3.5 mr-1" aria-hidden="true" />{" "}
-              保存为新分支
-            </Button>
-          </div>
-        </div>
+        <Textarea
+          ref={editInputRef}
+          className="w-full resize-none rounded-none border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0"
+          value={editContent}
+          onChange={(e) => setEditContent(e.target.value)}
+          aria-label="编辑消息内容"
+        />
       ) : isBranching && canBranch ? (
-        <div className="w-full min-w-[260px] sm:min-w-[360px]">
-          <textarea
-            ref={branchInputRef}
-            className="min-h-[100px] w-full resize-y rounded-md border bg-background p-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
-            placeholder="输入分支消息…"
-            value={branchContent}
-            onChange={(e) => setBranchContent(e.target.value)}
-            aria-label="分支消息内容"
-          />
-          <div className="flex justify-end gap-2 mt-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsBranching(false)}
-            >
-              <X className="size-3.5 mr-1" aria-hidden="true" /> 取消
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleBranchSubmit}
-              disabled={!branchContent.trim()}
-            >
-              <Check className="size-3.5 mr-1" aria-hidden="true" /> 创建分支
-            </Button>
-          </div>
-        </div>
+        <Textarea
+          ref={branchInputRef}
+          className="w-full resize-none rounded-none border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0"
+          placeholder="输入分支消息…"
+          value={branchContent}
+          onChange={(e) => setBranchContent(e.target.value)}
+          aria-label="分支消息内容"
+        />
       ) : message.role === "assistant" ? (
         <>
           {message.thinking !== undefined && (

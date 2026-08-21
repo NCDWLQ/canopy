@@ -9,7 +9,8 @@ import {
   type UserGenerationAction,
 } from "./MessageNode"
 import { Button } from "@/components/ui/button"
-import { AlertCircle, RefreshCw, Loader2 } from "lucide-react"
+import { AlertCircle, RefreshCw } from "lucide-react"
+import { Spinner } from "@/components/ui/spinner"
 
 export type { AssistantRegenerationAction, UserGenerationAction }
 
@@ -123,10 +124,7 @@ function TransientGenerationMessage({
           role="status"
           aria-live="polite"
         >
-          <Loader2
-            className="size-3.5 animate-spin motion-reduce:animate-none"
-            aria-hidden="true"
-          />
+          <Spinner className="size-3.5" aria-hidden="true" />
           {status}
         </span>
       ) : null}
@@ -173,10 +171,7 @@ export function ConversationPane({
   if (status === "loading" && path.length === 0) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
-        <Loader2
-          className="mb-4 size-8 animate-spin motion-reduce:animate-none"
-          aria-hidden="true"
-        />
+        <Spinner className="mb-4 size-8" aria-hidden="true" />
         <p>正在加载会话…</p>
       </div>
     )
@@ -256,8 +251,8 @@ export function ConversationPane({
         )}
         {status === "loading" && path.length > 0 && (
           <div className="flex justify-center p-4" aria-label="正在保存消息">
-            <Loader2
-              className="size-6 animate-spin text-muted-foreground motion-reduce:animate-none"
+            <Spinner
+              className="size-6 text-muted-foreground"
               aria-hidden="true"
             />
           </div>

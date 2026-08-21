@@ -1,10 +1,11 @@
 import * as React from "react"
-import { Check, ChevronDown, Eye, EyeOff, Plus, X } from "lucide-react"
+import { Eye, EyeOff, Plus, X } from "lucide-react"
 
 import { resolveApiKeyAction } from "./apiKeyAction"
 import { useProviderStore } from "../store"
 import type { ModelSummaryView, ProviderProtocol, ProviderView } from "../types"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Badge } from "@/components/reui/badge"
 import { Button } from "@/components/ui/button"
 import { DialogFooter } from "@/components/ui/dialog"
 import {
@@ -22,11 +23,14 @@ import {
 } from "@/components/ui/input-group"
 import { Spinner } from "@/components/ui/spinner"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Separator } from "@/components/ui/separator"
 import type { ProviderClient } from "@/lib/tauri"
 
 type ProviderDraft = {
@@ -274,43 +278,28 @@ export function ProviderSettingsEditor({
               />
             </Field>
             <Field data-disabled={mutationDisabled}>
-              <FieldLabel>协议</FieldLabel>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild disabled={mutationDisabled}>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full justify-between"
-                    disabled={mutationDisabled}
-                  >
-                    {draft.protocol === "anthropic"
-                      ? "Anthropic Messages"
-                      : "OpenAI 兼容"}
-                    <ChevronDown className="size-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="start"
-                  className="w-[var(--radix-dropdown-menu-trigger-width)]"
-                >
-                  <DropdownMenuItem
-                    onClick={() => updateDraft("protocol", "openai_compatible")}
-                  >
-                    {draft.protocol === "openai_compatible" && (
-                      <Check className="size-4" />
-                    )}
-                    OpenAI 兼容
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => updateDraft("protocol", "anthropic")}
-                  >
-                    {draft.protocol === "anthropic" && (
-                      <Check className="size-4" />
-                    )}
-                    Anthropic Messages
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <FieldLabel htmlFor="provider-protocol">协议</FieldLabel>
+              <Select
+                value={draft.protocol}
+                disabled={mutationDisabled}
+                onValueChange={(value) =>
+                  updateDraft("protocol", value as ProviderProtocol)
+                }
+              >
+                <SelectTrigger id="provider-protocol" className="w-full">
+                  <SelectValue placeholder="选择协议" />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  <SelectGroup>
+                    <SelectItem value="openai_compatible">
+                      OpenAI 兼容
+                    </SelectItem>
+                    <SelectItem value="anthropic">
+                      Anthropic Messages
+                    </SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
             </Field>
             <Field data-disabled={mutationDisabled}>
               <FieldLabel htmlFor="provider-endpoint">基础端点</FieldLabel>
@@ -376,56 +365,76 @@ export function ProviderSettingsEditor({
               {draft.models.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {draft.models.map((model) => (
-                    <span key={model} className="inline-flex items-center">
-                      <Button
+                    <Badge
+                      key={model}
+                      variant="outline"
+                      size="lg"
+                      className="gap-1 pr-1"
+                    >
+                      {model}
+                      <button
                         type="button"
-                        size="xs"
-                        variant={
-                          model === draft.model ? "secondary" : "outline"
-                        }
-                        aria-label={`设为默认：${model}`}
-                        disabled={mutationDisabled}
-                        onClick={() => updateDraft("model", model)}
-                      >
-                        {model === draft.model && (
-                          <Check data-icon="inline-start" aria-hidden="true" />
-                        )}
-                        {model}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-xs"
                         aria-label={`移除 ${model}`}
                         disabled={mutationDisabled || draft.models.length <= 1}
                         onClick={() => removeModel(model)}
+                        className="rounded-sm opacity-60 transition-opacity hover:opacity-100 disabled:pointer-events-none"
                       >
-                        <X aria-hidden="true" />
-                      </Button>
-                    </span>
+                        <X className="size-3" aria-hidden="true" />
+                      </button>
+                    </Badge>
                   ))}
                 </div>
               )}
               {models.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {models
-                    .filter((model) => !draft.models.includes(model.id))
-                    .map((model) => (
-                      <Button
-                        key={model.id}
-                        type="button"
-                        size="xs"
-                        variant="ghost"
-                        aria-label={`加入模型：${model.id}`}
-                        disabled={mutationDisabled}
-                        onClick={() => addModel(model.id)}
-                      >
-                        <Plus data-icon="inline-start" aria-hidden="true" />
-                        {model.displayName ?? model.id}
-                      </Button>
-                    ))}
-                </div>
+                <>
+                  <Separator className="mt-2" />
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {models
+                      .filter((model) => !draft.models.includes(model.id))
+                      .map((model) => (
+                        <Button
+                          key={model.id}
+                          type="button"
+                          size="xs"
+                          variant="ghost"
+                          aria-label={`加入模型：${model.id}`}
+                          disabled={mutationDisabled}
+                          onClick={() => addModel(model.id)}
+                        >
+                          <Plus data-icon="inline-start" aria-hidden="true" />
+                          {model.displayName ?? model.id}
+                        </Button>
+                      ))}
+                  </div>
+                </>
               )}
+            </Field>
+            <Field
+              data-disabled={mutationDisabled || draft.models.length === 0}
+            >
+              <FieldLabel htmlFor="provider-default-model">默认模型</FieldLabel>
+              <Select
+                value={
+                  draft.models.includes(draft.model) ? draft.model : undefined
+                }
+                disabled={mutationDisabled || draft.models.length === 0}
+                onValueChange={(value) => {
+                  if (value !== "") updateDraft("model", value)
+                }}
+              >
+                <SelectTrigger id="provider-default-model" className="w-full">
+                  <SelectValue placeholder="选择默认模型" />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  <SelectGroup>
+                    {draft.models.map((model) => (
+                      <SelectItem key={model} value={model}>
+                        {model}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
             </Field>
             <Field data-disabled={mutationDisabled}>
               <FieldLabel htmlFor="provider-api-key">API 密钥</FieldLabel>

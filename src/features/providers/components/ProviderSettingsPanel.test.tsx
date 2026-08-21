@@ -296,9 +296,8 @@ describe("ProviderSettingsPanel", () => {
     await user.click(
       await screen.findByRole("button", { name: "加入模型：gpt-test" }),
     )
-    expect(
-      screen.getByRole("button", { name: "设为默认：gpt-test" }),
-    ).toBeVisible()
+    expect(screen.getByRole("button", { name: "移除 gpt-test" })).toBeVisible()
+    expect(screen.getByLabelText("默认模型")).toHaveTextContent("fixture-model")
     await user.click(screen.getByRole("button", { name: "保存模型提供商" }))
     await waitFor(() =>
       expect(bridge.saveProvider).toHaveBeenCalledWith(
@@ -334,7 +333,7 @@ describe("ProviderSettingsPanel", () => {
     )
     expect(
       screen.getByRole("button", {
-        name: "设为默认：claude-sonnet-4-20250514",
+        name: "移除 claude-sonnet-4-20250514",
       }),
     ).toBeVisible()
   })
