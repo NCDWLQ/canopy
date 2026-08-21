@@ -59,8 +59,7 @@ const badgeVariants = cva(
       },
       /** `default`: active style radius. `full`: pill radius. */
       radius: {
-        default:
-          "rounded-sm",
+        default: "rounded-sm",
         full: "rounded-full",
       },
     },
@@ -69,7 +68,7 @@ const badgeVariants = cva(
       size: "default",
       radius: "default",
     },
-  }
+  },
 )
 
 interface BadgeProps

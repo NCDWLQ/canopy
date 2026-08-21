@@ -251,7 +251,10 @@ export function ConversationPane({
         )}
         {status === "loading" && path.length > 0 && (
           <div className="flex justify-center p-4" aria-label="正在保存消息">
-            <Spinner className="size-6 text-muted-foreground" aria-hidden="true" />
+            <Spinner
+              className="size-6 text-muted-foreground"
+              aria-hidden="true"
+            />
           </div>
         )}
         <div ref={bottomRef} aria-hidden="true" />

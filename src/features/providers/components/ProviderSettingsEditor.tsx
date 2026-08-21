@@ -291,8 +291,12 @@ export function ProviderSettingsEditor({
                 </SelectTrigger>
                 <SelectContent position="popper">
                   <SelectGroup>
-                    <SelectItem value="openai_compatible">OpenAI 兼容</SelectItem>
-                    <SelectItem value="anthropic">Anthropic Messages</SelectItem>
+                    <SelectItem value="openai_compatible">
+                      OpenAI 兼容
+                    </SelectItem>
+                    <SelectItem value="anthropic">
+                      Anthropic Messages
+                    </SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>
@@ -405,7 +409,9 @@ export function ProviderSettingsEditor({
                 </>
               )}
             </Field>
-            <Field data-disabled={mutationDisabled || draft.models.length === 0}>
+            <Field
+              data-disabled={mutationDisabled || draft.models.length === 0}
+            >
               <FieldLabel htmlFor="provider-default-model">默认模型</FieldLabel>
               <Select
                 value={draft.model}

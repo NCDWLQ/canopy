@@ -128,19 +128,36 @@ export function MessageNode({
       footer={
         isEditing ? (
           <div className="flex justify-end gap-2 mt-2">
-            <Button variant="ghost" size="sm" onClick={() => setIsEditing(false)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsEditing(false)}
+            >
               <X className="size-3.5 mr-1" aria-hidden="true" /> 取消
             </Button>
-            <Button size="sm" onClick={handleEditSubmit} disabled={!editContent.trim()}>
-              <Check className="size-3.5 mr-1" aria-hidden="true" /> 保存为新分支
+            <Button
+              size="sm"
+              onClick={handleEditSubmit}
+              disabled={!editContent.trim()}
+            >
+              <Check className="size-3.5 mr-1" aria-hidden="true" />{" "}
+              保存为新分支
             </Button>
           </div>
         ) : isBranching ? (
           <div className="flex justify-end gap-2 mt-2">
-            <Button variant="ghost" size="sm" onClick={() => setIsBranching(false)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsBranching(false)}
+            >
               <X className="size-3.5 mr-1" aria-hidden="true" /> 取消
             </Button>
-            <Button size="sm" onClick={handleBranchSubmit} disabled={!branchContent.trim()}>
+            <Button
+              size="sm"
+              onClick={handleBranchSubmit}
+              disabled={!branchContent.trim()}
+            >
               <Check className="size-3.5 mr-1" aria-hidden="true" /> 创建分支
             </Button>
           </div>
