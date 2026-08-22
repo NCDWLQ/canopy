@@ -682,3 +682,24 @@ Moved GlobalSettingsDialog out of features/providers into a new features/setting
 ### Status
 
 [OK] **Completed**
+
+
+## Session 31: DeepSeek v4 标题思考禁用修复收尾归档
+
+**Date**: 2026-08-22
+**Task**: DeepSeek v4 标题思考禁用修复收尾归档
+**Branch**: `main`
+
+### Summary
+
+确认 08-22-title-thinking-disabled 工作已随 PR #13 合并 main(显式 thinking:{type:disabled} 修复 DeepSeek v4 标题静默失败),分支与 worktree 此前已清理,本次补跑 finish-work:归档任务至 archive/2026-08 并记录 journal。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7d6fa8d` | (see git log) |
+
+### Status
+
+[OK] **Completed**
