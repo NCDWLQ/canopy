@@ -15,6 +15,7 @@ use super::{
         map_status, map_transport_error, GeneratedContent, OpenAiCompatibleClient,
         StreamingRequest, MAX_RESPONSE_BYTES,
     },
+    title_prompt::TitlePrompt,
     ProviderError,
 };
 
@@ -114,15 +115,17 @@ pub fn build_request(
     .map_err(|_| ProviderError::Protocol)
 }
 
-fn build_title_request(model: &str, prompt: &str) -> Result<Value, ProviderError> {
+fn build_title_request(model: &str, prompt: &TitlePrompt) -> Result<Value, ProviderError> {
     serde_json::to_value(Request {
         model: model.trim().to_owned(),
-        system: None,
+        system: Some(prompt.system.clone()),
         messages: vec![Message {
             role: "user",
-            content: prompt.to_owned(),
+            content: prompt.user.clone(),
         }],
-        max_tokens: 60,
+        // Thinking stays off; 256 only raises the truncation ceiling for the
+        // title body (see design.md §2).
+        max_tokens: 256,
         thinking: None,
         stream: true,
     })
@@ -152,13 +155,13 @@ where
     .await
 }
 
-pub async fn stream_title(
+pub(crate) async fn stream_title(
     client: &OpenAiCompatibleClient,
     endpoint: &super::ValidatedEndpoint,
     model: &str,
     secret: Option<&secrecy::SecretString>,
     cancellation: &tokio_util::sync::CancellationToken,
-    prompt: &str,
+    prompt: &TitlePrompt,
 ) -> Result<String, ProviderError> {
     stream_body(
         client,
@@ -348,10 +351,21 @@ mod tests {
 
     #[test]
     fn title_request_disables_thinking_and_limits_output() {
-        let request = build_title_request("fixture-model", "TITLE_PROMPT").unwrap();
-        assert_eq!(request["max_tokens"], 60);
+        let prompt = crate::providers::title_prompt::build_title_prompt(
+            "USER_EXCERPT_SENTINEL",
+            "ASSISTANT_EXCERPT_SENTINEL",
+        );
+        let request = build_title_request("fixture-model", &prompt).unwrap();
+        assert_eq!(request["max_tokens"], 256);
         assert!(request.get("thinking").is_none());
-        assert_eq!(request["messages"][0]["content"], "TITLE_PROMPT");
+        let system = request["system"].as_str().unwrap_or_default();
+        assert!(!system.is_empty());
+        assert!(system.contains("Generate a short conversation title"));
+        assert_eq!(request["messages"].as_array().map(Vec::len), Some(1));
+        assert_eq!(request["messages"][0]["role"], "user");
+        let user_content = request["messages"][0]["content"].as_str().unwrap();
+        assert!(user_content.contains("USER_EXCERPT_SENTINEL"));
+        assert!(user_content.contains("<conversation>"));
     }
 
     #[test]

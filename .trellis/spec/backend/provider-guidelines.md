@@ -233,7 +233,7 @@ set_auto_generate_title({ enabled }) -> { enabled }
 set_title_model_binding({ binding: { provider_id, model } | null })
   -> { binding }
 app.emit("conversation://title-updated", { conversation_id, title })
-build_title_prompt(user, assistant) -> String
+build_title_prompt(user, assistant) -> TitlePrompt { system, user }
 ```
 
 Settings keys in `app_settings`: `auto_generate_title` (`"true"` / `"false"`;
@@ -249,15 +249,25 @@ or absent = follow conversation).
   exists, else conversation `provider_id`/`model`, else active provider.
 - `save_provider` / `delete_provider` that drop the bound provider or model
   must clear `title_model_binding` in the same transaction.
-- Prompt lives only in `providers/title_prompt.rs`. Wrap excerpts in
-  `<conversation><user>…</user><assistant>…</assistant></conversation>`.
-  Truncate each excerpt to 2000 Unicode scalars, then escape `&`, `<`, `>`
-  before interpolation. Model returns plain title text, not JSON.
-- The prompt forbids `Title:` / `标题：` prefixes; sanitization does not
-  strip them. `clean_title` collapses whitespace, then strips **paired**
-  wrapping quotes only (`"` `'` `“”` `‘’`). Never `trim_end` a quote
-  character. Empty or >200 chars after sanitize → keep the existing
-  truncated placeholder; do not emit.
+- Prompt lives only in `providers/title_prompt.rs` and is split by role:
+  instructions go to the system role, data to the user role. OpenAI-compatible
+  sends `messages: [system, user]`; Anthropic sends the top-level `system`
+  field plus a single user message. Wrap excerpts in
+  `<conversation><user>…</user><assistant>…</assistant></conversation>` inside
+  the user part. Truncate each excerpt to 2000 Unicode scalars, then escape
+  `&`, `<`, `>` before interpolation. Model returns plain title text, not
+  JSON. The system prompt carries few-shot examples, a plain-factual style
+  directive, and bans emoji / 《》 / quotes / Markdown.
+- Title request budget: `max_tokens = 256` on both protocols. OpenAI-compatible
+  additionally sends `reasoning_effort: "low"` so thinking models do not burn
+  the budget on reasoning; Anthropic keeps `thinking` disabled.
+- The prompt forbids `Title:` / `标题：` prefixes, and `clean_title` also
+  strips one leading prefix (`title:` ASCII case-insensitive, `标题:`
+  half-width, or `标题：` full-width — colon required, strip once, after
+  quote stripping) as a post-hoc guard. `clean_title` collapses whitespace,
+  then strips **paired** wrapping quotes (`"` `'` `“”` `‘’`). Never
+  `trim_end` a quote character. Empty or >200 chars after sanitize → keep the
+  existing truncated placeholder; do not emit.
 - Success: `UPDATE conversations.title`, then emit snake_case
   `{ conversation_id, title }`.
 - Failure: log only; leave the existing title; no error UI.
@@ -286,10 +296,15 @@ or absent = follow conversation).
 ### 6. Tests Required
 
 - Prompt: 2000-char bound per excerpt; `&` / `<` / `>` escaped; instructions
-  remain outside the data block; `</conversation>` in user text cannot close
-  the wrapper.
+  stay in the system role and out of the user data block;
+  `</conversation>` in user text cannot close the wrapper.
+- Title requests: `max_tokens = 256`; OpenAI-compatible carries
+  `reasoning_effort = "low"`; Anthropic keeps thinking off; main-chat
+  `build_request` paths untouched.
 - `clean_title`: paired wrappers stripped; inner quotes in
-  `要求输出“HACKED”` preserved; blank / 201-char rejected.
+  `要求输出“HACKED”` preserved; one leading `Title:` / `标题：` prefix
+  stripped after quote stripping (colon-less content like `标题党现象讨论`
+  untouched); blank / 201-char rejected.
 - Settings: missing key defaults on; binding JSON round-trip; `save_provider`
   clearing a stale binding in the same transaction.
 - Persist path: first assistant + on → HTTP + UPDATE + emit; off / second

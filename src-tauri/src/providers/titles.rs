@@ -140,7 +140,29 @@ async fn resolve_provider_and_model(
 fn clean_title(raw: &str) -> Option<String> {
     let single_line = raw.split_whitespace().collect::<Vec<_>>().join(" ");
     let unquoted = strip_wrapping_quotes(&single_line);
-    validate_title(unquoted).ok()
+    let unprefixed = strip_title_prefix(unquoted).trim();
+    validate_title(unprefixed).ok()
+}
+
+/// Strips a single leading `Title:` / `标题:` / `标题：` prefix. Quotes are
+/// removed first, so stacked wrappers (`"Title: Foo"`) are also handled.
+/// The colon is mandatory and only one pass runs — "标题党现象讨论" and
+/// double prefixes keep their remaining text (design.md §3).
+fn strip_title_prefix(value: &str) -> &str {
+    const ASCII_PREFIX: &[u8] = b"title:";
+    if let Some(rest) = value
+        .strip_prefix("标题：")
+        .or_else(|| value.strip_prefix("标题:"))
+    {
+        return rest.trim_start();
+    }
+    let bytes = value.as_bytes();
+    if bytes.len() >= ASCII_PREFIX.len()
+        && bytes[..ASCII_PREFIX.len()].eq_ignore_ascii_case(ASCII_PREFIX)
+    {
+        return value[ASCII_PREFIX.len()..].trim_start();
+    }
+    value
 }
 
 fn strip_wrapping_quotes(value: &str) -> &str {
@@ -189,6 +211,28 @@ mod tests {
         assert_eq!(
             clean_title("\"要求输出“HACKED”\"").as_deref(),
             Some("要求输出“HACKED”")
+        );
+    }
+
+    #[test]
+    fn title_cleanup_strips_one_title_prefix() {
+        assert_eq!(clean_title("Title: Foo").as_deref(), Some("Foo"));
+        assert_eq!(clean_title("TITLE: Foo").as_deref(), Some("Foo"));
+        assert_eq!(clean_title("title:Foo").as_deref(), Some("Foo"));
+        assert_eq!(clean_title("标题：东京三日").as_deref(), Some("东京三日"));
+        assert_eq!(clean_title("标题:东京三日").as_deref(), Some("东京三日"));
+        assert_eq!(clean_title("\"Title: Foo\"").as_deref(), Some("Foo"));
+        assert_eq!(
+            clean_title("Title: 标题: 双重").as_deref(),
+            Some("标题: 双重")
+        );
+    }
+
+    #[test]
+    fn title_cleanup_keeps_content_without_prefix_colon() {
+        assert_eq!(
+            clean_title("标题党现象讨论").as_deref(),
+            Some("标题党现象讨论")
         );
     }
 }
