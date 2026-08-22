@@ -14,7 +14,7 @@ use crate::conversations::{Role, ValidatedPath};
 
 use crate::conversations::ReasoningEffort;
 
-use super::{domain::validate_model, ProviderError, ValidatedEndpoint};
+use super::{domain::validate_model, title_prompt::TitlePrompt, ProviderError, ValidatedEndpoint};
 
 pub(crate) const MAX_RESPONSE_BYTES: usize = 1024 * 1024;
 static HTTP_CLIENT: OnceLock<Client> = OnceLock::new();
@@ -84,16 +84,28 @@ pub fn build_request(
     })
 }
 
-fn build_title_request(model: &str, prompt: &str) -> Result<ChatCompletionRequest, ProviderError> {
+fn build_title_request(
+    model: &str,
+    prompt: &TitlePrompt,
+) -> Result<ChatCompletionRequest, ProviderError> {
     Ok(ChatCompletionRequest {
         model: validate_model(model)?,
-        messages: vec![ChatMessage {
-            role: "user",
-            content: prompt.to_owned(),
-        }],
+        messages: vec![
+            ChatMessage {
+                role: "system",
+                content: prompt.system.clone(),
+            },
+            ChatMessage {
+                role: "user",
+                content: prompt.user.clone(),
+            },
+        ],
         stream: true,
-        reasoning_effort: None,
-        max_tokens: Some(60),
+        // The 256 budget leaves room for a reasoning model's low-effort
+        // thinking tokens (which count toward max_tokens) plus the title
+        // body; 60 could starve the body to empty on those models.
+        reasoning_effort: Some(ReasoningEffort::Low.as_str()),
+        max_tokens: Some(256),
     })
 }
 
@@ -192,13 +204,13 @@ impl OpenAiCompatibleClient {
         .await
     }
 
-    pub async fn stream_title(
+    pub(crate) async fn stream_title(
         &self,
         endpoint: &ValidatedEndpoint,
         model: &str,
         secret: Option<&SecretString>,
         cancellation: &CancellationToken,
-        prompt: &str,
+        prompt: &TitlePrompt,
     ) -> Result<String, ProviderError> {
         let body = build_title_request(model, prompt)?;
         self.stream_chat_completion(endpoint, secret, cancellation, body, |_| Ok(()), |_| Ok(()))
@@ -421,13 +433,26 @@ mod tests {
     }
 
     #[test]
-    fn title_request_is_bounded_and_disables_reasoning() {
+    fn title_request_bounds_reasoning_and_separates_roles() {
+        let prompt = crate::providers::title_prompt::build_title_prompt(
+            "USER_EXCERPT_SENTINEL",
+            "ASSISTANT_EXCERPT_SENTINEL",
+        );
         let request =
-            serde_json::to_value(build_title_request("fixture-model", "TITLE_PROMPT").unwrap())
-                .unwrap();
-        assert_eq!(request["max_tokens"], 60);
-        assert!(request.get("reasoning_effort").is_none());
-        assert_eq!(request["messages"][0]["content"], "TITLE_PROMPT");
+            serde_json::to_value(build_title_request("fixture-model", &prompt).unwrap()).unwrap();
+        assert_eq!(request["max_tokens"], 256);
+        assert_eq!(request["reasoning_effort"], "low");
+        assert_eq!(request["messages"].as_array().map(Vec::len), Some(2));
+        assert_eq!(request["messages"][0]["role"], "system");
+        assert!(request["messages"][0]["content"]
+            .as_str()
+            .unwrap()
+            .contains("Generate a short conversation title"));
+        assert_eq!(request["messages"][1]["role"], "user");
+        let user_content = request["messages"][1]["content"].as_str().unwrap();
+        assert!(user_content.contains("USER_EXCERPT_SENTINEL"));
+        assert!(user_content.contains("<conversation>"));
+        assert!(!user_content.contains("Generate a short conversation title"));
     }
 
     #[test]
