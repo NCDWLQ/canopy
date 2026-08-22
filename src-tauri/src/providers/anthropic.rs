@@ -31,7 +31,8 @@ struct Message {
 struct Thinking {
     #[serde(rename = "type")]
     kind: &'static str,
-    budget_tokens: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    budget_tokens: Option<u32>,
 }
 
 #[derive(Serialize)]
@@ -108,7 +109,7 @@ pub fn build_request(
         max_tokens,
         thinking: Some(Thinking {
             kind: "enabled",
-            budget_tokens,
+            budget_tokens: Some(budget_tokens),
         }),
         stream: true,
     })
@@ -123,10 +124,15 @@ fn build_title_request(model: &str, prompt: &TitlePrompt) -> Result<Value, Provi
             role: "user",
             content: prompt.user.clone(),
         }],
-        // Thinking stays off; 256 only raises the truncation ceiling for the
-        // title body (see design.md §2).
+        // Omitting the field is not "off" for every endpoint: DeepSeek v4
+        // defaults to thinking and burns the whole max_tokens budget before
+        // any text. Explicit disabled is valid Anthropic and leaves the
+        // title body 6-14 tokens of headroom.
         max_tokens: 256,
-        thinking: None,
+        thinking: Some(Thinking {
+            kind: "disabled",
+            budget_tokens: None,
+        }),
         stream: true,
     })
     .map_err(|_| ProviderError::Protocol)
@@ -357,7 +363,8 @@ mod tests {
         );
         let request = build_title_request("fixture-model", &prompt).unwrap();
         assert_eq!(request["max_tokens"], 256);
-        assert!(request.get("thinking").is_none());
+        assert_eq!(request["thinking"]["type"], "disabled");
+        assert!(request["thinking"].get("budget_tokens").is_none());
         let system = request["system"].as_str().unwrap_or_default();
         assert!(!system.is_empty());
         assert!(system.contains("Generate a short conversation title"));

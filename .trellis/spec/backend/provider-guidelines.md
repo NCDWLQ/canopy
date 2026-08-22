@@ -260,7 +260,10 @@ or absent = follow conversation).
   directive, and bans emoji / 《》 / quotes / Markdown.
 - Title request budget: `max_tokens = 256` on both protocols. OpenAI-compatible
   additionally sends `reasoning_effort: "low"` so thinking models do not burn
-  the budget on reasoning; Anthropic keeps `thinking` disabled.
+  the budget on reasoning; Anthropic sends an explicit
+  `thinking: {"type": "disabled"}` payload — omitting the field is not "off"
+  for every endpoint (DeepSeek v4 defaults to thinking and burns the whole
+  `max_tokens` before any text).
 - The prompt forbids `Title:` / `标题：` prefixes, and `clean_title` also
   strips one leading prefix (`title:` ASCII case-insensitive, `标题:`
   half-width, or `标题：` full-width — colon required, strip once, after
@@ -299,7 +302,8 @@ or absent = follow conversation).
   stay in the system role and out of the user data block;
   `</conversation>` in user text cannot close the wrapper.
 - Title requests: `max_tokens = 256`; OpenAI-compatible carries
-  `reasoning_effort = "low"`; Anthropic keeps thinking off; main-chat
+  `reasoning_effort = "low"`; Anthropic sends explicit
+  `thinking: {"type": "disabled"}`; main-chat
   `build_request` paths untouched.
 - `clean_title`: paired wrappers stripped; inner quotes in
   `要求输出“HACKED”` preserved; one leading `Title:` / `标题：` prefix
