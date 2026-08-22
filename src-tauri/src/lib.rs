@@ -54,6 +54,7 @@ fn app_builder() -> tauri::Builder<tauri::Wry> {
                 .add_migrations(DATABASE_URL, plugin_migrations())
                 .build(),
         )
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
