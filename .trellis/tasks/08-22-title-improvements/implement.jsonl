@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/backend/provider-guidelines.md", "reason": "providers 层请求构造/SSE/生成边界契约，改动 build_title_request 与 stream_title 必须遵守"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "后端质量门：可独立验证产物与测试要求"}
+{"file": ".trellis/tasks/08-22-title-improvements/research.md", "reason": "调研结论与四产品 prompt 对比，design.md 中 prompt 文本的设计依据"}
