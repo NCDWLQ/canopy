@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 31
+- **Total Sessions**: 32
 - **Last Active**: 2026-08-22
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~705 | Active |
+| `journal-1.md` | ~726 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 32 | 2026-08-22 | 窗口 1200×800 默认值与位置持久化 | `4f687a3` | `main` |
 | 31 | 2026-08-22 | DeepSeek v4 标题思考禁用修复收尾归档 | `7d6fa8d` | `main` |
 | 30 | 2026-08-22 | 标题生成快速包：角色分离 + 预算修复 + prompt/清洗强化 | `e3ad5d0`, `bd032b4`, `5be9aaf` | `feat/title-improvements` |
 | 29 | 2026-08-18 | Extract settings feature and rename SettingsDialog | `9be55e9` | `feat/extract-settings-feature` |

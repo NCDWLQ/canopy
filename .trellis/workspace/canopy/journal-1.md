@@ -703,3 +703,24 @@ Moved GlobalSettingsDialog out of features/providers into a new features/setting
 ### Status
 
 [OK] **Completed**
+
+
+## Session 32: 窗口 1200×800 默认值与位置持久化
+
+**Date**: 2026-08-22
+**Task**: 窗口 1200×800 默认值与位置持久化
+**Branch**: `main`
+
+### Summary
+
+worktree 流程完成窗口状态任务:默认窗口 800×600→1200×800(逻辑像素),新增 minWidth/minHeight 768×480 与 center;接入 tauri-plugin-window-state 2.4.1(Rust-only 注册)从第二次启动恢复大小/位置/最大化。cargo test 全绿、clippy -D warnings 通过。PR #14 已合并(cb096d3)。网络插曲:github SSH 22/443 全挂,经 gh HTTPS credential helper 完成推送,已记入记忆。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4f687a3` | (see git log) |
+
+### Status
+
+[OK] **Completed**
