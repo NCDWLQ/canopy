@@ -659,3 +659,26 @@ Moved GlobalSettingsDialog out of features/providers into a new features/setting
 ### Status
 
 [OK] **Completed**
+
+
+## Session 30: 标题生成快速包：角色分离 + 预算修复 + prompt/清洗强化
+
+**Date**: 2026-08-22
+**Task**: 标题生成快速包：角色分离 + 预算修复 + prompt/清洗强化
+**Branch**: `feat/title-improvements`
+
+### Summary
+
+调研 Open WebUI/LibreChat/NextChat/LobeChat 后落地候选 1+4+6+5：build_title_prompt 改为 TitlePrompt{system,user} 两协议角色分离；max_tokens 60→256 且 OpenAI-compatible 带 reasoning_effort=low（修思考型模型静默失败）；system prompt 加 few-shot/风格压制/符号禁令；clean_title 增加一次性 Title:/标题： 前缀剥离。88 测试全绿，clippy 干净，主对话路径零改动；provider-guidelines.md Auto-Title 契约已同步。候选 2(重试+migration)/3(寒暄兜底)/7(埋点细分) 留待后续。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e3ad5d0` | (see git log) |
+| `bd032b4` | (see git log) |
+| `5be9aaf` | (see git log) |
+
+### Status
+
+[OK] **Completed**
