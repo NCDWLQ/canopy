@@ -256,12 +256,14 @@ function createProviderClient() {
       activeProviderId: provider.id,
       autoGenerateTitle: true,
       titleModelBinding: null,
+      language: "system",
     }),
     saveProvider: vi.fn<ProviderClient["saveProvider"]>(),
     deleteProvider: vi.fn<ProviderClient["deleteProvider"]>(),
     setActiveProvider: vi.fn<ProviderClient["setActiveProvider"]>(),
     setAutoGenerateTitle: vi.fn<ProviderClient["setAutoGenerateTitle"]>(),
     setTitleModelBinding: vi.fn<ProviderClient["setTitleModelBinding"]>(),
+    setLanguage: vi.fn<ProviderClient["setLanguage"]>(),
     revealProviderApiKey: vi
       .fn<ProviderClient["revealProviderApiKey"]>()
       .mockResolvedValue(null),
@@ -1196,7 +1198,8 @@ describe("workspace generation controller", () => {
     const notification = vi.mocked(showClickableToast).mock.calls[0]![0]
     expect(notification.kind).toBe("error")
     expect(notification.title).toBe("RIGHT_ACTIVE_SENTINEL")
-    expect(notification.description).toBe("Provider unavailable.")
+    // Display copy is derived from the error code, never the backend message.
+    expect(notification.description).toBe("服务提供商当前不可用。")
   })
 
   it("cancels a background run when its conversation is archived", async () => {

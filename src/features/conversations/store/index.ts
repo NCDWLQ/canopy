@@ -9,6 +9,7 @@ import type {
   UiError,
 } from "../types"
 import type { GenerationEventView } from "@/features/providers/types"
+import { t } from "@/lib/i18n"
 import { ConversationCommandError, type ConversationClient } from "@/lib/tauri"
 import type { SetConversationProviderInput } from "@/lib/tauri"
 
@@ -187,15 +188,17 @@ export type ConversationStore = ConversationTreeState & {
   recoverGeneration: (runId: number, tree: ConversationTreeView) => boolean
 }
 
+// Display sites render these through commandErrorMessage(code); the message
+// field carries localized text only for wire/debug inspection.
 const TREE_INTEGRITY_ERROR: UiError = {
   code: "tree_integrity",
-  message: "无法安全显示会话树。",
+  message: t("errors.unsafeTreeProjection"),
   retryable: true,
 }
 
 const INTERNAL_ERROR: UiError = {
   code: "internal",
-  message: "发生意外错误。",
+  message: t("errors.internal"),
   retryable: false,
 }
 
