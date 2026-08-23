@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "质量检查基线与禁止模式"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "核查：zod schema 与 wire 契约零变化、CommandErrorCode union 未被复制、词典 satisfies 类型检查"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "核查 locale store 是否符合 zustand 约定（未引入 localStorage persist）"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "后端改动（set_language/list_providers 扩展）质量门槛"}
+{"file": ".trellis/tasks/08-22-i18n/research/ui-string-inventory.md", "reason": "核对迁移完整性：清单内文件全部走词典、非资源代码无残留硬编码中文"}

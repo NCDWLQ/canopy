@@ -1,0 +1,9 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "前端规范入口：Pre-Development Checklist 与指南索引"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "IPC 边界契约：language 字段搭 list_providers 的 auto-title 先例、satisfies 用法、闭合 CommandErrorCode union 禁止复制（command-errors.ts 映射依据）"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "src/lib/i18n 与 features/settings 新面板的落位约定"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "GeneralSettingsPanel 需遵循 reui/shadcn 设置控件模式（对照 ConversationSettingsPanel）"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "locale zustand store 需符合既有 store 约定（UI 态不 persist，持久化走后端）"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "禁止模式清单（any/@ts-ignore/裸 invoke 等）"}
+{"file": ".trellis/spec/backend/provider-guidelines.md", "reason": "set_language 命令与 app_settings kv 读写须遵循 providers 模块命令/repository 约定"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "CommandErrorCode 语义与错误链路，前端按 code 映射时不得破坏既有错误契约"}
+{"file": ".trellis/tasks/08-22-i18n/research/ui-string-inventory.md", "reason": "迁移核对表：~200 处字符串的文件级清单、插值/复数场景、永不翻译清单"}
