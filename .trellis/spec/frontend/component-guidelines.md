@@ -554,3 +554,36 @@ Use when implementing or styling conversation message displays (`MessageBubble`,
   accessibility contract. It must not be a second footer or header action.
   The workspace header contains no Generate or Cancel slot; active cancellation
   belongs to the Composer's circular action.
+
+## Design Decision: Mind-map Canvas View
+
+**Context**: The conversation tree also renders as a mind-map style canvas
+(`MindMapCanvas`, React Flow v12 + `d3-hierarchy` tidy tree, left-to-right).
+React Flow was chosen because nodes are real React components (shadcn/Tailwind
+styling reuse) and pan/zoom/minimap/fit-view ship built-in on DOM/SVG — no
+WebGL dependency on WebKitGTK.
+
+**Decision**:
+
+- `MindMapCanvas` is fully controlled: `rootNodeId`, `nodesById`,
+  `activePathIds`, `onSelect` props only, no store access inside. The
+  root-to-active chain stays owned by the store's `selectActivePath`; the
+  workspace maps its path to `activePathIds`. Never re-derive the active
+  path in the canvas.
+- Layout lives in the pure module `features/conversations/mindmapLayout.ts`
+  (defensive validation mirroring `projectVisibleRows`: null on missing
+  nodes, parent mismatch, or cycle; component renders the
+  `errors.unsafeTreeProjection` alert). Collapse state is component-local
+  and scoped to the current root via derived state, not an effect reset.
+- Flow nodes declare explicit `width`/`height` matching the fixed card
+  metrics exported from the layout module. Without them React Flow keeps
+  nodes `visibility: hidden` until measured, which never happens in jsdom
+  and flashes in production.
+- Testing recipe (jsdom): stub `ResizeObserver` with a class whose
+  `observe` synchronously invokes the callback with a `{ target,
+  contentRect }` entry, stub `DOMMatrixReadOnly` (`m22 = 1`), and spy
+  `HTMLElement.prototype.getBoundingClientRect` to a non-zero rect. Click
+  nodes/buttons with `fireEvent`, not `userEvent`: jsdom dispatches pointer
+  events with a null `view`, which crashes d3-zoom's drag bookkeeping.
+- Keep React Flow's attribution visible (MIT courtesy); the OutlineTree
+  remains the keyboard-accessible navigation surface for the same tree.
