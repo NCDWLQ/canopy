@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
 
@@ -161,5 +161,33 @@ describe("SearchDialog", () => {
     slowQuery.resolve?.([baseResultDto])
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(screen.queryByText("西瓜讨论")).not.toBeInTheDocument()
+  })
+
+  it("uses Rust whitespace trimming for the searched and revealed query", async () => {
+    const { invoke, onReveal } = renderDialog(() => [baseResultDto])
+    fireEvent.change(searchInput(), { target: { value: "\u0085西瓜\u0085" } })
+
+    await waitFor(
+      () => {
+        expect(invoke).toHaveBeenCalledWith("search_conversations", {
+          request: { query: "西瓜" },
+        })
+      },
+      { timeout: 2000 },
+    )
+    await userEvent.click(screen.getByRole("button", { name: /品种/ }))
+    expect(onReveal).toHaveBeenCalledWith("conversation-1", "node-1", "西瓜")
+  })
+
+  it("hides settled results as soon as a different debounced query is typed", async () => {
+    const user = userEvent.setup()
+    renderDialog((query) => (query === "西瓜" ? [baseResultDto] : []))
+
+    await user.type(searchInput(), "西瓜")
+    await screen.findByText("西瓜讨论", {}, { timeout: 2000 })
+    await user.type(searchInput(), "籽")
+
+    expect(screen.queryByText("西瓜讨论")).not.toBeInTheDocument()
+    expect(screen.getByText("正在搜索…")).toBeInTheDocument()
   })
 })

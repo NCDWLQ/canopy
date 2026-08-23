@@ -275,19 +275,42 @@ impl ConversationRepository {
             results.push(result);
         }
 
+        if results.is_empty() {
+            return Ok(results);
+        }
+        let selected_conversation_ids = Value::Array(
+            results
+                .iter()
+                .map(|result| Value::String(result.conversation_id.clone()))
+                .collect(),
+        )
+        .to_string();
+
         let hit_rows = sqlx::query(
-            "SELECT n.conversation_id AS conversation_id, n.id AS node_id, n.role AS role, \
-                    n.created_at AS created_at, \
-                    substr(n.content, max(1, instr(lower(n.content), lower(?1)) - 30), \
-                           length(?1) + 90) AS snippet \
-             FROM nodes AS n \
-             WHERE n.role IN ('user', 'assistant') \
-               AND lower(n.content) LIKE lower(?2) ESCAPE '\\' \
-             ORDER BY n.conversation_id ASC, n.created_at ASC, n.id ASC \
-             LIMIT 1000",
+            "WITH ranked_hits AS ( \
+               SELECT n.conversation_id AS conversation_id, n.id AS node_id, n.role AS role, \
+                      n.created_at AS created_at, \
+                      substr(n.content, max(1, instr(lower(n.content), lower(?1)) - 30), \
+                             length(?1) + 90) AS snippet, \
+                      ROW_NUMBER() OVER ( \
+                        PARTITION BY n.conversation_id \
+                        ORDER BY n.created_at ASC, n.id ASC \
+                      ) AS hit_rank \
+               FROM nodes AS n \
+               WHERE n.role IN ('user', 'assistant') \
+                 AND lower(n.content) LIKE lower(?2) ESCAPE '\\' \
+                 AND n.conversation_id IN ( \
+                   SELECT value FROM json_each(?3) \
+                 ) \
+             ) \
+             SELECT conversation_id, node_id, role, created_at, snippet \
+             FROM ranked_hits \
+             WHERE hit_rank <= 5 \
+             ORDER BY conversation_id ASC, created_at ASC, node_id ASC",
         )
         .bind(query)
         .bind(&pattern)
+        .bind(selected_conversation_ids)
         .fetch_all(&mut *connection)
         .await?;
 

@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest"
 
 import {
   applySearchHighlight,
+  clearSearchHighlight,
   findTextMatchRanges,
+  SEARCH_REVEAL_HIGHLIGHT_NAME,
   splitQueryMatches,
 } from "./highlightMatches"
 import { HighlightedText } from "./components/HighlightedText"
@@ -46,6 +48,16 @@ describe("splitQueryMatches", () => {
     expect(splitQueryMatches("miss", "zzz", { firstOnly: true })).toEqual([
       { text: "miss", isMatch: false },
     ])
+  })
+
+  it("matches only ASCII case-insensitively without changing Unicode offsets", () => {
+    expect(
+      splitQueryMatches("İ first, i second", "İ", { firstOnly: true }),
+    ).toEqual([
+      { text: "İ", isMatch: true },
+      { text: " first, i second", isMatch: false },
+    ])
+    expect(splitQueryMatches("İ", "i")).toEqual([{ text: "İ", isMatch: false }])
   })
 })
 
@@ -95,6 +107,15 @@ describe("findTextMatchRanges", () => {
     container.textContent = "anything"
     expect(findTextMatchRanges(container, "")).toEqual([])
   })
+
+  it("keeps valid DOM offsets for Unicode characters with expanding case folds", () => {
+    const container = document.createElement("div")
+    container.textContent = "İ and i"
+    const ranges = findTextMatchRanges(container, "İ")
+    expect(ranges).toHaveLength(1)
+    expect(ranges[0]?.toString()).toBe("İ")
+    expect(findTextMatchRanges(container, "i")[0]?.toString()).toBe("i")
+  })
 })
 
 describe("applySearchHighlight", () => {
@@ -106,5 +127,30 @@ describe("applySearchHighlight", () => {
     expect(applySearchHighlight(container, "needle")).toBe(false)
     expect(applySearchHighlight(null, "needle")).toBe(false)
     expect(applySearchHighlight(container, "")).toBe(false)
+  })
+
+  it("registers only the first range and removes it during cleanup", () => {
+    class TestHighlight {
+      readonly ranges: readonly Range[]
+
+      constructor(...ranges: Range[]) {
+        this.ranges = ranges
+      }
+    }
+    const registry = new Map<string, unknown>()
+    vi.stubGlobal("CSS", { highlights: registry })
+    vi.stubGlobal("Highlight", TestHighlight)
+    const container = document.createElement("div")
+    container.textContent = "NEEDLE first, needle second"
+
+    expect(applySearchHighlight(container, "needle")).toBe(true)
+    const highlight = registry.get(
+      SEARCH_REVEAL_HIGHLIGHT_NAME,
+    ) as TestHighlight
+    expect(highlight.ranges).toHaveLength(1)
+    expect(highlight.ranges[0]?.toString()).toBe("NEEDLE")
+
+    clearSearchHighlight()
+    expect(registry.has(SEARCH_REVEAL_HIGHLIGHT_NAME)).toBe(false)
   })
 })

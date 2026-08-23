@@ -771,13 +771,17 @@ mod tests {
     #[test]
     fn search_query_is_trimmed_and_bounded() {
         assert_eq!(validate_query("  团结  ").unwrap(), "团结");
+        let blank = validate_query(" \n\t ").unwrap_err();
+        assert_eq!(blank.code, CommandErrorCode::InvalidInput);
         assert_eq!(
-            validate_query(" \n\t ").unwrap_err().code,
-            CommandErrorCode::InvalidInput
+            blank.details,
+            Some(serde_json::json!({ "field": "query", "reason": "blank" }))
         );
+        let oversized = validate_query(&"词".repeat(201)).unwrap_err();
+        assert_eq!(oversized.code, CommandErrorCode::InvalidInput);
         assert_eq!(
-            validate_query(&"词".repeat(201)).unwrap_err().code,
-            CommandErrorCode::InvalidInput
+            oversized.details,
+            Some(serde_json::json!({ "field": "query", "reason": "too_long" }))
         );
         assert!(validate_query(&"词".repeat(200)).is_ok());
     }

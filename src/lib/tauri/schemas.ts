@@ -139,7 +139,7 @@ export const searchConversationsRequestSchema = z
 export const searchHitDtoSchema = z
   .object({
     node_id: idSchema,
-    role: z.enum(["system", "user", "assistant", "tool"]),
+    role: z.enum(["user", "assistant"]),
     created_at: z.number().int().safe(),
     snippet: z.string(),
   })
@@ -152,13 +152,39 @@ export const conversationSearchResultDtoSchema = z
     is_archived: z.boolean(),
     title_matched: z.boolean(),
     updated_at: z.number().int().safe(),
-    hits: z.array(searchHitDtoSchema),
+    hits: z.array(searchHitDtoSchema).max(5),
   })
   .strict()
+  .superRefine((result, context) => {
+    const nodeIds = new Set<string>()
+    result.hits.forEach((hit, index) => {
+      if (nodeIds.has(hit.node_id)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "duplicate search hit",
+          path: ["hits", index, "node_id"],
+        })
+      }
+      nodeIds.add(hit.node_id)
+    })
+  })
 
-export const conversationSearchResultsDtoSchema = z.array(
-  conversationSearchResultDtoSchema,
-)
+export const conversationSearchResultsDtoSchema = z
+  .array(conversationSearchResultDtoSchema)
+  .max(50)
+  .superRefine((results, context) => {
+    const conversationIds = new Set<string>()
+    results.forEach((result, index) => {
+      if (conversationIds.has(result.conversation_id)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "duplicate conversation search result",
+          path: [index, "conversation_id"],
+        })
+      }
+      conversationIds.add(result.conversation_id)
+    })
+  })
 
 export const commandErrorCodeSchema = z.enum([
   "invalid_input",

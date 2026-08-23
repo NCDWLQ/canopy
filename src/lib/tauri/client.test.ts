@@ -350,6 +350,43 @@ describe("conversation Tauri contract", () => {
     await expect(
       oversized.searchConversations("词".repeat(201)),
     ).rejects.toMatchObject({ code: "invalid_input", retryable: false })
+
+    const fixtureSearchResult = fixture.successes.search_results[0]
+    const fixtureSearchHit = fixtureSearchResult?.hits[0]
+    if (fixtureSearchResult === undefined || fixtureSearchHit === undefined) {
+      throw new Error("shared search fixture must contain one message hit")
+    }
+    const malformedSearchResponses = [
+      [fixtureSearchResult, fixtureSearchResult],
+      [
+        {
+          ...fixtureSearchResult,
+          hits: Array.from({ length: 6 }, (_, index) => ({
+            ...fixtureSearchHit,
+            node_id: `hit-${index}`,
+          })),
+        },
+      ],
+      [
+        {
+          ...fixtureSearchResult,
+          hits: [
+            {
+              ...fixtureSearchHit,
+              role: "system",
+            },
+          ],
+        },
+      ],
+    ]
+    for (const response of malformedSearchResponses) {
+      const malformed = createConversationClient(
+        resolvingTransport({ search_conversations: response }),
+      )
+      await expect(
+        malformed.searchConversations("branch"),
+      ).rejects.toMatchObject({ code: "internal", retryable: false })
+    }
   })
 
   it("rejects structurally malformed tree and path projections", async () => {

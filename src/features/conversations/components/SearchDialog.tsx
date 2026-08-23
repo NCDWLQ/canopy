@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import type { UiError } from "@/lib/tauri/types"
 import type { ConversationClient } from "@/lib/tauri"
+import { trimRustWhitespace } from "@/lib/tauri/schemas"
 import { commandErrorMessage, useTranslation } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 
@@ -60,10 +61,11 @@ export function SearchDialog({
     readonly ConversationSearchResultView[]
   >([])
   const [error, setError] = React.useState<UiError | null>(null)
+  const [settledQuery, setSettledQuery] = React.useState("")
   const searchEpochRef = React.useRef(0)
 
   React.useEffect(() => {
-    const trimmed = query.trim()
+    const trimmed = trimRustWhitespace(query)
     if (trimmed.length === 0) {
       // Invalidate any in-flight response without touching state; the blank
       // input is rendered as idle via the derived status below.
@@ -81,22 +83,28 @@ export function SearchDialog({
         .then((found) => {
           if (epoch !== searchEpochRef.current) return
           setResults(found)
+          setSettledQuery(trimmed)
           setStatus("ready")
         })
         .catch((failure: unknown) => {
           if (epoch !== searchEpochRef.current) return
           setError(normalizeUiError(failure))
+          setSettledQuery(trimmed)
           setStatus("error")
         })
     }, DEBOUNCE_MS)
     return () => clearTimeout(timer)
   }, [query, client])
 
-  const trimmedQuery = query.trim()
+  const trimmedQuery = trimRustWhitespace(query)
   const visibleStatus: SearchStatus =
-    trimmedQuery.length === 0 ? "idle" : status
+    trimmedQuery.length === 0
+      ? "idle"
+      : trimmedQuery === settledQuery
+        ? status
+        : "searching"
   const reveal = (conversationId: string, nodeId: string | null) => {
-    onReveal(conversationId, nodeId, trimmedQuery)
+    onReveal(conversationId, nodeId, settledQuery)
     onOpenChange(false)
   }
 

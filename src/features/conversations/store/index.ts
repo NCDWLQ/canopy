@@ -325,7 +325,7 @@ function newestLeafId(tree: ConversationTreeView): string {
     (candidate, node) =>
       candidate === undefined ||
       node.createdAt > candidate.createdAt ||
-      (node.createdAt === candidate.createdAt && node.id > candidate.id)
+      (node.createdAt === candidate.createdAt && node.id < candidate.id)
         ? node
         : candidate,
     undefined,
@@ -383,7 +383,7 @@ export function newestLeafDescendant(
       if (
         newest === null ||
         full.createdAt > newest.createdAt ||
-        (full.createdAt === newest.createdAt && currentId > newest.id)
+        (full.createdAt === newest.createdAt && currentId < newest.id)
       ) {
         newest = { id: currentId, createdAt: full.createdAt }
       }
@@ -620,6 +620,7 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
       isCreatingConversation: false,
       status: "loading",
       error: null,
+      reveal: null,
     })
     try {
       const tree = await client.loadConversationTree(id)
@@ -1143,6 +1144,9 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
 
     revealSearchHit: async (client, conversationId, nodeId, query) => {
       const epoch = ++requestEpoch
+      // A new reveal is navigation intent even if loading or target
+      // validation later fails; never leave the previous hit highlighted.
+      set({ reveal: null })
       if (get().conversationId !== conversationId) {
         const loaded = await loadSelectedConversation(
           client,

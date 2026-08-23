@@ -76,7 +76,7 @@ async fn seed(pool: &SqlitePool) {
         Some("alpha-root"),
         "conv-alpha",
         "assistant",
-        "Response about Apples",
+        "Response about Apples in C:\\orchard",
         2_000,
     )
     .await;
@@ -134,6 +134,16 @@ async fn seed(pool: &SqlitePool) {
         600,
     )
     .await;
+    insert_node(
+        pool,
+        "gamma-system",
+        Some("gamma-tool"),
+        "conv-gamma",
+        "system",
+        "SECRET_SYSTEM_MARKER prompt",
+        700,
+    )
+    .await;
 }
 
 #[test]
@@ -189,6 +199,11 @@ fn search_treats_like_wildcards_as_literal_characters() {
 
         let results = service.search_conversations("_").await.expect("search");
         assert!(results.is_empty());
+
+        let results = service.search_conversations("\\").await.expect("search");
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].conversation_id, "conv-alpha");
+        assert_eq!(results[0].hits[0].node_id, "alpha-assistant");
     });
 }
 
@@ -243,6 +258,11 @@ fn search_excludes_tool_and_system_roles() {
 
         let results = service
             .search_conversations("SECRET_TOOL_MARKER")
+            .await
+            .expect("search");
+        assert!(results.is_empty());
+        let results = service
+            .search_conversations("SECRET_SYSTEM_MARKER")
             .await
             .expect("search");
         assert!(results.is_empty());
@@ -328,5 +348,103 @@ fn search_caps_hits_per_conversation_in_creation_order() {
         assert_eq!(hits[0].node_id, "bulk-root");
         assert_eq!(hits[1].node_id, "bulk-user-0");
         assert_eq!(hits[4].node_id, "bulk-user-3");
+    });
+}
+
+#[test]
+fn search_caps_conversations_at_fifty_in_recency_order() {
+    run_async(async {
+        let pool = migrated_pool().await;
+        for index in 0..51 {
+            create_conversation(
+                &pool,
+                &format!("cap-conv-{index:02}"),
+                "Cap",
+                &format!("cap-root-{index:02}"),
+                "CAP_NEEDLE",
+                1_000 + index,
+            )
+            .await;
+        }
+
+        let results = ConversationPersistenceService::new(pool)
+            .search_conversations("CAP_NEEDLE")
+            .await
+            .expect("search");
+        assert_eq!(results.len(), 50);
+        assert_eq!(results[0].conversation_id, "cap-conv-50");
+        assert_eq!(results[49].conversation_id, "cap-conv-01");
+        assert!(
+            results
+                .iter()
+                .all(|result| result.conversation_id != "cap-conv-00"),
+            "the oldest matching conversation must be excluded"
+        );
+    });
+}
+
+#[test]
+fn high_volume_conversation_cannot_starve_other_results_of_hits() {
+    run_async(async {
+        let pool = migrated_pool().await;
+        create_conversation(
+            &pool,
+            "aa-noise",
+            "Noise",
+            "noise-root",
+            "needle noise root",
+            1_000,
+        )
+        .await;
+        insert_node(
+            &pool,
+            "noise-assistant",
+            Some("noise-root"),
+            "aa-noise",
+            "assistant",
+            "separator",
+            1_001,
+        )
+        .await;
+        let mut transaction = pool.begin().await.expect("bulk transaction");
+        for index in 0..1_000 {
+            sqlx::query(
+                "INSERT INTO nodes (id, parent_id, conversation_id, role, content, model, \
+                 created_at, metadata) VALUES (?1, 'noise-assistant', 'aa-noise', 'user', \
+                 'needle noise', NULL, ?2, '{}')",
+            )
+            .bind(format!("noise-user-{index:04}"))
+            .bind(2_000 + index)
+            .execute(&mut *transaction)
+            .await
+            .expect("noise node inserted");
+        }
+        transaction.commit().await.expect("bulk commit");
+
+        create_conversation(
+            &pool,
+            "zz-target",
+            "Target",
+            "target-root",
+            "needle target",
+            10_000,
+        )
+        .await;
+
+        let results = ConversationPersistenceService::new(pool)
+            .search_conversations("needle")
+            .await
+            .expect("search");
+        let target = results
+            .iter()
+            .find(|result| result.conversation_id == "zz-target")
+            .expect("target conversation remains in results");
+        assert_eq!(target.hits.len(), 1);
+        assert_eq!(target.hits[0].node_id, "target-root");
+        let noise = results
+            .iter()
+            .find(|result| result.conversation_id == "aa-noise")
+            .expect("noise conversation remains in results");
+        assert_eq!(noise.hits.len(), 5);
     });
 }

@@ -13,7 +13,11 @@ import { AssistantMarkdown } from "./AssistantMarkdown"
 import { MessageBubble } from "./MessageBubble"
 import { ThinkingBlock } from "./ThinkingBlock"
 import type { PathMessageView } from "../types"
-import { applySearchHighlight, clearSearchHighlight } from "../highlightMatches"
+import {
+  applySearchHighlight,
+  clearSearchHighlight,
+  findTextMatchRanges,
+} from "../highlightMatches"
 import { HighlightedText } from "./HighlightedText"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -38,6 +42,7 @@ export type MessageNodeProps = {
   assistantRegenerationAction?: AssistantRegenerationAction
   // Present only on the search-revealed message; drives match highlighting.
   highlightQuery?: string
+  scrollContainerRef?: React.RefObject<HTMLElement | null>
 }
 
 export function MessageNode({
@@ -49,6 +54,7 @@ export function MessageNode({
   generationAction,
   assistantRegenerationAction,
   highlightQuery,
+  scrollContainerRef,
 }: MessageNodeProps) {
   const { t } = useTranslation()
   const [isEditing, setIsEditing] = React.useState(false)
@@ -60,20 +66,81 @@ export function MessageNode({
   const branchInputRef = React.useRef<HTMLTextAreaElement>(null)
   const copyResetRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
   const revealArticleRef = React.useRef<HTMLElement>(null)
+  const assistantContentRef = React.useRef<HTMLDivElement>(null)
 
-  // Assistant content renders through the markdown pipeline, so plain-text
-  // `<mark>` wrapping cannot reach it; the CSS Custom Highlight API applies
-  // the first-occurrence query match to the already-rendered article instead
-  // (no-op in jsdom or engines without the API).
+  // Reveal positioning + match highlighting for the search-selected message.
+  // The scroll target is the match itself, not the article: centering a
+  // message taller than the viewport can leave the match off-screen. Plain
+  // text roles scroll to their inline <mark>; assistant content renders
+  // through the markdown pipeline, so the CSS Custom Highlight API marks the
+  // first-occurrence match on the already-rendered article (no-op in jsdom
+  // or engines without the API). Center the assistant's exact DOM Range
+  // geometrically because a containing paragraph may itself exceed the
+  // viewport; fall back to that containing element when range geometry or
+  // element scrolling is unavailable.
   React.useEffect(() => {
-    if (highlightQuery === undefined || message.role !== "assistant") return
+    if (highlightQuery === undefined) return
     const article = revealArticleRef.current
-    if (article === null) return
-    applySearchHighlight(article, highlightQuery)
+    const matchRoot =
+      message.role === "assistant" ? assistantContentRef.current : article
+    if (article === null || matchRoot === null) return
+
+    const reducedMotion = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)",
+    ).matches
+    const behavior = reducedMotion ? "auto" : "smooth"
+
+    if (message.role !== "assistant") {
+      const matchTarget = article.querySelector("mark") ?? article
+      matchTarget.scrollIntoView?.({
+        block: "center",
+        inline: "nearest",
+        behavior,
+      })
+      return
+    }
+
+    const matchRange = findTextMatchRanges(matchRoot, highlightQuery)[0]
+    const scrollContainer = scrollContainerRef?.current
+    const matchRect = matchRange?.getBoundingClientRect?.()
+    const containerRect = scrollContainer?.getBoundingClientRect()
+    const hasUsableGeometry =
+      matchRect !== undefined &&
+      containerRect !== undefined &&
+      Number.isFinite(matchRect.top) &&
+      Number.isFinite(matchRect.height) &&
+      Number.isFinite(containerRect.top) &&
+      Number.isFinite(containerRect.height) &&
+      containerRect.height > 0 &&
+      (matchRect.width > 0 || matchRect.height > 0)
+    if (
+      matchRange !== undefined &&
+      scrollContainer !== null &&
+      scrollContainer !== undefined &&
+      typeof scrollContainer.scrollBy === "function" &&
+      hasUsableGeometry
+    ) {
+      scrollContainer.scrollBy({
+        top:
+          matchRect.top -
+          containerRect.top -
+          (containerRect.height - matchRect.height) / 2,
+        behavior,
+      })
+    } else {
+      const fallbackTarget = matchRange?.startContainer.parentElement ?? article
+      fallbackTarget.scrollIntoView?.({
+        block: "center",
+        inline: "nearest",
+        behavior,
+      })
+    }
+
+    applySearchHighlight(matchRoot, highlightQuery)
     return () => {
       clearSearchHighlight()
     }
-  }, [highlightQuery, message.role])
+  }, [highlightQuery, message.content, message.role, scrollContainerRef])
 
   React.useEffect(() => {
     if (isEditing) {
@@ -307,7 +374,9 @@ export function MessageNode({
           {message.thinking !== undefined && (
             <ThinkingBlock thinking={message.thinking} streaming={false} />
           )}
-          <AssistantMarkdown content={message.content} />
+          <div ref={assistantContentRef}>
+            <AssistantMarkdown content={message.content} />
+          </div>
         </>
       ) : (
         <div className="whitespace-pre-wrap break-words text-sm text-foreground">

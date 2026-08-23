@@ -7,6 +7,16 @@
 
 export type TextSegment = { text: string; isMatch: boolean }
 
+// SQLite's built-in lower() folds ASCII only. Keep the frontend matcher on
+// that exact contract and, importantly, preserve UTF-16 offsets for DOM Range
+// construction (some Unicode case folds, such as İ -> i + combining dot,
+// change string length under JavaScript's toLowerCase()).
+function foldAsciiCase(value: string): string {
+  return value.replace(/[A-Z]/g, (character) =>
+    String.fromCharCode(character.charCodeAt(0) + 0x20),
+  )
+}
+
 // Case-insensitive for the same ASCII fold the backend applies; exact for
 // other scripts. `fail-open`: an empty query returns the text untouched.
 // `firstOnly` marks a single occurrence — the one the backend snippet is
@@ -17,10 +27,10 @@ export function splitQueryMatches(
   query: string,
   options?: { firstOnly?: boolean },
 ): readonly TextSegment[] {
-  const needle = query.toLowerCase()
+  const needle = foldAsciiCase(query)
   if (needle.length === 0) return [{ text, isMatch: false }]
 
-  const haystack = text.toLowerCase()
+  const haystack = foldAsciiCase(text)
   const segments: TextSegment[] = []
   let cursor = 0
   let matched = false
@@ -53,7 +63,7 @@ export function findTextMatchRanges(
   root: Element,
   query: string,
 ): readonly Range[] {
-  const needle = query.toLowerCase()
+  const needle = foldAsciiCase(query)
   if (needle.length === 0) return []
 
   const ranges: Range[] = []
@@ -61,7 +71,7 @@ export function findTextMatchRanges(
   let node = walker.nextNode()
   while (node !== null) {
     const text = node.nodeValue ?? ""
-    const haystack = text.toLowerCase()
+    const haystack = foldAsciiCase(text)
     let cursor = 0
     while (cursor <= haystack.length) {
       const index = haystack.indexOf(needle, cursor)

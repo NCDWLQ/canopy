@@ -186,20 +186,28 @@ export function ConversationWorkspace({
   // Keep the selected conversation's history row visible — e.g. after a
   // search reveal jumps to an older conversation far down the list.
   const historyScrollRef = React.useRef<HTMLDivElement>(null)
+  const scrollHistoryRowIntoView = React.useCallback(
+    (conversationId: string) => {
+      const row = Array.from(
+        historyScrollRef.current?.querySelectorAll<HTMLElement>(
+          "[data-conversation-id]",
+        ) ?? [],
+      ).find((candidate) => candidate.dataset.conversationId === conversationId)
+      if (row === undefined) return
+      const reducedMotion = window.matchMedia?.(
+        "(prefers-reduced-motion: reduce)",
+      ).matches
+      row.scrollIntoView?.({
+        block: "nearest",
+        behavior: reducedMotion ? "auto" : "smooth",
+      })
+    },
+    [],
+  )
   React.useEffect(() => {
     if (store.conversationId === null) return
-    const row = historyScrollRef.current?.querySelector(
-      `[data-conversation-id="${CSS.escape(store.conversationId)}"]`,
-    )
-    if (row === null || row === undefined) return
-    const reducedMotion = window.matchMedia?.(
-      "(prefers-reduced-motion: reduce)",
-    ).matches
-    row.scrollIntoView?.({
-      block: "nearest",
-      behavior: reducedMotion ? "auto" : "smooth",
-    })
-  }, [store.conversationId])
+    scrollHistoryRowIntoView(store.conversationId)
+  }, [scrollHistoryRowIntoView, store.conversationId])
 
   const projectionError =
     pathProjection.kind === "error" ? pathProjection.error : null
@@ -553,7 +561,16 @@ export function ConversationWorkspace({
             onOpenChange={setIsSearchOpen}
             client={client}
             onReveal={(conversationId, nodeId, query) => {
-              void store.revealSearchHit(client, conversationId, nodeId, query)
+              void store
+                .revealSearchHit(client, conversationId, nodeId, query)
+                .then(() => {
+                  if (
+                    useConversationStore.getState().conversationId ===
+                    conversationId
+                  ) {
+                    scrollHistoryRowIntoView(conversationId)
+                  }
+                })
             }}
           />
         </footer>

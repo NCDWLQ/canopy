@@ -170,10 +170,11 @@ export function ConversationPane({
   const revealQuery = reveal?.query ?? ""
   const revealOnPath =
     revealNodeId !== null && path.some((message) => message.id === revealNodeId)
-  const revealScrollKey = `${revealNodeId}|${revealQuery}|${pathScrollKey}`
 
   React.useEffect(() => {
     if (status === "ready" || status === "streaming") {
+      // While a search reveal owns the viewport, MessageNode scrolls to the
+      // matched text; the bottom autoscroll would fight that target.
       if (revealOnPath) return
       const reducedMotion = window.matchMedia?.(
         "(prefers-reduced-motion: reduce)",
@@ -189,23 +190,6 @@ export function ConversationPane({
     transientGeneration?.phase,
     revealOnPath,
   ])
-
-  // Search reveal: center the hit message. Retries when the path finishes
-  // loading after the reveal arrives (e.g. cross-conversation jump).
-  React.useEffect(() => {
-    if (revealNodeId === null) return
-    const element = containerRef.current?.querySelector(
-      `[data-node-id="${CSS.escape(revealNodeId)}"]`,
-    )
-    if (element === null || element === undefined) return
-    const reducedMotion = window.matchMedia?.(
-      "(prefers-reduced-motion: reduce)",
-    ).matches
-    element.scrollIntoView?.({
-      block: "center",
-      behavior: reducedMotion ? "auto" : "smooth",
-    })
-  }, [revealScrollKey, revealNodeId])
 
   if (status === "loading" && path.length === 0) {
     return (
@@ -289,6 +273,7 @@ export function ConversationPane({
                   ? revealQuery
                   : undefined
               }
+              scrollContainerRef={containerRef}
             />
           )
         })}

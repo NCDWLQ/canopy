@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { selectActivePath, useConversationStore } from "./index"
+import {
+  newestLeafDescendant,
+  selectActivePath,
+  useConversationStore,
+} from "./index"
 import type {
   ConversationNodeView,
   ConversationSummaryView,
@@ -224,7 +228,7 @@ describe("conversation store", () => {
     })
   })
 
-  it("breaks latest-leaf timestamp ties by the greater node ID", async () => {
+  it("breaks latest-leaf timestamp ties by ascending node ID", async () => {
     client.loadConversationTree.mockResolvedValueOnce({
       ...tree,
       nodes: [root, assistant, { ...left, createdAt: right.createdAt }, right],
@@ -234,7 +238,7 @@ describe("conversation store", () => {
       .getState()
       .loadConversation(client, conversation.id)
 
-    expect(useConversationStore.getState().activeNodeId).toBe(right.id)
+    expect(useConversationStore.getState().activeNodeId).toBe(left.id)
   })
 
   it("discovers history, prefers the newest unarchived conversation, and restores its latest path", async () => {
@@ -1207,6 +1211,13 @@ describe("revealSearchHit", () => {
 
   it("ignores unknown node ids instead of switching the path", async () => {
     await loadConversationFirst()
+    useConversationStore.setState({
+      reveal: {
+        conversationId: conversation.id,
+        nodeId: right.id,
+        query: "RIGHT",
+      },
+    })
 
     await useConversationStore
       .getState()
@@ -1215,6 +1226,25 @@ describe("revealSearchHit", () => {
     const state = useConversationStore.getState()
     expect(state.activeNodeId).toBe(right.id)
     expect(state.reveal).toBeNull()
+  })
+
+  it("clears the previous reveal as soon as a new navigation starts", async () => {
+    await loadConversationFirst()
+    useConversationStore.setState({
+      reveal: {
+        conversationId: conversation.id,
+        nodeId: right.id,
+        query: "RIGHT",
+      },
+    })
+    client.loadConversationTree.mockRejectedValueOnce(new Error("offline"))
+
+    const pending = useConversationStore
+      .getState()
+      .revealSearchHit(client, "another-conversation", "node", "query")
+    expect(useConversationStore.getState().reveal).toBeNull()
+    await pending
+    expect(useConversationStore.getState().reveal).toBeNull()
   })
 
   it("clears the reveal on the next node selection", async () => {
@@ -1228,5 +1258,18 @@ describe("revealSearchHit", () => {
     const state = useConversationStore.getState()
     expect(state.activeNodeId).toBe(left.id)
     expect(state.reveal).toBeNull()
+  })
+
+  it("uses ascending id as the deterministic tie-break for equally new leaves", () => {
+    const tiedFullNodes = {
+      ...tree.nodes.reduce<Record<string, ConversationNodeView>>(
+        (nodes, node) => ({ ...nodes, [node.id]: node }),
+        {},
+      ),
+      left: { ...left, createdAt: 4 },
+    }
+    expect(
+      newestLeafDescendant(tree.nodesById, tiedFullNodes, assistant.id),
+    ).toBe("left")
   })
 })

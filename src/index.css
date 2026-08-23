@@ -222,8 +222,8 @@
   background: var(--accent);
 }
 
-/* 搜索定位高亮(CSS Custom Highlight API,见 features/conversations/highlightMatches.tsx)。
-   不支持该 API 的引擎(如 jsdom)自动降级为仅消息级高亮环。 */
+/* 搜索定位高亮(CSS Custom Highlight API,见 features/conversations/highlightMatches.ts)。
+   不支持该 API 的引擎保留精确匹配位置的滚动降级。 */
 ::highlight(canopy-search-reveal) {
   background-color: oklch(0.9 0.15 95);
   color: inherit;
