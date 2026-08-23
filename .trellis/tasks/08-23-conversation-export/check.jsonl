@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "前端质量检查基准（lint/typecheck/vitest 全量门 pnpm check）"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "后端质量检查基准（cargo test/clippy、契约测试 command_boundary）"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "核查新 key 双语言同步、无硬编码文案"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "核查命令名四处一致（commands.rs/lib.rs/fixture/client.ts）与 DTO snake_case 契约"}
+{"file": ".trellis/tasks/08-23-conversation-export/research/codebase-current-state.md", "reason": "核查实现是否违反调研确立的约束（capability 最小化、不动既有命令）"}
