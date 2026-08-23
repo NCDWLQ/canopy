@@ -238,4 +238,29 @@ describe("MindMapCanvas", () => {
 
     expect(screen.getByRole("alert")).toHaveTextContent("无法安全显示会话树。")
   })
+
+  it("keeps edges after the post-mount measurement pass", () => {
+    // In a real browser the node ResizeObserver completes measurement
+    // (offsetWidth/offsetHeight) and React Flow overwrites handleBounds from
+    // a DOM scan. Without Handle elements in the card that scan yields null
+    // and every edge disappears until the next node-store update — the
+    // "edges missing until a node is clicked" regression. jsdom's
+    // offsetWidth is always 0, so the pass only runs with these stubs.
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(224)
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(80)
+
+    const { container } = render(
+      <MindMapCanvas
+        rootNodeId="root"
+        nodesById={nodesById}
+        activePathIds={activePathIds}
+        onSelect={vi.fn()}
+      />,
+    )
+
+    expect(container.querySelectorAll(".react-flow__edge")).toHaveLength(4)
+    expect(container.querySelectorAll(".react-flow__handle")).not.toHaveLength(
+      0,
+    )
+  })
 })

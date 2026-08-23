@@ -2,7 +2,9 @@ import * as React from "react"
 import {
   Background,
   Controls,
+  Handle,
   MiniMap,
+  Position,
   ReactFlow,
   type NodeProps,
   type NodeTypes,
@@ -66,8 +68,24 @@ function MindMapNodeCard({ data }: NodeProps<MindMapFlowNode>) {
       )}
       style={{ width: MINDMAP_CARD_WIDTH, height: MINDMAP_CARD_HEIGHT }}
     >
-      {/* Edge anchors are declared on the node in mindmapLayout (see
-          MINDMAP_NODE_HANDLES); lines meet the card edges directly. */}
+      {/* The declared MINDMAP_NODE_HANDLES cover the first paint, but the
+          node ResizeObserver later overwrites handleBounds from a DOM scan
+          (querySelectorAll('.source'/'.target')); with no handle elements
+          that scan yields null and every edge silently disappears. Keep
+          invisible Handle elements in sync with the declaration so measured
+          bounds match. */}
+      <Handle
+        type="target"
+        position={Position.Left}
+        isConnectable={false}
+        className="!border-0 !bg-transparent"
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        isConnectable={false}
+        className="!border-0 !bg-transparent"
+      />
       <div className="flex items-center gap-1.5 text-muted-foreground">
         <RoleIcon role={data.role} />
         <span className="text-[10px] font-medium uppercase tracking-wide">

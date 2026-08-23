@@ -583,7 +583,17 @@ WebGL dependency on WebKitGTK.
   before the error-008 path is even reached) — nodes render fine while all
   edges vanish. Declarative handles avoid DOM measurement, so edges exist on
   first paint and in jsdom; do not rely on `<Handle>` components inside the
-  card for this view. Without them React Flow keeps
+  card for this view.
+- Declared handles alone are NOT enough in a real browser: once the node
+  ResizeObserver completes measurement, `updateNodeInternals` overwrites
+  handleBounds from a `querySelectorAll('.source'/'.target')` DOM scan —
+  with no Handle elements that scan yields `{source: null, target: null}`
+  and every edge silently vanishes until the next node-store update
+  re-adopts the user nodes (symptom: "edges missing until a node is
+  clicked"). Keep the declaration (first paint + jsdom, where
+  offsetWidth 0 means the measurement pass never runs) AND matching
+  invisible `<Handle>` elements in the card; the regression test mocks
+  offsetWidth/offsetHeight to exercise the overwrite path. Without them React Flow keeps
   nodes `visibility: hidden` until measured, which never happens in jsdom
   and flashes in production.
 - Testing recipe (jsdom): stub `ResizeObserver` with a class whose
