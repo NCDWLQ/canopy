@@ -111,6 +111,10 @@ fn shared_fixture_round_trips_rust_requests_dtos_errors_and_exact_command_names(
         "set_conversation_provider",
         canopy_lib::conversations::commands::SetConversationProviderRequest
     );
+    assert_request!(
+        "search_conversations",
+        canopy_lib::conversations::commands::SearchConversationsRequest
+    );
 
     let conversation: ConversationDto =
         serde_json::from_value(fixture["successes"]["conversation"].clone())
@@ -118,6 +122,13 @@ fn shared_fixture_round_trips_rust_requests_dtos_errors_and_exact_command_names(
     assert_eq!(
         serde_json::to_value(conversation).expect("conversation DTO reserializes"),
         fixture["successes"]["conversation"]
+    );
+    let search_results: Vec<canopy_lib::conversations::commands::ConversationSearchResultDto> =
+        serde_json::from_value(fixture["successes"]["search_results"].clone())
+            .expect("search results decode");
+    assert_eq!(
+        serde_json::to_value(search_results).expect("search results reserialize"),
+        fixture["successes"]["search_results"]
     );
     let summaries: Vec<ConversationSummaryDto> =
         serde_json::from_value(fixture["successes"]["conversation_summaries"].clone())
@@ -173,6 +184,10 @@ fn shared_fixture_round_trips_rust_requests_dtos_errors_and_exact_command_names(
     assert!(serde_json::from_value::<ActivePathDto>(
         malformed_commands["load_active_path"].clone()
     )
+    .is_err());
+    assert!(serde_json::from_value::<
+        Vec<canopy_lib::conversations::commands::ConversationSearchResultDto>,
+    >(malformed_commands["search_conversations"].clone())
     .is_err());
 }
 

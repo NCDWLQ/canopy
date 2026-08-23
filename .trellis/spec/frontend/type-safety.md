@@ -73,12 +73,16 @@ listConversations(): Promise<readonly ConversationSummaryView[]>
 loadConversationTree(conversationId): Promise<ConversationTreeView>
 loadActivePath(conversationId, activeNodeId): Promise<ActivePathView>
 archiveConversation(conversationId): Promise<ConversationView>
+searchConversations(query): Promise<readonly ConversationSearchResultView[]>
 ```
 
 These map to the frozen snake-case commands `create_conversation`,
 `append_node`, `create_branch`, `edit_node_as_branch`,
-`list_conversations`, `load_conversation_tree`, `load_active_path`, and
-`archive_conversation`.
+`list_conversations`, `load_conversation_tree`, `load_active_path`,
+`archive_conversation`, and `search_conversations` (added 2026-08-23 with
+task 08-23-search: substring search over user/assistant content and titles;
+snippets are windowed SQL-side and the query is trimmed/≤200 chars on both
+sides).
 
 ### 3. Contracts
 

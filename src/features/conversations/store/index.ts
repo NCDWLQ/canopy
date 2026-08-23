@@ -5,6 +5,7 @@ import type {
   ConversationSummaryView,
   ConversationTreeView,
   PathMessageView,
+  SearchReveal,
   TreeNodeView,
   UiError,
 } from "../types"
@@ -94,6 +95,9 @@ export type ConversationTreeState = {
   expandedIds: ReadonlySet<string>
   status: "idle" | "loading" | "ready" | "streaming" | "error"
   error: UiError | null
+  // One-shot search reveal (see SearchReveal). Cleared by the next
+  // navigation or tree replacement so highlight never outlives its target.
+  reveal: SearchReveal | null
   // At most one run record per conversation, keyed by conversation ID. Active
   // runs stream in the background when their conversation is not loaded;
   // terminal records survive switches so failures can surface on re-entry.
@@ -131,6 +135,12 @@ export type ConversationStore = ConversationTreeState & {
   selectConversation: (client: ConversationClient, id: string) => Promise<void>
   loadConversation: (client: ConversationClient, id: string) => Promise<void>
   selectNode: (nodeId: string) => void
+  revealSearchHit: (
+    client: ConversationClient,
+    conversationId: string,
+    nodeId: string | null,
+    query: string,
+  ) => Promise<void>
   toggleExpanded: (nodeId: string) => void
   createConversation: (
     client: ConversationClient,
@@ -251,6 +261,7 @@ const initialState: ConversationTreeState = {
   expandedIds: new Set(),
   status: "idle",
   error: null,
+  reveal: null,
   generationRuns: emptyRecord(),
 }
 
@@ -336,6 +347,53 @@ function expandedPathIds(
   return expandedIds
 }
 
+function expandedIdsFromNodes(
+  fullNodes: Readonly<Record<string, ConversationNodeView>>,
+  activeNodeId: string,
+): ReadonlySet<string> {
+  const expandedIds = new Set<string>()
+  let currentId: string | undefined = activeNodeId
+  while (currentId !== undefined) {
+    expandedIds.add(currentId)
+    currentId = fullNodes[currentId]?.parentId
+  }
+  return expandedIds
+}
+
+// Deterministic newest leaf of the subtree rooted at `nodeId`, mirroring the
+// (createdAt DESC, id ASC) tie-break `newestLeafId` applies to whole trees.
+export function newestLeafDescendant(
+  nodesById: Readonly<Record<string, TreeNodeView>>,
+  fullNodes: Readonly<Record<string, ConversationNodeView>>,
+  nodeId: string,
+): string | null {
+  if (!Object.hasOwn(nodesById, nodeId)) return null
+  const pending = [nodeId]
+  const visited = new Set<string>()
+  let newest: { id: string; createdAt: number } | null = null
+  while (pending.length > 0) {
+    const currentId = pending.pop()
+    if (currentId === undefined || visited.has(currentId)) return null
+    visited.add(currentId)
+    const node = nodesById[currentId]
+    if (node === undefined) return null
+    if (node.childIds.length === 0) {
+      const full = fullNodes[currentId]
+      if (full === undefined) return null
+      if (
+        newest === null ||
+        full.createdAt > newest.createdAt ||
+        (full.createdAt === newest.createdAt && currentId > newest.id)
+      ) {
+        newest = { id: currentId, createdAt: full.createdAt }
+      }
+      continue
+    }
+    pending.push(...node.childIds)
+  }
+  return newest?.id ?? nodeId
+}
+
 function loadedTreeState(
   tree: ConversationTreeView,
   generationRuns: Readonly<Record<string, GenerationRun>>,
@@ -358,6 +416,7 @@ function loadedTreeState(
     expandedIds: expandedPathIds(tree, activeNodeId),
     status: "ready",
     error: null,
+    reveal: null,
     generationRuns,
   }
 }
@@ -491,6 +550,7 @@ function addAuthoritativeNode(
     expandedIds,
     status: "ready",
     error: null,
+    reveal: null,
   }
 }
 
@@ -599,6 +659,7 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
         draftReasoningEffort: null,
         status: state.conversationId === null ? "idle" : "ready",
         error: null,
+        reveal: null,
       })
     },
 
@@ -1077,7 +1138,37 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
       if (!Object.hasOwn(state.nodesById, nodeId)) return
       const projection = selectActivePath({ ...state, activeNodeId: nodeId })
       if (projection.kind !== "ready") return
-      set({ activeNodeId: nodeId })
+      set({ activeNodeId: nodeId, reveal: null })
+    },
+
+    revealSearchHit: async (client, conversationId, nodeId, query) => {
+      const epoch = ++requestEpoch
+      if (get().conversationId !== conversationId) {
+        const loaded = await loadSelectedConversation(
+          client,
+          conversationId,
+          epoch,
+        )
+        if (!loaded || epoch !== requestEpoch) return
+      }
+      const state = get()
+      if (state.conversationId !== conversationId) return
+      if (nodeId === null) {
+        // Title-only hit: the default newest-leaf view installed by the load
+        // above is the whole reveal; there is no message to position on.
+        set({ reveal: null })
+        return
+      }
+      if (!Object.hasOwn(state.nodesById, nodeId)) return
+      const targetId =
+        newestLeafDescendant(state.nodesById, state.fullNodes, nodeId) ?? nodeId
+      const projection = selectActivePath({ ...state, activeNodeId: targetId })
+      if (projection.kind !== "ready") return
+      set({
+        activeNodeId: targetId,
+        expandedIds: expandedIdsFromNodes(state.fullNodes, targetId),
+        reveal: { conversationId, nodeId, query },
+      })
     },
 
     loadConversation: async (client, id) => {

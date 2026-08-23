@@ -13,6 +13,8 @@ import { AssistantMarkdown } from "./AssistantMarkdown"
 import { MessageBubble } from "./MessageBubble"
 import { ThinkingBlock } from "./ThinkingBlock"
 import type { PathMessageView } from "../types"
+import { applySearchHighlight, clearSearchHighlight } from "../highlightMatches"
+import { HighlightedText } from "./HighlightedText"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { useTranslation } from "@/lib/i18n"
@@ -34,6 +36,8 @@ export type MessageNodeProps = {
   onEditAsBranch: (nodeId: string, content: string) => void
   generationAction?: UserGenerationAction
   assistantRegenerationAction?: AssistantRegenerationAction
+  // Present only on the search-revealed message; drives match highlighting.
+  highlightQuery?: string
 }
 
 export function MessageNode({
@@ -44,6 +48,7 @@ export function MessageNode({
   onEditAsBranch,
   generationAction,
   assistantRegenerationAction,
+  highlightQuery,
 }: MessageNodeProps) {
   const { t } = useTranslation()
   const [isEditing, setIsEditing] = React.useState(false)
@@ -54,6 +59,21 @@ export function MessageNode({
   const editInputRef = React.useRef<HTMLTextAreaElement>(null)
   const branchInputRef = React.useRef<HTMLTextAreaElement>(null)
   const copyResetRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+  const revealArticleRef = React.useRef<HTMLElement>(null)
+
+  // Assistant content renders through the markdown pipeline, so plain-text
+  // `<mark>` wrapping cannot reach it; the CSS Custom Highlight API applies
+  // the same query to the already-rendered article instead (no-op in jsdom
+  // or engines without the API — the reveal ring remains as fallback).
+  React.useEffect(() => {
+    if (highlightQuery === undefined || message.role !== "assistant") return
+    const article = revealArticleRef.current
+    if (article === null) return
+    applySearchHighlight(article, highlightQuery)
+    return () => {
+      clearSearchHighlight()
+    }
+  }, [highlightQuery, message.role])
 
   React.useEffect(() => {
     if (isEditing) {
@@ -127,6 +147,9 @@ export function MessageNode({
   return (
     <MessageBubble
       role={message.role}
+      nodeId={message.id}
+      highlighted={highlightQuery !== undefined}
+      articleRef={revealArticleRef}
       footer={
         isEditing ? (
           <div className="flex justify-end gap-2 mt-2">
@@ -289,7 +312,11 @@ export function MessageNode({
         </>
       ) : (
         <div className="whitespace-pre-wrap break-words text-sm text-foreground">
-          {message.content}
+          {highlightQuery === undefined ? (
+            message.content
+          ) : (
+            <HighlightedText text={message.content} query={highlightQuery} />
+          )}
         </div>
       )}
     </MessageBubble>

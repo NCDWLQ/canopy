@@ -1,5 +1,5 @@
 import * as React from "react"
-import type { PathMessageView, UiError } from "../types"
+import type { PathMessageView, SearchReveal, UiError } from "../types"
 import { AssistantMarkdown } from "./AssistantMarkdown"
 import { MessageBubble } from "./MessageBubble"
 import { ThinkingBlock } from "./ThinkingBlock"
@@ -28,6 +28,9 @@ export type ConversationPaneProps = {
   onRegenerate: () => void
   userGenerationAction?: UserGenerationAction | null
   assistantRegenerationAction?: AssistantRegenerationAction | null
+  // Active search reveal: scrolls the hit message into view (centered) and
+  // highlights matches until the next navigation clears it.
+  reveal?: SearchReveal | null
 }
 
 export type TransientGenerationView =
@@ -149,9 +152,11 @@ export function ConversationPane({
   onRegenerate,
   userGenerationAction,
   assistantRegenerationAction,
+  reveal = null,
 }: ConversationPaneProps) {
   const { t } = useTranslation()
   const bottomRef = React.useRef<HTMLDivElement>(null)
+  const containerRef = React.useRef<HTMLDivElement>(null)
   const transientContent =
     transientGeneration !== null && "content" in transientGeneration
       ? transientGeneration.content
@@ -161,9 +166,15 @@ export function ConversationPane({
   // must key on the displayed tail's content, not on the array reference.
   const lastMessage = path.at(-1)
   const pathScrollKey = `${path.length}|${lastMessage?.id ?? ""}|${lastMessage?.content ?? ""}`
+  const revealNodeId = reveal?.nodeId ?? null
+  const revealQuery = reveal?.query ?? ""
+  const revealOnPath =
+    revealNodeId !== null && path.some((message) => message.id === revealNodeId)
+  const revealScrollKey = `${revealNodeId}|${revealQuery}|${pathScrollKey}`
 
   React.useEffect(() => {
     if (status === "ready" || status === "streaming") {
+      if (revealOnPath) return
       const reducedMotion = window.matchMedia?.(
         "(prefers-reduced-motion: reduce)",
       ).matches
@@ -171,7 +182,30 @@ export function ConversationPane({
         behavior: reducedMotion ? "auto" : "smooth",
       })
     }
-  }, [pathScrollKey, status, transientContent, transientGeneration?.phase])
+  }, [
+    pathScrollKey,
+    status,
+    transientContent,
+    transientGeneration?.phase,
+    revealOnPath,
+  ])
+
+  // Search reveal: center the hit message. Retries when the path finishes
+  // loading after the reveal arrives (e.g. cross-conversation jump).
+  React.useEffect(() => {
+    if (revealNodeId === null) return
+    const element = containerRef.current?.querySelector(
+      `[data-node-id="${CSS.escape(revealNodeId)}"]`,
+    )
+    if (element === null || element === undefined) return
+    const reducedMotion = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)",
+    ).matches
+    element.scrollIntoView?.({
+      block: "center",
+      behavior: reducedMotion ? "auto" : "smooth",
+    })
+  }, [revealScrollKey, revealNodeId])
 
   if (status === "loading" && path.length === 0) {
     return (
@@ -184,6 +218,7 @@ export function ConversationPane({
 
   return (
     <div
+      ref={containerRef}
       data-testid="conversation-pane"
       className="relative flex h-full flex-1 flex-col overflow-y-auto px-4 py-6 md:px-8 [contain:paint]"
     >
@@ -249,6 +284,11 @@ export function ConversationPane({
               onEditAsBranch={onEditAsBranch}
               generationAction={nodeGenerationAction}
               assistantRegenerationAction={nodeAssistantRegenerationAction}
+              highlightQuery={
+                revealNodeId !== null && revealNodeId === msg.id
+                  ? revealQuery
+                  : undefined
+              }
             />
           )
         })}

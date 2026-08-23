@@ -1,5 +1,11 @@
 import * as React from "react"
-import { Archive, PanelLeftClose, PanelLeftOpen, SquarePen } from "lucide-react"
+import {
+  Archive,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Search,
+  SquarePen,
+} from "lucide-react"
 import { useShallow } from "zustand/react/shallow"
 
 import { Composer, type ComposerAction } from "./Composer"
@@ -9,6 +15,7 @@ import {
   type UserGenerationAction,
 } from "./ConversationPane"
 import { OutlineTree } from "./OutlineTree"
+import { SearchDialog } from "./SearchDialog"
 import { useConversationTitleUpdates } from "../hooks/useConversationTitleUpdates"
 import { useWorkspaceGenerationController } from "../hooks/useWorkspaceGenerationController"
 import {
@@ -142,12 +149,14 @@ export function ConversationWorkspace({
       expandedIds: state.expandedIds,
       status: state.status,
       error: state.error,
+      reveal: state.reveal,
       generationRuns: state.generationRuns,
       history: state.history,
       toggleExpanded: state.toggleExpanded,
       clearError: state.clearError,
       retryHistory: state.retryHistory,
       selectConversation: state.selectConversation,
+      revealSearchHit: state.revealSearchHit,
       enterConversationCreation: state.enterConversationCreation,
     })),
   )
@@ -161,6 +170,7 @@ export function ConversationWorkspace({
   })
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true)
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(false)
+  const [isSearchOpen, setIsSearchOpen] = React.useState(false)
   const [pendingArchiveId, setPendingArchiveId] = React.useState<string | null>(
     null,
   )
@@ -335,27 +345,46 @@ export function ConversationWorkspace({
       >
         <div className="flex h-12 shrink-0 items-center justify-between gap-2 px-3 text-sm font-semibold">
           <span className="font-bold tracking-tight">Canopy</span>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="size-8"
-                  aria-label={t("conversation.workspace.newConversation")}
-                  title={t("conversation.workspace.newConversation")}
-                  disabled={store.status === "loading"}
-                  onClick={store.enterConversationCreation}
-                >
-                  <SquarePen className="size-4" aria-hidden="true" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                {t("conversation.workspace.newConversation")}
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <div className="flex items-center gap-1">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-8"
+                    aria-label={t("search.openButton")}
+                    title={t("search.openButton")}
+                    disabled={store.history.summaries.length === 0}
+                    onClick={() => setIsSearchOpen(true)}
+                  >
+                    <Search className="size-4" aria-hidden="true" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t("search.openButton")}</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-8"
+                    aria-label={t("conversation.workspace.newConversation")}
+                    title={t("conversation.workspace.newConversation")}
+                    disabled={store.status === "loading"}
+                    onClick={store.enterConversationCreation}
+                  >
+                    <SquarePen className="size-4" aria-hidden="true" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {t("conversation.workspace.newConversation")}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
         </div>
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-2">
           <section>
@@ -495,6 +524,15 @@ export function ConversationWorkspace({
             readOnly={!isBlankConversation && store.isArchived}
             open={isSettingsOpen}
             onOpenChange={setIsSettingsOpen}
+          />
+          <SearchDialog
+            key={isSearchOpen ? "search-open" : "search-closed"}
+            open={isSearchOpen}
+            onOpenChange={setIsSearchOpen}
+            client={client}
+            onReveal={(conversationId, nodeId, query) => {
+              void store.revealSearchHit(client, conversationId, nodeId, query)
+            }}
           />
         </footer>
       </aside>
@@ -669,6 +707,7 @@ export function ConversationWorkspace({
               onRegenerate={controller.generate}
               userGenerationAction={userGenerationAction}
               assistantRegenerationAction={assistantRegenerationAction}
+              reveal={store.reveal}
             />
 
             <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10">

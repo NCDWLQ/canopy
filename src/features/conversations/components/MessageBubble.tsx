@@ -1,4 +1,4 @@
-import type { ReactNode } from "react"
+import type { ReactNode, Ref } from "react"
 
 import type { PathMessageView } from "../types"
 import { useTranslation } from "@/lib/i18n"
@@ -10,6 +10,10 @@ export type MessageBubbleProps = {
   actions?: ReactNode
   footer?: ReactNode
   className?: string
+  // Stable scroll anchor and reveal emphasis for search-result positioning.
+  nodeId?: string
+  highlighted?: boolean
+  articleRef?: Ref<HTMLElement>
 }
 
 export function MessageBubble({
@@ -18,6 +22,9 @@ export function MessageBubble({
   actions,
   footer,
   className,
+  nodeId,
+  highlighted = false,
+  articleRef,
 }: MessageBubbleProps) {
   const { t } = useTranslation()
   const roleLabels: Record<PathMessageView["role"], string> = {
@@ -30,12 +37,21 @@ export function MessageBubble({
   const messageAria = t("conversation.messageBubble.messageAria", {
     role: roleLabel,
   })
+  const revealClass = highlighted
+    ? "rounded-xl bg-primary/5 ring-1 ring-primary/30 px-2 -mx-2"
+    : undefined
 
   if (role === "user") {
     return (
       <article
+        ref={articleRef}
+        data-node-id={nodeId}
         aria-label={messageAria}
-        className={cn("group flex flex-col items-end my-3 w-full", className)}
+        className={cn(
+          "group flex flex-col items-end my-3 w-full",
+          revealClass,
+          className,
+        )}
       >
         <div className="max-w-[85%] rounded-2xl bg-muted px-4 py-2.5 text-sm text-foreground">
           {children}
@@ -53,9 +69,12 @@ export function MessageBubble({
   if (role === "assistant") {
     return (
       <article
+        ref={articleRef}
+        data-node-id={nodeId}
         aria-label={messageAria}
         className={cn(
           "group flex flex-col items-start my-4 w-full text-foreground",
+          revealClass,
           className,
         )}
       >
@@ -72,6 +91,8 @@ export function MessageBubble({
 
   return (
     <article
+      ref={articleRef}
+      data-node-id={nodeId}
       aria-label={messageAria}
       className={cn("group my-3 flex flex-col items-center w-full", className)}
     >
@@ -80,7 +101,7 @@ export function MessageBubble({
       </div>
       {footer && <div className="w-full">{footer}</div>}
       {actions && (
-        <div className="mt-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+        <div className="mt-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
           {actions}
         </div>
       )}

@@ -244,6 +244,7 @@ function createClient() {
         path: [],
       }),
     archiveConversation: () => Promise.resolve(conversation),
+    searchConversations: () => Promise.resolve([]),
   } satisfies ConversationClient
 }
 

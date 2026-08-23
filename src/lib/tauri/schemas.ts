@@ -128,6 +128,38 @@ export const conversationProviderBindingResultSchema = z
     }
   })
 
+export const searchConversationsRequestSchema = z
+  .object({
+    query: unicodeScalarStringSchema
+      .transform(trimRustWhitespace)
+      .refine((value) => value.length > 0 && [...value].length <= 200),
+  })
+  .strict()
+
+export const searchHitDtoSchema = z
+  .object({
+    node_id: idSchema,
+    role: z.enum(["system", "user", "assistant", "tool"]),
+    created_at: z.number().int().safe(),
+    snippet: z.string(),
+  })
+  .strict()
+
+export const conversationSearchResultDtoSchema = z
+  .object({
+    conversation_id: idSchema,
+    title: z.string(),
+    is_archived: z.boolean(),
+    title_matched: z.boolean(),
+    updated_at: z.number().int().safe(),
+    hits: z.array(searchHitDtoSchema),
+  })
+  .strict()
+
+export const conversationSearchResultsDtoSchema = z.array(
+  conversationSearchResultDtoSchema,
+)
+
 export const commandErrorCodeSchema = z.enum([
   "invalid_input",
   "not_found",
@@ -227,6 +259,10 @@ export const activePathDtoSchema = z
 export type ConversationDto = z.infer<typeof conversationDtoSchema>
 export type ConversationSummaryDto = z.infer<
   typeof conversationSummaryDtoSchema
+>
+export type SearchHitDto = z.infer<typeof searchHitDtoSchema>
+export type ConversationSearchResultDto = z.infer<
+  typeof conversationSearchResultDtoSchema
 >
 export type NodeDto = z.infer<typeof nodeDtoSchema>
 export type ConversationTreeDto = z.infer<typeof conversationTreeDtoSchema>

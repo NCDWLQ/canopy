@@ -123,6 +123,17 @@ export const en = {
   "conversation.outline.noReplies": "No replies to this message yet",
   "conversation.outline.emptyContent": "Empty",
 
+  // SearchDialog.tsx
+  "search.openButton": "Search conversations",
+  "search.title": "Search conversations",
+  "search.description": "Search message content and titles by keyword.",
+  "search.placeholder": "Search messages or titles…",
+  "search.hint": "Type a keyword to search message content and titles.",
+  "search.searching": "Searching…",
+  "search.noResults": "No matching conversations.",
+  "search.resultsRegion": "Search results",
+  "search.titleMatched": "Title match",
+
   // AssistantMarkdown.tsx (streamdown translations)
   "conversation.markdown.copyCode": "Copy code",
   "conversation.markdown.copied": "Copied",

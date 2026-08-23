@@ -325,3 +325,95 @@ describe("ConversationPane", () => {
     })
   })
 })
+
+describe("ConversationPane search reveal", () => {
+  it("anchors every message with its node id and scrolls the revealed hit into view", () => {
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+
+    const { rerender } = render(
+      <ConversationPane
+        path={[user1, assistant1, user2]}
+        status="ready"
+        canBranch={() => false}
+        canEdit={() => false}
+        onCreateBranch={vi.fn()}
+        onEditAsBranch={vi.fn()}
+        transientGeneration={null}
+        onRegenerate={vi.fn()}
+      />,
+    )
+    expect(
+      screen.getByText("USER_1_CONTENT").closest("article"),
+    ).toHaveAttribute("data-node-id", "user-1")
+    expect(
+      screen.getByText("USER_2_CONTENT").closest("article"),
+    ).toHaveAttribute("data-node-id", "user-2")
+    expect(scrollIntoView).not.toHaveBeenCalledWith(
+      expect.objectContaining({ block: "center" }),
+    )
+
+    rerender(
+      <ConversationPane
+        path={[user1, assistant1, user2]}
+        status="ready"
+        canBranch={() => false}
+        canEdit={() => false}
+        onCreateBranch={vi.fn()}
+        onEditAsBranch={vi.fn()}
+        transientGeneration={null}
+        onRegenerate={vi.fn()}
+        reveal={{ conversationId: "c1", nodeId: "user-1", query: "USER_1" }}
+      />,
+    )
+    expect(scrollIntoView).toHaveBeenCalledWith(
+      expect.objectContaining({ block: "center" }),
+    )
+  })
+
+  it("highlights matches only inside the revealed message", () => {
+    const { container } = render(
+      <ConversationPane
+        path={[user1, assistant1, user2]}
+        status="ready"
+        canBranch={() => false}
+        canEdit={() => false}
+        onCreateBranch={vi.fn()}
+        onEditAsBranch={vi.fn()}
+        transientGeneration={null}
+        onRegenerate={vi.fn()}
+        reveal={{ conversationId: "c1", nodeId: "user-1", query: "USER_1" }}
+      />,
+    )
+
+    const user1Article = container.querySelector('[data-node-id="user-1"]')
+    expect(user1Article?.querySelector("mark")?.textContent).toBe("USER_1")
+
+    const user2Article = container.querySelector('[data-node-id="user-2"]')
+    expect(user2Article?.querySelector("mark")).toBeNull()
+    expect(user2Article?.textContent).toContain("USER_2_CONTENT")
+  })
+
+  it("falls back to emphasis-only reveal when no node id is set", () => {
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+
+    render(
+      <ConversationPane
+        path={[user1]}
+        status="ready"
+        canBranch={() => false}
+        canEdit={() => false}
+        onCreateBranch={vi.fn()}
+        onEditAsBranch={vi.fn()}
+        transientGeneration={null}
+        onRegenerate={vi.fn()}
+        reveal={{ conversationId: "c1", nodeId: null, query: "USER_1" }}
+      />,
+    )
+    expect(scrollIntoView).not.toHaveBeenCalledWith(
+      expect.objectContaining({ block: "center" }),
+    )
+    expect(screen.queryByText("USER_1_CONTENT")).toBeInTheDocument()
+  })
+})

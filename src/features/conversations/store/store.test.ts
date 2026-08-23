@@ -117,6 +117,9 @@ function createMockClient() {
       .mockResolvedValue(tree),
     loadActivePath: vi.fn<ConversationClient["loadActivePath"]>(),
     archiveConversation: vi.fn<ConversationClient["archiveConversation"]>(),
+    searchConversations: vi
+      .fn<ConversationClient["searchConversations"]>()
+      .mockResolvedValue([]),
   } satisfies ConversationClient
 }
 
@@ -137,6 +140,7 @@ function resetStore() {
     expandedIds: new Set(),
     status: "idle",
     error: null,
+    reveal: null,
     generationRuns: {},
     history: { status: "idle", summaries: [], error: null },
   })
@@ -1115,5 +1119,114 @@ describe("conversation store", () => {
     const failed = useConversationStore.getState()
     expect(failed.error?.code).toBe("not_found")
     expect(failed.providerId).toBeNull()
+  })
+})
+
+describe("revealSearchHit", () => {
+  let client: ReturnType<typeof createMockClient>
+
+  beforeEach(() => {
+    client = createMockClient()
+    client.loadConversationTree.mockResolvedValue(tree)
+    resetStore()
+  })
+
+  async function loadConversationFirst() {
+    useConversationStore.setState({
+      history: {
+        status: "ready",
+        summaries: [summary],
+        error: null,
+      },
+    })
+    await useConversationStore
+      .getState()
+      .selectConversation(client, conversation.id)
+  }
+
+  it("loads a foreign conversation and reveals the hit branch with its newest leaf", async () => {
+    await useConversationStore
+      .getState()
+      .revealSearchHit(client, conversation.id, assistant.id, "SENTINEL")
+
+    const state = useConversationStore.getState()
+    expect(state.conversationId).toBe(conversation.id)
+    // The hit is mid-path; the view extends to the newest leaf of its subtree.
+    expect(state.activeNodeId).toBe(right.id)
+    expect(state.reveal).toEqual({
+      conversationId: conversation.id,
+      nodeId: assistant.id,
+      query: "SENTINEL",
+    })
+    const projection = selectActivePath(state)
+    expect(projection.kind).toBe("ready")
+    if (projection.kind === "ready") {
+      expect(projection.path.map((message) => message.id)).toEqual([
+        root.id,
+        assistant.id,
+        right.id,
+      ])
+    }
+  })
+
+  it("switches the visible branch without reloading when the conversation is already loaded", async () => {
+    await loadConversationFirst()
+    client.loadConversationTree.mockClear()
+
+    await useConversationStore
+      .getState()
+      .revealSearchHit(client, conversation.id, left.id, "LEFT")
+
+    const state = useConversationStore.getState()
+    expect(client.loadConversationTree).not.toHaveBeenCalled()
+    expect(state.activeNodeId).toBe(left.id)
+    const projection = selectActivePath(state)
+    if (projection.kind === "ready") {
+      expect(projection.path.map((message) => message.id)).toEqual([
+        root.id,
+        assistant.id,
+        left.id,
+      ])
+      // The inactive sibling branch stays out of the revealed path.
+      expect(projection.path.some((message) => message.id === right.id)).toBe(
+        false,
+      )
+    }
+  })
+
+  it("opens a title-only hit on the default view without a pane reveal", async () => {
+    await useConversationStore
+      .getState()
+      .revealSearchHit(client, conversation.id, null, "Branch")
+
+    const state = useConversationStore.getState()
+    expect(state.conversationId).toBe(conversation.id)
+    expect(state.activeNodeId).toBe(right.id)
+    expect(state.reveal).toBeNull()
+  })
+
+  it("ignores unknown node ids instead of switching the path", async () => {
+    await loadConversationFirst()
+
+    await useConversationStore
+      .getState()
+      .revealSearchHit(client, conversation.id, "ghost-node", "ghost")
+
+    const state = useConversationStore.getState()
+    expect(state.activeNodeId).toBe(right.id)
+    expect(state.reveal).toBeNull()
+  })
+
+  it("clears the reveal on the next node selection", async () => {
+    await useConversationStore
+      .getState()
+      .revealSearchHit(client, conversation.id, assistant.id, "SENTINEL")
+    expect(useConversationStore.getState().reveal).not.toBeNull()
+
+    useConversationStore.getState().selectNode(left.id)
+
+    const state = useConversationStore.getState()
+    expect(state.activeNodeId).toBe(left.id)
+    expect(state.reveal).toBeNull()
   })
 })

@@ -123,6 +123,17 @@ export const zhCN = {
   "conversation.outline.noReplies": "该消息暂无回复",
   "conversation.outline.emptyContent": "无内容",
 
+  // SearchDialog.tsx
+  "search.openButton": "搜索会话",
+  "search.title": "搜索会话",
+  "search.description": "按关键词搜索消息内容与会话标题。",
+  "search.placeholder": "搜索消息或标题…",
+  "search.hint": "输入关键词以搜索消息内容与会话标题。",
+  "search.searching": "正在搜索…",
+  "search.noResults": "没有匹配的会话。",
+  "search.resultsRegion": "搜索结果",
+  "search.titleMatched": "标题匹配",
+
   // AssistantMarkdown.tsx (streamdown translations)
   "conversation.markdown.copyCode": "复制代码",
   "conversation.markdown.copied": "已复制",

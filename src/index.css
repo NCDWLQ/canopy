@@ -221,3 +221,16 @@
 .assistant-markdown [data-streamdown="code-block-copy-button"]:hover {
   background: var(--accent);
 }
+
+/* 搜索定位高亮(CSS Custom Highlight API,见 features/conversations/highlightMatches.tsx)。
+   不支持该 API 的引擎(如 jsdom)自动降级为仅消息级高亮环。 */
+::highlight(canopy-search-reveal) {
+  background-color: oklch(0.9 0.15 95);
+  color: inherit;
+}
+
+@media (prefers-color-scheme: dark) {
+  ::highlight(canopy-search-reveal) {
+    background-color: oklch(0.68 0.14 75);
+  }
+}
