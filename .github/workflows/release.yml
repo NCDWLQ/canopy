@@ -89,6 +89,8 @@ jobs:
 
       - name: Build Tauri client
         uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tauriScript: pnpm tauri
           args: >-
@@ -99,6 +101,5 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: Canopy ${{ github.ref_name }}
           releaseDraft: true
-          uploadReleaseAssets: true
           uploadWorkflowArtifacts: true
           workflowArtifactNamePattern: canopy-${{ matrix.artifact }}-[bundle]

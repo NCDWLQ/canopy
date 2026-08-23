@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { selectActivePath, useConversationStore } from "./index"
+import {
+  newestLeafDescendant,
+  selectActivePath,
+  useConversationStore,
+} from "./index"
 import type {
   ConversationNodeView,
   ConversationSummaryView,
@@ -122,6 +126,12 @@ function createMockClient() {
     unarchiveConversation: vi
       .fn<ConversationClient["unarchiveConversation"]>()
       .mockResolvedValue(conversation),
+    searchConversations: vi
+      .fn<ConversationClient["searchConversations"]>()
+      .mockResolvedValue([]),
+    writeExportFile: vi
+      .fn<ConversationClient["writeExportFile"]>()
+      .mockResolvedValue({ bytesWritten: 0 }),
   } satisfies ConversationClient
 }
 
@@ -142,6 +152,7 @@ function resetStore() {
     expandedIds: new Set(),
     status: "idle",
     error: null,
+    reveal: null,
     generationRuns: {},
     history: { status: "idle", summaries: [], error: null },
   })
@@ -225,7 +236,7 @@ describe("conversation store", () => {
     })
   })
 
-  it("breaks latest-leaf timestamp ties by the greater node ID", async () => {
+  it("breaks latest-leaf timestamp ties by ascending node ID", async () => {
     client.loadConversationTree.mockResolvedValueOnce({
       ...tree,
       nodes: [root, assistant, { ...left, createdAt: right.createdAt }, right],
@@ -235,7 +246,7 @@ describe("conversation store", () => {
       .getState()
       .loadConversation(client, conversation.id)
 
-    expect(useConversationStore.getState().activeNodeId).toBe(right.id)
+    expect(useConversationStore.getState().activeNodeId).toBe(left.id)
   })
 
   it("discovers history, prefers the newest unarchived conversation, and restores its latest path", async () => {
@@ -1492,5 +1503,153 @@ describe("conversation store", () => {
     const failed = useConversationStore.getState()
     expect(failed.error?.code).toBe("not_found")
     expect(failed.providerId).toBeNull()
+  })
+})
+
+describe("revealSearchHit", () => {
+  let client: ReturnType<typeof createMockClient>
+
+  beforeEach(() => {
+    client = createMockClient()
+    client.loadConversationTree.mockResolvedValue(tree)
+    resetStore()
+  })
+
+  async function loadConversationFirst() {
+    useConversationStore.setState({
+      history: {
+        status: "ready",
+        summaries: [summary],
+        error: null,
+      },
+    })
+    await useConversationStore
+      .getState()
+      .selectConversation(client, conversation.id)
+  }
+
+  it("loads a foreign conversation and reveals the hit branch with its newest leaf", async () => {
+    await useConversationStore
+      .getState()
+      .revealSearchHit(client, conversation.id, assistant.id, "SENTINEL")
+
+    const state = useConversationStore.getState()
+    expect(state.conversationId).toBe(conversation.id)
+    // The hit is mid-path; the view extends to the newest leaf of its subtree.
+    expect(state.activeNodeId).toBe(right.id)
+    expect(state.reveal).toEqual({
+      conversationId: conversation.id,
+      nodeId: assistant.id,
+      query: "SENTINEL",
+    })
+    const projection = selectActivePath(state)
+    expect(projection.kind).toBe("ready")
+    if (projection.kind === "ready") {
+      expect(projection.path.map((message) => message.id)).toEqual([
+        root.id,
+        assistant.id,
+        right.id,
+      ])
+    }
+  })
+
+  it("switches the visible branch without reloading when the conversation is already loaded", async () => {
+    await loadConversationFirst()
+    client.loadConversationTree.mockClear()
+
+    await useConversationStore
+      .getState()
+      .revealSearchHit(client, conversation.id, left.id, "LEFT")
+
+    const state = useConversationStore.getState()
+    expect(client.loadConversationTree).not.toHaveBeenCalled()
+    expect(state.activeNodeId).toBe(left.id)
+    const projection = selectActivePath(state)
+    if (projection.kind === "ready") {
+      expect(projection.path.map((message) => message.id)).toEqual([
+        root.id,
+        assistant.id,
+        left.id,
+      ])
+      // The inactive sibling branch stays out of the revealed path.
+      expect(projection.path.some((message) => message.id === right.id)).toBe(
+        false,
+      )
+    }
+  })
+
+  it("opens a title-only hit on the default view without a pane reveal", async () => {
+    await useConversationStore
+      .getState()
+      .revealSearchHit(client, conversation.id, null, "Branch")
+
+    const state = useConversationStore.getState()
+    expect(state.conversationId).toBe(conversation.id)
+    expect(state.activeNodeId).toBe(right.id)
+    expect(state.reveal).toBeNull()
+  })
+
+  it("ignores unknown node ids instead of switching the path", async () => {
+    await loadConversationFirst()
+    useConversationStore.setState({
+      reveal: {
+        conversationId: conversation.id,
+        nodeId: right.id,
+        query: "RIGHT",
+      },
+    })
+
+    await useConversationStore
+      .getState()
+      .revealSearchHit(client, conversation.id, "ghost-node", "ghost")
+
+    const state = useConversationStore.getState()
+    expect(state.activeNodeId).toBe(right.id)
+    expect(state.reveal).toBeNull()
+  })
+
+  it("clears the previous reveal as soon as a new navigation starts", async () => {
+    await loadConversationFirst()
+    useConversationStore.setState({
+      reveal: {
+        conversationId: conversation.id,
+        nodeId: right.id,
+        query: "RIGHT",
+      },
+    })
+    client.loadConversationTree.mockRejectedValueOnce(new Error("offline"))
+
+    const pending = useConversationStore
+      .getState()
+      .revealSearchHit(client, "another-conversation", "node", "query")
+    expect(useConversationStore.getState().reveal).toBeNull()
+    await pending
+    expect(useConversationStore.getState().reveal).toBeNull()
+  })
+
+  it("clears the reveal on the next node selection", async () => {
+    await useConversationStore
+      .getState()
+      .revealSearchHit(client, conversation.id, assistant.id, "SENTINEL")
+    expect(useConversationStore.getState().reveal).not.toBeNull()
+
+    useConversationStore.getState().selectNode(left.id)
+
+    const state = useConversationStore.getState()
+    expect(state.activeNodeId).toBe(left.id)
+    expect(state.reveal).toBeNull()
+  })
+
+  it("uses ascending id as the deterministic tie-break for equally new leaves", () => {
+    const tiedFullNodes = {
+      ...tree.nodes.reduce<Record<string, ConversationNodeView>>(
+        (nodes, node) => ({ ...nodes, [node.id]: node }),
+        {},
+      ),
+      left: { ...left, createdAt: 4 },
+    }
+    expect(
+      newestLeafDescendant(tree.nodesById, tiedFullNodes, assistant.id),
+    ).toBe("left")
   })
 })

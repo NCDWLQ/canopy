@@ -16,7 +16,8 @@ use canopy_lib::{
             DeleteConversationRequest, DeleteConversationSuccess, EditNodeAsBranchRequest,
             IdentityTimeSource, ListConversationsRequest, LoadActivePathRequest,
             LoadConversationTreeRequest, NodeDto, RenameConversationRequest,
-            UnarchiveConversationRequest, CONVERSATION_COMMAND_NAMES,
+            UnarchiveConversationRequest, WriteExportFileRequest, WriteExportFileResponse,
+            CONVERSATION_COMMAND_NAMES,
         },
         ConversationPersistenceService, NewConversation, NewNode, PersistenceError, Role,
     },
@@ -115,6 +116,11 @@ fn shared_fixture_round_trips_rust_requests_dtos_errors_and_exact_command_names(
         "set_conversation_provider",
         canopy_lib::conversations::commands::SetConversationProviderRequest
     );
+    assert_request!(
+        "search_conversations",
+        canopy_lib::conversations::commands::SearchConversationsRequest
+    );
+    assert_request!("write_export_file", WriteExportFileRequest);
 
     let conversation: ConversationDto =
         serde_json::from_value(fixture["successes"]["conversation"].clone())
@@ -122,6 +128,13 @@ fn shared_fixture_round_trips_rust_requests_dtos_errors_and_exact_command_names(
     assert_eq!(
         serde_json::to_value(conversation).expect("conversation DTO reserializes"),
         fixture["successes"]["conversation"]
+    );
+    let search_results: Vec<canopy_lib::conversations::commands::ConversationSearchResultDto> =
+        serde_json::from_value(fixture["successes"]["search_results"].clone())
+            .expect("search results decode");
+    assert_eq!(
+        serde_json::to_value(search_results).expect("search results reserialize"),
+        fixture["successes"]["search_results"]
     );
     let summaries: Vec<ConversationSummaryDto> =
         serde_json::from_value(fixture["successes"]["conversation_summaries"].clone())
@@ -164,10 +177,17 @@ fn shared_fixture_round_trips_rust_requests_dtos_errors_and_exact_command_names(
         serde_json::to_value(unarchived).expect("unarchived conversation DTO reserializes"),
         fixture["successes"]["unarchived_conversation"]
     );
+    let export: WriteExportFileResponse =
+        serde_json::from_value(fixture["successes"]["write_export_file"].clone())
+            .expect("export write DTO decodes");
+    assert_eq!(
+        serde_json::to_value(export).expect("export write DTO reserializes"),
+        fixture["successes"]["write_export_file"]
+    );
 
     let errors: Vec<CommandError> =
         serde_json::from_value(fixture["errors"].clone()).expect("all command errors decode");
-    assert_eq!(errors.len(), 11);
+    assert_eq!(errors.len(), 12);
     assert_eq!(
         serde_json::to_value(&errors).expect("all command errors reserialize"),
         fixture["errors"]
@@ -179,6 +199,9 @@ fn shared_fixture_round_trips_rust_requests_dtos_errors_and_exact_command_names(
         error.code == CommandErrorCode::RateLimited
             && error.details == Some(json!({ "retry_after_ms": 1000 }))
     }));
+    assert!(errors
+        .iter()
+        .any(|error| { error.code == CommandErrorCode::ExportFileWrite && !error.retryable }));
 
     for malformed in fixture["malformed_successes"]
         .as_array()
@@ -197,6 +220,14 @@ fn shared_fixture_round_trips_rust_requests_dtos_errors_and_exact_command_names(
     .is_err());
     assert!(serde_json::from_value::<ActivePathDto>(
         malformed_commands["load_active_path"].clone()
+    )
+    .is_err());
+    assert!(serde_json::from_value::<
+        Vec<canopy_lib::conversations::commands::ConversationSearchResultDto>,
+    >(malformed_commands["search_conversations"].clone())
+    .is_err());
+    assert!(serde_json::from_value::<WriteExportFileResponse>(
+        malformed_commands["write_export_file"].clone()
     )
     .is_err());
 }

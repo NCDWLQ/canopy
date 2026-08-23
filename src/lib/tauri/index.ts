@@ -11,6 +11,8 @@ export {
   type EditNodeAsBranchInput,
   type RenameConversationInput,
   type SetConversationProviderInput,
+  type WriteExportFileInput,
+  type WriteExportFileResult,
   type InvokeTransport,
 } from "./client"
 

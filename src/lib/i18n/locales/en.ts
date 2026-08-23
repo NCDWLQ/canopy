@@ -28,6 +28,7 @@ export const en = {
   "errors.providerUnavailable": "The provider is currently unavailable.",
   "errors.networkFailure": "The provider network request failed.",
   "errors.cancelled": "Generation was cancelled.",
+  "errors.exportFileWrite": "Failed to write the export file.",
   "errors.internal": "An unexpected error occurred.",
   "errors.unsafeTreeProjection":
     "The conversation tree cannot be shown safely.",
@@ -111,6 +112,14 @@ export const en = {
   "conversation.message.editContent": "Edit message content",
   "conversation.message.branchPlaceholder": "Type a branch message…",
   "conversation.message.branchContent": "Branch message content",
+  "conversation.message.export": "Export conversation up to this message",
+
+  // exportMarkdown.ts + store export action
+  "conversation.export.success": ({ fileName }: { fileName: string }) =>
+    `Exported: ${fileName}`,
+  "conversation.export.failed": "Export failed",
+  "conversation.export.userLabel": "User",
+  "conversation.export.assistantLabel": "Assistant",
 
   // MessageBubble.tsx
   "conversation.messageBubble.roleSystem": "System",
@@ -136,6 +145,17 @@ export const en = {
   "conversation.outline.messageFallback": "message",
   "conversation.outline.noReplies": "No replies to this message yet",
   "conversation.outline.emptyContent": "Empty",
+
+  // SearchDialog.tsx
+  "search.openButton": "Search conversations",
+  "search.title": "Search conversations",
+  "search.description": "Search message content and titles by keyword.",
+  "search.placeholder": "Search messages or titles…",
+  "search.hint": "Type a keyword to search message content and titles.",
+  "search.searching": "Searching…",
+  "search.noResults": "No matching conversations.",
+  "search.resultsRegion": "Search results",
+  "search.titleMatched": "Title match",
 
   // AssistantMarkdown.tsx (streamdown translations)
   "conversation.markdown.copyCode": "Copy code",

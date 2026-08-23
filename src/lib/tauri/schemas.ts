@@ -60,6 +60,13 @@ const titleSchema = unicodeScalarStringSchema
 const contentSchema = unicodeScalarStringSchema
   .refine(containsNonRustWhitespace)
   .refine((value) => new TextEncoder().encode(value).byteLength <= 1024 * 1024)
+// Export payloads aggregate many nodes plus headings, so the byte cap keeps
+// generous headroom above the per-node limit (mirrors MAX_EXPORT_CONTENT_BYTES).
+const exportContentSchema = unicodeScalarStringSchema
+  .refine(containsNonRustWhitespace)
+  .refine(
+    (value) => new TextEncoder().encode(value).byteLength <= 16 * 1024 * 1024,
+  )
 
 export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
   z.union([
@@ -105,6 +112,15 @@ export const renameConversationRequestSchema = z
 export const deleteConversationRequestSchema = loadConversationTreeRequestSchema
 export const unarchiveConversationRequestSchema =
   loadConversationTreeRequestSchema
+export const writeExportFileRequestSchema = z
+  .object({
+    path: idSchema,
+    content: exportContentSchema,
+  })
+  .strict()
+export const writeExportFileResultSchema = z
+  .object({ bytes_written: z.number().int().safe().nonnegative() })
+  .strict()
 export const setConversationProviderRequestSchema = z
   .object({
     conversation_id: idSchema,
@@ -134,6 +150,64 @@ export const conversationProviderBindingResultSchema = z
     }
   })
 
+export const searchConversationsRequestSchema = z
+  .object({
+    query: unicodeScalarStringSchema
+      .transform(trimRustWhitespace)
+      .refine((value) => value.length > 0 && [...value].length <= 200),
+  })
+  .strict()
+
+export const searchHitDtoSchema = z
+  .object({
+    node_id: idSchema,
+    role: z.enum(["user", "assistant"]),
+    created_at: z.number().int().safe(),
+    snippet: z.string(),
+  })
+  .strict()
+
+export const conversationSearchResultDtoSchema = z
+  .object({
+    conversation_id: idSchema,
+    title: z.string(),
+    is_archived: z.boolean(),
+    title_matched: z.boolean(),
+    updated_at: z.number().int().safe(),
+    hits: z.array(searchHitDtoSchema).max(5),
+  })
+  .strict()
+  .superRefine((result, context) => {
+    const nodeIds = new Set<string>()
+    result.hits.forEach((hit, index) => {
+      if (nodeIds.has(hit.node_id)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "duplicate search hit",
+          path: ["hits", index, "node_id"],
+        })
+      }
+      nodeIds.add(hit.node_id)
+    })
+  })
+
+export const conversationSearchResultsDtoSchema = z
+  .array(conversationSearchResultDtoSchema)
+  .max(50)
+  .superRefine((results, context) => {
+    const conversationIds = new Set<string>()
+    results.forEach((result, index) => {
+      if (conversationIds.has(result.conversation_id)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "duplicate conversation search result",
+          path: [index, "conversation_id"],
+        })
+      }
+      conversationIds.add(result.conversation_id)
+    })
+  })
+
 export const commandErrorCodeSchema = z.enum([
   "invalid_input",
   "not_found",
@@ -145,6 +219,7 @@ export const commandErrorCodeSchema = z.enum([
   "provider_unavailable",
   "network_failure",
   "cancelled",
+  "export_file_write",
   "internal",
 ])
 
@@ -238,6 +313,10 @@ export type ConversationDto = z.infer<typeof conversationDtoSchema>
 export type ConversationSummaryDto = z.infer<
   typeof conversationSummaryDtoSchema
 >
+export type SearchHitDto = z.infer<typeof searchHitDtoSchema>
+export type ConversationSearchResultDto = z.infer<
+  typeof conversationSearchResultDtoSchema
+>
 export type NodeDto = z.infer<typeof nodeDtoSchema>
 export type ConversationTreeDto = z.infer<typeof conversationTreeDtoSchema>
 export type ActivePathDto = z.infer<typeof activePathDtoSchema>
@@ -246,4 +325,7 @@ export type DeleteConversationSuccessDto = z.infer<
 >
 export type ConversationProviderBindingResultDto = z.infer<
   typeof conversationProviderBindingResultSchema
+>
+export type WriteExportFileResultDto = z.infer<
+  typeof writeExportFileResultSchema
 >

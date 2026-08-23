@@ -31,6 +31,7 @@ export const zhCN = {
   "errors.providerUnavailable": "服务提供商当前不可用。",
   "errors.networkFailure": "服务提供商网络请求失败。",
   "errors.cancelled": "生成已取消。",
+  "errors.exportFileWrite": "写入导出文件失败。",
   "errors.internal": "发生意外错误。",
   "errors.unsafeTreeProjection": "无法安全显示会话树。",
 
@@ -111,6 +112,14 @@ export const zhCN = {
   "conversation.message.editContent": "编辑消息内容",
   "conversation.message.branchPlaceholder": "输入分支消息…",
   "conversation.message.branchContent": "分支消息内容",
+  "conversation.message.export": "导出对话至该消息",
+
+  // exportMarkdown.ts + store export action
+  "conversation.export.success": ({ fileName }: { fileName: string }) =>
+    `已导出：${fileName}`,
+  "conversation.export.failed": "导出失败",
+  "conversation.export.userLabel": "用户",
+  "conversation.export.assistantLabel": "助手",
 
   // MessageBubble.tsx
   "conversation.messageBubble.roleSystem": "系统",
@@ -136,6 +145,17 @@ export const zhCN = {
   "conversation.outline.messageFallback": "消息",
   "conversation.outline.noReplies": "该消息暂无回复",
   "conversation.outline.emptyContent": "无内容",
+
+  // SearchDialog.tsx
+  "search.openButton": "搜索会话",
+  "search.title": "搜索会话",
+  "search.description": "按关键词搜索消息内容与会话标题。",
+  "search.placeholder": "搜索消息或标题…",
+  "search.hint": "输入关键词以搜索消息内容与会话标题。",
+  "search.searching": "正在搜索…",
+  "search.noResults": "没有匹配的会话。",
+  "search.resultsRegion": "搜索结果",
+  "search.titleMatched": "标题匹配",
 
   // AssistantMarkdown.tsx (streamdown translations)
   "conversation.markdown.copyCode": "复制代码",

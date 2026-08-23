@@ -6,6 +6,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Pencil,
+  Search,
   SquarePen,
   Trash2,
 } from "lucide-react"
@@ -19,6 +20,7 @@ import {
 } from "./ConversationPane"
 import { OutlineTree } from "./OutlineTree"
 import { RenameConversationDialog } from "./RenameConversationDialog"
+import { SearchDialog } from "./SearchDialog"
 import { useConversationTitleUpdates } from "../hooks/useConversationTitleUpdates"
 import { useWorkspaceGenerationController } from "../hooks/useWorkspaceGenerationController"
 import {
@@ -159,12 +161,14 @@ export function ConversationWorkspace({
       expandedIds: state.expandedIds,
       status: state.status,
       error: state.error,
+      reveal: state.reveal,
       generationRuns: state.generationRuns,
       history: state.history,
       toggleExpanded: state.toggleExpanded,
       clearError: state.clearError,
       retryHistory: state.retryHistory,
       selectConversation: state.selectConversation,
+      revealSearchHit: state.revealSearchHit,
       enterConversationCreation: state.enterConversationCreation,
     })),
   )
@@ -178,6 +182,7 @@ export function ConversationWorkspace({
   })
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true)
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(false)
+  const [isSearchOpen, setIsSearchOpen] = React.useState(false)
   const [pendingArchiveId, setPendingArchiveId] = React.useState<string | null>(
     null,
   )
@@ -195,6 +200,32 @@ export function ConversationWorkspace({
   React.useEffect(() => {
     void initializeHistory(client)
   }, [client, initializeHistory])
+
+  // Keep the selected conversation's history row visible — e.g. after a
+  // search reveal jumps to an older conversation far down the list.
+  const historyScrollRef = React.useRef<HTMLDivElement>(null)
+  const scrollHistoryRowIntoView = React.useCallback(
+    (conversationId: string) => {
+      const row = Array.from(
+        historyScrollRef.current?.querySelectorAll<HTMLElement>(
+          "[data-conversation-id]",
+        ) ?? [],
+      ).find((candidate) => candidate.dataset.conversationId === conversationId)
+      if (row === undefined) return
+      const reducedMotion = window.matchMedia?.(
+        "(prefers-reduced-motion: reduce)",
+      ).matches
+      row.scrollIntoView?.({
+        block: "nearest",
+        behavior: reducedMotion ? "auto" : "smooth",
+      })
+    },
+    [],
+  )
+  React.useEffect(() => {
+    if (store.conversationId === null) return
+    scrollHistoryRowIntoView(store.conversationId)
+  }, [scrollHistoryRowIntoView, store.conversationId])
 
   const projectionError =
     pathProjection.kind === "error" ? pathProjection.error : null
@@ -370,29 +401,51 @@ export function ConversationWorkspace({
       >
         <div className="flex h-12 shrink-0 items-center justify-between gap-2 px-3 text-sm font-semibold">
           <span className="font-bold tracking-tight">Canopy</span>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="size-8"
-                  aria-label={t("conversation.workspace.newConversation")}
-                  title={t("conversation.workspace.newConversation")}
-                  disabled={store.status === "loading"}
-                  onClick={store.enterConversationCreation}
-                >
-                  <SquarePen className="size-4" aria-hidden="true" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                {t("conversation.workspace.newConversation")}
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <div className="flex items-center gap-1">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-8"
+                    aria-label={t("search.openButton")}
+                    title={t("search.openButton")}
+                    disabled={store.history.summaries.length === 0}
+                    onClick={() => setIsSearchOpen(true)}
+                  >
+                    <Search className="size-4" aria-hidden="true" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t("search.openButton")}</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-8"
+                    aria-label={t("conversation.workspace.newConversation")}
+                    title={t("conversation.workspace.newConversation")}
+                    disabled={store.status === "loading"}
+                    onClick={store.enterConversationCreation}
+                  >
+                    <SquarePen className="size-4" aria-hidden="true" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {t("conversation.workspace.newConversation")}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
         </div>
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-2">
+        <div
+          ref={historyScrollRef}
+          className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-2"
+        >
           <section>
             <div className="sticky top-0 z-10 bg-sidebar px-2.5 pb-1 pt-3 text-sm font-medium text-muted-foreground/70">
               {t("conversation.workspace.history")}
@@ -423,6 +476,7 @@ export function ConversationWorkspace({
                             isCurrent && "font-medium",
                           )}
                           aria-current={isCurrent ? "page" : undefined}
+                          data-conversation-id={summary.id}
                           disabled={store.status === "loading"}
                           onClick={() =>
                             void store.selectConversation(client, summary.id)
@@ -580,6 +634,24 @@ export function ConversationWorkspace({
             readOnly={!isBlankConversation && store.isArchived}
             open={isSettingsOpen}
             onOpenChange={setIsSettingsOpen}
+          />
+          <SearchDialog
+            key={isSearchOpen ? "search-open" : "search-closed"}
+            open={isSearchOpen}
+            onOpenChange={setIsSearchOpen}
+            client={client}
+            onReveal={(conversationId, nodeId, query) => {
+              void store
+                .revealSearchHit(client, conversationId, nodeId, query)
+                .then(() => {
+                  if (
+                    useConversationStore.getState().conversationId ===
+                    conversationId
+                  ) {
+                    scrollHistoryRowIntoView(conversationId)
+                  }
+                })
+            }}
           />
         </footer>
       </aside>
@@ -748,12 +820,19 @@ export function ConversationWorkspace({
               onEditAsBranch={(nodeId, content) =>
                 void controller.editNodeAsBranch(nodeId, content)
               }
+              onExportMessage={(nodeId) => {
+                void useConversationStore
+                  .getState()
+                  .exportUpToMessage(client, nodeId)
+              }}
+              exportDisabled={isRunActive(currentRun)}
               transientGeneration={
                 transientBubbleVisible ? transientGeneration : null
               }
               onRegenerate={controller.generate}
               userGenerationAction={userGenerationAction}
               assistantRegenerationAction={assistantRegenerationAction}
+              reveal={store.reveal}
             />
 
             <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10">

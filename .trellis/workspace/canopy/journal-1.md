@@ -762,6 +762,15 @@ Planned and implemented full i18n support (task 08-22-i18n) in worktree canopy-i
 ### Summary
 
 新增 rename/delete/unarchive 三个会话 IPC 命令（契约 9→12 同组变更）；删除与取消归档采用事务内 trigger DROP/原文重建模式（nodes_reject_delete / conversations_archive_forward_only），测试守护保护完整性；侧栏行改「…」下拉菜单（重命名/归档↔取消归档/删除），重命名 Dialog+校验，删除确认框+运行中断提示，删除当前会话回空态新对话；spec 更新 guarded trigger-lifted mutations 约定与命令数同步提醒
+## Session 34: 对话导出功能
+
+**Date**: 2026-08-23
+**Task**: 对话导出功能
+**Branch**: `feat/conversation-export`
+
+### Summary
+
+完成按助手消息前缀导出 Markdown：补齐保存对话框与文件写入 IPC、前端导出纯函数/store/UI、双语文案及契约测试；记录 Tauri capability 配置规范，并通过前端全量检查、Rust 测试与 Clippy。
 
 ### Git Commits
 
@@ -771,6 +780,29 @@ Planned and implemented full i18n support (task 08-22-i18n) in worktree canopy-i
 | `83bf690` | (see git log) |
 | `9628025` | (see git log) |
 | `f9edbe4` | (see git log) |
+| `f954182` | (see git log) |
+| `4144b81` | (see git log) |
+
+### Status
+
+[OK] **Completed**
+
+
+## Session 35: Finish conversation search
+
+**Date**: 2026-08-23
+**Task**: Finish conversation search
+**Branch**: `feat/search`
+
+### Summary
+
+Hardened search matching, result limits, reveal scrolling, stale-query handling, response validation, and regression coverage; all frontend and Rust quality gates passed.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a20da0e` | (see git log) |
 
 ### Status
 

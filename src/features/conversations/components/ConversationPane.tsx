@@ -1,5 +1,5 @@
 import * as React from "react"
-import type { PathMessageView, UiError } from "../types"
+import type { PathMessageView, SearchReveal, UiError } from "../types"
 import { AssistantMarkdown } from "./AssistantMarkdown"
 import { MessageBubble } from "./MessageBubble"
 import { ThinkingBlock } from "./ThinkingBlock"
@@ -24,10 +24,15 @@ export type ConversationPaneProps = {
   canEdit: (nodeId: string) => boolean
   onCreateBranch: (nodeId: string, content: string) => void
   onEditAsBranch: (nodeId: string, content: string) => void
+  onExportMessage?: (nodeId: string) => void
+  exportDisabled?: boolean
   transientGeneration: TransientGenerationView | null
   onRegenerate: () => void
   userGenerationAction?: UserGenerationAction | null
   assistantRegenerationAction?: AssistantRegenerationAction | null
+  // Active search reveal: scrolls the hit message into view (centered) and
+  // highlights matches until the next navigation clears it.
+  reveal?: SearchReveal | null
 }
 
 export type TransientGenerationView =
@@ -145,13 +150,17 @@ export function ConversationPane({
   canEdit,
   onCreateBranch,
   onEditAsBranch,
+  onExportMessage,
+  exportDisabled,
   transientGeneration,
   onRegenerate,
   userGenerationAction,
   assistantRegenerationAction,
+  reveal = null,
 }: ConversationPaneProps) {
   const { t } = useTranslation()
   const bottomRef = React.useRef<HTMLDivElement>(null)
+  const containerRef = React.useRef<HTMLDivElement>(null)
   const transientContent =
     transientGeneration !== null && "content" in transientGeneration
       ? transientGeneration.content
@@ -161,9 +170,16 @@ export function ConversationPane({
   // must key on the displayed tail's content, not on the array reference.
   const lastMessage = path.at(-1)
   const pathScrollKey = `${path.length}|${lastMessage?.id ?? ""}|${lastMessage?.content ?? ""}`
+  const revealNodeId = reveal?.nodeId ?? null
+  const revealQuery = reveal?.query ?? ""
+  const revealOnPath =
+    revealNodeId !== null && path.some((message) => message.id === revealNodeId)
 
   React.useEffect(() => {
     if (status === "ready" || status === "streaming") {
+      // While a search reveal owns the viewport, MessageNode scrolls to the
+      // matched text; the bottom autoscroll would fight that target.
+      if (revealOnPath) return
       const reducedMotion = window.matchMedia?.(
         "(prefers-reduced-motion: reduce)",
       ).matches
@@ -171,7 +187,13 @@ export function ConversationPane({
         behavior: reducedMotion ? "auto" : "smooth",
       })
     }
-  }, [pathScrollKey, status, transientContent, transientGeneration?.phase])
+  }, [
+    pathScrollKey,
+    status,
+    transientContent,
+    transientGeneration?.phase,
+    revealOnPath,
+  ])
 
   if (status === "loading" && path.length === 0) {
     return (
@@ -184,6 +206,7 @@ export function ConversationPane({
 
   return (
     <div
+      ref={containerRef}
       data-testid="conversation-pane"
       className="relative flex h-full flex-1 flex-col overflow-y-auto px-4 py-6 md:px-8 [contain:paint]"
     >
@@ -247,8 +270,16 @@ export function ConversationPane({
               canEdit={canEdit(msg.id)}
               onCreateBranch={onCreateBranch}
               onEditAsBranch={onEditAsBranch}
+              onExportMessage={onExportMessage}
+              exportDisabled={exportDisabled}
               generationAction={nodeGenerationAction}
               assistantRegenerationAction={nodeAssistantRegenerationAction}
+              highlightQuery={
+                revealNodeId !== null && revealNodeId === msg.id
+                  ? revealQuery
+                  : undefined
+              }
+              scrollContainerRef={containerRef}
             />
           )
         })}

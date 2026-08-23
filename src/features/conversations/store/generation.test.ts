@@ -249,6 +249,8 @@ function createClient() {
     deleteConversation: () =>
       Promise.resolve({ conversationId: conversation.id }),
     unarchiveConversation: () => Promise.resolve(conversation),
+    searchConversations: () => Promise.resolve([]),
+    writeExportFile: () => Promise.resolve({ bytesWritten: 0 }),
   } satisfies ConversationClient
 }
 

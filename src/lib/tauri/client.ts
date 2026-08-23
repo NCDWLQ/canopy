@@ -3,6 +3,7 @@ import type { z } from "zod"
 
 import type {
   ActivePathView,
+  ConversationSearchResultView,
   ConversationSummaryView,
   ConversationTreeView,
   ConversationView,
@@ -18,6 +19,7 @@ import {
   archiveConversationRequestSchema,
   commandErrorSchema,
   conversationDtoSchema,
+  conversationSearchResultsDtoSchema,
   conversationSummariesDtoSchema,
   conversationTreeDtoSchema,
   createBranchRequestSchema,
@@ -30,16 +32,21 @@ import {
   loadConversationTreeRequestSchema,
   nodeDtoSchema,
   renameConversationRequestSchema,
+  searchConversationsRequestSchema,
   setConversationProviderRequestSchema,
   unarchiveConversationRequestSchema,
   conversationProviderBindingResultSchema,
+  writeExportFileRequestSchema,
+  writeExportFileResultSchema,
   type ActivePathDto,
   type ConversationDto,
+  type ConversationSearchResultDto,
   type ConversationSummaryDto,
   type ConversationTreeDto,
   type DeleteConversationSuccessDto,
   type NodeDto,
   type ConversationProviderBindingResultDto,
+  type WriteExportFileResultDto,
 } from "./schemas"
 
 export const CONVERSATION_COMMANDS = {
@@ -55,6 +62,8 @@ export const CONVERSATION_COMMANDS = {
   deleteConversation: "delete_conversation",
   unarchiveConversation: "unarchive_conversation",
   setConversationProvider: "set_conversation_provider",
+  searchConversations: "search_conversations",
+  writeExportFile: "write_export_file",
 } as const
 
 export interface InvokeTransport {
@@ -105,6 +114,8 @@ export type SetConversationProviderInput = {
   binding: { providerId: string; model: string } | null
   reasoningEffort: "low" | "medium" | "high" | null
 }
+export type WriteExportFileInput = { path: string; content: string }
+export type WriteExportFileResult = { bytesWritten: number }
 
 export type ConversationClient = Omit<
   ReturnType<typeof createConversationClient>,
@@ -272,6 +283,28 @@ export function createConversationClient(
         mapConversationProviderBinding,
       )
     },
+
+    searchConversations(query: string) {
+      return call(
+        transport,
+        CONVERSATION_COMMANDS.searchConversations,
+        searchConversationsRequestSchema,
+        { query },
+        conversationSearchResultsDtoSchema,
+        (results) => results.map(mapConversationSearchResult),
+      )
+    },
+
+    writeExportFile(input: WriteExportFileInput) {
+      return call(
+        transport,
+        CONVERSATION_COMMANDS.writeExportFile,
+        writeExportFileRequestSchema,
+        { path: input.path, content: input.content },
+        writeExportFileResultSchema,
+        mapWriteExportFileResult,
+      )
+    },
   }
 }
 
@@ -402,6 +435,30 @@ function mapDeleteConversationSuccess(
   dto: DeleteConversationSuccessDto,
 ): DeleteConversationSuccess {
   return { conversationId: dto.conversation_id }
+}
+
+function mapConversationSearchResult(
+  dto: ConversationSearchResultDto,
+): ConversationSearchResultView {
+  return {
+    conversationId: dto.conversation_id,
+    title: dto.title,
+    isArchived: dto.is_archived,
+    titleMatched: dto.title_matched,
+    updatedAt: dto.updated_at,
+    hits: dto.hits.map((hit) => ({
+      nodeId: hit.node_id,
+      role: hit.role,
+      createdAt: hit.created_at,
+      snippet: hit.snippet,
+    })),
+  }
+}
+
+function mapWriteExportFileResult(
+  dto: WriteExportFileResultDto,
+): WriteExportFileResult {
+  return { bytesWritten: dto.bytes_written }
 }
 
 function mapConversationTree(dto: ConversationTreeDto): ConversationTreeView {

@@ -1,15 +1,19 @@
 import { create } from "zustand"
+import { save } from "@tauri-apps/plugin-dialog"
+import { toast } from "sonner"
 
+import { buildExportMarkdown, sanitizeExportFilename } from "../exportMarkdown"
 import type {
   ConversationNodeView,
   ConversationSummaryView,
   ConversationTreeView,
   PathMessageView,
+  SearchReveal,
   TreeNodeView,
   UiError,
 } from "../types"
 import type { GenerationEventView } from "@/features/providers/types"
-import { t } from "@/lib/i18n"
+import { commandErrorMessage, t } from "@/lib/i18n"
 import { ConversationCommandError, type ConversationClient } from "@/lib/tauri"
 import type { SetConversationProviderInput } from "@/lib/tauri"
 
@@ -94,6 +98,9 @@ export type ConversationTreeState = {
   expandedIds: ReadonlySet<string>
   status: "idle" | "loading" | "ready" | "streaming" | "error"
   error: UiError | null
+  // One-shot search reveal (see SearchReveal). Cleared by the next
+  // navigation or tree replacement so highlight never outlives its target.
+  reveal: SearchReveal | null
   // At most one run record per conversation, keyed by conversation ID. Active
   // runs stream in the background when their conversation is not loaded;
   // terminal records survive switches so failures can surface on re-entry.
@@ -131,6 +138,12 @@ export type ConversationStore = ConversationTreeState & {
   selectConversation: (client: ConversationClient, id: string) => Promise<void>
   loadConversation: (client: ConversationClient, id: string) => Promise<void>
   selectNode: (nodeId: string) => void
+  revealSearchHit: (
+    client: ConversationClient,
+    conversationId: string,
+    nodeId: string | null,
+    query: string,
+  ) => Promise<void>
   toggleExpanded: (nodeId: string) => void
   createConversation: (
     client: ConversationClient,
@@ -147,6 +160,10 @@ export type ConversationStore = ConversationTreeState & {
     client: ConversationClient,
     sourceNodeId: string,
     content: string,
+  ) => Promise<void>
+  exportUpToMessage: (
+    client: ConversationClient,
+    anchorNodeId: string,
   ) => Promise<void>
   archiveConversation: (
     client: ConversationClient,
@@ -264,6 +281,7 @@ const initialState: ConversationTreeState = {
   expandedIds: new Set(),
   status: "idle",
   error: null,
+  reveal: null,
   generationRuns: emptyRecord(),
 }
 
@@ -357,7 +375,7 @@ function newestLeafId(tree: ConversationTreeView): string {
     (candidate, node) =>
       candidate === undefined ||
       node.createdAt > candidate.createdAt ||
-      (node.createdAt === candidate.createdAt && node.id > candidate.id)
+      (node.createdAt === candidate.createdAt && node.id < candidate.id)
         ? node
         : candidate,
     undefined,
@@ -377,6 +395,53 @@ function expandedPathIds(
     currentId = fullNodes[currentId]?.parentId
   }
   return expandedIds
+}
+
+function expandedIdsFromNodes(
+  fullNodes: Readonly<Record<string, ConversationNodeView>>,
+  activeNodeId: string,
+): ReadonlySet<string> {
+  const expandedIds = new Set<string>()
+  let currentId: string | undefined = activeNodeId
+  while (currentId !== undefined) {
+    expandedIds.add(currentId)
+    currentId = fullNodes[currentId]?.parentId
+  }
+  return expandedIds
+}
+
+// Deterministic newest leaf of the subtree rooted at `nodeId`, mirroring the
+// (createdAt DESC, id ASC) tie-break `newestLeafId` applies to whole trees.
+export function newestLeafDescendant(
+  nodesById: Readonly<Record<string, TreeNodeView>>,
+  fullNodes: Readonly<Record<string, ConversationNodeView>>,
+  nodeId: string,
+): string | null {
+  if (!Object.hasOwn(nodesById, nodeId)) return null
+  const pending = [nodeId]
+  const visited = new Set<string>()
+  let newest: { id: string; createdAt: number } | null = null
+  while (pending.length > 0) {
+    const currentId = pending.pop()
+    if (currentId === undefined || visited.has(currentId)) return null
+    visited.add(currentId)
+    const node = nodesById[currentId]
+    if (node === undefined) return null
+    if (node.childIds.length === 0) {
+      const full = fullNodes[currentId]
+      if (full === undefined) return null
+      if (
+        newest === null ||
+        full.createdAt > newest.createdAt ||
+        (full.createdAt === newest.createdAt && currentId < newest.id)
+      ) {
+        newest = { id: currentId, createdAt: full.createdAt }
+      }
+      continue
+    }
+    pending.push(...node.childIds)
+  }
+  return newest?.id ?? nodeId
 }
 
 function loadedTreeState(
@@ -401,6 +466,7 @@ function loadedTreeState(
     expandedIds: expandedPathIds(tree, activeNodeId),
     status: "ready",
     error: null,
+    reveal: null,
     generationRuns,
   }
 }
@@ -534,6 +600,7 @@ function addAuthoritativeNode(
     expandedIds,
     status: "ready",
     error: null,
+    reveal: null,
   }
 }
 
@@ -603,6 +670,7 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
       isCreatingConversation: false,
       status: "loading",
       error: null,
+      reveal: null,
     })
     try {
       const tree = await client.loadConversationTree(id)
@@ -642,6 +710,7 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
         draftReasoningEffort: null,
         status: state.conversationId === null ? "idle" : "ready",
         error: null,
+        reveal: null,
       })
     },
 
@@ -1120,7 +1189,40 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
       if (!Object.hasOwn(state.nodesById, nodeId)) return
       const projection = selectActivePath({ ...state, activeNodeId: nodeId })
       if (projection.kind !== "ready") return
-      set({ activeNodeId: nodeId })
+      set({ activeNodeId: nodeId, reveal: null })
+    },
+
+    revealSearchHit: async (client, conversationId, nodeId, query) => {
+      const epoch = ++requestEpoch
+      // A new reveal is navigation intent even if loading or target
+      // validation later fails; never leave the previous hit highlighted.
+      set({ reveal: null })
+      if (get().conversationId !== conversationId) {
+        const loaded = await loadSelectedConversation(
+          client,
+          conversationId,
+          epoch,
+        )
+        if (!loaded || epoch !== requestEpoch) return
+      }
+      const state = get()
+      if (state.conversationId !== conversationId) return
+      if (nodeId === null) {
+        // Title-only hit: the default newest-leaf view installed by the load
+        // above is the whole reveal; there is no message to position on.
+        set({ reveal: null })
+        return
+      }
+      if (!Object.hasOwn(state.nodesById, nodeId)) return
+      const targetId =
+        newestLeafDescendant(state.nodesById, state.fullNodes, nodeId) ?? nodeId
+      const projection = selectActivePath({ ...state, activeNodeId: targetId })
+      if (projection.kind !== "ready") return
+      set({
+        activeNodeId: targetId,
+        expandedIds: expandedIdsFromNodes(state.fullNodes, targetId),
+        reveal: { conversationId, nodeId, query },
+      })
     },
 
     loadConversation: async (client, id) => {
@@ -1329,6 +1431,52 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
           return
         }
         set({ status: "error", error: normalizeUiError(error) })
+      }
+    },
+
+    exportUpToMessage: async (client, anchorNodeId) => {
+      const state = get()
+      const projection = selectActivePath(state)
+      if (
+        state.conversationId === null ||
+        state.status !== "ready" ||
+        projection.kind !== "ready" ||
+        // The streaming reply is not durable yet, so a run for this
+        // conversation blocks the export (the button is disabled with the
+        // same condition; this guard covers stale clicks).
+        isRunActive(state.generationRuns[state.conversationId])
+      ) {
+        return
+      }
+      const anchorIndex = projection.path.findIndex(
+        (node) => node.id === anchorNodeId,
+      )
+      if (anchorIndex === -1) return
+
+      const title = state.title ?? ""
+      const markdown = buildExportMarkdown({
+        messages: projection.path.slice(0, anchorIndex + 1),
+        title,
+        userLabel: t("conversation.export.userLabel"),
+        assistantLabel: t("conversation.export.assistantLabel"),
+      })
+      try {
+        const target = await save({
+          defaultPath: `${sanitizeExportFilename(title)}.md`,
+          filters: [{ name: "Markdown", extensions: ["md"] }],
+        })
+        // A cancelled save dialog is a silent no-op: no write, no toast.
+        if (target === null) return
+        await client.writeExportFile({ path: target, content: markdown })
+        toast.success(
+          t("conversation.export.success", {
+            fileName: target.split(/[\\/]/).at(-1) ?? target,
+          }),
+        )
+      } catch (error: unknown) {
+        toast.error(t("conversation.export.failed"), {
+          description: commandErrorMessage(normalizeUiError(error).code),
+        })
       }
     },
 

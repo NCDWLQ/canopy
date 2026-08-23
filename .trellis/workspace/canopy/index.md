@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 34
+- **Total Sessions**: 36
 - **Last Active**: 2026-08-23
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~777 | Active |
+| `journal-1.md` | ~801 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,7 +29,9 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
-| 34 | 2026-08-23 | Conversation rename, delete & unarchive | `47d3e7b`, `83bf690`, `9628025`, `f9edbe4` | `feat/conversation-manage` |
+| 36 | 2026-08-23 | Conversation rename, delete & unarchive | `47d3e7b`, `83bf690`, `9628025`, `f9edbe4` | `feat/conversation-manage` |
+| 35 | 2026-08-23 | Finish conversation search | `a20da0e` | `feat/search` |
+| 34 | 2026-08-23 | 对话导出功能 | `f954182`, `4144b81` | `feat/conversation-export` |
 | 33 | 2026-08-23 | i18n support: zh-CN + en typed-dictionary UI localization | `92f3dc4`, `91e7ec6`, `9eec50a`, `3bfab43`, `2a68497`, `fa0b2fd`, `3c1da83` | `feat/i18n` |
 | 32 | 2026-08-22 | 窗口 1200×800 默认值与位置持久化 | `4f687a3` | `main` |
 | 31 | 2026-08-22 | DeepSeek v4 标题思考禁用修复收尾归档 | `7d6fa8d` | `main` |

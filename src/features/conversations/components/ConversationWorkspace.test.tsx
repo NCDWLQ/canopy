@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { StrictMode } from "react"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { ConversationWorkspace } from "./ConversationWorkspace"
 import { useConversationStore, type GenerationRun } from "../store"
@@ -18,6 +18,23 @@ import {
   type ConversationClient,
   type ProviderClient,
 } from "@/lib/tauri"
+
+const originalScrollIntoView = Object.getOwnPropertyDescriptor(
+  Element.prototype,
+  "scrollIntoView",
+)
+
+afterEach(() => {
+  if (originalScrollIntoView === undefined) {
+    Reflect.deleteProperty(Element.prototype, "scrollIntoView")
+  } else {
+    Object.defineProperty(
+      Element.prototype,
+      "scrollIntoView",
+      originalScrollIntoView,
+    )
+  }
+})
 
 vi.mock("@/lib/tauri", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/tauri")>()
@@ -183,6 +200,12 @@ function createMockClient() {
     unarchiveConversation: vi
       .fn<ConversationClient["unarchiveConversation"]>()
       .mockResolvedValue(tree.conversation),
+    searchConversations: vi
+      .fn<ConversationClient["searchConversations"]>()
+      .mockResolvedValue([]),
+    writeExportFile: vi
+      .fn<ConversationClient["writeExportFile"]>()
+      .mockResolvedValue({ bytesWritten: 0 }),
     setConversationProvider: vi
       .fn<NonNullable<ConversationClient["setConversationProvider"]>>()
       .mockResolvedValue({
@@ -2455,5 +2478,87 @@ describe("ConversationWorkspace", () => {
       within(pane7).queryByRole("button", { name: "重新生成" }),
     ).not.toBeInTheDocument()
     unmount7()
+  })
+})
+
+describe("ConversationWorkspace sidebar reveal", () => {
+  it("scrolls the history row into view when the conversation changes", async () => {
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+
+    const client = createMockClient()
+    client.listConversations.mockResolvedValueOnce([
+      {
+        ...tree.conversation,
+        updatedAt: right.createdAt,
+      },
+    ])
+    vi.mocked(createConversationClient).mockReturnValue(client)
+    vi.mocked(createProviderClient).mockReturnValue(createMockProviderClient())
+    resetStore()
+
+    render(<ConversationWorkspace />)
+
+    const row = await screen.findByRole("button", { name: "Branch proof" })
+    expect(row).toHaveAttribute("data-conversation-id", tree.conversation.id)
+    await waitFor(() => {
+      expect(scrollIntoView).toHaveBeenCalledWith(
+        expect.objectContaining({ block: "nearest" }),
+      )
+    })
+  })
+
+  it("scrolls the current row again when search reveals another branch", async () => {
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+    const user = userEvent.setup()
+
+    const client = createMockClient()
+    client.listConversations.mockResolvedValueOnce([
+      { ...tree.conversation, updatedAt: right.createdAt },
+    ])
+    client.searchConversations.mockResolvedValueOnce([
+      {
+        conversationId: tree.conversation.id,
+        title: tree.conversation.title,
+        isArchived: false,
+        titleMatched: false,
+        updatedAt: right.createdAt,
+        hits: [
+          {
+            nodeId: left.id,
+            role: left.role,
+            createdAt: left.createdAt,
+            snippet: left.content,
+          },
+        ],
+      },
+    ])
+    vi.mocked(createConversationClient).mockReturnValue(client)
+    vi.mocked(createProviderClient).mockReturnValue(createMockProviderClient())
+    resetStore()
+    render(<ConversationWorkspace />)
+
+    await screen.findByRole("button", { name: "Branch proof" })
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled())
+    scrollIntoView.mockClear()
+
+    await user.click(screen.getByRole("button", { name: "搜索会话" }))
+    await user.type(screen.getByLabelText("搜索消息或标题…"), "LEFT")
+    await user.click(
+      await screen.findByRole(
+        "button",
+        { name: /LEFT_BRANCH_SENTINEL/ },
+        {
+          timeout: 2000,
+        },
+      ),
+    )
+
+    await waitFor(() => {
+      expect(scrollIntoView).toHaveBeenCalledWith(
+        expect.objectContaining({ block: "nearest" }),
+      )
+    })
   })
 })

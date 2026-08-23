@@ -239,6 +239,12 @@ function createConversationClient() {
     renameConversation: vi.fn<ConversationClient["renameConversation"]>(),
     deleteConversation: vi.fn<ConversationClient["deleteConversation"]>(),
     unarchiveConversation: vi.fn<ConversationClient["unarchiveConversation"]>(),
+    searchConversations: vi
+      .fn<ConversationClient["searchConversations"]>()
+      .mockResolvedValue([]),
+    writeExportFile: vi
+      .fn<ConversationClient["writeExportFile"]>()
+      .mockResolvedValue({ bytesWritten: 0 }),
     setConversationProvider: vi
       .fn<NonNullable<ConversationClient["setConversationProvider"]>>()
       .mockImplementation((input) =>

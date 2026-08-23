@@ -73,12 +73,21 @@ listConversations(): Promise<readonly ConversationSummaryView[]>
 loadConversationTree(conversationId): Promise<ConversationTreeView>
 loadActivePath(conversationId, activeNodeId): Promise<ActivePathView>
 archiveConversation(conversationId): Promise<ConversationView>
+setConversationProvider(input): Promise<Pick<ConversationView, "id" | "providerId" | "model" | "reasoningEffort">>
+searchConversations(query): Promise<readonly ConversationSearchResultView[]>
+writeExportFile({ path, content }): Promise<{ bytesWritten: number }>
 ```
 
 These map to the frozen snake-case commands `create_conversation`,
 `append_node`, `create_branch`, `edit_node_as_branch`,
-`list_conversations`, `load_conversation_tree`, `load_active_path`, and
-`archive_conversation`.
+`list_conversations`, `load_conversation_tree`, `load_active_path`,
+`archive_conversation`, `set_conversation_provider`, and
+`search_conversations` (added 2026-08-23 with
+task 08-23-search: substring search over user/assistant content and titles;
+snippets are windowed SQL-side and the query is trimmed/≤200 chars on both
+sides), plus `write_export_file` (added 2026-08-23 with task
+08-23-conversation-export: validated bounded Markdown writes selected through
+the desktop save dialog).
 
 ### 3. Contracts
 
@@ -118,7 +127,7 @@ Content limits use UTF-8 byte length, not JavaScript UTF-16 code units.
 
 ### 6. Tests Required
 
-- Assert all twelve command names, the outer `request` wrapper, and exact
+- Assert all fourteen command names, the outer `request` wrapper, and exact
   snake-case request fields through an injected transport. For discovery,
   also assert deterministic summary ordering, safe timestamps, and duplicate
   ID rejection. When a command is added or removed, update the count wording
