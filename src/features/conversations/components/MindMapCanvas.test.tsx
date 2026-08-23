@@ -128,6 +128,38 @@ describe("MindMapCanvas", () => {
     ).not.toHaveAttribute("data-on-active-path")
   })
 
+  it("draws an edge per parent link and highlights the active-path edges", () => {
+    const { container } = render(
+      <MindMapCanvas
+        rootNodeId="root"
+        nodesById={nodesById}
+        activePathIds={activePathIds}
+        onSelect={vi.fn()}
+      />,
+    )
+
+    // React Flow silently drops edges whose endpoint nodes have no handle
+    // bounds, so presence here is the regression guard for the declared
+    // MINDMAP_NODE_HANDLES anchors.
+    expect(container.querySelectorAll(".react-flow__edge")).toHaveLength(4)
+
+    const activeEdge = container.querySelector(
+      '[data-testid="rf__edge-assistant-a__user-right"]',
+    )
+    expect(activeEdge).not.toBeNull()
+    expect(activeEdge?.querySelector("path")?.getAttribute("style")).toContain(
+      "var(--ring)",
+    )
+
+    const siblingEdge = container.querySelector(
+      '[data-testid="rf__edge-assistant-a__user-left"]',
+    )
+    expect(siblingEdge).not.toBeNull()
+    expect(siblingEdge?.querySelector("path")?.getAttribute("style")).toContain(
+      "var(--border)",
+    )
+  })
+
   it("emits the clicked node id through onSelect", () => {
     const onSelect = vi.fn()
     render(

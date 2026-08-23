@@ -576,7 +576,14 @@ WebGL dependency on WebKitGTK.
   `errors.unsafeTreeProjection` alert). Collapse state is component-local
   and scoped to the current root via derived state, not an effect reset.
 - Flow nodes declare explicit `width`/`height` matching the fixed card
-  metrics exported from the layout module. Without them React Flow keeps
+  metrics exported from the layout module.
+- Flow nodes also declare `handles` (`MINDMAP_NODE_HANDLES`: target left,
+  source right, card-local coordinates). React Flow **silently drops every
+  edge** whose endpoint nodes lack handle bounds (`isNodeInitialized` fails
+  before the error-008 path is even reached) — nodes render fine while all
+  edges vanish. Declarative handles avoid DOM measurement, so edges exist on
+  first paint and in jsdom; do not rely on `<Handle>` components inside the
+  card for this view. Without them React Flow keeps
   nodes `visibility: hidden` until measured, which never happens in jsdom
   and flashes in production.
 - Testing recipe (jsdom): stub `ResizeObserver` with a class whose

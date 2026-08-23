@@ -66,6 +66,8 @@ function MindMapNodeCard({ data }: NodeProps<MindMapFlowNode>) {
       )}
       style={{ width: MINDMAP_CARD_WIDTH, height: MINDMAP_CARD_HEIGHT }}
     >
+      {/* Edge anchors are declared on the node in mindmapLayout (see
+          MINDMAP_NODE_HANDLES); lines meet the card edges directly. */}
       <div className="flex items-center gap-1.5 text-muted-foreground">
         <RoleIcon role={data.role} />
         <span className="text-[10px] font-medium uppercase tracking-wide">

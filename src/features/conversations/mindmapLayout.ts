@@ -1,5 +1,10 @@
 import { hierarchy, tree } from "d3-hierarchy"
-import type { Edge, Node as FlowNode } from "@xyflow/react"
+import {
+  Position,
+  type Edge,
+  type Node as FlowNode,
+  type NodeHandle,
+} from "@xyflow/react"
 
 import type { TreeNodeView } from "./types"
 
@@ -27,6 +32,25 @@ export type MindMapCardData = {
   isCollapsed: boolean
   collapsedDescendantCount: number
 }
+
+// Declarative anchor points: React Flow refuses to render an edge until the
+// endpoint nodes have handle bounds (error 008 / silent null otherwise).
+// Declaring them on the node skips DOM measurement entirely, so edges exist
+// on the very first paint.
+const MINDMAP_NODE_HANDLES: NodeHandle[] = [
+  {
+    type: "target",
+    position: Position.Left,
+    x: 0,
+    y: MINDMAP_CARD_HEIGHT / 2,
+  },
+  {
+    type: "source",
+    position: Position.Right,
+    x: MINDMAP_CARD_WIDTH,
+    y: MINDMAP_CARD_HEIGHT / 2,
+  },
+]
 
 export type MindMapNodeData = MindMapCardData & {
   onToggleBranch: (nodeId: string) => void
@@ -196,6 +220,7 @@ export function projectMindMapLayout({
       },
       width: MINDMAP_CARD_WIDTH,
       height: MINDMAP_CARD_HEIGHT,
+      handles: MINDMAP_NODE_HANDLES,
       data: {
         nodeId,
         role: node.role,
