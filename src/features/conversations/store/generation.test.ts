@@ -244,6 +244,11 @@ function createClient() {
         path: [],
       }),
     archiveConversation: () => Promise.resolve(conversation),
+    renameConversation: () =>
+      Promise.resolve({ ...conversation, title: "Renamed" }),
+    deleteConversation: () =>
+      Promise.resolve({ conversationId: conversation.id }),
+    unarchiveConversation: () => Promise.resolve(conversation),
   } satisfies ConversationClient
 }
 

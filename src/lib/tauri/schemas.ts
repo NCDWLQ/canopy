@@ -99,6 +99,12 @@ export const loadActivePathRequestSchema = z
   .strict()
 export const archiveConversationRequestSchema =
   loadConversationTreeRequestSchema
+export const renameConversationRequestSchema = z
+  .object({ conversation_id: idSchema, title: titleSchema })
+  .strict()
+export const deleteConversationRequestSchema = loadConversationTreeRequestSchema
+export const unarchiveConversationRequestSchema =
+  loadConversationTreeRequestSchema
 export const setConversationProviderRequestSchema = z
   .object({
     conversation_id: idSchema,
@@ -224,6 +230,10 @@ export const activePathDtoSchema = z
   })
   .strict()
 
+export const deleteConversationSuccessSchema = z
+  .object({ conversation_id: idSchema })
+  .strict()
+
 export type ConversationDto = z.infer<typeof conversationDtoSchema>
 export type ConversationSummaryDto = z.infer<
   typeof conversationSummaryDtoSchema
@@ -231,6 +241,9 @@ export type ConversationSummaryDto = z.infer<
 export type NodeDto = z.infer<typeof nodeDtoSchema>
 export type ConversationTreeDto = z.infer<typeof conversationTreeDtoSchema>
 export type ActivePathDto = z.infer<typeof activePathDtoSchema>
+export type DeleteConversationSuccessDto = z.infer<
+  typeof deleteConversationSuccessSchema
+>
 export type ConversationProviderBindingResultDto = z.infer<
   typeof conversationProviderBindingResultSchema
 >

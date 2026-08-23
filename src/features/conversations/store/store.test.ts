@@ -117,6 +117,11 @@ function createMockClient() {
       .mockResolvedValue(tree),
     loadActivePath: vi.fn<ConversationClient["loadActivePath"]>(),
     archiveConversation: vi.fn<ConversationClient["archiveConversation"]>(),
+    renameConversation: vi.fn<ConversationClient["renameConversation"]>(),
+    deleteConversation: vi.fn<ConversationClient["deleteConversation"]>(),
+    unarchiveConversation: vi
+      .fn<ConversationClient["unarchiveConversation"]>()
+      .mockResolvedValue(conversation),
   } satisfies ConversationClient
 }
 
@@ -651,6 +656,378 @@ describe("conversation store", () => {
     expect(
       useConversationStore.getState().generationRuns[conversation.id],
     ).toBeUndefined()
+  })
+
+  it("renames the current conversation through both the title and the summary", async () => {
+    client.listConversations.mockResolvedValueOnce([summary])
+    await useConversationStore.getState().initializeHistory(client)
+    client.renameConversation.mockResolvedValueOnce({
+      ...conversation,
+      title: "手动重命名",
+    })
+
+    const failure = await useConversationStore
+      .getState()
+      .renameConversation(client, conversation.id, "  手动重命名  ")
+
+    expect(failure).toBeNull()
+    expect(client.renameConversation).toHaveBeenCalledWith({
+      conversationId: conversation.id,
+      title: "  手动重命名  ",
+    })
+    const state = useConversationStore.getState()
+    expect(state.title).toBe("手动重命名")
+    expect(
+      state.history.summaries.find((item) => item.id === conversation.id)
+        ?.title,
+    ).toBe("手动重命名")
+  })
+
+  it("renames a non-current conversation as a summary-only mutation and reports failures to the caller", async () => {
+    const otherSummary: ConversationSummaryView = {
+      id: "conversation-other",
+      title: "Other row",
+      rootNodeId: "other-root",
+      isArchived: false,
+      updatedAt: 1,
+    }
+    client.listConversations.mockResolvedValueOnce([summary, otherSummary])
+    await useConversationStore.getState().initializeHistory(client)
+    client.renameConversation.mockResolvedValueOnce({
+      id: otherSummary.id,
+      title: "Renamed elsewhere",
+      rootNodeId: otherSummary.rootNodeId,
+      isArchived: false,
+    })
+
+    const renamed = await useConversationStore
+      .getState()
+      .renameConversation(client, otherSummary.id, "Renamed elsewhere")
+
+    expect(renamed).toBeNull()
+    const state = useConversationStore.getState()
+    expect(state.title).toBe(conversation.title)
+    expect(
+      state.history.summaries.find((item) => item.id === otherSummary.id)
+        ?.title,
+    ).toBe("Renamed elsewhere")
+    // Renaming must not reorder the sidebar: the summary keeps its
+    // updated_at, so the newest-first order stays put.
+    expect(state.history.summaries.map((item) => item.id)).toEqual([
+      conversation.id,
+      otherSummary.id,
+    ])
+
+    client.renameConversation.mockRejectedValueOnce(
+      new ConversationCommandError({
+        code: "not_found",
+        message: "Conversation is gone.",
+        retryable: false,
+      }),
+    )
+    const failure = await useConversationStore
+      .getState()
+      .renameConversation(client, otherSummary.id, "missing")
+    expect(failure).toMatchObject({ code: "not_found", retryable: false })
+    expect(useConversationStore.getState().status).toBe("ready")
+    expect(useConversationStore.getState().error).toBeNull()
+
+    client.renameConversation.mockResolvedValueOnce({
+      ...conversation,
+      id: "conversation-imposter",
+      title: "Drifted",
+    })
+    const drifted = await useConversationStore
+      .getState()
+      .renameConversation(client, otherSummary.id, "drift")
+    expect(drifted).toMatchObject({ code: "tree_integrity" })
+  })
+
+  it("deletes a non-current conversation as a history-only mutation and clears its run record", async () => {
+    const otherSummary: ConversationSummaryView = {
+      id: "conversation-other",
+      title: "Other row",
+      rootNodeId: "other-root",
+      isArchived: false,
+      updatedAt: 1,
+    }
+    client.listConversations.mockResolvedValueOnce([summary, otherSummary])
+    await useConversationStore.getState().initializeHistory(client)
+    useConversationStore.setState({
+      generationRuns: {
+        "conversation-other": {
+          runId: 12,
+          conversationId: "conversation-other",
+          parentNodeId: "other-root",
+          priorChildIds: [],
+          phase: "cancelled",
+          content: "",
+        },
+      },
+    })
+    client.deleteConversation.mockResolvedValueOnce({
+      conversationId: otherSummary.id,
+    })
+
+    await useConversationStore
+      .getState()
+      .deleteConversation(client, otherSummary.id)
+
+    const state = useConversationStore.getState()
+    expect(client.deleteConversation).toHaveBeenCalledWith(otherSummary.id)
+    expect(state.history).toMatchObject({
+      status: "ready",
+      summaries: [summary],
+      error: null,
+    })
+    expect(state.generationRuns["conversation-other"]).toBeUndefined()
+    // The loaded conversation keeps its full projection and status.
+    expect(state.conversationId).toBe(conversation.id)
+    expect(state.status).toBe("ready")
+    expect(state.error).toBeNull()
+  })
+
+  it("routes a failed non-current delete to the history error channel", async () => {
+    const otherSummary: ConversationSummaryView = {
+      id: "conversation-other",
+      title: "Other row",
+      rootNodeId: "other-root",
+      isArchived: false,
+      updatedAt: 1,
+    }
+    client.listConversations.mockResolvedValueOnce([summary, otherSummary])
+    await useConversationStore.getState().initializeHistory(client)
+    client.deleteConversation.mockRejectedValueOnce(
+      new ConversationCommandError({
+        code: "database_unavailable",
+        message: "Delete failed.",
+        retryable: true,
+      }),
+    )
+
+    await useConversationStore
+      .getState()
+      .deleteConversation(client, otherSummary.id)
+
+    const state = useConversationStore.getState()
+    expect(state.history).toMatchObject({
+      status: "error",
+      error: { code: "database_unavailable", retryable: true },
+    })
+    expect(
+      state.history.summaries.find((item) => item.id === otherSummary.id),
+    ).toBeDefined()
+    expect(state.conversationId).toBe(conversation.id)
+    expect(state.status).toBe("ready")
+  })
+
+  it("deletes the current conversation back to the blank state without loading another conversation", async () => {
+    client.listConversations.mockResolvedValueOnce([summary, archivedSummary])
+    await useConversationStore.getState().initializeHistory(client)
+    client.deleteConversation.mockResolvedValueOnce({
+      conversationId: conversation.id,
+    })
+
+    await useConversationStore
+      .getState()
+      .deleteConversation(client, conversation.id)
+
+    const state = useConversationStore.getState()
+    expect(state.conversationId).toBeNull()
+    expect(state.title).toBeNull()
+    expect(state.rootNodeId).toBeNull()
+    expect(state.activeNodeId).toBeNull()
+    expect(state.nodesById).toEqual({})
+    expect(state.fullNodes).toEqual({})
+    expect(state.status).toBe("idle")
+    expect(state.isCreatingConversation).toBe(true)
+    expect(state.history).toMatchObject({
+      status: "ready",
+      summaries: [archivedSummary],
+      error: null,
+    })
+    // No landing conversation is auto-loaded after the deletion.
+    expect(client.loadConversationTree).toHaveBeenCalledTimes(1)
+  })
+
+  it("deleting the last current conversation lands on the empty history state and clears its run record", async () => {
+    client.listConversations.mockResolvedValueOnce([summary])
+    await useConversationStore.getState().initializeHistory(client)
+    useConversationStore.setState({
+      generationRuns: {
+        [conversation.id]: {
+          runId: 13,
+          conversationId: conversation.id,
+          parentNodeId: right.id,
+          generationId: "delete-gen-id",
+          model: "fixture-model",
+          phase: "streaming",
+          thinking: "",
+          content: "PARTIAL_REPLY",
+          priorChildIds: [],
+        },
+      },
+    })
+    client.deleteConversation.mockResolvedValueOnce({
+      conversationId: conversation.id,
+    })
+
+    await useConversationStore
+      .getState()
+      .deleteConversation(client, conversation.id)
+
+    const state = useConversationStore.getState()
+    expect(state.conversationId).toBeNull()
+    expect(state.status).toBe("idle")
+    expect(state.generationRuns[conversation.id]).toBeUndefined()
+    expect(state.history).toEqual({
+      status: "empty",
+      summaries: [],
+      error: null,
+    })
+  })
+
+  it("keeps the loaded projection when a current delete drifts or fails", async () => {
+    client.listConversations.mockResolvedValueOnce([summary])
+    await useConversationStore.getState().initializeHistory(client)
+
+    client.deleteConversation.mockResolvedValueOnce({
+      conversationId: "conversation-imposter",
+    })
+    await useConversationStore
+      .getState()
+      .deleteConversation(client, conversation.id)
+    let state = useConversationStore.getState()
+    expect(state.status).toBe("error")
+    expect(state.error).toMatchObject({ code: "tree_integrity" })
+    expect(state.conversationId).toBe(conversation.id)
+
+    client.deleteConversation.mockRejectedValueOnce(
+      new ConversationCommandError({
+        code: "database_unavailable",
+        message: "Delete failed.",
+        retryable: true,
+      }),
+    )
+    await useConversationStore
+      .getState()
+      .deleteConversation(client, conversation.id)
+    state = useConversationStore.getState()
+    expect(state.status).toBe("error")
+    expect(state.error).toMatchObject({
+      code: "database_unavailable",
+      retryable: true,
+    })
+    expect(state.conversationId).toBe(conversation.id)
+    expect(state.history.status).toBe("ready")
+  })
+
+  it("unarchives the current conversation, clearing its read-only state", async () => {
+    const archivedTree = {
+      ...tree,
+      conversation: { ...conversation, isArchived: true },
+    }
+    client.loadConversationTree.mockResolvedValueOnce(archivedTree)
+    await useConversationStore
+      .getState()
+      .loadConversation(client, conversation.id)
+    useConversationStore.setState({
+      history: {
+        status: "ready",
+        summaries: [{ ...summary, isArchived: true }],
+        error: null,
+      },
+    })
+    client.unarchiveConversation.mockResolvedValueOnce(conversation)
+
+    await useConversationStore
+      .getState()
+      .unarchiveConversation(client, conversation.id)
+
+    const state = useConversationStore.getState()
+    expect(client.unarchiveConversation).toHaveBeenCalledWith(conversation.id)
+    expect(state.isArchived).toBe(false)
+    expect(state.status).toBe("ready")
+    expect(
+      state.history.summaries.find((item) => item.id === conversation.id)
+        ?.isArchived,
+    ).toBe(false)
+  })
+
+  it("unarchives a non-current conversation as a summary-only mutation", async () => {
+    client.listConversations.mockResolvedValueOnce([summary, archivedSummary])
+    await useConversationStore.getState().initializeHistory(client)
+    client.unarchiveConversation.mockResolvedValueOnce({
+      id: archivedSummary.id,
+      title: archivedSummary.title,
+      rootNodeId: archivedSummary.rootNodeId,
+      isArchived: false,
+    })
+
+    await useConversationStore
+      .getState()
+      .unarchiveConversation(client, archivedSummary.id)
+
+    const state = useConversationStore.getState()
+    expect(state.history).toMatchObject({ status: "ready", error: null })
+    expect(
+      state.history.summaries.find((item) => item.id === archivedSummary.id)
+        ?.isArchived,
+    ).toBe(false)
+    expect(state.conversationId).toBe(conversation.id)
+    expect(state.isArchived).toBe(false)
+    expect(state.status).toBe("ready")
+  })
+
+  it("skips unarchive guards and routes drift or failures to the owning channel", async () => {
+    client.listConversations.mockResolvedValueOnce([summary, archivedSummary])
+    await useConversationStore.getState().initializeHistory(client)
+
+    // Already-active targets are no-ops on both channels.
+    await useConversationStore
+      .getState()
+      .unarchiveConversation(client, conversation.id)
+    expect(client.unarchiveConversation).not.toHaveBeenCalled()
+
+    client.unarchiveConversation.mockResolvedValueOnce({
+      id: archivedSummary.id,
+      title: archivedSummary.title,
+      rootNodeId: archivedSummary.rootNodeId,
+      isArchived: true,
+    })
+    await useConversationStore
+      .getState()
+      .unarchiveConversation(client, archivedSummary.id)
+    expect(useConversationStore.getState().history).toMatchObject({
+      status: "error",
+      error: { code: "tree_integrity" },
+    })
+
+    useConversationStore.setState({
+      history: {
+        status: "ready",
+        summaries: [summary, archivedSummary],
+        error: null,
+      },
+    })
+    client.unarchiveConversation.mockRejectedValueOnce(
+      new ConversationCommandError({
+        code: "database_unavailable",
+        message: "Unarchive failed.",
+        retryable: true,
+      }),
+    )
+    await useConversationStore
+      .getState()
+      .unarchiveConversation(client, archivedSummary.id)
+    const state = useConversationStore.getState()
+    expect(state.history).toMatchObject({
+      status: "error",
+      error: { code: "database_unavailable", retryable: true },
+    })
+    expect(state.conversationId).toBe(conversation.id)
+    expect(state.status).toBe("ready")
+    expect(state.error).toBeNull()
   })
 
   it("enters blank creation without replacing the loaded tree or history", async () => {

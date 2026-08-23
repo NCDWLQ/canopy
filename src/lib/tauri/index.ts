@@ -7,7 +7,9 @@ export {
   type ConversationClient,
   type CreateBranchInput,
   type CreateConversationInput,
+  type DeleteConversationSuccess,
   type EditNodeAsBranchInput,
+  type RenameConversationInput,
   type SetConversationProviderInput,
   type InvokeTransport,
 } from "./client"

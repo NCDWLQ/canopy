@@ -152,6 +152,19 @@ export type ConversationStore = ConversationTreeState & {
     client: ConversationClient,
     targetId?: string,
   ) => Promise<void>
+  renameConversation: (
+    client: ConversationClient,
+    targetId: string,
+    title: string,
+  ) => Promise<UiError | null>
+  deleteConversation: (
+    client: ConversationClient,
+    targetId: string,
+  ) => Promise<void>
+  unarchiveConversation: (
+    client: ConversationClient,
+    targetId: string,
+  ) => Promise<void>
   setConversationProvider: (
     client: ConversationClient,
     input: Omit<SetConversationProviderInput, "conversationId">,
@@ -260,6 +273,22 @@ const initialHistoryState: ConversationHistoryState = {
   error: null,
 }
 
+// Deleting the loaded conversation clears its whole projection. The workspace
+// lands back on the blank new-conversation state; run records for the deleted
+// target cannot survive it.
+function blankTreeState(
+  generationRuns: Readonly<Record<string, GenerationRun>>,
+): ConversationTreeState {
+  return {
+    ...initialState,
+    isCreatingConversation: true,
+    nodesById: emptyRecord(),
+    fullNodes: emptyRecord(),
+    expandedIds: new Set(),
+    generationRuns,
+  }
+}
+
 function sortedSummaries(
   summaries: readonly ConversationSummaryView[],
 ): readonly ConversationSummaryView[] {
@@ -278,6 +307,20 @@ function upsertSummary(
     ...summaries.filter((item) => item.id !== summary.id),
     summary,
   ])
+}
+
+// Removing a deleted conversation keeps the list ready while other rows
+// remain and flips to the explicit empty state for the last one.
+function withoutSummary(
+  history: ConversationHistoryState,
+  conversationId: string,
+): ConversationHistoryState {
+  const summaries = history.summaries.filter(
+    (item) => item.id !== conversationId,
+  )
+  return summaries.length > 0
+    ? { status: "ready", summaries, error: null }
+    : { status: "empty", summaries: [], error: null }
 }
 
 function summaryFromTree(tree: ConversationTreeView): ConversationSummaryView {
@@ -1434,6 +1477,184 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
           // Archived conversations are read-only; any lingering terminal run
           // record for it can no longer be acted on.
           generationRuns: removeRunRecord(get(), target),
+        })
+      } catch (error: unknown) {
+        set({ status: "error", error: normalizeUiError(error) })
+      }
+    },
+
+    renameConversation: async (client, targetId, title) => {
+      const state = get()
+      const summary = state.history.summaries.find(
+        (item) => item.id === targetId,
+      )
+      try {
+        const conversation = await client.renameConversation({
+          conversationId: targetId,
+          title,
+        })
+        if (conversation.id !== targetId) {
+          return TREE_INTEGRITY_ERROR
+        }
+        // Dual-channel update mirroring applyTitleUpdate: the loaded title
+        // when current, the history summary otherwise.
+        const live = get()
+        set({
+          ...(live.conversationId === targetId
+            ? { title: conversation.title }
+            : {}),
+          ...(summary === undefined
+            ? {}
+            : {
+                history: {
+                  status: "ready" as const,
+                  summaries: upsertSummary(live.history.summaries, {
+                    ...summary,
+                    title: conversation.title,
+                  }),
+                  error: null,
+                },
+              }),
+        })
+        return null
+      } catch (error: unknown) {
+        // Rename failures stay in the dialog that requested them; they must
+        // not disable the workspace via the global status.
+        return normalizeUiError(error)
+      }
+    },
+
+    deleteConversation: async (client, targetId) => {
+      const state = get()
+      const isCurrent = targetId === state.conversationId
+
+      if (!isCurrent) {
+        const summary = state.history.summaries.find(
+          (item) => item.id === targetId,
+        )
+        if (summary === undefined) return // row vanished from history
+        // Non-current target: history-only mutation, like archive-by-ID.
+        try {
+          const result = await client.deleteConversation(targetId)
+          if (result.conversationId !== targetId) {
+            set({
+              history: {
+                status: "error" as const,
+                summaries: get().history.summaries,
+                error: TREE_INTEGRITY_ERROR,
+              },
+            })
+            return
+          }
+          set({
+            history: withoutSummary(get().history, targetId),
+            generationRuns: removeRunRecord(get(), targetId),
+          })
+        } catch (error: unknown) {
+          set({
+            history: {
+              status: "error" as const,
+              summaries: get().history.summaries,
+              error: normalizeUiError(error),
+            },
+          })
+        }
+        return
+      }
+
+      // Current conversation: reset to the blank new-conversation state
+      // without loading another conversation. The controller owns the
+      // confirm-time run cancellation, mirroring archive.
+      set({ status: "loading", error: null })
+      try {
+        const result = await client.deleteConversation(targetId)
+        if (result.conversationId !== targetId) {
+          set({ status: "error", error: TREE_INTEGRITY_ERROR })
+          return
+        }
+        set({
+          ...blankTreeState(removeRunRecord(get(), targetId)),
+          history: withoutSummary(get().history, targetId),
+        })
+      } catch (error: unknown) {
+        set({ status: "error", error: normalizeUiError(error) })
+      }
+    },
+
+    unarchiveConversation: async (client, targetId) => {
+      const state = get()
+      const isCurrent = targetId === state.conversationId
+
+      if (!isCurrent) {
+        const summary = state.history.summaries.find(
+          (item) => item.id === targetId,
+        )
+        if (summary === undefined || !summary.isArchived) return
+        try {
+          const conversation = await client.unarchiveConversation(targetId)
+          if (conversation.id !== targetId || conversation.isArchived) {
+            set({
+              history: {
+                status: "error" as const,
+                summaries: get().history.summaries,
+                error: TREE_INTEGRITY_ERROR,
+              },
+            })
+            return
+          }
+          set({
+            history: {
+              status: "ready" as const,
+              summaries: upsertSummary(get().history.summaries, {
+                ...summary,
+                isArchived: false,
+              }),
+              error: null,
+            },
+          })
+        } catch (error: unknown) {
+          set({
+            history: {
+              status: "error" as const,
+              summaries: get().history.summaries,
+              error: normalizeUiError(error),
+            },
+          })
+        }
+        return
+      }
+
+      if (!state.isArchived) return
+      set({ status: "loading", error: null })
+      try {
+        const conversation = await client.unarchiveConversation(targetId)
+        if (
+          conversation.id !== targetId ||
+          conversation.rootNodeId !== state.rootNodeId ||
+          conversation.isArchived
+        ) {
+          set({ status: "error", error: TREE_INTEGRITY_ERROR })
+          return
+        }
+        const liveSummary = get().history.summaries.find(
+          (item) => item.id === targetId,
+        )
+        set({
+          isArchived: false,
+          status: "ready",
+          error: null,
+          ...(liveSummary === undefined
+            ? {}
+            : {
+                history: {
+                  status: "ready" as const,
+                  summaries: upsertSummary(get().history.summaries, {
+                    ...liveSummary,
+                    isArchived: false,
+                  }),
+                  error: null,
+                },
+              }),
         })
       } catch (error: unknown) {
         set({ status: "error", error: normalizeUiError(error) })

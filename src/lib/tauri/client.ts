@@ -22,17 +22,22 @@ import {
   conversationTreeDtoSchema,
   createBranchRequestSchema,
   createConversationRequestSchema,
+  deleteConversationRequestSchema,
+  deleteConversationSuccessSchema,
   editNodeAsBranchRequestSchema,
   loadActivePathRequestSchema,
   listConversationsRequestSchema,
   loadConversationTreeRequestSchema,
   nodeDtoSchema,
+  renameConversationRequestSchema,
   setConversationProviderRequestSchema,
+  unarchiveConversationRequestSchema,
   conversationProviderBindingResultSchema,
   type ActivePathDto,
   type ConversationDto,
   type ConversationSummaryDto,
   type ConversationTreeDto,
+  type DeleteConversationSuccessDto,
   type NodeDto,
   type ConversationProviderBindingResultDto,
 } from "./schemas"
@@ -46,6 +51,9 @@ export const CONVERSATION_COMMANDS = {
   loadConversationTree: "load_conversation_tree",
   loadActivePath: "load_active_path",
   archiveConversation: "archive_conversation",
+  renameConversation: "rename_conversation",
+  deleteConversation: "delete_conversation",
+  unarchiveConversation: "unarchive_conversation",
   setConversationProvider: "set_conversation_provider",
 } as const
 
@@ -84,6 +92,13 @@ export type EditNodeAsBranchInput = {
   conversationId: string
   sourceNodeId: string
   content: string
+}
+export type RenameConversationInput = {
+  conversationId: string
+  title: string
+}
+export type DeleteConversationSuccess = {
+  conversationId: string
 }
 export type SetConversationProviderInput = {
   conversationId: string
@@ -198,6 +213,39 @@ export function createConversationClient(
         transport,
         CONVERSATION_COMMANDS.archiveConversation,
         archiveConversationRequestSchema,
+        { conversation_id: conversationId },
+        conversationDtoSchema,
+        mapConversation,
+      )
+    },
+
+    renameConversation(input: RenameConversationInput) {
+      return call(
+        transport,
+        CONVERSATION_COMMANDS.renameConversation,
+        renameConversationRequestSchema,
+        { conversation_id: input.conversationId, title: input.title },
+        conversationDtoSchema,
+        mapConversation,
+      )
+    },
+
+    deleteConversation(conversationId: string) {
+      return call(
+        transport,
+        CONVERSATION_COMMANDS.deleteConversation,
+        deleteConversationRequestSchema,
+        { conversation_id: conversationId },
+        deleteConversationSuccessSchema,
+        mapDeleteConversationSuccess,
+      )
+    },
+
+    unarchiveConversation(conversationId: string) {
+      return call(
+        transport,
+        CONVERSATION_COMMANDS.unarchiveConversation,
+        unarchiveConversationRequestSchema,
         { conversation_id: conversationId },
         conversationDtoSchema,
         mapConversation,
@@ -348,6 +396,12 @@ function mapConversationProviderBinding(
     model: dto.model ?? null,
     reasoningEffort: dto.reasoning_effort ?? null,
   }
+}
+
+function mapDeleteConversationSuccess(
+  dto: DeleteConversationSuccessDto,
+): DeleteConversationSuccess {
+  return { conversationId: dto.conversation_id }
 }
 
 function mapConversationTree(dto: ConversationTreeDto): ConversationTreeView {
