@@ -196,6 +196,9 @@ function createMockClient() {
     searchConversations: vi
       .fn<ConversationClient["searchConversations"]>()
       .mockResolvedValue([]),
+    writeExportFile: vi
+      .fn<ConversationClient["writeExportFile"]>()
+      .mockResolvedValue({ bytesWritten: 0 }),
     setConversationProvider: vi
       .fn<NonNullable<ConversationClient["setConversationProvider"]>>()
       .mockResolvedValue({

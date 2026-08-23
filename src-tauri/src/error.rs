@@ -16,6 +16,7 @@ pub enum CommandErrorCode {
     ProviderUnavailable,
     NetworkFailure,
     Cancelled,
+    ExportFileWrite,
     Internal,
 }
 
@@ -52,6 +53,18 @@ impl CommandError {
         Self {
             code: CommandErrorCode::Cancelled,
             message: "生成已取消。".to_owned(),
+            retryable: false,
+            details: None,
+        }
+    }
+
+    /// A file write requested by an export failed. The source IO error is
+    /// dropped: its display text may embed the full target path, which the
+    /// error envelope must not expose.
+    pub fn export_file_write() -> Self {
+        Self {
+            code: CommandErrorCode::ExportFileWrite,
+            message: "写入导出文件失败。".to_owned(),
             retryable: false,
             details: None,
         }

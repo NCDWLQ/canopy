@@ -1,0 +1,6 @@
+{"file": ".trellis/tasks/08-23-conversation-export/research/codebase-current-state.md", "reason": "数据模型/命令注册四处同步清单/现有复制能力与插件现状的调研结论，实现前必读"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "前端各层规范入口（目录结构/组件/i18n/状态管理/类型安全 zod IPC 校验）"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "新增导出文案必须 zh-CN 真源 + en 同步；内容不翻译等红线"}
+{"file": ".trellis/spec/backend/index.md", "reason": "后端规范入口（命令模式/错误信封/数据库约定）"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "write_export_file 的 IO 错误需映射 CommandError 信封（code/message/retryable）"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "本任务横跨 Rust 命令→契约→zod schema→client→store→组件，跨层一致性指引"}

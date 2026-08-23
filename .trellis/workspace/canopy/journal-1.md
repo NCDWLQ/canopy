@@ -753,7 +753,29 @@ Planned and implemented full i18n support (task 08-22-i18n) in worktree canopy-i
 [OK] **Completed**
 
 
-## Session 34: Finish conversation search
+## Session 34: 对话导出功能
+
+**Date**: 2026-08-23
+**Task**: 对话导出功能
+**Branch**: `feat/conversation-export`
+
+### Summary
+
+完成按助手消息前缀导出 Markdown：补齐保存对话框与文件写入 IPC、前端导出纯函数/store/UI、双语文案及契约测试；记录 Tauri capability 配置规范，并通过前端全量检查、Rust 测试与 Clippy。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f954182` | (see git log) |
+| `4144b81` | (see git log) |
+
+### Status
+
+[OK] **Completed**
+
+
+## Session 35: Finish conversation search
 
 **Date**: 2026-08-23
 **Task**: Finish conversation search

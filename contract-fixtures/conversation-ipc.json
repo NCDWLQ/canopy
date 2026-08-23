@@ -9,7 +9,8 @@
     "load_active_path",
     "archive_conversation",
     "set_conversation_provider",
-    "search_conversations"
+    "search_conversations",
+    "write_export_file"
   ],
   "requests": {
     "create_conversation": {
@@ -52,6 +53,10 @@
     },
     "search_conversations": {
       "query": "branch"
+    },
+    "write_export_file": {
+      "path": "/exports/Fixture conversation.md",
+      "content": "# Fixture conversation\n\n## 用户\n\n  preserved root content\n"
     }
   },
   "successes": {
@@ -257,7 +262,10 @@
         "updated_at": 1760000000000,
         "hits": []
       }
-    ]
+    ],
+    "write_export_file": {
+      "bytes_written": 60
+    }
   },
   "errors": [
     {
@@ -321,6 +329,11 @@
     {
       "code": "cancelled",
       "message": "Cancelled.",
+      "retryable": false
+    },
+    {
+      "code": "export_file_write",
+      "message": "写入导出文件失败。",
       "retryable": false
     },
     {
@@ -401,6 +414,9 @@
       "conversation_id": "conversation-fixture",
       "active_node_id": null,
       "nodes": []
+    },
+    "write_export_file": {
+      "bytes_written": "60"
     }
   },
   "malformed_errors": [

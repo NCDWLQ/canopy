@@ -37,8 +37,13 @@ class WireDatabaseError extends Error {
   readonly retryable = true
 }
 
+class WireExportWriteError extends Error {
+  readonly code = "export_file_write"
+  readonly retryable = false
+}
+
 describe("conversation Tauri contract", () => {
-  it("uses the shared exact command list and maps all ten request shapes", async () => {
+  it("uses the shared exact command list and maps all eleven request shapes", async () => {
     expect(Object.values(CONVERSATION_COMMANDS)).toEqual(fixture.command_names)
     const transport = resolvingTransport({
       create_conversation: fixture.successes.conversation_tree,
@@ -51,6 +56,7 @@ describe("conversation Tauri contract", () => {
       archive_conversation: fixture.successes.archived_conversation,
       set_conversation_provider: fixture.successes.set_conversation_provider,
       search_conversations: fixture.successes.search_results,
+      write_export_file: fixture.successes.write_export_file,
     })
     const client = createConversationClient(transport)
 
@@ -98,6 +104,10 @@ describe("conversation Tauri contract", () => {
     await client.searchConversations(
       fixture.requests.search_conversations.query,
     )
+    await client.writeExportFile({
+      path: fixture.requests.write_export_file.path,
+      content: fixture.requests.write_export_file.content,
+    })
 
     const requests = Object.values(fixture.requests)
     expect(transport.calls).toEqual(
@@ -301,6 +311,18 @@ describe("conversation Tauri contract", () => {
     )
     await expect(
       searchClient.searchConversations("branch"),
+    ).rejects.toMatchObject({ code: "internal", retryable: false })
+
+    const exportClient = createConversationClient(
+      resolvingTransport({
+        write_export_file: malformedCommands.write_export_file,
+      }),
+    )
+    await expect(
+      exportClient.writeExportFile({
+        path: "/exports/Fixture conversation.md",
+        content: "# Fixture conversation",
+      }),
     ).rejects.toMatchObject({ code: "internal", retryable: false })
   })
 
@@ -535,6 +557,55 @@ describe("conversation Tauri contract", () => {
     })
     expect(transport.calls.at(-1)?.args).toEqual({
       request: { title: "Rust whitespace", content: "\ufeff" },
+    })
+  })
+
+  it("projects export byte counts and validates export requests locally", async () => {
+    const transport = resolvingTransport({
+      write_export_file: fixture.successes.write_export_file,
+    })
+    const client = createConversationClient(transport)
+
+    await expect(
+      client.writeExportFile({
+        path: fixture.requests.write_export_file.path,
+        content: fixture.requests.write_export_file.content,
+      }),
+    ).resolves.toEqual({
+      bytesWritten: fixture.successes.write_export_file.bytes_written,
+    })
+    expect(transport.calls[0]?.args).toEqual({
+      request: fixture.requests.write_export_file,
+    })
+
+    // A blank path or blank/oversized content never reaches the transport.
+    await expect(
+      client.writeExportFile({ path: "  ", content: "# valid" }),
+    ).rejects.toMatchObject({ code: "invalid_input", retryable: false })
+    await expect(
+      client.writeExportFile({
+        path: "/tmp/canopy-export.md",
+        content: " \n\t",
+      }),
+    ).rejects.toMatchObject({ code: "invalid_input", retryable: false })
+    await expect(
+      client.writeExportFile({
+        path: "/tmp/canopy-export.md",
+        content: "a".repeat(16 * 1024 * 1024 + 1),
+      }),
+    ).rejects.toMatchObject({ code: "invalid_input", retryable: false })
+    expect(transport.calls).toHaveLength(1)
+
+    // A structured export_file_write rejection keeps its closed code through
+    // normalization.
+    const failing = createConversationClient(
+      rejectingTransport(new WireExportWriteError("写入导出文件失败。")),
+    )
+    await expect(
+      failing.writeExportFile({ path: "/exports/x.md", content: "# x" }),
+    ).rejects.toMatchObject({
+      code: "export_file_write",
+      retryable: false,
     })
   })
 })

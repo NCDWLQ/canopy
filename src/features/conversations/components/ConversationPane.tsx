@@ -24,6 +24,8 @@ export type ConversationPaneProps = {
   canEdit: (nodeId: string) => boolean
   onCreateBranch: (nodeId: string, content: string) => void
   onEditAsBranch: (nodeId: string, content: string) => void
+  onExportMessage?: (nodeId: string) => void
+  exportDisabled?: boolean
   transientGeneration: TransientGenerationView | null
   onRegenerate: () => void
   userGenerationAction?: UserGenerationAction | null
@@ -148,6 +150,8 @@ export function ConversationPane({
   canEdit,
   onCreateBranch,
   onEditAsBranch,
+  onExportMessage,
+  exportDisabled,
   transientGeneration,
   onRegenerate,
   userGenerationAction,
@@ -266,6 +270,8 @@ export function ConversationPane({
               canEdit={canEdit(msg.id)}
               onCreateBranch={onCreateBranch}
               onEditAsBranch={onEditAsBranch}
+              onExportMessage={onExportMessage}
+              exportDisabled={exportDisabled}
               generationAction={nodeGenerationAction}
               assistantRegenerationAction={nodeAssistantRegenerationAction}
               highlightQuery={

@@ -16,6 +16,9 @@ use crate::{database::managed_sqlite_pool, error::CommandError};
 
 const MAX_TITLE_CHARS: usize = 200;
 const MAX_CONTENT_BYTES: usize = 1024 * 1024;
+// Exports aggregate many nodes (plus headings), so the cap keeps generous
+// headroom above the 1 MiB per-node limit instead of reusing it.
+const MAX_EXPORT_CONTENT_BYTES: usize = 16 * 1024 * 1024;
 
 pub const CONVERSATION_COMMAND_NAMES: &[&str] = &[
     "create_conversation",
@@ -28,6 +31,7 @@ pub const CONVERSATION_COMMAND_NAMES: &[&str] = &[
     "archive_conversation",
     "set_conversation_provider",
     "search_conversations",
+    "write_export_file",
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -143,6 +147,21 @@ pub struct ConversationProviderBindingResult {
     pub model: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<ReasoningEffortDto>,
+}
+
+/// Path and content for a Markdown export. The path always originates from
+/// the native save dialog; the webview never gains direct filesystem access.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct WriteExportFileRequest {
+    pub path: String,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct WriteExportFileResponse {
+    pub bytes_written: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -435,6 +454,14 @@ impl<S: IdentityTimeSource> ConversationCommandService<S> {
             })
             .map_err(CommandError::from)
     }
+
+    pub async fn write_export_file(
+        &self,
+        request: WriteExportFileRequest,
+    ) -> Result<WriteExportFileResponse, CommandError> {
+        let bytes_written = write_export_file_bytes(&request.path, &request.content)?;
+        Ok(WriteExportFileResponse { bytes_written })
+    }
 }
 
 pub(crate) fn validate_title(title: &str) -> Result<String, CommandError> {
@@ -475,6 +502,27 @@ fn validate_query(query: &str) -> Result<String, CommandError> {
         return Err(CommandError::invalid_input("query", "too_long"));
     }
     Ok(query.to_owned())
+}
+
+fn validate_export_content(content: &str) -> Result<(), CommandError> {
+    if content.trim().is_empty() {
+        return Err(CommandError::invalid_input("content", "blank"));
+    }
+    if content.len() > MAX_EXPORT_CONTENT_BYTES {
+        return Err(CommandError::invalid_input("content", "too_large"));
+    }
+    Ok(())
+}
+
+/// Validate and write one export file. Split from the service method so the
+/// policy (rejections, IO error mapping) is unit-testable without a database
+/// pool. Blocking by design: a single bounded write (16 MiB cap) performed on
+/// the command task.
+fn write_export_file_bytes(path: &str, content: &str) -> Result<u64, CommandError> {
+    validate_id("path", path)?;
+    validate_export_content(content)?;
+    std::fs::write(path, content).map_err(|_| CommandError::export_file_write())?;
+    Ok(u64::try_from(content.len()).unwrap_or(u64::MAX))
 }
 
 fn user_node(
@@ -755,17 +803,32 @@ pub async fn search_conversations(
         .await
 }
 
+#[tauri::command]
+pub async fn write_export_file(
+    request: WriteExportFileRequest,
+    instances: State<'_, DbInstances>,
+) -> Result<WriteExportFileResponse, CommandError> {
+    production_service(instances.inner())
+        .await?
+        .write_export_file(request)
+        .await
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{validate_content, validate_query, validate_title, CONVERSATION_COMMAND_NAMES};
+    use super::{
+        validate_content, validate_query, validate_title, write_export_file_bytes,
+        CONVERSATION_COMMAND_NAMES,
+    };
     use crate::error::CommandErrorCode;
 
     #[test]
     fn command_names_are_frozen() {
-        assert_eq!(CONVERSATION_COMMAND_NAMES.len(), 10);
+        assert_eq!(CONVERSATION_COMMAND_NAMES.len(), 11);
         assert_eq!(CONVERSATION_COMMAND_NAMES[0], "create_conversation");
         assert_eq!(CONVERSATION_COMMAND_NAMES[8], "set_conversation_provider");
         assert_eq!(CONVERSATION_COMMAND_NAMES[9], "search_conversations");
+        assert_eq!(CONVERSATION_COMMAND_NAMES[10], "write_export_file");
     }
 
     #[test]
@@ -818,5 +881,58 @@ mod tests {
                 .code,
             CommandErrorCode::InvalidInput
         );
+    }
+
+    #[test]
+    fn export_write_rejects_blank_and_oversized_requests() {
+        let blank_path = write_export_file_bytes("  ", "# title").unwrap_err();
+        assert_eq!(blank_path.code, CommandErrorCode::InvalidInput);
+        assert_eq!(
+            blank_path.details,
+            Some(serde_json::json!({ "field": "path", "reason": "blank" }))
+        );
+
+        let blank_content = write_export_file_bytes("/tmp/canopy-export.md", " \n\t ").unwrap_err();
+        assert_eq!(blank_content.code, CommandErrorCode::InvalidInput);
+        assert_eq!(
+            blank_content.details,
+            Some(serde_json::json!({ "field": "content", "reason": "blank" }))
+        );
+
+        let oversized =
+            write_export_file_bytes("/tmp/canopy-export.md", &"a".repeat(16 * 1024 * 1024 + 1))
+                .unwrap_err();
+        assert_eq!(oversized.code, CommandErrorCode::InvalidInput);
+        assert_eq!(
+            oversized.details,
+            Some(serde_json::json!({ "field": "content", "reason": "too_large" }))
+        );
+    }
+
+    #[test]
+    fn export_write_maps_io_failure_to_export_file_write_envelope() {
+        // A missing parent directory fails with ENOENT for every user,
+        // including a root test runner, without touching the filesystem.
+        let error =
+            write_export_file_bytes("/canopy-export-missing-parent-dir/export.md", "# title")
+                .unwrap_err();
+        assert_eq!(error.code, CommandErrorCode::ExportFileWrite);
+        assert_eq!(error.message, "写入导出文件失败。");
+        assert!(!error.retryable);
+        assert_eq!(error.details, None);
+    }
+
+    #[test]
+    fn export_write_reports_byte_length_and_stores_content_verbatim() {
+        let path = std::env::temp_dir().join(format!("canopy-export-{}.md", uuid::Uuid::new_v4()));
+        let path = path.to_str().expect("temp path is valid UTF-8");
+        let content = "# 标题\n\n## 用户\n\n  preserved 内容\n";
+
+        let bytes_written = write_export_file_bytes(path, content).expect("export writes");
+        assert_eq!(bytes_written, content.len() as u64);
+
+        let stored = std::fs::read_to_string(path).expect("exported file is readable");
+        assert_eq!(stored, content);
+        std::fs::remove_file(path).expect("exported file is removed");
     }
 }

@@ -5,6 +5,7 @@ import {
   X,
   Check,
   Copy,
+  ExternalLink,
   Sparkles,
   Settings2,
   RefreshCw,
@@ -43,6 +44,10 @@ export type MessageNodeProps = {
   // Present only on the search-revealed message; drives match highlighting.
   highlightQuery?: string
   scrollContainerRef?: React.RefObject<HTMLElement | null>
+  /** Present only on assistant messages; undefined hides the export button. */
+  onExportMessage?: (nodeId: string) => void
+  /** True while this conversation is generating (streaming content is not durable yet). */
+  exportDisabled?: boolean
 }
 
 export function MessageNode({
@@ -55,6 +60,8 @@ export function MessageNode({
   assistantRegenerationAction,
   highlightQuery,
   scrollContainerRef,
+  onExportMessage,
+  exportDisabled = false,
 }: MessageNodeProps) {
   const { t } = useTranslation()
   const [isEditing, setIsEditing] = React.useState(false)
@@ -203,8 +210,14 @@ export function MessageNode({
       ? assistantRegenerationAction
       : undefined
   const canCopy = message.role === "user" || message.role === "assistant"
+  const canExport =
+    message.role === "assistant" && onExportMessage !== undefined
   const hasActions =
-    (canCopy || canEdit || canBranch || regenerationAction !== undefined) &&
+    (canCopy ||
+      canEdit ||
+      canBranch ||
+      canExport ||
+      regenerationAction !== undefined) &&
     !isEditing &&
     !isBranching
 
@@ -346,6 +359,19 @@ export function MessageNode({
                 ) : (
                   <Copy className="size-3.5" aria-hidden="true" />
                 )}
+              </Button>
+            )}
+            {canExport && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7 text-muted-foreground hover:text-foreground"
+                title={t("conversation.message.export")}
+                aria-label={t("conversation.message.export")}
+                disabled={exportDisabled}
+                onClick={() => onExportMessage?.(message.id)}
+              >
+                <ExternalLink className="size-3.5" aria-hidden="true" />
               </Button>
             )}
           </>

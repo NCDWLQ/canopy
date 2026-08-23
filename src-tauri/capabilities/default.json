@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Allows the desktop shell to use core Tauri APIs. SQL remains Rust-only.",
+  "description": "Allows the desktop shell to use core Tauri APIs. SQL remains Rust-only; the dialog is limited to save.",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "dialog:allow-save"]
 }
