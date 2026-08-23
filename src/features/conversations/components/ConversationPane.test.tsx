@@ -394,7 +394,36 @@ describe("ConversationPane search reveal", () => {
     expect(user2Article?.textContent).toContain("USER_2_CONTENT")
   })
 
-  it("falls back to emphasis-only reveal when no node id is set", () => {
+  it("marks only the first occurrence inside the revealed message", () => {
+    const twice: PathMessageView = {
+      id: "user-twice",
+      role: "user",
+      content: "NEEDLE first then needle again",
+      createdAt: 2,
+      metadata: null,
+    }
+    const { container } = render(
+      <ConversationPane
+        path={[user1, twice]}
+        status="ready"
+        canBranch={() => false}
+        canEdit={() => false}
+        onCreateBranch={vi.fn()}
+        onEditAsBranch={vi.fn()}
+        transientGeneration={null}
+        onRegenerate={vi.fn()}
+        reveal={{ conversationId: "c1", nodeId: "user-twice", query: "needle" }}
+      />,
+    )
+
+    const article = container.querySelector('[data-node-id="user-twice"]')
+    const marks = article?.querySelectorAll("mark") ?? []
+    expect(marks).toHaveLength(1)
+    expect(marks[0]?.textContent).toBe("NEEDLE")
+    expect(article?.textContent).toBe("NEEDLE first then needle again")
+  })
+
+  it("does not scroll when the reveal carries no node id", () => {
     const scrollIntoView = vi.fn()
     Element.prototype.scrollIntoView = scrollIntoView
 

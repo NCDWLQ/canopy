@@ -63,8 +63,8 @@ export function MessageNode({
 
   // Assistant content renders through the markdown pipeline, so plain-text
   // `<mark>` wrapping cannot reach it; the CSS Custom Highlight API applies
-  // the same query to the already-rendered article instead (no-op in jsdom
-  // or engines without the API — the reveal ring remains as fallback).
+  // the first-occurrence query match to the already-rendered article instead
+  // (no-op in jsdom or engines without the API).
   React.useEffect(() => {
     if (highlightQuery === undefined || message.role !== "assistant") return
     const article = revealArticleRef.current
@@ -148,7 +148,6 @@ export function MessageNode({
     <MessageBubble
       role={message.role}
       nodeId={message.id}
-      highlighted={highlightQuery !== undefined}
       articleRef={revealArticleRef}
       footer={
         isEditing ? (
@@ -315,7 +314,11 @@ export function MessageNode({
           {highlightQuery === undefined ? (
             message.content
           ) : (
-            <HighlightedText text={message.content} query={highlightQuery} />
+            <HighlightedText
+              text={message.content}
+              query={highlightQuery}
+              firstOnly
+            />
           )}
         </div>
       )}

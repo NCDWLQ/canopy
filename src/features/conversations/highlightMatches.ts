@@ -9,9 +9,13 @@ export type TextSegment = { text: string; isMatch: boolean }
 
 // Case-insensitive for the same ASCII fold the backend applies; exact for
 // other scripts. `fail-open`: an empty query returns the text untouched.
+// `firstOnly` marks a single occurrence — the one the backend snippet is
+// anchored to — for the pane reveal; the dialog marks every occurrence
+// inside its short snippet.
 export function splitQueryMatches(
   text: string,
   query: string,
+  options?: { firstOnly?: boolean },
 ): readonly TextSegment[] {
   const needle = query.toLowerCase()
   if (needle.length === 0) return [{ text, isMatch: false }]
@@ -19,13 +23,10 @@ export function splitQueryMatches(
   const haystack = text.toLowerCase()
   const segments: TextSegment[] = []
   let cursor = 0
+  let matched = false
   while (cursor <= haystack.length) {
     const index = haystack.indexOf(needle, cursor)
-    if (index === -1) {
-      const tail = text.slice(cursor)
-      if (tail.length > 0) segments.push({ text: tail, isMatch: false })
-      break
-    }
+    if (index === -1) break
     if (index > cursor) {
       segments.push({ text: text.slice(cursor, index), isMatch: false })
     }
@@ -33,7 +34,13 @@ export function splitQueryMatches(
       text: text.slice(index, index + needle.length),
       isMatch: true,
     })
+    matched = true
     cursor = index + needle.length
+    if (options?.firstOnly) break
+  }
+  const tail = text.slice(cursor)
+  if (tail.length > 0 || !matched) {
+    segments.push({ text: tail, isMatch: false })
   }
   return segments
 }
@@ -77,9 +84,10 @@ type HighlightRegistryContainer = {
 }
 
 /**
- * Applies the reveal highlight through the CSS Custom Highlight API.
+ * Applies the reveal highlight through the CSS Custom Highlight API,
+ * marking only the first occurrence (the one the backend snippet anchors).
  * Returns `true` when applied; on engines without the API (jsdom, older
- * WebKit) it is a no-op so callers keep their fallback emphasis.
+ * WebKit) it is a no-op.
  */
 export function applySearchHighlight(
   root: Element | null,
@@ -93,8 +101,8 @@ export function applySearchHighlight(
   if (registry === undefined) return false
 
   clearSearchHighlight()
-  const matchRanges = findTextMatchRanges(root, query)
-  if (matchRanges.length === 0) return false
+  const matchRange = findTextMatchRanges(root, query)[0]
+  if (matchRange === undefined) return false
 
   const HighlightConstructor = (
     globalThis as typeof globalThis & {
@@ -105,7 +113,7 @@ export function applySearchHighlight(
 
   registry.set(
     SEARCH_REVEAL_HIGHLIGHT_NAME,
-    new HighlightConstructor(...matchRanges),
+    new HighlightConstructor(matchRange),
   )
   return true
 }

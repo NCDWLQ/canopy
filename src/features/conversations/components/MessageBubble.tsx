@@ -10,9 +10,8 @@ export type MessageBubbleProps = {
   actions?: ReactNode
   footer?: ReactNode
   className?: string
-  // Stable scroll anchor and reveal emphasis for search-result positioning.
+  // Stable scroll anchor for search-result positioning.
   nodeId?: string
-  highlighted?: boolean
   articleRef?: Ref<HTMLElement>
 }
 
@@ -23,7 +22,6 @@ export function MessageBubble({
   footer,
   className,
   nodeId,
-  highlighted = false,
   articleRef,
 }: MessageBubbleProps) {
   const { t } = useTranslation()
@@ -37,21 +35,13 @@ export function MessageBubble({
   const messageAria = t("conversation.messageBubble.messageAria", {
     role: roleLabel,
   })
-  const revealClass = highlighted
-    ? "rounded-xl bg-primary/5 ring-1 ring-primary/30 px-2 -mx-2"
-    : undefined
-
   if (role === "user") {
     return (
       <article
         ref={articleRef}
         data-node-id={nodeId}
         aria-label={messageAria}
-        className={cn(
-          "group flex flex-col items-end my-3 w-full",
-          revealClass,
-          className,
-        )}
+        className={cn("group flex flex-col items-end my-3 w-full", className)}
       >
         <div className="max-w-[85%] rounded-2xl bg-muted px-4 py-2.5 text-sm text-foreground">
           {children}
@@ -74,7 +64,6 @@ export function MessageBubble({
         aria-label={messageAria}
         className={cn(
           "group flex flex-col items-start my-4 w-full text-foreground",
-          revealClass,
           className,
         )}
       >

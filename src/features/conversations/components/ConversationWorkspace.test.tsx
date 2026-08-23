@@ -2054,3 +2054,31 @@ describe("ConversationWorkspace", () => {
     unmount7()
   })
 })
+
+describe("ConversationWorkspace sidebar reveal", () => {
+  it("scrolls the history row into view when the conversation changes", async () => {
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+
+    const client = createMockClient()
+    client.listConversations.mockResolvedValueOnce([
+      {
+        ...tree.conversation,
+        updatedAt: right.createdAt,
+      },
+    ])
+    vi.mocked(createConversationClient).mockReturnValue(client)
+    vi.mocked(createProviderClient).mockReturnValue(createMockProviderClient())
+    resetStore()
+
+    render(<ConversationWorkspace />)
+
+    const row = await screen.findByRole("button", { name: "Branch proof" })
+    expect(row).toHaveAttribute("data-conversation-id", tree.conversation.id)
+    await waitFor(() => {
+      expect(scrollIntoView).toHaveBeenCalledWith(
+        expect.objectContaining({ block: "nearest" }),
+      )
+    })
+  })
+})

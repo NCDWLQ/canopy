@@ -37,6 +37,16 @@ describe("splitQueryMatches", () => {
       { text: "nothing here", isMatch: false },
     ])
   })
+
+  it("marks only the first occurrence in firstOnly mode", () => {
+    expect(splitQueryMatches("a b a b", "a", { firstOnly: true })).toEqual([
+      { text: "a", isMatch: true },
+      { text: " b a b", isMatch: false },
+    ])
+    expect(splitQueryMatches("miss", "zzz", { firstOnly: true })).toEqual([
+      { text: "miss", isMatch: false },
+    ])
+  })
 })
 
 describe("HighlightedText", () => {
@@ -51,6 +61,20 @@ describe("HighlightedText", () => {
 
     render(<HighlightedText text="no query hit" query="zzz" />)
     expect(screen.getByText("no query hit")).toBeInTheDocument()
+  })
+
+  it("marks only the snippet-anchored occurrence when firstOnly is set", () => {
+    const { container } = render(
+      <HighlightedText
+        text="needle first, needle second"
+        query="needle"
+        firstOnly
+      />,
+    )
+    const marks = container.querySelectorAll("mark")
+    expect(marks).toHaveLength(1)
+    expect(marks[0]?.textContent).toBe("needle")
+    expect(container.textContent).toBe("needle first, needle second")
   })
 })
 
@@ -77,7 +101,8 @@ describe("applySearchHighlight", () => {
   it("is a graceful no-op without the CSS Custom Highlight API", () => {
     const container = document.createElement("div")
     container.textContent = "needle in a haystack"
-    // jsdom has no CSS.highlights registry; the reveal ring is the fallback.
+    // jsdom has no CSS.highlights registry; engines without the API simply
+    // render without inline marks.
     expect(applySearchHighlight(container, "needle")).toBe(false)
     expect(applySearchHighlight(null, "needle")).toBe(false)
     expect(applySearchHighlight(container, "")).toBe(false)

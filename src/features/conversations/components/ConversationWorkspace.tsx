@@ -183,6 +183,24 @@ export function ConversationWorkspace({
     void initializeHistory(client)
   }, [client, initializeHistory])
 
+  // Keep the selected conversation's history row visible — e.g. after a
+  // search reveal jumps to an older conversation far down the list.
+  const historyScrollRef = React.useRef<HTMLDivElement>(null)
+  React.useEffect(() => {
+    if (store.conversationId === null) return
+    const row = historyScrollRef.current?.querySelector(
+      `[data-conversation-id="${CSS.escape(store.conversationId)}"]`,
+    )
+    if (row === null || row === undefined) return
+    const reducedMotion = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)",
+    ).matches
+    row.scrollIntoView?.({
+      block: "nearest",
+      behavior: reducedMotion ? "auto" : "smooth",
+    })
+  }, [store.conversationId])
+
   const projectionError =
     pathProjection.kind === "error" ? pathProjection.error : null
   const visiblePath = pathProjection.kind === "ready" ? pathProjection.path : []
@@ -386,7 +404,10 @@ export function ConversationWorkspace({
             </TooltipProvider>
           </div>
         </div>
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-2">
+        <div
+          ref={historyScrollRef}
+          className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-2"
+        >
           <section>
             <div className="sticky top-0 z-10 bg-sidebar px-2.5 pb-1 pt-3 text-sm font-medium text-muted-foreground/70">
               {t("conversation.workspace.history")}
@@ -417,6 +438,7 @@ export function ConversationWorkspace({
                             isCurrent && "font-medium",
                           )}
                           aria-current={isCurrent ? "page" : undefined}
+                          data-conversation-id={summary.id}
                           disabled={store.status === "loading"}
                           onClick={() =>
                             void store.selectConversation(client, summary.id)
