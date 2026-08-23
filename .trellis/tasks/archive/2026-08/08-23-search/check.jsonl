@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "核查：新命令在 commands.rs/error.rs/夹具/zod schema/前端 types 五处同步、无副本漂移；命令名冻结断言更新为 10"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "核查：SQL 全部参数化且只在 repository 层；LIKE 转义正确；无 webview SQL 权限变更；排序与 list_conversations 语义一致"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "核查：未新增错误码；message 保持中文 wire 值；UI 只渲染 commandErrorMessage(code)"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "核查：搜索请求 epoch 防过期；reveal 状态导航即清；无 persist/localStorage 引入"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "核查：滚动改动未破坏 overflow-y-auto/contain:paint 约束；测试用行为/可访问性查询；pnpm check 与 cargo test/clippy 全绿（fmt 仅限触碰文件）"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "核查：search.* 键 zh-CN/en 双侧齐备且 satisfies Dictionary；用户内容未被翻译"}
+{"file": ".trellis/tasks/08-23-search/research/codebase-survey.md", "reason": "对照调研锚点复核实现与既有模式一致（DTO serde 形状、store 动作结构、测试注入方式）"}

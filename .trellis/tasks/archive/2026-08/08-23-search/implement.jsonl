@@ -1,0 +1,9 @@
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "新 IPC 命令的跨层契约清单：commands.rs/error.rs/contract-fixtures/conversation-ipc.json/src/lib/tauri/前端 types 必须同组变更；zod strict schema 与命令名冻结规则"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "仓储管 SQL/服务管事务/命令只做校验映射的分层规则；参数化 SQL；webview 禁 SQL 权限；list_conversations 的 updated_at 派生语义（搜索排序须一致）"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "闭合 CommandErrorCode 枚举——搜索复用 invalid_input/database_unavailable，禁止新增码；CommandError 序列化形状与 message 约定"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "conversations 域内 commands/service/repository 分层落位；集成测试进 src-tauri/tests/ 并复用 tests/support/"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "requestEpoch 单调防过期（search 弹窗与 revealSearchHit 复用）；错误进局部/切片状态而非全局；Zustand 动作与纯选择器约定"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "组件不裸调 invoke；SearchDialog 落位 features/conversations/components；props 注入 client 的测试模式"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "search.* 新键双侧词典添加规则；不翻译用户输入内容（snippet/标题/查询词）"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "滚动合成约束（scrollIntoView 不引虚拟化）；测试用可访问性查询与兄弟哨兵断言"}
+{"file": ".trellis/tasks/08-23-search/research/codebase-survey.md", "reason": "本任务代码调研全集：存储 schema、IPC 模式、store/面板机制、测试模式（全部含 file:line 锚点）"}

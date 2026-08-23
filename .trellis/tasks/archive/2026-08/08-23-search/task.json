@@ -1,0 +1,30 @@
+{
+  "id": "search",
+  "name": "search",
+  "title": "Conversation search",
+  "description": "",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "canopy",
+  "assignee": "canopy",
+  "createdAt": "2026-08-23",
+  "completedAt": "2026-08-23",
+  "branch": "feat/search",
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "description": "会话全文搜索：消息内容+标题子串匹配，弹窗结果按会话分组，点击切到命中分支并定位高亮",
+    "pr_url": "https://github.com/NCDWLQ/canopy/pull/16",
+    "commit": "7b90d99"
+  }
+}
