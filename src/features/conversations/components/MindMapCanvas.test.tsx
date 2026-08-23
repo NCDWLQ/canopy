@@ -148,7 +148,7 @@ describe("MindMapCanvas", () => {
     )
     expect(activeEdge).not.toBeNull()
     expect(activeEdge?.querySelector("path")?.getAttribute("style")).toContain(
-      "var(--ring)",
+      "var(--foreground)",
     )
 
     const siblingEdge = container.querySelector(
@@ -156,7 +156,7 @@ describe("MindMapCanvas", () => {
     )
     expect(siblingEdge).not.toBeNull()
     expect(siblingEdge?.querySelector("path")?.getAttribute("style")).toContain(
-      "var(--border)",
+      "var(--muted-foreground)",
     )
   })
 

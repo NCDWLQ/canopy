@@ -122,8 +122,10 @@ describe("projectMindMapLayout", () => {
     const siblingEdge = layout.edges.find(
       (edge) => edge.source === "assistant-a" && edge.target === "user-left",
     )
-    expect(activeEdge?.style).toMatchObject({ stroke: "var(--ring)" })
-    expect(siblingEdge?.style).toMatchObject({ stroke: "var(--border)" })
+    expect(activeEdge?.style).toMatchObject({ stroke: "var(--foreground)" })
+    expect(siblingEdge?.style).toMatchObject({
+      stroke: "var(--muted-foreground)",
+    })
   })
 
   it("hides descendants of collapsed nodes and reports their count", () => {

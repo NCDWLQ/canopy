@@ -186,7 +186,7 @@ export function MindMapCanvas({
 
   return (
     <div
-      className="h-full w-full"
+      className="h-full w-full [--xy-background-pattern-dots-color:var(--border)]"
       role="region"
       aria-label={t("conversation.mindmap.canvas")}
     >

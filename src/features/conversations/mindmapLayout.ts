@@ -241,9 +241,16 @@ export function projectMindMapLayout({
         source: parentId,
         target: nodeId,
         type: "smoothstep",
+        // Connector lines carry information: use muted-foreground, not the
+        // border token (near-invisible on the light canvas), and foreground
+        // for the active path so it dominates in both color schemes.
         style: edgeOnActivePath
-          ? { stroke: "var(--ring)", strokeWidth: 2 }
-          : { stroke: "var(--border)", strokeWidth: 1.25 },
+          ? { stroke: "var(--foreground)", strokeWidth: 2 }
+          : {
+              stroke: "var(--muted-foreground)",
+              strokeOpacity: 0.6,
+              strokeWidth: 1.25,
+            },
       })
     }
   }
