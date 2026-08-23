@@ -3,6 +3,7 @@ import type { z } from "zod"
 
 import type {
   ActivePathView,
+  ConversationSearchResultView,
   ConversationSummaryView,
   ConversationTreeView,
   ConversationView,
@@ -18,6 +19,7 @@ import {
   archiveConversationRequestSchema,
   commandErrorSchema,
   conversationDtoSchema,
+  conversationSearchResultsDtoSchema,
   conversationSummariesDtoSchema,
   conversationTreeDtoSchema,
   createBranchRequestSchema,
@@ -27,12 +29,14 @@ import {
   listConversationsRequestSchema,
   loadConversationTreeRequestSchema,
   nodeDtoSchema,
+  searchConversationsRequestSchema,
   setConversationProviderRequestSchema,
   conversationProviderBindingResultSchema,
   writeExportFileRequestSchema,
   writeExportFileResultSchema,
   type ActivePathDto,
   type ConversationDto,
+  type ConversationSearchResultDto,
   type ConversationSummaryDto,
   type ConversationTreeDto,
   type NodeDto,
@@ -50,6 +54,7 @@ export const CONVERSATION_COMMANDS = {
   loadActivePath: "load_active_path",
   archiveConversation: "archive_conversation",
   setConversationProvider: "set_conversation_provider",
+  searchConversations: "search_conversations",
   writeExportFile: "write_export_file",
 } as const
 
@@ -231,6 +236,17 @@ export function createConversationClient(
       )
     },
 
+    searchConversations(query: string) {
+      return call(
+        transport,
+        CONVERSATION_COMMANDS.searchConversations,
+        searchConversationsRequestSchema,
+        { query },
+        conversationSearchResultsDtoSchema,
+        (results) => results.map(mapConversationSearchResult),
+      )
+    },
+
     writeExportFile(input: WriteExportFileInput) {
       return call(
         transport,
@@ -364,6 +380,24 @@ function mapConversationProviderBinding(
     providerId: dto.provider_id ?? null,
     model: dto.model ?? null,
     reasoningEffort: dto.reasoning_effort ?? null,
+  }
+}
+
+function mapConversationSearchResult(
+  dto: ConversationSearchResultDto,
+): ConversationSearchResultView {
+  return {
+    conversationId: dto.conversation_id,
+    title: dto.title,
+    isArchived: dto.is_archived,
+    titleMatched: dto.title_matched,
+    updatedAt: dto.updated_at,
+    hits: dto.hits.map((hit) => ({
+      nodeId: hit.node_id,
+      role: hit.role,
+      createdAt: hit.created_at,
+      snippet: hit.snippet,
+    })),
   }
 }
 

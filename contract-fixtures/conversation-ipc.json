@@ -9,6 +9,7 @@
     "load_active_path",
     "archive_conversation",
     "set_conversation_provider",
+    "search_conversations",
     "write_export_file"
   ],
   "requests": {
@@ -49,6 +50,9 @@
         "model": "fixture-model"
       },
       "reasoning_effort": "medium"
+    },
+    "search_conversations": {
+      "query": "branch"
     },
     "write_export_file": {
       "path": "/exports/Fixture conversation.md",
@@ -234,6 +238,31 @@
       "model": "fixture-model",
       "reasoning_effort": "medium"
     },
+    "search_results": [
+      {
+        "conversation_id": "conversation-fixture",
+        "title": "Fixture conversation",
+        "is_archived": false,
+        "title_matched": false,
+        "updated_at": 1770000002124,
+        "hits": [
+          {
+            "node_id": "user-left",
+            "role": "user",
+            "created_at": 1770000002123,
+            "snippet": "LEFT_BRANCH_SENTINEL"
+          }
+        ]
+      },
+      {
+        "conversation_id": "conversation-archived",
+        "title": "Archived fixture",
+        "is_archived": true,
+        "title_matched": true,
+        "updated_at": 1760000000000,
+        "hits": []
+      }
+    ],
     "write_export_file": {
       "bytes_written": 60
     }
@@ -351,6 +380,15 @@
       "title": "Fixture conversation",
       "root_node_id": "root"
     },
+    "search_conversations": [
+      {
+        "conversation_id": "conversation-fixture",
+        "title": "Fixture conversation",
+        "is_archived": false,
+        "updated_at": 1770000002124,
+        "hits": []
+      }
+    ],
     "load_conversation_tree": {
       "conversation": {
         "id": "conversation-fixture",

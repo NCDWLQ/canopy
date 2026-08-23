@@ -14,6 +14,12 @@ import { AssistantMarkdown } from "./AssistantMarkdown"
 import { MessageBubble } from "./MessageBubble"
 import { ThinkingBlock } from "./ThinkingBlock"
 import type { PathMessageView } from "../types"
+import {
+  applySearchHighlight,
+  clearSearchHighlight,
+  findTextMatchRanges,
+} from "../highlightMatches"
+import { HighlightedText } from "./HighlightedText"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { useTranslation } from "@/lib/i18n"
@@ -35,6 +41,9 @@ export type MessageNodeProps = {
   onEditAsBranch: (nodeId: string, content: string) => void
   generationAction?: UserGenerationAction
   assistantRegenerationAction?: AssistantRegenerationAction
+  // Present only on the search-revealed message; drives match highlighting.
+  highlightQuery?: string
+  scrollContainerRef?: React.RefObject<HTMLElement | null>
   /** Present only on assistant messages; undefined hides the export button. */
   onExportMessage?: (nodeId: string) => void
   /** True while this conversation is generating (streaming content is not durable yet). */
@@ -49,6 +58,8 @@ export function MessageNode({
   onEditAsBranch,
   generationAction,
   assistantRegenerationAction,
+  highlightQuery,
+  scrollContainerRef,
   onExportMessage,
   exportDisabled = false,
 }: MessageNodeProps) {
@@ -61,6 +72,82 @@ export function MessageNode({
   const editInputRef = React.useRef<HTMLTextAreaElement>(null)
   const branchInputRef = React.useRef<HTMLTextAreaElement>(null)
   const copyResetRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+  const revealArticleRef = React.useRef<HTMLElement>(null)
+  const assistantContentRef = React.useRef<HTMLDivElement>(null)
+
+  // Reveal positioning + match highlighting for the search-selected message.
+  // The scroll target is the match itself, not the article: centering a
+  // message taller than the viewport can leave the match off-screen. Plain
+  // text roles scroll to their inline <mark>; assistant content renders
+  // through the markdown pipeline, so the CSS Custom Highlight API marks the
+  // first-occurrence match on the already-rendered article (no-op in jsdom
+  // or engines without the API). Center the assistant's exact DOM Range
+  // geometrically because a containing paragraph may itself exceed the
+  // viewport; fall back to that containing element when range geometry or
+  // element scrolling is unavailable.
+  React.useEffect(() => {
+    if (highlightQuery === undefined) return
+    const article = revealArticleRef.current
+    const matchRoot =
+      message.role === "assistant" ? assistantContentRef.current : article
+    if (article === null || matchRoot === null) return
+
+    const reducedMotion = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)",
+    ).matches
+    const behavior = reducedMotion ? "auto" : "smooth"
+
+    if (message.role !== "assistant") {
+      const matchTarget = article.querySelector("mark") ?? article
+      matchTarget.scrollIntoView?.({
+        block: "center",
+        inline: "nearest",
+        behavior,
+      })
+      return
+    }
+
+    const matchRange = findTextMatchRanges(matchRoot, highlightQuery)[0]
+    const scrollContainer = scrollContainerRef?.current
+    const matchRect = matchRange?.getBoundingClientRect?.()
+    const containerRect = scrollContainer?.getBoundingClientRect()
+    const hasUsableGeometry =
+      matchRect !== undefined &&
+      containerRect !== undefined &&
+      Number.isFinite(matchRect.top) &&
+      Number.isFinite(matchRect.height) &&
+      Number.isFinite(containerRect.top) &&
+      Number.isFinite(containerRect.height) &&
+      containerRect.height > 0 &&
+      (matchRect.width > 0 || matchRect.height > 0)
+    if (
+      matchRange !== undefined &&
+      scrollContainer !== null &&
+      scrollContainer !== undefined &&
+      typeof scrollContainer.scrollBy === "function" &&
+      hasUsableGeometry
+    ) {
+      scrollContainer.scrollBy({
+        top:
+          matchRect.top -
+          containerRect.top -
+          (containerRect.height - matchRect.height) / 2,
+        behavior,
+      })
+    } else {
+      const fallbackTarget = matchRange?.startContainer.parentElement ?? article
+      fallbackTarget.scrollIntoView?.({
+        block: "center",
+        inline: "nearest",
+        behavior,
+      })
+    }
+
+    applySearchHighlight(matchRoot, highlightQuery)
+    return () => {
+      clearSearchHighlight()
+    }
+  }, [highlightQuery, message.content, message.role, scrollContainerRef])
 
   React.useEffect(() => {
     if (isEditing) {
@@ -140,6 +227,8 @@ export function MessageNode({
   return (
     <MessageBubble
       role={message.role}
+      nodeId={message.id}
+      articleRef={revealArticleRef}
       footer={
         isEditing ? (
           <div className="flex justify-end gap-2 mt-2">
@@ -311,11 +400,21 @@ export function MessageNode({
           {message.thinking !== undefined && (
             <ThinkingBlock thinking={message.thinking} streaming={false} />
           )}
-          <AssistantMarkdown content={message.content} />
+          <div ref={assistantContentRef}>
+            <AssistantMarkdown content={message.content} />
+          </div>
         </>
       ) : (
         <div className="whitespace-pre-wrap break-words text-sm text-foreground">
-          {message.content}
+          {highlightQuery === undefined ? (
+            message.content
+          ) : (
+            <HighlightedText
+              text={message.content}
+              query={highlightQuery}
+              firstOnly
+            />
+          )}
         </div>
       )}
     </MessageBubble>

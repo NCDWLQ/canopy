@@ -43,7 +43,7 @@ class WireExportWriteError extends Error {
 }
 
 describe("conversation Tauri contract", () => {
-  it("uses the shared exact command list and maps all ten request shapes", async () => {
+  it("uses the shared exact command list and maps all eleven request shapes", async () => {
     expect(Object.values(CONVERSATION_COMMANDS)).toEqual(fixture.command_names)
     const transport = resolvingTransport({
       create_conversation: fixture.successes.conversation_tree,
@@ -55,6 +55,7 @@ describe("conversation Tauri contract", () => {
       load_active_path: fixture.successes.active_path,
       archive_conversation: fixture.successes.archived_conversation,
       set_conversation_provider: fixture.successes.set_conversation_provider,
+      search_conversations: fixture.successes.search_results,
       write_export_file: fixture.successes.write_export_file,
     })
     const client = createConversationClient(transport)
@@ -100,6 +101,9 @@ describe("conversation Tauri contract", () => {
       reasoningEffort: fixture.requests.set_conversation_provider
         .reasoning_effort as "low" | "medium" | "high",
     })
+    await client.searchConversations(
+      fixture.requests.search_conversations.query,
+    )
     await client.writeExportFile({
       path: fixture.requests.write_export_file.path,
       content: fixture.requests.write_export_file.content,
@@ -300,6 +304,15 @@ describe("conversation Tauri contract", () => {
       pathClient.loadActivePath("conversation-fixture", "user-right"),
     ).rejects.toMatchObject({ code: "internal", retryable: false })
 
+    const searchClient = createConversationClient(
+      resolvingTransport({
+        search_conversations: malformedCommands.search_conversations,
+      }),
+    )
+    await expect(
+      searchClient.searchConversations("branch"),
+    ).rejects.toMatchObject({ code: "internal", retryable: false })
+
     const exportClient = createConversationClient(
       resolvingTransport({
         write_export_file: malformedCommands.write_export_file,
@@ -311,6 +324,91 @@ describe("conversation Tauri contract", () => {
         content: "# Fixture conversation",
       }),
     ).rejects.toMatchObject({ code: "internal", retryable: false })
+  })
+
+  it("projects search results and validates the query locally", async () => {
+    const client = createConversationClient(
+      resolvingTransport({
+        search_conversations: fixture.successes.search_results,
+      }),
+    )
+    await expect(client.searchConversations("branch")).resolves.toEqual([
+      {
+        conversationId: "conversation-fixture",
+        title: "Fixture conversation",
+        isArchived: false,
+        titleMatched: false,
+        updatedAt: 1770000002124,
+        hits: [
+          {
+            nodeId: "user-left",
+            role: "user",
+            createdAt: 1770000002123,
+            snippet: "LEFT_BRANCH_SENTINEL",
+          },
+        ],
+      },
+      {
+        conversationId: "conversation-archived",
+        title: "Archived fixture",
+        isArchived: true,
+        titleMatched: true,
+        updatedAt: 1760000000000,
+        hits: [],
+      },
+    ])
+
+    const blank = createConversationClient(
+      resolvingTransport({ search_conversations: [] }),
+    )
+    await expect(blank.searchConversations("   ")).rejects.toMatchObject({
+      code: "invalid_input",
+      retryable: false,
+    })
+
+    const oversized = createConversationClient(
+      resolvingTransport({ search_conversations: [] }),
+    )
+    await expect(
+      oversized.searchConversations("词".repeat(201)),
+    ).rejects.toMatchObject({ code: "invalid_input", retryable: false })
+
+    const fixtureSearchResult = fixture.successes.search_results[0]
+    const fixtureSearchHit = fixtureSearchResult?.hits[0]
+    if (fixtureSearchResult === undefined || fixtureSearchHit === undefined) {
+      throw new Error("shared search fixture must contain one message hit")
+    }
+    const malformedSearchResponses = [
+      [fixtureSearchResult, fixtureSearchResult],
+      [
+        {
+          ...fixtureSearchResult,
+          hits: Array.from({ length: 6 }, (_, index) => ({
+            ...fixtureSearchHit,
+            node_id: `hit-${index}`,
+          })),
+        },
+      ],
+      [
+        {
+          ...fixtureSearchResult,
+          hits: [
+            {
+              ...fixtureSearchHit,
+              role: "system",
+            },
+          ],
+        },
+      ],
+    ]
+    for (const response of malformedSearchResponses) {
+      const malformed = createConversationClient(
+        resolvingTransport({ search_conversations: response }),
+      )
+      await expect(
+        malformed.searchConversations("branch"),
+      ).rejects.toMatchObject({ code: "internal", retryable: false })
+    }
   })
 
   it("rejects structurally malformed tree and path projections", async () => {

@@ -102,6 +102,9 @@ function createExportClient() {
       .mockResolvedValue(tree),
     loadActivePath: vi.fn<ConversationClient["loadActivePath"]>(),
     archiveConversation: vi.fn<ConversationClient["archiveConversation"]>(),
+    searchConversations: vi
+      .fn<ConversationClient["searchConversations"]>()
+      .mockResolvedValue([]),
     writeExportFile: vi
       .fn<ConversationClient["writeExportFile"]>()
       .mockResolvedValue({ bytesWritten: 96 }),

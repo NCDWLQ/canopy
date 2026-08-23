@@ -56,3 +56,28 @@ export type ActivePathView = {
   activeNodeId: string
   path: readonly PathMessageView[]
 }
+
+export type SearchHitView = {
+  nodeId: string
+  role: NodeRole
+  createdAt: number
+  snippet: string
+}
+
+export type ConversationSearchResultView = {
+  conversationId: string
+  title: string
+  isArchived: boolean
+  titleMatched: boolean
+  updatedAt: number
+  hits: readonly SearchHitView[]
+}
+
+// One-shot reveal request produced by picking a search result: the pane
+// switches to the hit's branch, scrolls to the message, and highlights
+// matches until the next navigation clears it.
+export type SearchReveal = {
+  conversationId: string
+  nodeId: string | null
+  query: string
+}

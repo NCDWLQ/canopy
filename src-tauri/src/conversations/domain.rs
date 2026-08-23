@@ -136,6 +136,29 @@ pub struct ConversationTree {
     pub nodes: Vec<Node>,
 }
 
+/// One message-level search hit. `snippet` is a bounded window around the
+/// first case-insensitive match, produced inside SQLite so a full (up to
+/// 1 MiB) message content never crosses the repository boundary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SearchHit {
+    pub node_id: String,
+    pub role: Role,
+    pub created_at: i64,
+    pub snippet: String,
+}
+
+/// Conversation-level search result. `hits` may be empty when only the
+/// conversation title matched.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConversationSearchResult {
+    pub conversation_id: String,
+    pub title: String,
+    pub is_archived: bool,
+    pub title_matched: bool,
+    pub updated_at: i64,
+    pub hits: Vec<SearchHit>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ValidatedPath(Vec<Node>);
 

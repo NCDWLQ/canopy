@@ -7,8 +7,9 @@ use tauri_plugin_sql::DbInstances;
 use uuid::Uuid;
 
 use super::{
-    Conversation, ConversationPersistenceService, ConversationSummary, ConversationTree,
-    NewConversation, NewNode, Node, ReasoningEffort, Role, ValidatedPath,
+    Conversation, ConversationPersistenceService, ConversationSearchResult, ConversationSummary,
+    ConversationTree, NewConversation, NewNode, Node, ReasoningEffort, Role, SearchHit,
+    ValidatedPath,
 };
 use crate::providers::domain::validate_model;
 use crate::{database::managed_sqlite_pool, error::CommandError};
@@ -29,6 +30,7 @@ pub const CONVERSATION_COMMAND_NAMES: &[&str] = &[
     "load_active_path",
     "archive_conversation",
     "set_conversation_provider",
+    "search_conversations",
     "write_export_file",
 ];
 
@@ -107,6 +109,32 @@ pub struct SetConversationProviderRequest {
     pub conversation_id: String,
     pub binding: Option<ConversationProviderBindingDto>,
     pub reasoning_effort: Option<ReasoningEffortDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct SearchConversationsRequest {
+    pub query: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct SearchHitDto {
+    pub node_id: String,
+    pub role: RoleDto,
+    pub created_at: i64,
+    pub snippet: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct ConversationSearchResultDto {
+    pub conversation_id: String,
+    pub title: String,
+    pub is_archived: bool,
+    pub title_matched: bool,
+    pub updated_at: i64,
+    pub hits: Vec<SearchHitDto>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -410,6 +438,23 @@ impl<S: IdentityTimeSource> ConversationCommandService<S> {
             .map_err(CommandError::from)
     }
 
+    pub async fn search_conversations(
+        &self,
+        request: SearchConversationsRequest,
+    ) -> Result<Vec<ConversationSearchResultDto>, CommandError> {
+        let query = validate_query(&request.query)?;
+        self.persistence
+            .search_conversations(&query)
+            .await
+            .map(|results| {
+                results
+                    .into_iter()
+                    .map(ConversationSearchResultDto::from)
+                    .collect()
+            })
+            .map_err(CommandError::from)
+    }
+
     pub async fn write_export_file(
         &self,
         request: WriteExportFileRequest,
@@ -446,6 +491,17 @@ fn validate_id(field: &'static str, id: &str) -> Result<(), CommandError> {
     } else {
         Ok(())
     }
+}
+
+fn validate_query(query: &str) -> Result<String, CommandError> {
+    let query = query.trim();
+    if query.is_empty() {
+        return Err(CommandError::invalid_input("query", "blank"));
+    }
+    if query.chars().count() > MAX_TITLE_CHARS {
+        return Err(CommandError::invalid_input("query", "too_long"));
+    }
+    Ok(query.to_owned())
 }
 
 fn validate_export_content(content: &str) -> Result<(), CommandError> {
@@ -563,6 +619,30 @@ impl From<Role> for RoleDto {
             Role::User => Self::User,
             Role::Assistant => Self::Assistant,
             Role::Tool => Self::Tool,
+        }
+    }
+}
+
+impl From<SearchHit> for SearchHitDto {
+    fn from(hit: SearchHit) -> Self {
+        Self {
+            node_id: hit.node_id,
+            role: hit.role.into(),
+            created_at: hit.created_at,
+            snippet: hit.snippet,
+        }
+    }
+}
+
+impl From<ConversationSearchResult> for ConversationSearchResultDto {
+    fn from(result: ConversationSearchResult) -> Self {
+        Self {
+            conversation_id: result.conversation_id,
+            title: result.title,
+            is_archived: result.is_archived,
+            title_matched: result.title_matched,
+            updated_at: result.updated_at,
+            hits: result.hits.into_iter().map(SearchHitDto::from).collect(),
         }
     }
 }
@@ -713,6 +793,17 @@ pub async fn set_conversation_provider(
 }
 
 #[tauri::command]
+pub async fn search_conversations(
+    request: SearchConversationsRequest,
+    instances: State<'_, DbInstances>,
+) -> Result<Vec<ConversationSearchResultDto>, CommandError> {
+    production_service(instances.inner())
+        .await?
+        .search_conversations(request)
+        .await
+}
+
+#[tauri::command]
 pub async fn write_export_file(
     request: WriteExportFileRequest,
     instances: State<'_, DbInstances>,
@@ -726,16 +817,36 @@ pub async fn write_export_file(
 #[cfg(test)]
 mod tests {
     use super::{
-        validate_content, validate_title, write_export_file_bytes, CONVERSATION_COMMAND_NAMES,
+        validate_content, validate_query, validate_title, write_export_file_bytes,
+        CONVERSATION_COMMAND_NAMES,
     };
     use crate::error::CommandErrorCode;
 
     #[test]
     fn command_names_are_frozen() {
-        assert_eq!(CONVERSATION_COMMAND_NAMES.len(), 10);
+        assert_eq!(CONVERSATION_COMMAND_NAMES.len(), 11);
         assert_eq!(CONVERSATION_COMMAND_NAMES[0], "create_conversation");
         assert_eq!(CONVERSATION_COMMAND_NAMES[8], "set_conversation_provider");
-        assert_eq!(CONVERSATION_COMMAND_NAMES[9], "write_export_file");
+        assert_eq!(CONVERSATION_COMMAND_NAMES[9], "search_conversations");
+        assert_eq!(CONVERSATION_COMMAND_NAMES[10], "write_export_file");
+    }
+
+    #[test]
+    fn search_query_is_trimmed_and_bounded() {
+        assert_eq!(validate_query("  团结  ").unwrap(), "团结");
+        let blank = validate_query(" \n\t ").unwrap_err();
+        assert_eq!(blank.code, CommandErrorCode::InvalidInput);
+        assert_eq!(
+            blank.details,
+            Some(serde_json::json!({ "field": "query", "reason": "blank" }))
+        );
+        let oversized = validate_query(&"词".repeat(201)).unwrap_err();
+        assert_eq!(oversized.code, CommandErrorCode::InvalidInput);
+        assert_eq!(
+            oversized.details,
+            Some(serde_json::json!({ "field": "query", "reason": "too_long" }))
+        );
+        assert!(validate_query(&"词".repeat(200)).is_ok());
     }
 
     #[test]

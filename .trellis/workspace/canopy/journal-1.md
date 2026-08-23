@@ -773,3 +773,24 @@ Planned and implemented full i18n support (task 08-22-i18n) in worktree canopy-i
 ### Status
 
 [OK] **Completed**
+
+
+## Session 35: Finish conversation search
+
+**Date**: 2026-08-23
+**Task**: Finish conversation search
+**Branch**: `feat/search`
+
+### Summary
+
+Hardened search matching, result limits, reveal scrolling, stale-query handling, response validation, and regression coverage; all frontend and Rust quality gates passed.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a20da0e` | (see git log) |
+
+### Status
+
+[OK] **Completed**

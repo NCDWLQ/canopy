@@ -4,8 +4,8 @@ use serde_json::Value;
 use sqlx::{sqlite::SqliteRow, Row, SqliteConnection};
 
 use super::{
-    Conversation, ConversationSummary, NewConversation, NewNode, Node, PersistenceError,
-    ReasoningEffort, Role, ValidatedPath,
+    Conversation, ConversationSearchResult, ConversationSummary, NewConversation, NewNode, Node,
+    PersistenceError, ReasoningEffort, Role, SearchHit, ValidatedPath,
 };
 
 #[derive(Debug, Default)]
@@ -237,6 +237,105 @@ impl ConversationRepository {
             })
     }
 
+    /// Substring search across conversation titles and user/assistant message
+    /// content, case-insensitive for ASCII (SQLite `lower` on both sides),
+    /// exact for other scripts. Snippets are windowed inside SQLite so full
+    /// message content never crosses the boundary.
+    pub(crate) async fn search_conversations(
+        connection: &mut SqliteConnection,
+        query: &str,
+    ) -> Result<Vec<ConversationSearchResult>, PersistenceError> {
+        let pattern = format!("%{}%", escape_like(query));
+        let conversation_rows = sqlx::query(
+            "SELECT c.id, c.title, c.is_archived, \
+                    MAX(n.created_at) AS updated_at, \
+                    (lower(c.title) LIKE lower(?1) ESCAPE '\\') AS title_matched \
+             FROM conversations AS c \
+             JOIN nodes AS n ON n.conversation_id = c.id \
+             WHERE EXISTS ( \
+               SELECT 1 FROM nodes AS m \
+               WHERE m.conversation_id = c.id \
+                 AND m.role IN ('user', 'assistant') \
+                 AND lower(m.content) LIKE lower(?1) ESCAPE '\\' \
+             ) OR lower(c.title) LIKE lower(?1) ESCAPE '\\' \
+             GROUP BY c.id, c.title, c.is_archived \
+             ORDER BY updated_at DESC, c.id ASC \
+             LIMIT 50",
+        )
+        .bind(&pattern)
+        .fetch_all(&mut *connection)
+        .await?;
+
+        let mut results: Vec<ConversationSearchResult> =
+            Vec::with_capacity(conversation_rows.len());
+        let mut hits_by_conversation: HashSet<String> = HashSet::new();
+        for row in conversation_rows {
+            let result = decode_conversation_search_result(row)?;
+            hits_by_conversation.insert(result.conversation_id.clone());
+            results.push(result);
+        }
+
+        if results.is_empty() {
+            return Ok(results);
+        }
+        let selected_conversation_ids = Value::Array(
+            results
+                .iter()
+                .map(|result| Value::String(result.conversation_id.clone()))
+                .collect(),
+        )
+        .to_string();
+
+        let hit_rows = sqlx::query(
+            "WITH ranked_hits AS ( \
+               SELECT n.conversation_id AS conversation_id, n.id AS node_id, n.role AS role, \
+                      n.created_at AS created_at, \
+                      substr(n.content, max(1, instr(lower(n.content), lower(?1)) - 30), \
+                             length(?1) + 90) AS snippet, \
+                      ROW_NUMBER() OVER ( \
+                        PARTITION BY n.conversation_id \
+                        ORDER BY n.created_at ASC, n.id ASC \
+                      ) AS hit_rank \
+               FROM nodes AS n \
+               WHERE n.role IN ('user', 'assistant') \
+                 AND lower(n.content) LIKE lower(?2) ESCAPE '\\' \
+                 AND n.conversation_id IN ( \
+                   SELECT value FROM json_each(?3) \
+                 ) \
+             ) \
+             SELECT conversation_id, node_id, role, created_at, snippet \
+             FROM ranked_hits \
+             WHERE hit_rank <= 5 \
+             ORDER BY conversation_id ASC, created_at ASC, node_id ASC",
+        )
+        .bind(query)
+        .bind(&pattern)
+        .bind(selected_conversation_ids)
+        .fetch_all(&mut *connection)
+        .await?;
+
+        for row in hit_rows {
+            let conversation_id: String = row.try_get("conversation_id")?;
+            // Keep the conversation order from the first query; per-conversation
+            // hits stay in (created_at, id) order and are capped at five.
+            if !hits_by_conversation.contains(&conversation_id) {
+                continue;
+            }
+            let Some(result) = results
+                .iter_mut()
+                .find(|result| result.conversation_id == conversation_id)
+            else {
+                continue;
+            };
+            if result.hits.len() >= 5 {
+                continue;
+            }
+            result.hits.push(decode_search_hit(row)?);
+        }
+
+        Ok(results)
+    }
+
     pub(crate) async fn provider_exists(
         connection: &mut SqliteConnection,
         provider_id: &str,
@@ -281,6 +380,47 @@ fn canonical_json(value: &Value) -> Result<String, PersistenceError> {
     serde_json::to_string(value).map_err(|_| PersistenceError::InvalidInput {
         operation: "encode_metadata",
         source: None,
+    })
+}
+
+/// Escapes LIKE wildcards so the query matches them as literal characters.
+fn escape_like(query: &str) -> String {
+    let mut escaped = String::with_capacity(query.len());
+    for character in query.chars() {
+        if matches!(character, '%' | '_' | '\\') {
+            escaped.push('\\');
+        }
+        escaped.push(character);
+    }
+    escaped
+}
+
+fn flatten_snippet(snippet: String) -> String {
+    snippet.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn decode_conversation_search_result(
+    row: SqliteRow,
+) -> Result<ConversationSearchResult, PersistenceError> {
+    Ok(ConversationSearchResult {
+        conversation_id: row.try_get("id")?,
+        title: row.try_get("title")?,
+        is_archived: decode_boolean(&row, "is_archived")?,
+        title_matched: decode_boolean(&row, "title_matched")?,
+        updated_at: row.try_get("updated_at")?,
+        hits: Vec::new(),
+    })
+}
+
+fn decode_search_hit(row: SqliteRow) -> Result<SearchHit, PersistenceError> {
+    let role: String = row.try_get("role")?;
+    let snippet: String = row.try_get("snippet")?;
+    Ok(SearchHit {
+        node_id: row.try_get("node_id")?,
+        role: Role::try_from(role.as_str())
+            .map_err(|_| PersistenceError::InvalidStoredData { field: "role" })?,
+        created_at: row.try_get("created_at")?,
+        snippet: flatten_snippet(snippet),
     })
 }
 

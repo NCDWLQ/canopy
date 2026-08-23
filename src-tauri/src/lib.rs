@@ -19,6 +19,7 @@ fn register_conversation_commands<R: tauri::Runtime>(
         conversations::commands::load_active_path,
         conversations::commands::archive_conversation,
         conversations::commands::set_conversation_provider,
+        conversations::commands::search_conversations,
         conversations::commands::write_export_file,
     ])
 }
@@ -34,6 +35,7 @@ fn register_commands<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Bu
         conversations::commands::load_active_path,
         conversations::commands::archive_conversation,
         conversations::commands::set_conversation_provider,
+        conversations::commands::search_conversations,
         conversations::commands::write_export_file,
         providers::commands::list_providers,
         providers::commands::save_provider,
@@ -149,6 +151,18 @@ mod tests {
             (
                 "archive_conversation",
                 json!({ "request": { "conversation_id": "conversation" } }),
+            ),
+            (
+                "set_conversation_provider",
+                json!({ "request": {
+                    "conversation_id": "conversation",
+                    "binding": null,
+                    "reasoning_effort": null
+                } }),
+            ),
+            (
+                "search_conversations",
+                json!({ "request": { "query": "content" } }),
             ),
             (
                 "write_export_file",
