@@ -1,5 +1,6 @@
 import { Channel } from "@tauri-apps/api/core"
 
+import { t, type LocalePreference } from "@/lib/i18n"
 import type {
   GenerationEventView,
   GenerationTerminalView,
@@ -40,6 +41,8 @@ import {
   setActiveProviderResultSchema,
   setAutoGenerateTitleRequestSchema,
   setAutoGenerateTitleResultSchema,
+  setLanguageRequestSchema,
+  setLanguageResultSchema,
   setTitleModelBindingRequestSchema,
   setTitleModelBindingResultSchema,
   type GenerationEventDto,
@@ -56,6 +59,7 @@ export const PROVIDER_COMMANDS = {
   setActiveProvider: "set_active_provider",
   setAutoGenerateTitle: "set_auto_generate_title",
   setTitleModelBinding: "set_title_model_binding",
+  setLanguage: "set_language",
   revealProviderApiKey: "reveal_provider_api_key",
   listProviderModels: "list_provider_models",
   generateFromActivePath: "generate_from_active_path",
@@ -189,6 +193,17 @@ export function createProviderClient(
                 providerId: value.binding.provider_id,
                 model: value.binding.model,
               },
+      )
+    },
+
+    async setLanguage(language: LocalePreference): Promise<LocalePreference> {
+      return providerCall(
+        transport,
+        PROVIDER_COMMANDS.setLanguage,
+        setLanguageRequestSchema,
+        { language },
+        setLanguageResultSchema,
+        (value) => value.language,
       )
     },
 
@@ -471,6 +486,7 @@ function mapListProviders(dto: ListProvidersResultDto): ListProvidersView {
             providerId: dto.title_model_binding.provider_id,
             model: dto.title_model_binding.model,
           },
+    language: dto.language,
   }
 }
 
@@ -530,10 +546,12 @@ function mapGenerationTerminal(
   }
 }
 
+// Local fallback error; display sites render it through
+// commandErrorMessage(code), the message text serves wire/debug inspection.
 function invalidInputError(): ConversationCommandError {
   return new ConversationCommandError({
     code: "invalid_input",
-    message: "请求包含无效输入。",
+    message: t("errors.invalidInput"),
     retryable: false,
   })
 }

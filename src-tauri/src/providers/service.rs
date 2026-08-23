@@ -6,12 +6,12 @@ use sqlx::SqlitePool;
 
 use super::{
     domain::{
-        validate_model, validate_models, validate_name, ApiKeyAction, Provider, ProviderInput,
-        RedactedProvider, TitleModelBinding, ValidatedEndpoint,
+        validate_model, validate_models, validate_name, ApiKeyAction, LanguagePreference, Provider,
+        ProviderInput, RedactedProvider, TitleModelBinding, ValidatedEndpoint,
     },
     repository::{
         CredentialOperation, CredentialOperationKind, ProviderRepository,
-        ACTIVE_PROVIDER_SETTING_KEY, AUTO_GENERATE_TITLE_SETTING_KEY,
+        ACTIVE_PROVIDER_SETTING_KEY, AUTO_GENERATE_TITLE_SETTING_KEY, LANGUAGE_SETTING_KEY,
         TITLE_MODEL_BINDING_SETTING_KEY,
     },
     CredentialStore, ProviderError,
@@ -98,6 +98,32 @@ impl ProviderService {
         let binding = read_title_model_binding(&mut transaction).await?;
         transaction.commit().await?;
         Ok(binding)
+    }
+
+    /// Reads the persisted UI language preference. An absent key means
+    /// `System` (follow the OS locale), matching the auto-title default.
+    pub async fn get_language(&self) -> Result<LanguagePreference, ProviderError> {
+        let _guard = self.operation_lock.lock().await;
+        let mut transaction = self.pool.begin().await?;
+        let language = read_language(&mut transaction).await?;
+        transaction.commit().await?;
+        Ok(language)
+    }
+
+    pub async fn set_language(
+        &self,
+        language: LanguagePreference,
+    ) -> Result<LanguagePreference, ProviderError> {
+        let _guard = self.operation_lock.lock().await;
+        let mut transaction = self.pool.begin().await?;
+        ProviderRepository::set_setting(
+            &mut transaction,
+            LANGUAGE_SETTING_KEY,
+            language.as_setting_text(),
+        )
+        .await?;
+        transaction.commit().await?;
+        Ok(language)
     }
 
     pub async fn set_title_model_binding(
@@ -607,6 +633,18 @@ async fn read_title_model_binding(
         .await?
         .map(|value| serde_json::from_str(&value).map_err(|_| ProviderError::Protocol))
         .transpose()
+}
+
+async fn read_language(
+    connection: &mut sqlx::SqliteConnection,
+) -> Result<LanguagePreference, ProviderError> {
+    match ProviderRepository::get_setting(connection, LANGUAGE_SETTING_KEY)
+        .await?
+        .as_deref()
+    {
+        None => Ok(LanguagePreference::System),
+        Some(value) => LanguagePreference::from_setting_text(value),
+    }
 }
 
 async fn clear_title_binding_for_provider(

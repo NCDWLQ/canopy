@@ -9,8 +9,8 @@ use canopy_lib::conversations::{
     commands::ConversationDto, ConversationPersistenceService, NewConversation, NewNode, Role,
 };
 use canopy_lib::providers::{
-    ApiKeyAction, CredentialStore, Protocol, ProviderError, ProviderInput, ProviderService,
-    RedactedProvider, TitleModelBinding,
+    ApiKeyAction, CredentialStore, LanguagePreference, Protocol, ProviderError, ProviderInput,
+    ProviderService, RedactedProvider, TitleModelBinding,
 };
 use secrecy::{ExposeSecret, SecretString};
 use serde_json::json;
@@ -92,6 +92,61 @@ fn assert_duplicate_name(result: Result<RedactedProvider, ProviderError>) {
             reason: "duplicate",
         })
     ));
+}
+
+#[test]
+fn language_preference_settings_round_trip_through_the_settings_kv() {
+    run_async(async {
+        let pool = migrated_pool().await;
+        let service = ProviderService::new(pool.clone(), Arc::new(FakeCredentialStore::default()));
+
+        // A missing key means "system": the UI follows the OS locale.
+        assert_eq!(
+            service.get_language().await.unwrap(),
+            LanguagePreference::System
+        );
+
+        // Every stored preference round-trips through the settings kv.
+        assert_eq!(
+            service
+                .set_language(LanguagePreference::ZhCn)
+                .await
+                .unwrap(),
+            LanguagePreference::ZhCn
+        );
+        assert_eq!(
+            service.get_language().await.unwrap(),
+            LanguagePreference::ZhCn
+        );
+        let stored: Option<String> =
+            sqlx::query_scalar("SELECT value FROM app_settings WHERE key = 'language'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(stored.as_deref(), Some("zh-CN"));
+        assert_eq!(
+            service.set_language(LanguagePreference::En).await.unwrap(),
+            LanguagePreference::En
+        );
+        assert_eq!(
+            service
+                .set_language(LanguagePreference::System)
+                .await
+                .unwrap(),
+            LanguagePreference::System
+        );
+        assert_eq!(
+            service.get_language().await.unwrap(),
+            LanguagePreference::System
+        );
+
+        // Dirty stored values fail closed instead of silently resetting.
+        sqlx::query("UPDATE app_settings SET value = 'klingon' WHERE key = 'language'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert!(service.get_language().await.is_err());
+    });
 }
 
 #[test]

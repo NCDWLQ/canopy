@@ -15,8 +15,8 @@ use crate::{
 use super::model_list::{list_models, ModelSummary};
 use super::{
     generation::{prepare_generation, GenerationOutcome, GenerationStage},
-    ApiKeyAction, GenerationRuntime, NativeCredentialStore, Protocol, ProviderError, ProviderInput,
-    ProviderService, RedactedProvider, TitleModelBinding,
+    ApiKeyAction, GenerationRuntime, LanguagePreference, NativeCredentialStore, Protocol,
+    ProviderError, ProviderInput, ProviderService, RedactedProvider, TitleModelBinding,
 };
 
 pub const PROVIDER_COMMAND_NAMES: &[&str] = &[
@@ -26,6 +26,7 @@ pub const PROVIDER_COMMAND_NAMES: &[&str] = &[
     "set_active_provider",
     "set_auto_generate_title",
     "set_title_model_binding",
+    "set_language",
     "reveal_provider_api_key",
     "list_provider_models",
     "generate_from_active_path",
@@ -155,6 +156,7 @@ pub struct ListProvidersResult {
     pub active_provider_id: Option<String>,
     pub auto_generate_title: bool,
     pub title_model_binding: Option<TitleModelBindingDto>,
+    pub language: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -204,6 +206,18 @@ pub struct SetTitleModelBindingRequest {
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct SetTitleModelBindingResult {
     pub binding: Option<TitleModelBindingDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct SetLanguageRequest {
+    pub language: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct SetLanguageResult {
+    pub language: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -325,11 +339,13 @@ pub async fn list_providers(
         .get_title_model_binding()
         .await
         .map_err(CommandError::from)?;
+    let language = service.get_language().await.map_err(CommandError::from)?;
     Ok(ListProvidersResult {
         providers: providers.into_iter().map(ProviderDto::from).collect(),
         active_provider_id,
         auto_generate_title,
         title_model_binding: title_model_binding.map(Into::into),
+        language: language.as_setting_text().to_owned(),
     })
 }
 
@@ -364,6 +380,25 @@ pub async fn set_title_model_binding(
         .await
         .map(|binding| SetTitleModelBindingResult {
             binding: binding.map(Into::into),
+        })
+        .map_err(CommandError::from)
+}
+
+#[tauri::command]
+pub async fn set_language(
+    request: SetLanguageRequest,
+    instances: State<'_, DbInstances>,
+) -> Result<SetLanguageResult, CommandError> {
+    let language = LanguagePreference::parse(&request.language)
+        .ok_or_else(|| CommandError::invalid_input("language", "invalid_language"))?;
+    let pool = managed_sqlite_pool(instances.inner())
+        .await
+        .map_err(CommandError::from)?;
+    production_service(pool)
+        .set_language(language)
+        .await
+        .map(|language| SetLanguageResult {
+            language: language.as_setting_text().to_owned(),
         })
         .map_err(CommandError::from)
 }

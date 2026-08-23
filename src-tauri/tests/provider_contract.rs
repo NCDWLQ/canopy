@@ -3,7 +3,8 @@ use canopy_lib::providers::commands::{
     GenerateFromActivePathRequest, GenerationEventDto, GenerationTerminalDto,
     ListProviderModelsRequest, ListProvidersRequest, ListProvidersResult, ProviderDto,
     RevealProviderApiKeyRequest, RevealProviderApiKeyResult, SaveProviderRequest,
-    SetActiveProviderRequest, SetActiveProviderResult, PROVIDER_COMMAND_NAMES,
+    SetActiveProviderRequest, SetActiveProviderResult, SetLanguageRequest, SetLanguageResult,
+    PROVIDER_COMMAND_NAMES,
 };
 use serde_json::Value;
 
@@ -28,6 +29,7 @@ fn shared_provider_fixture_round_trips_rust_wire_types() {
     request!("save_provider", SaveProviderRequest);
     request!("delete_provider", DeleteProviderRequest);
     request!("set_active_provider", SetActiveProviderRequest);
+    request!("set_language", SetLanguageRequest);
     request!("reveal_provider_api_key", RevealProviderApiKeyRequest);
     request!("list_provider_models", ListProviderModelsRequest);
     request!("generate_from_active_path", GenerateFromActivePathRequest);
@@ -56,6 +58,12 @@ fn shared_provider_fixture_round_trips_rust_wire_types() {
     assert_eq!(
         serde_json::to_value(active).unwrap(),
         fixture["successes"]["active"]
+    );
+    let language: SetLanguageResult =
+        serde_json::from_value(fixture["successes"]["set_language"].clone()).unwrap();
+    assert_eq!(
+        serde_json::to_value(language).unwrap(),
+        fixture["successes"]["set_language"]
     );
     let revealed: RevealProviderApiKeyResult =
         serde_json::from_value(fixture["successes"]["reveal_api_key"].clone()).unwrap();

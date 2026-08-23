@@ -8,6 +8,10 @@ import {
   createProviderClient,
   type ChannelFactory,
 } from "./index"
+import {
+  listProvidersResultSchema,
+  setLanguageRequestSchema,
+} from "./provider-schemas"
 import type { InvokeTransport } from "./client"
 
 type RecordedCall = { command: string; args: Record<string, unknown> }
@@ -56,6 +60,7 @@ describe("provider Tauri contract", () => {
           model: "fixture-model",
         },
       },
+      set_language: fixture.successes.set_language,
       reveal_provider_api_key: fixture.successes.reveal_api_key,
       list_provider_models: { models: [{ id: "fixture-model" }] },
       cancel_generation: fixture.successes.cancel,
@@ -74,6 +79,7 @@ describe("provider Tauri contract", () => {
       activeProviderId: "provider-fixture",
       autoGenerateTitle: true,
       titleModelBinding: null,
+      language: "system",
     })
     await expect(
       client.saveProvider({
@@ -99,6 +105,7 @@ describe("provider Tauri contract", () => {
       providerId: "provider-fixture",
       model: "fixture-model",
     })
+    await expect(client.setLanguage("zh-CN")).resolves.toBe("zh-CN")
     await expect(client.revealProviderApiKey("provider-fixture")).resolves.toBe(
       "fixture-revealed-key-sentinel",
     )
@@ -118,6 +125,50 @@ describe("provider Tauri contract", () => {
         api_key: { action: "replace", value: "TRANSIENT_TEST_VALUE" },
       },
     })
+    expect(transport.calls[6]?.args).toEqual({
+      request: { language: "zh-CN" },
+    })
+  })
+
+  it("sends set_language as a single-field request and validates the closed language set", async () => {
+    const transport = recordingTransport({
+      set_language: fixture.successes.set_language,
+    })
+    const client = createProviderClient(transport, new FakeChannelFactory())
+
+    await expect(client.setLanguage("zh-CN")).resolves.toBe("zh-CN")
+    expect(transport.calls[0]?.args).toEqual({ request: { language: "zh-CN" } })
+    // The request schema rejects unknown locales, extra fields, and a
+    // missing language before any invoke crosses the bridge.
+    expect(setLanguageRequestSchema.safeParse({ language: "fr" }).success).toBe(
+      false,
+    )
+    expect(setLanguageRequestSchema.safeParse({ language: "EN" }).success).toBe(
+      false,
+    )
+    expect(
+      setLanguageRequestSchema.safeParse({ language: "en", extra: true })
+        .success,
+    ).toBe(false)
+    expect(setLanguageRequestSchema.safeParse({}).success).toBe(false)
+  })
+
+  it("decodes the provider list language and rejects responses without a valid one", () => {
+    expect(
+      listProvidersResultSchema.safeParse(fixture.successes.providers).success,
+    ).toBe(true)
+    expect(
+      listProvidersResultSchema.safeParse({
+        ...fixture.successes.providers,
+        language: "fr",
+      }).success,
+    ).toBe(false)
+    expect(
+      listProvidersResultSchema.safeParse({
+        ...fixture.successes.providers,
+        language: undefined,
+      }).success,
+    ).toBe(false)
   })
 
   it("streams thinking and content with independent one-MiB budgets", async () => {
