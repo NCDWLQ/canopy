@@ -753,6 +753,15 @@ Planned and implemented full i18n support (task 08-22-i18n) in worktree canopy-i
 [OK] **Completed**
 
 
+## Session 34: Conversation rename, delete & unarchive
+
+**Date**: 2026-08-23
+**Task**: Conversation rename, delete & unarchive
+**Branch**: `feat/conversation-manage`
+
+### Summary
+
+新增 rename/delete/unarchive 三个会话 IPC 命令（契约 9→12 同组变更）；删除与取消归档采用事务内 trigger DROP/原文重建模式（nodes_reject_delete / conversations_archive_forward_only），测试守护保护完整性；侧栏行改「…」下拉菜单（重命名/归档↔取消归档/删除），重命名 Dialog+校验，删除确认框+运行中断提示，删除当前会话回空态新对话；spec 更新 guarded trigger-lifted mutations 约定与命令数同步提醒
 ## Session 34: 对话导出功能
 
 **Date**: 2026-08-23
@@ -767,6 +776,10 @@ Planned and implemented full i18n support (task 08-22-i18n) in worktree canopy-i
 
 | Hash | Message |
 |------|---------|
+| `47d3e7b` | (see git log) |
+| `83bf690` | (see git log) |
+| `9628025` | (see git log) |
+| `f9edbe4` | (see git log) |
 | `f954182` | (see git log) |
 | `4144b81` | (see git log) |
 

@@ -151,6 +151,9 @@ list_conversations() -> Result<Vec<ConversationSummary>, PersistenceError>
 load_conversation_tree(&str) -> Result<ConversationTree, PersistenceError>
 load_active_path(&str, &str) -> Result<ValidatedPath, PersistenceError>
 archive_conversation(&str) -> Result<Conversation, PersistenceError>
+unarchive_conversation(&str) -> Result<Conversation, PersistenceError>
+rename_conversation(&str, &str) -> Result<Conversation, PersistenceError>
+delete_conversation(&str) -> Result<(), PersistenceError>
 ```
 
 Persistence-service inputs accept explicit opaque IDs and epoch-millisecond
@@ -372,9 +375,12 @@ express alone:
   `nodes.is_archived` value is always zero after migration v3 and all future
   attempts to set it are rejected.
 - Archive belongs only to the conversation. Archiving is idempotent, does not
-  rewrite nodes, keeps tree/path reads available, and has no restore operation.
-- Nodes cannot be deleted in application data. Repositories must also never use
-  `INSERT OR REPLACE` for nodes.
+  rewrite nodes, and keeps tree/path reads available. Unarchiving is the
+  symmetric guarded operation (see "Guarded trigger-lifted mutations" below).
+- Nodes cannot be deleted individually. The only delete path is
+  whole-conversation `delete_conversation`, which removes nodes and the
+  conversation row under the guarded pattern below. Repositories must also
+  never use `INSERT OR REPLACE` for nodes.
 - Conversation identity and `root_node_id` are immutable in application data.
   If a repair migration ever needs to change them, it must explicitly replace
   the trigger and revalidate root ownership, null parentage, and the one-root
@@ -382,6 +388,27 @@ express alone:
 
 Use null-safe SQLite comparisons (`OLD.value IS NOT NEW.value`) in immutable
 field triggers. Do not rely only on repository behavior for these guarantees.
+
+### Guarded trigger-lifted mutations (delete / unarchive)
+
+Application commands that must bypass a migration trigger
+(`delete_conversation` lifts `nodes_reject_delete`; `unarchive_conversation`
+lifts `conversations_archive_forward_only` from migration `0003`) follow one
+mandatory pattern, all inside a single service transaction:
+
+1. `DROP TRIGGER IF EXISTS <trigger>`;
+2. perform the guarded mutation (`DELETE FROM nodes WHERE conversation_id`,
+   `DELETE FROM conversations`, or `UPDATE ... SET is_archived = 0`);
+3. `CREATE TRIGGER <trigger>` with the definition **copied verbatim** from the
+   owning migration;
+4. commit. Any early error return drops the transaction before commit, which
+  rolls the `DROP` back with it — the guard never stays missing.
+
+SQLite DDL is transactional, so this is atomic. The verbatim-copy rule exists
+because a drifted redefinition would silently weaken the guard; persistence
+tests must therefore assert that a direct `DELETE FROM nodes` (or raw
+un-archive `UPDATE`) still ABORTs after the command succeeds, and that
+`sqlite_schema` contains exactly one copy of each guard trigger.
 
 ## Repository and Transaction Patterns
 

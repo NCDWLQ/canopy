@@ -1,0 +1,8 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "删除命令要动 nodes 表与 trigger，须遵守 DB 事务与迁移规范"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "新命令错误映射沿用 PersistenceError/CommandError 惯例与 marker 登记"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "后端测试分层与 clippy 门"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "store action 与 run 记录清理的既有模式"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Dialog/AlertDialog/DropdownMenu 组件使用规范"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "新增文案须 zh-CN/en 键集同步"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "zod schema 镜像与 View 类型惯例"}
+{"file": ".trellis/tasks/08-23-conversation-manage/research/codebase-survey.md", "reason": "全部代码事实与 file:line 锚点、改动面清单"}

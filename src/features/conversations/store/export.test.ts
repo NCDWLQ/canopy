@@ -102,6 +102,11 @@ function createExportClient() {
       .mockResolvedValue(tree),
     loadActivePath: vi.fn<ConversationClient["loadActivePath"]>(),
     archiveConversation: vi.fn<ConversationClient["archiveConversation"]>(),
+    renameConversation: vi.fn<ConversationClient["renameConversation"]>(),
+    deleteConversation: vi.fn<ConversationClient["deleteConversation"]>(),
+    unarchiveConversation: vi
+      .fn<ConversationClient["unarchiveConversation"]>()
+      .mockResolvedValue(tree.conversation),
     searchConversations: vi
       .fn<ConversationClient["searchConversations"]>()
       .mockResolvedValue([]),

@@ -18,6 +18,9 @@ fn register_conversation_commands<R: tauri::Runtime>(
         conversations::commands::load_conversation_tree,
         conversations::commands::load_active_path,
         conversations::commands::archive_conversation,
+        conversations::commands::rename_conversation,
+        conversations::commands::delete_conversation,
+        conversations::commands::unarchive_conversation,
         conversations::commands::set_conversation_provider,
         conversations::commands::search_conversations,
         conversations::commands::write_export_file,
@@ -34,6 +37,9 @@ fn register_commands<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Bu
         conversations::commands::load_conversation_tree,
         conversations::commands::load_active_path,
         conversations::commands::archive_conversation,
+        conversations::commands::rename_conversation,
+        conversations::commands::delete_conversation,
+        conversations::commands::unarchive_conversation,
         conversations::commands::set_conversation_provider,
         conversations::commands::search_conversations,
         conversations::commands::write_export_file,
@@ -150,6 +156,21 @@ mod tests {
             ),
             (
                 "archive_conversation",
+                json!({ "request": { "conversation_id": "conversation" } }),
+            ),
+            (
+                "rename_conversation",
+                json!({ "request": {
+                    "conversation_id": "conversation",
+                    "title": "Renamed title"
+                } }),
+            ),
+            (
+                "delete_conversation",
+                json!({ "request": { "conversation_id": "conversation" } }),
+            ),
+            (
+                "unarchive_conversation",
                 json!({ "request": { "conversation_id": "conversation" } }),
             ),
             (

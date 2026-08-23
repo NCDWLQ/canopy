@@ -43,7 +43,7 @@ class WireExportWriteError extends Error {
 }
 
 describe("conversation Tauri contract", () => {
-  it("uses the shared exact command list and maps all eleven request shapes", async () => {
+  it("uses the shared exact command list and maps all fourteen request shapes", async () => {
     expect(Object.values(CONVERSATION_COMMANDS)).toEqual(fixture.command_names)
     const transport = resolvingTransport({
       create_conversation: fixture.successes.conversation_tree,
@@ -54,6 +54,9 @@ describe("conversation Tauri contract", () => {
       load_conversation_tree: fixture.successes.conversation_tree,
       load_active_path: fixture.successes.active_path,
       archive_conversation: fixture.successes.archived_conversation,
+      rename_conversation: fixture.successes.renamed_conversation,
+      delete_conversation: fixture.successes.deleted_conversation,
+      unarchive_conversation: fixture.successes.unarchived_conversation,
       set_conversation_provider: fixture.successes.set_conversation_provider,
       search_conversations: fixture.successes.search_results,
       write_export_file: fixture.successes.write_export_file,
@@ -90,6 +93,16 @@ describe("conversation Tauri contract", () => {
     await client.archiveConversation(
       fixture.requests.archive_conversation.conversation_id,
     )
+    await client.renameConversation({
+      conversationId: fixture.requests.rename_conversation.conversation_id,
+      title: fixture.requests.rename_conversation.title,
+    })
+    await client.deleteConversation(
+      fixture.requests.delete_conversation.conversation_id,
+    )
+    await client.unarchiveConversation(
+      fixture.requests.unarchive_conversation.conversation_id,
+    )
     await client.setConversationProvider({
       conversationId:
         fixture.requests.set_conversation_provider.conversation_id,
@@ -118,6 +131,78 @@ describe("conversation Tauri contract", () => {
         },
       })),
     )
+  })
+
+  it("projects rename, delete, and unarchive results from the shared fixture", async () => {
+    const client = createConversationClient(
+      resolvingTransport({
+        rename_conversation: fixture.successes.renamed_conversation,
+        delete_conversation: fixture.successes.deleted_conversation,
+        unarchive_conversation: fixture.successes.unarchived_conversation,
+      }),
+    )
+
+    await expect(
+      client.renameConversation({
+        conversationId: "conversation-fixture",
+        title: "  Renamed fixture conversation  ",
+      }),
+    ).resolves.toEqual({
+      id: "conversation-fixture",
+      title: "Renamed fixture conversation",
+      rootNodeId: "root",
+      isArchived: false,
+      providerId: null,
+      model: null,
+      reasoningEffort: null,
+    })
+    await expect(
+      client.deleteConversation("conversation-fixture"),
+    ).resolves.toEqual({ conversationId: "conversation-fixture" })
+    await expect(
+      client.unarchiveConversation("conversation-fixture"),
+    ).resolves.toEqual({
+      id: "conversation-fixture",
+      title: "Fixture conversation",
+      rootNodeId: "root",
+      isArchived: false,
+      providerId: null,
+      model: null,
+      reasoningEffort: null,
+    })
+
+    const malformedClient = createConversationClient(
+      resolvingTransport({
+        rename_conversation: {
+          ...fixture.successes.renamed_conversation,
+          id: " ",
+        },
+        delete_conversation: { conversation_id: " " },
+      }),
+    )
+    await expect(
+      malformedClient.renameConversation({
+        conversationId: "conversation-fixture",
+        title: "valid",
+      }),
+    ).rejects.toMatchObject({ code: "internal", retryable: false })
+    await expect(
+      malformedClient.deleteConversation("conversation-fixture"),
+    ).rejects.toMatchObject({ code: "internal", retryable: false })
+
+    const invalidClient = createConversationClient(resolvingTransport({}))
+    await expect(
+      invalidClient.renameConversation({
+        conversationId: "conversation-fixture",
+        title: " ",
+      }),
+    ).rejects.toMatchObject({ code: "invalid_input", retryable: false })
+    await expect(
+      invalidClient.renameConversation({
+        conversationId: "conversation-fixture",
+        title: "界".repeat(201),
+      }),
+    ).rejects.toMatchObject({ code: "invalid_input", retryable: false })
   })
 
   it("validates and projects unique conversation summaries", async () => {

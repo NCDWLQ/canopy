@@ -701,6 +701,199 @@ fn conversation_archive_is_idempotent_readable_and_preserves_node_bytes() {
 }
 
 #[test]
+fn conversation_delete_removes_both_tables_and_keeps_the_delete_guard() {
+    run_async(async {
+        let pool = migrated_pool().await;
+        let service = create_branch_fixture(&pool).await;
+        service
+            .create_conversation(
+                conversation("conversation-b", "root-b"),
+                node(
+                    "root-b",
+                    None,
+                    "conversation-b",
+                    Role::System,
+                    "root b",
+                    100,
+                ),
+            )
+            .await
+            .expect("second conversation is created");
+
+        service
+            .delete_conversation("conversation-a")
+            .await
+            .expect("conversation deletes with its nodes");
+
+        let conversations: i64 =
+            sqlx::query_scalar("SELECT count(*) FROM conversations WHERE id = 'conversation-a'")
+                .fetch_one(&pool)
+                .await
+                .expect("conversation count is readable");
+        let nodes: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM nodes WHERE conversation_id = 'conversation-a'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("node count is readable");
+        assert_eq!((conversations, nodes), (0, 0));
+        let survivor: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM nodes WHERE conversation_id = 'conversation-b'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("survivor node count is readable");
+        assert_eq!(survivor, 1);
+
+        // The recreated trigger keeps direct node deletion rejected.
+        let direct_delete = sqlx::query("DELETE FROM nodes WHERE id = 'root-b'")
+            .execute(&pool)
+            .await;
+        assert!(direct_delete.is_err());
+
+        assert!(matches!(
+            service.delete_conversation("conversation-a").await,
+            Err(PersistenceError::NotFound { .. })
+        ));
+        assert!(matches!(
+            service.delete_conversation("conversation-missing").await,
+            Err(PersistenceError::NotFound { .. })
+        ));
+        let trigger_count: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM sqlite_schema \
+             WHERE type = 'trigger' AND name = 'nodes_reject_delete'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("delete guard presence is readable");
+        assert_eq!(trigger_count, 1);
+    });
+}
+
+#[test]
+fn conversation_rename_unarchive_and_delete_fail_closed_for_missing_ids() {
+    run_async(async {
+        let pool = migrated_pool().await;
+        let service = ConversationPersistenceService::new(pool.clone());
+        service
+            .create_conversation(
+                conversation("conversation-a", "root-a"),
+                node("root-a", None, "conversation-a", Role::User, "root", 1),
+            )
+            .await
+            .expect("conversation is created");
+
+        assert!(matches!(
+            service
+                .rename_conversation("conversation-missing", "New title")
+                .await,
+            Err(PersistenceError::NotFound { .. })
+        ));
+        assert!(matches!(
+            service.unarchive_conversation("conversation-missing").await,
+            Err(PersistenceError::NotFound { .. })
+        ));
+
+        let renamed = service
+            .rename_conversation("conversation-a", "Renamed title")
+            .await
+            .expect("conversation renames");
+        assert_eq!(renamed.title, "Renamed title");
+        assert!(!renamed.is_archived);
+        let stored_title: String =
+            sqlx::query_scalar("SELECT title FROM conversations WHERE id = 'conversation-a'")
+                .fetch_one(&pool)
+                .await
+                .expect("stored title is readable");
+        assert_eq!(stored_title, "Renamed title");
+
+        service
+            .delete_conversation("conversation-a")
+            .await
+            .expect("conversation deletes");
+        assert!(matches!(
+            service
+                .rename_conversation("conversation-a", "New title")
+                .await,
+            Err(PersistenceError::NotFound { .. })
+        ));
+    });
+}
+
+#[test]
+fn conversation_archive_unarchive_round_trip_is_idempotent_and_guard_preserved() {
+    run_async(async {
+        let pool = migrated_pool().await;
+        let service = create_branch_fixture(&pool).await;
+
+        service
+            .archive_conversation("conversation-a")
+            .await
+            .expect("conversation archives");
+
+        let unarchived = service
+            .unarchive_conversation("conversation-a")
+            .await
+            .expect("conversation restores");
+        assert!(!unarchived.is_archived);
+        // Idempotent: an already-active conversation returns unchanged.
+        assert!(
+            !service
+                .unarchive_conversation("conversation-a")
+                .await
+                .expect("unarchive is idempotent")
+                .is_archived
+        );
+        assert!(matches!(
+            service.unarchive_conversation("conversation-missing").await,
+            Err(PersistenceError::NotFound { .. })
+        ));
+
+        let tree = service
+            .load_conversation_tree("conversation-a")
+            .await
+            .expect("restored tree loads");
+        assert!(!tree.conversation.is_archived);
+        assert_eq!(tree.nodes.len(), 5);
+        // The restored conversation is writable again.
+        service
+            .append_node(node(
+                "post-restore-child",
+                Some("user-right"),
+                "conversation-a",
+                Role::Assistant,
+                "restored writable",
+                500,
+            ))
+            .await
+            .expect("restored conversation accepts writes");
+
+        // The recreated forward-only guard still blocks a raw restore.
+        let raw_restore =
+            sqlx::query("UPDATE conversations SET is_archived = 0 WHERE id = 'conversation-a'")
+                .execute(&pool)
+                .await;
+        assert!(raw_restore.is_err());
+        // Archiving still works after the trigger replacement.
+        assert!(
+            service
+                .archive_conversation("conversation-a")
+                .await
+                .expect("conversation re-archives")
+                .is_archived
+        );
+        let trigger_count: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM sqlite_schema \
+             WHERE type = 'trigger' AND name = 'conversations_archive_forward_only'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("archive guard presence is readable");
+        assert_eq!(trigger_count, 1);
+    });
+}
+
+#[test]
 fn sqlite_constraints_and_triggers_protect_tree_history() {
     run_async(async {
         let pool = migrated_pool().await;

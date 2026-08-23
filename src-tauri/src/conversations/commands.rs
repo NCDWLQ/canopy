@@ -29,6 +29,9 @@ pub const CONVERSATION_COMMAND_NAMES: &[&str] = &[
     "load_conversation_tree",
     "load_active_path",
     "archive_conversation",
+    "rename_conversation",
+    "delete_conversation",
+    "unarchive_conversation",
     "set_conversation_provider",
     "search_conversations",
     "write_export_file",
@@ -85,6 +88,31 @@ pub struct LoadActivePathRequest {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ArchiveConversationRequest {
+    pub conversation_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct RenameConversationRequest {
+    pub conversation_id: String,
+    pub title: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct DeleteConversationRequest {
+    pub conversation_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct UnarchiveConversationRequest {
+    pub conversation_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct DeleteConversationSuccess {
     pub conversation_id: String,
 }
 
@@ -408,6 +436,45 @@ impl<S: IdentityTimeSource> ConversationCommandService<S> {
         validate_id("conversation_id", &request.conversation_id)?;
         self.persistence
             .archive_conversation(&request.conversation_id)
+            .await
+            .map(ConversationDto::from)
+            .map_err(CommandError::from)
+    }
+
+    pub async fn rename_conversation(
+        &self,
+        request: RenameConversationRequest,
+    ) -> Result<ConversationDto, CommandError> {
+        validate_id("conversation_id", &request.conversation_id)?;
+        let title = validate_title(&request.title)?;
+        self.persistence
+            .rename_conversation(&request.conversation_id, &title)
+            .await
+            .map(ConversationDto::from)
+            .map_err(CommandError::from)
+    }
+
+    pub async fn delete_conversation(
+        &self,
+        request: DeleteConversationRequest,
+    ) -> Result<DeleteConversationSuccess, CommandError> {
+        validate_id("conversation_id", &request.conversation_id)?;
+        self.persistence
+            .delete_conversation(&request.conversation_id)
+            .await
+            .map_err(CommandError::from)?;
+        Ok(DeleteConversationSuccess {
+            conversation_id: request.conversation_id,
+        })
+    }
+
+    pub async fn unarchive_conversation(
+        &self,
+        request: UnarchiveConversationRequest,
+    ) -> Result<ConversationDto, CommandError> {
+        validate_id("conversation_id", &request.conversation_id)?;
+        self.persistence
+            .unarchive_conversation(&request.conversation_id)
             .await
             .map(ConversationDto::from)
             .map_err(CommandError::from)
@@ -782,6 +849,39 @@ pub async fn archive_conversation(
 }
 
 #[tauri::command]
+pub async fn rename_conversation(
+    request: RenameConversationRequest,
+    instances: State<'_, DbInstances>,
+) -> Result<ConversationDto, CommandError> {
+    production_service(instances.inner())
+        .await?
+        .rename_conversation(request)
+        .await
+}
+
+#[tauri::command]
+pub async fn delete_conversation(
+    request: DeleteConversationRequest,
+    instances: State<'_, DbInstances>,
+) -> Result<DeleteConversationSuccess, CommandError> {
+    production_service(instances.inner())
+        .await?
+        .delete_conversation(request)
+        .await
+}
+
+#[tauri::command]
+pub async fn unarchive_conversation(
+    request: UnarchiveConversationRequest,
+    instances: State<'_, DbInstances>,
+) -> Result<ConversationDto, CommandError> {
+    production_service(instances.inner())
+        .await?
+        .unarchive_conversation(request)
+        .await
+}
+
+#[tauri::command]
 pub async fn set_conversation_provider(
     request: SetConversationProviderRequest,
     instances: State<'_, DbInstances>,
@@ -824,11 +924,14 @@ mod tests {
 
     #[test]
     fn command_names_are_frozen() {
-        assert_eq!(CONVERSATION_COMMAND_NAMES.len(), 11);
+        assert_eq!(CONVERSATION_COMMAND_NAMES.len(), 14);
         assert_eq!(CONVERSATION_COMMAND_NAMES[0], "create_conversation");
-        assert_eq!(CONVERSATION_COMMAND_NAMES[8], "set_conversation_provider");
-        assert_eq!(CONVERSATION_COMMAND_NAMES[9], "search_conversations");
-        assert_eq!(CONVERSATION_COMMAND_NAMES[10], "write_export_file");
+        assert_eq!(CONVERSATION_COMMAND_NAMES[8], "rename_conversation");
+        assert_eq!(CONVERSATION_COMMAND_NAMES[9], "delete_conversation");
+        assert_eq!(CONVERSATION_COMMAND_NAMES[10], "unarchive_conversation");
+        assert_eq!(CONVERSATION_COMMAND_NAMES[11], "set_conversation_provider");
+        assert_eq!(CONVERSATION_COMMAND_NAMES[12], "search_conversations");
+        assert_eq!(CONVERSATION_COMMAND_NAMES[13], "write_export_file");
     }
 
     #[test]
