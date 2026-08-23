@@ -1,0 +1,28 @@
+{
+  "id": "conversation-manage",
+  "name": "conversation-manage",
+  "title": "Conversation rename, delete & unarchive",
+  "description": "会话重命名、删除与取消归档：侧栏「…」菜单统一操作入口",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "canopy",
+  "assignee": "canopy",
+  "createdAt": "2026-08-23",
+  "completedAt": "2026-08-23",
+  "branch": "feat/conversation-manage",
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "description": "会话重命名/删除/取消归档：新增三个 IPC 命令走冻结契约同组变更；删除=硬删除+确认框（事务内处理 nodes_reject_delete trigger）；取消归档与 archive 严格对称"
+  }
+}
