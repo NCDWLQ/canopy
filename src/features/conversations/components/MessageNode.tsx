@@ -15,6 +15,7 @@ import { ThinkingBlock } from "./ThinkingBlock"
 import type { PathMessageView } from "../types"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import { useTranslation } from "@/lib/i18n"
 
 export type UserGenerationAction =
   | { kind: "generate"; onSelect: () => void }
@@ -44,6 +45,7 @@ export function MessageNode({
   generationAction,
   assistantRegenerationAction,
 }: MessageNodeProps) {
+  const { t } = useTranslation()
   const [isEditing, setIsEditing] = React.useState(false)
   const [editContent, setEditContent] = React.useState(message.content)
   const [isBranching, setIsBranching] = React.useState(false)
@@ -133,7 +135,8 @@ export function MessageNode({
               size="sm"
               onClick={() => setIsEditing(false)}
             >
-              <X className="size-3.5 mr-1" aria-hidden="true" /> 取消
+              <X className="size-3.5 mr-1" aria-hidden="true" />{" "}
+              {t("common.cancel")}
             </Button>
             <Button
               size="sm"
@@ -141,7 +144,7 @@ export function MessageNode({
               disabled={!editContent.trim()}
             >
               <Check className="size-3.5 mr-1" aria-hidden="true" />{" "}
-              保存为新分支
+              {t("conversation.message.saveAsBranch")}
             </Button>
           </div>
         ) : isBranching ? (
@@ -151,14 +154,16 @@ export function MessageNode({
               size="sm"
               onClick={() => setIsBranching(false)}
             >
-              <X className="size-3.5 mr-1" aria-hidden="true" /> 取消
+              <X className="size-3.5 mr-1" aria-hidden="true" />{" "}
+              {t("common.cancel")}
             </Button>
             <Button
               size="sm"
               onClick={handleBranchSubmit}
               disabled={!branchContent.trim()}
             >
-              <Check className="size-3.5 mr-1" aria-hidden="true" /> 创建分支
+              <Check className="size-3.5 mr-1" aria-hidden="true" />{" "}
+              {t("conversation.message.createBranch")}
             </Button>
           </div>
         ) : showGenerationAction ? (
@@ -172,12 +177,12 @@ export function MessageNode({
               {generationAction.kind === "generate" ? (
                 <>
                   <Sparkles data-icon="inline-start" aria-hidden="true" />
-                  生成回复
+                  {t("conversation.message.generateReply")}
                 </>
               ) : (
                 <>
                   <Settings2 data-icon="inline-start" aria-hidden="true" />
-                  配置服务提供商以生成
+                  {t("conversation.message.configureProvider")}
                 </>
               )}
             </Button>
@@ -192,8 +197,8 @@ export function MessageNode({
                 variant="ghost"
                 size="icon"
                 className="size-7 text-muted-foreground hover:text-foreground"
-                title="重新生成"
-                aria-label="重新生成"
+                title={t("conversation.message.regenerate")}
+                aria-label={t("conversation.message.regenerate")}
                 onClick={() =>
                   regenerationAction.onSelect(
                     regenerationAction.assistantNodeId,
@@ -208,8 +213,8 @@ export function MessageNode({
                 variant="ghost"
                 size="icon"
                 className="size-7 text-muted-foreground hover:text-foreground"
-                title="编辑为新分支"
-                aria-label="编辑为新分支"
+                title={t("conversation.message.editAsBranch")}
+                aria-label={t("conversation.message.editAsBranch")}
                 onClick={() => {
                   setEditContent(message.content)
                   setIsEditing(true)
@@ -223,8 +228,8 @@ export function MessageNode({
                 variant="ghost"
                 size="icon"
                 className="size-7 text-muted-foreground hover:text-foreground"
-                title="从此处创建分支"
-                aria-label="从此处创建分支"
+                title={t("conversation.message.branchFromHere")}
+                aria-label={t("conversation.message.branchFromHere")}
                 onClick={() => setIsBranching(true)}
               >
                 <GitBranch className="size-3.5" aria-hidden="true" />
@@ -235,8 +240,16 @@ export function MessageNode({
                 variant="ghost"
                 size="icon"
                 className="size-7 text-muted-foreground hover:text-foreground"
-                title={isCopied ? "已复制" : "复制"}
-                aria-label={isCopied ? "已复制" : "复制"}
+                title={
+                  isCopied
+                    ? t("conversation.message.copied")
+                    : t("conversation.message.copy")
+                }
+                aria-label={
+                  isCopied
+                    ? t("conversation.message.copied")
+                    : t("conversation.message.copy")
+                }
                 onClick={handleCopy}
               >
                 {isCopied ? (
@@ -256,16 +269,16 @@ export function MessageNode({
           className="w-full resize-none rounded-none border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0"
           value={editContent}
           onChange={(e) => setEditContent(e.target.value)}
-          aria-label="编辑消息内容"
+          aria-label={t("conversation.message.editContent")}
         />
       ) : isBranching && canBranch ? (
         <Textarea
           ref={branchInputRef}
           className="w-full resize-none rounded-none border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0"
-          placeholder="输入分支消息…"
+          placeholder={t("conversation.message.branchPlaceholder")}
           value={branchContent}
           onChange={(e) => setBranchContent(e.target.value)}
-          aria-label="分支消息内容"
+          aria-label={t("conversation.message.branchContent")}
         />
       ) : message.role === "assistant" ? (
         <>

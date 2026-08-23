@@ -2,6 +2,7 @@ import * as React from "react"
 import { ChevronDown, ChevronRight, MessageSquare } from "lucide-react"
 
 import type { TreeNodeView } from "../types"
+import { useTranslation } from "@/lib/i18n"
 
 export type OutlineTreeProps = {
   rootNodeId: string
@@ -94,6 +95,7 @@ export function OutlineTree({
   onToggle,
   onSelect,
 }: OutlineTreeProps) {
+  const { t } = useTranslation()
   const rows = projectVisibleRows(rootNodeId, nodesById, expandedIds)
   const [focusedNodeId, setFocusedNodeId] = React.useState(activeNodeId)
   const itemRefs = React.useRef(new Map<string, HTMLDivElement>())
@@ -101,7 +103,7 @@ export function OutlineTree({
   if (rows === null) {
     return (
       <div className="px-2.5 py-3 text-sm text-destructive" role="alert">
-        无法安全显示会话树。
+        {t("errors.unsafeTreeProjection")}
       </div>
     )
   }
@@ -179,7 +181,7 @@ export function OutlineTree({
     <div
       className="flex w-full flex-col gap-1 py-1"
       role="tree"
-      aria-label="会话树"
+      aria-label={t("conversation.outline.tree")}
     >
       {rows.map((row, rowIndex) => {
         const { node } = row
@@ -223,8 +225,13 @@ export function OutlineTree({
               tabIndex={-1}
               aria-label={
                 hasChildren
-                  ? `${isExpanded ? "收起" : "展开"} ${node.preview || "消息"}`
-                  : "该消息暂无回复"
+                  ? t("conversation.outline.togglePreview", {
+                      expanded: isExpanded,
+                      label:
+                        node.preview ||
+                        t("conversation.outline.messageFallback"),
+                    })
+                  : t("conversation.outline.noReplies")
               }
             >
               {hasChildren ? (
@@ -239,7 +246,9 @@ export function OutlineTree({
             </button>
             <span className="flex-1 truncate" title={node.preview}>
               {node.preview || (
-                <span className="italic text-muted-foreground">无内容</span>
+                <span className="italic text-muted-foreground">
+                  {t("conversation.outline.emptyContent")}
+                </span>
               )}
             </span>
           </div>

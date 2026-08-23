@@ -29,6 +29,7 @@ function client() {
     setActiveProvider: vi.fn(),
     setAutoGenerateTitle: vi.fn().mockResolvedValue(true),
     setTitleModelBinding: vi.fn().mockResolvedValue(null),
+    setLanguage: vi.fn().mockResolvedValue("system"),
     revealProviderApiKey: vi.fn().mockResolvedValue(null),
     listProviderModels: vi.fn(),
     generateFromActivePath: vi.fn(),
@@ -371,7 +372,10 @@ describe("ProviderSettingsPanel", () => {
     )
     await openProviderEditor(user)
     expect(screen.getByText("操作未完成")).toBeVisible()
-    expect(screen.getByText("保存失败，请稍后重试。")).toBeVisible()
+    // The editor maps the store error through commandErrorMessage(code); the
+    // raw message payload is never echoed to the UI.
+    expect(screen.getByText("发生意外错误。")).toBeVisible()
+    expect(screen.queryByText("保存失败，请稍后重试。")).not.toBeInTheDocument()
   })
 
   it("returns to the list via the model-provider breadcrumb", async () => {

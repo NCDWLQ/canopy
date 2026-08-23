@@ -48,6 +48,7 @@ import {
   type ConversationClient,
   type ProviderClient,
 } from "@/lib/tauri"
+import { commandErrorMessage, useTranslation } from "@/lib/i18n"
 
 export type ConversationWorkspaceProps = {
   conversationClient?: ConversationClient
@@ -111,6 +112,7 @@ export function ConversationWorkspace({
   conversationClient: injectedConversationClient,
   providerClient: injectedProviderClient,
 }: ConversationWorkspaceProps = {}) {
+  const { t } = useTranslation()
   useConversationTitleUpdates()
   const client = React.useMemo(
     () => injectedConversationClient ?? createConversationClient(),
@@ -324,7 +326,7 @@ export function ConversationWorkspace({
     <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
       <aside
         id="conversation-tree-sidebar"
-        aria-label="会话树侧栏"
+        aria-label={t("conversation.workspace.sidebar")}
         className={`flex shrink-0 flex-col border-r border-border/70 bg-sidebar text-sidebar-foreground transition-[width] duration-300 motion-reduce:transition-none ${
           isSidebarOpen ? "w-64 md:w-80" : "w-0 overflow-hidden border-none"
         }`}
@@ -341,25 +343,30 @@ export function ConversationWorkspace({
                   variant="ghost"
                   size="icon"
                   className="size-8"
-                  aria-label="新建会话"
-                  title="新建会话"
+                  aria-label={t("conversation.workspace.newConversation")}
+                  title={t("conversation.workspace.newConversation")}
                   disabled={store.status === "loading"}
                   onClick={store.enterConversationCreation}
                 >
                   <SquarePen className="size-4" aria-hidden="true" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>新建会话</TooltipContent>
+              <TooltipContent>
+                {t("conversation.workspace.newConversation")}
+              </TooltipContent>
             </Tooltip>
           </TooltipProvider>
         </div>
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-2">
           <section>
             <div className="sticky top-0 z-10 bg-sidebar px-2.5 pb-1 pt-3 text-sm font-medium text-muted-foreground/70">
-              历史记录
+              {t("conversation.workspace.history")}
             </div>
             {store.history.summaries.length > 0 && (
-              <ul aria-label="会话历史记录" className="flex flex-col gap-1">
+              <ul
+                aria-label={t("conversation.workspace.historyList")}
+                className="flex flex-col gap-1"
+              >
                 {store.history.summaries.map((summary) => {
                   const isCurrent =
                     !isBlankConversation && store.conversationId === summary.id
@@ -395,12 +402,14 @@ export function ConversationWorkspace({
                           {isGenerating && (
                             <Spinner
                               className="size-3.5 shrink-0 text-muted-foreground"
-                              aria-label="正在生成回复"
+                              aria-label={t(
+                                "conversation.workspace.generatingReply",
+                              )}
                             />
                           )}
                           {summary.isArchived && (
                             <Badge className="shrink-0" variant="secondary">
-                              已归档
+                              {t("conversation.workspace.archivedBadge")}
                             </Badge>
                           )}
                         </button>
@@ -410,8 +419,8 @@ export function ConversationWorkspace({
                             variant="ghost"
                             size="icon"
                             className="absolute inset-y-0 right-1 my-auto size-7 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 hover:text-foreground"
-                            aria-label="归档"
-                            title="归档"
+                            aria-label={t("conversation.workspace.archive")}
+                            title={t("conversation.workspace.archive")}
                             onClick={() => setPendingArchiveId(summary.id)}
                           >
                             <Archive className="size-3.5" aria-hidden="true" />
@@ -426,25 +435,25 @@ export function ConversationWorkspace({
             {store.history.status === "loading" &&
               store.history.summaries.length === 0 && (
                 <p className="px-2.5 py-3 text-sm text-muted-foreground">
-                  正在加载历史记录…
+                  {t("conversation.workspace.loadingHistory")}
                 </p>
               )}
             {store.history.status === "empty" && (
               <p className="px-2.5 py-3 text-sm text-muted-foreground">
-                暂无已保存的会话。
+                {t("conversation.workspace.emptyHistory")}
               </p>
             )}
             {store.history.status === "error" && (
               <Alert variant="destructive">
                 <AlertDescription className="flex flex-col gap-2">
-                  <p>{store.history.error.message}</p>
+                  <p>{commandErrorMessage(store.history.error.code)}</p>
                   {store.history.error.retryable && (
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => void store.retryHistory(client)}
                     >
-                      重试加载历史记录
+                      {t("conversation.workspace.retryHistory")}
                     </Button>
                   )}
                 </AlertDescription>
@@ -453,7 +462,7 @@ export function ConversationWorkspace({
           </section>
           <section>
             <div className="sticky top-0 z-10 bg-sidebar px-2.5 pb-1 pt-6 text-sm font-medium text-muted-foreground/70">
-              会话树
+              {t("conversation.workspace.treeSection")}
             </div>
             <div>
               {store.rootNodeId !== null && isProjectionValid ? (
@@ -470,11 +479,11 @@ export function ConversationWorkspace({
                   className="px-2.5 py-3 text-sm text-destructive"
                   role="alert"
                 >
-                  {projectionError.message}
+                  {commandErrorMessage(projectionError.code)}
                 </div>
               ) : (
                 <div className="px-2.5 py-3 text-sm text-muted-foreground">
-                  尚未加载会话。
+                  {t("conversation.workspace.noConversationLoaded")}
                 </div>
               )}
             </div>
@@ -498,8 +507,16 @@ export function ConversationWorkspace({
               size="icon"
               className="size-8"
               onClick={() => setIsSidebarOpen((isOpen) => !isOpen)}
-              title={isSidebarOpen ? "收起侧栏" : "展开侧栏"}
-              aria-label={isSidebarOpen ? "收起侧栏" : "展开侧栏"}
+              title={
+                isSidebarOpen
+                  ? t("conversation.workspace.collapseSidebar")
+                  : t("conversation.workspace.expandSidebar")
+              }
+              aria-label={
+                isSidebarOpen
+                  ? t("conversation.workspace.collapseSidebar")
+                  : t("conversation.workspace.expandSidebar")
+              }
               aria-expanded={isSidebarOpen}
               aria-controls="conversation-tree-sidebar"
             >
@@ -518,22 +535,24 @@ export function ConversationWorkspace({
                       variant="ghost"
                       size="icon"
                       className="size-8"
-                      aria-label="新建会话"
-                      title="新建会话"
+                      aria-label={t("conversation.workspace.newConversation")}
+                      title={t("conversation.workspace.newConversation")}
                       disabled={store.status === "loading"}
                       onClick={store.enterConversationCreation}
                     >
                       <SquarePen className="size-4" aria-hidden="true" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>新建会话</TooltipContent>
+                  <TooltipContent>
+                    {t("conversation.workspace.newConversation")}
+                  </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             )}
             {!isBlankConversation && store.isArchived && (
               <Badge variant="secondary">
                 <Archive data-icon="inline-start" />
-                已归档 — 只读
+                {t("conversation.workspace.archivedReadonlyBadge")}
               </Badge>
             )}
             {(isBlankConversation || store.conversationId !== null) && (
@@ -573,22 +592,22 @@ export function ConversationWorkspace({
                 id="blank-conversation-title"
                 className="text-2xl font-semibold"
               >
-                开始新会话
+                {t("conversation.workspace.blankTitle")}
               </h1>
               <p className="max-w-md text-sm text-muted-foreground">
-                在下方输入第一条消息。发送后才会保存。
+                {t("conversation.workspace.blankHint")}
               </p>
               {store.error !== null && (
                 <Alert variant="destructive" className="max-w-md text-left">
                   <AlertDescription className="flex flex-col gap-3">
-                    <p>{store.error.message}</p>
+                    <p>{commandErrorMessage(store.error.code)}</p>
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
                       onClick={store.clearError}
                     >
-                      关闭
+                      {t("common.close")}
                     </Button>
                   </AlertDescription>
                 </Alert>
@@ -602,7 +621,9 @@ export function ConversationWorkspace({
                   kind: "send",
                   disabled: store.status === "loading",
                 }}
-                placeholder="输入第一条消息…"
+                placeholder={t(
+                  "conversation.workspace.firstMessagePlaceholder",
+                )}
               />
             </div>
           </div>
@@ -613,16 +634,16 @@ export function ConversationWorkspace({
             className="flex flex-1 items-center justify-center text-sm text-muted-foreground"
             role="status"
           >
-            正在加载会话历史记录…
+            {t("conversation.workspace.loadingHistoryPane")}
           </div>
         ) : store.conversationId === null &&
           store.history.status === "error" ? (
           <Alert variant="destructive" className="m-auto max-w-md">
             <AlertDescription className="flex flex-col gap-4 text-center">
-              <p>{store.history.error.message}</p>
+              <p>{commandErrorMessage(store.history.error.code)}</p>
               {store.history.error.retryable && (
                 <Button onClick={() => void store.retryHistory(client)}>
-                  重试加载历史记录
+                  {t("conversation.workspace.retryHistory")}
                 </Button>
               )}
             </AlertDescription>
@@ -657,12 +678,12 @@ export function ConversationWorkspace({
                 action={composerAction}
                 placeholder={
                   store.isArchived
-                    ? "会话已归档，无法修改。"
+                    ? t("conversation.workspace.placeholderArchived")
                     : isRunActive(currentRun) && !transientBubbleVisible
-                      ? "回复生成中…"
+                      ? t("conversation.workspace.placeholderGenerating")
                       : canAppend
-                        ? "输入下一条用户消息…"
-                        : "可输入草稿；当前路径暂无法发送。"
+                        ? t("conversation.workspace.placeholderNextMessage")
+                        : t("conversation.workspace.placeholderDraftOnly")
                 }
               />
             </div>
@@ -678,7 +699,9 @@ export function ConversationWorkspace({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>归档会话？</AlertDialogTitle>
+            <AlertDialogTitle>
+              {t("conversation.workspace.archiveConfirmTitle")}
+            </AlertDialogTitle>
             <AlertDialogDescription>
               {pendingArchiveSummary !== null && (
                 <span className="block font-medium text-foreground">
@@ -686,16 +709,18 @@ export function ConversationWorkspace({
                 </span>
               )}
               <span className="block">
-                归档后会话转为只读，并在历史记录中标记为已归档。
+                {t("conversation.workspace.archiveConfirmBody")}
               </span>
               {pendingArchiveInterrupts && (
-                <span className="block">归档将打断正在进行的生成。</span>
+                <span className="block">
+                  {t("conversation.workspace.archiveConfirmInterrupts")}
+                </span>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setPendingArchiveId(null)}>
-              取消
+              {t("common.cancel")}
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
@@ -706,7 +731,7 @@ export function ConversationWorkspace({
                 }
               }}
             >
-              归档
+              {t("conversation.workspace.archiveConfirmAction")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -1,6 +1,7 @@
 import * as React from "react"
 import { SendHorizontal, Square } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useTranslation } from "@/lib/i18n"
 
 export type ComposerAction =
   { kind: "send"; disabled: boolean } | { kind: "cancel"; onCancel: () => void }
@@ -16,8 +17,11 @@ export function Composer({
   onSubmit,
   inputDisabled,
   action,
-  placeholder = "输入消息…",
+  placeholder,
 }: ComposerProps) {
+  const { t } = useTranslation()
+  const effectivePlaceholder =
+    placeholder ?? t("conversation.composer.placeholder")
   const [content, setContent] = React.useState("")
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const textareaRef = React.useRef<HTMLTextAreaElement>(null)
@@ -80,7 +84,7 @@ export function Composer({
     >
       <div className="pointer-events-auto relative mx-auto flex max-w-4xl items-end gap-2 rounded-2xl border border-border/80 bg-card/95 p-2 shadow-sm backdrop-blur-xl transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 dark:border-border/60 dark:bg-card/90">
         <label className="sr-only" htmlFor="message-composer">
-          消息输入框
+          {t("conversation.composer.label")}
         </label>
         <textarea
           id="message-composer"
@@ -90,7 +94,7 @@ export function Composer({
           onKeyDown={handleKeyDown}
           onInput={handleInput}
           disabled={inputDisabled || isSubmitting}
-          placeholder={placeholder}
+          placeholder={effectivePlaceholder}
           rows={1}
           className="max-h-[200px] w-full resize-none border-none bg-transparent px-3 py-1.5 text-sm leading-5 text-foreground outline-none placeholder:text-muted-foreground/70 disabled:opacity-50"
         />
@@ -99,8 +103,8 @@ export function Composer({
             size="icon"
             className="size-8 shrink-0 rounded-full transition-transform active:scale-95"
             type="button"
-            title="取消生成"
-            aria-label="取消生成"
+            title={t("conversation.composer.cancelGeneration")}
+            aria-label={t("conversation.composer.cancelGeneration")}
             onClick={action.onCancel}
           >
             <Square className="size-4" aria-hidden="true" />
@@ -116,8 +120,8 @@ export function Composer({
               !content.trim()
             }
             type="submit"
-            title="发送消息"
-            aria-label="发送消息"
+            title={t("conversation.composer.send")}
+            aria-label={t("conversation.composer.send")}
           >
             <SendHorizontal className="size-4" aria-hidden="true" />
           </Button>
