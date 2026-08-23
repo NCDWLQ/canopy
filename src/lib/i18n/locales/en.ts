@@ -65,6 +65,20 @@ export const en = {
   "conversation.workspace.archiveConfirmInterrupts":
     "Archiving will interrupt the generation in progress.",
   "conversation.workspace.archiveConfirmAction": "Archive",
+  "conversation.workspace.conversationMenu": ({ title }: { title: string }) =>
+    `Conversation actions: ${title}`,
+  "conversation.workspace.rename": "Rename",
+  "conversation.workspace.unarchive": "Unarchive",
+  "conversation.workspace.renameDialogTitle": "Rename conversation",
+  "conversation.workspace.renameDialogLabel": "Conversation title",
+  "conversation.workspace.renameDialogTitleBlank": "The title cannot be blank.",
+  "conversation.workspace.renameDialogTitleTooLong":
+    "The title cannot exceed 200 characters.",
+  "conversation.workspace.deleteConfirmTitle": "Delete this conversation?",
+  "conversation.workspace.deleteConfirmBody":
+    "Deletion cannot be undone; the conversation and every message in it are permanently removed.",
+  "conversation.workspace.deleteConfirmInterrupts":
+    "Deleting will interrupt the generation in progress and discard its result.",
 
   // ConversationPane.tsx
   "conversation.pane.thinking": "Thinking",

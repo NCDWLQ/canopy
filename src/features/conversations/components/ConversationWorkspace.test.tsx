@@ -176,6 +176,13 @@ function createMockClient() {
       .mockResolvedValue(tree),
     loadActivePath: vi.fn<ConversationClient["loadActivePath"]>(),
     archiveConversation: vi.fn<ConversationClient["archiveConversation"]>(),
+    renameConversation: vi.fn<ConversationClient["renameConversation"]>(),
+    deleteConversation: vi
+      .fn<ConversationClient["deleteConversation"]>()
+      .mockResolvedValue({ conversationId: root.conversationId }),
+    unarchiveConversation: vi
+      .fn<ConversationClient["unarchiveConversation"]>()
+      .mockResolvedValue(tree.conversation),
     setConversationProvider: vi
       .fn<NonNullable<ConversationClient["setConversationProvider"]>>()
       .mockResolvedValue({
@@ -432,7 +439,7 @@ describe("ConversationWorkspace", () => {
     const initialPane = await screen.findByTestId("conversation-pane")
     await within(initialPane).findByText(right.content)
 
-    await user.click(screen.getByRole("button", { name: /Other history/ }))
+    await user.click(screen.getByRole("button", { name: /^Other history/ }))
 
     const pane = await screen.findByTestId("conversation-pane")
     await waitFor(() => {
@@ -508,9 +515,10 @@ describe("ConversationWorkspace", () => {
     expect(within(pane).getByText("BACKGROUND_PART_")).toBeVisible()
 
     // The generating row shows a running indicator and every row stays
-    // clickable while the run is active.
+    // clickable while the run is active. The "…" menu trigger carries the
+    // row title in its accessible name, so title queries stay exact.
     const generatingRow = screen
-      .getByRole("button", { name: /Branch proof/ })
+      .getByRole("button", { name: /^Branch proof/ })
       .closest("li")
     expect(generatingRow).not.toBeNull()
     expect(
@@ -518,7 +526,7 @@ describe("ConversationWorkspace", () => {
     ).toBeVisible()
     expect(screen.getByRole("button", { name: "新建会话" })).toBeEnabled()
 
-    await user.click(screen.getByRole("button", { name: /Other history/ }))
+    await user.click(screen.getByRole("button", { name: /^Other history/ }))
     await waitFor(() => {
       expect(within(pane).getByText(otherRoot.content)).toBeVisible()
     })
@@ -531,7 +539,7 @@ describe("ConversationWorkspace", () => {
       onEvent!({ type: "delta", generationId, content: "MORE" })
     })
 
-    await user.click(screen.getByRole("button", { name: /Branch proof/ }))
+    await user.click(screen.getByRole("button", { name: /^Branch proof/ }))
     await waitFor(() => {
       expect(within(pane).getByText("BACKGROUND_PART_MORE")).toBeVisible()
     })
@@ -683,8 +691,9 @@ describe("ConversationWorkspace", () => {
       within(screen.getByTestId("conversation-pane")).getByText(right.content),
     ).toBeVisible()
     expect(screen.getByRole("textbox", { name: "消息输入框" })).toBeDisabled()
-    // The archived history row keeps only its badge; there is no archive
-    // entry point anywhere (header action removed, archived rows hide it).
+    // The archived history row keeps its badge; with the row menu closed
+    // there is no archive entry point anywhere (header action removed, the
+    // archived row's menu offers unarchive instead — covered separately).
     expect(screen.getByText("已归档")).toBeVisible()
     expect(
       screen.queryByRole("button", { name: "归档" }),
@@ -809,7 +818,7 @@ describe("ConversationWorkspace", () => {
     expect(creating.nodesById).toBe(before.nodesById)
     expect(creating.history).toBe(before.history)
 
-    await user.click(screen.getByRole("button", { name: "Branch proof" }))
+    await user.click(screen.getByRole("button", { name: /^Branch proof/ }))
     await waitFor(() => {
       expect(screen.getByTestId("conversation-pane")).toBeVisible()
       expect(useConversationStore.getState().isCreatingConversation).toBe(false)
@@ -1203,13 +1212,16 @@ describe("ConversationWorkspace", () => {
     const cancelButton = screen.getByRole("button", { name: "取消生成" })
     expect(cancelButton).toBeVisible()
     expect(cancelButton).toBeEnabled()
-    // The header archive entry point is gone; the history-row archive button
-    // stays visible and enabled during streaming, and merely opening or
-    // cancelling its dialog must never interrupt anything.
-    const archiveButton = screen.getByRole("button", { name: "归档" })
-    expect(archiveButton).toBeVisible()
-    expect(archiveButton).toBeEnabled()
-    await user.click(archiveButton)
+    // The header archive entry point is gone; the history-row "…" menu stays
+    // visible and enabled during streaming, and merely opening its dialog
+    // must never interrupt anything.
+    const menuTrigger = screen.getByRole("button", {
+      name: "会话操作：Branch proof",
+    })
+    expect(menuTrigger).toBeVisible()
+    expect(menuTrigger).toBeEnabled()
+    await user.click(menuTrigger)
+    await user.click(screen.getByRole("menuitem", { name: "归档" }))
     const dialog = screen.getByRole("alertdialog", { name: "归档会话？" })
     expect(within(dialog).getByText("Branch proof")).toBeVisible()
     expect(
@@ -1240,8 +1252,8 @@ describe("ConversationWorkspace", () => {
     await user.click(cancelButton)
     expect(providerClient.cancelGeneration).toHaveBeenCalledWith(generationId)
     expect(providerClient.cancelGeneration).toHaveBeenCalledTimes(1)
-    expect(archiveButton).toBeEnabled()
-    expect(archiveButton).toHaveAttribute("title", "归档")
+    expect(menuTrigger).toBeEnabled()
+    expect(menuTrigger).toHaveAttribute("title", "会话操作：Branch proof")
   })
 
   it("archives a non-current history row by ID from the confirm dialog without disturbing the loaded conversation", async () => {
@@ -1279,22 +1291,27 @@ describe("ConversationWorkspace", () => {
     const otherRow = selectButton.closest("li")
     expect(otherRow).not.toBeNull()
     // The workspace is writable and ready — the state that used to render the
-    // header archive button. Only the two row buttons exist; no header entry.
-    expect(screen.getAllByRole("button", { name: "归档" })).toHaveLength(2)
-    const archiveButton = within(otherRow!).getByRole("button", {
-      name: "归档",
+    // header archive button. Each row exposes exactly one "…" menu trigger;
+    // no header entry.
+    expect(screen.getAllByRole("button", { name: /会话操作：/ })).toHaveLength(
+      2,
+    )
+    const menuTrigger = within(otherRow!).getByRole("button", {
+      name: "会话操作：Other row",
     })
     // Sibling buttons inside one group wrapper — no nested <button> markup.
-    const rowWrapper = archiveButton.parentElement
+    const rowWrapper = menuTrigger.parentElement
     expect(rowWrapper?.querySelectorAll("button")).toHaveLength(2)
     expect(rowWrapper?.contains(selectButton)).toBe(true)
-    expect(selectButton.contains(archiveButton)).toBe(false)
-    expect(archiveButton.contains(selectButton)).toBe(false)
+    expect(selectButton.contains(menuTrigger)).toBe(false)
+    expect(menuTrigger.contains(selectButton)).toBe(false)
     // Hover/focus reveal without layout shift. Vertical centering uses
     // inset-y-0 + my-auto: a -translate-y-1/2 here would be overridden by
     // Button's active:translate-y-px (both set the `translate` property in
     // Tailwind v4), making the icon jump ~half its height on press.
-    expect(archiveButton).toHaveClass(
+    // The open-state selector keeps the trigger visible while its portaled
+    // menu is open — group-hover ends once the pointer leaves the row.
+    expect(menuTrigger).toHaveClass(
       "inset-y-0",
       "my-auto",
       "size-7",
@@ -1303,10 +1320,12 @@ describe("ConversationWorkspace", () => {
       "transition-opacity",
       "group-hover:opacity-100",
       "group-focus-within:opacity-100",
+      "data-[state=open]:opacity-100",
       "hover:text-foreground",
     )
 
-    await user.click(archiveButton)
+    await user.click(menuTrigger)
+    await user.click(screen.getByRole("menuitem", { name: "归档" }))
     const dialog = screen.getByRole("alertdialog", { name: "归档会话？" })
     expect(within(dialog).getByText("Other row")).toBeVisible()
     expect(
@@ -1336,12 +1355,15 @@ describe("ConversationWorkspace", () => {
     expect(state.isArchived).toBe(false)
     expect(state.status).toBe("ready")
     expect(state.error).toBeNull()
-    expect(screen.getByRole("button", { name: "Branch proof" })).toBeEnabled()
-    expect(screen.getByRole("button", { name: /Other row/ })).toBeEnabled()
+    expect(screen.getByRole("button", { name: /^Branch proof/ })).toBeEnabled()
+    expect(screen.getByRole("button", { name: /^Other row/ })).toBeEnabled()
     expect(within(otherRow!).getByText("已归档")).toBeVisible()
+    // The row keeps its "…" trigger; the archive action now lives inside it.
     expect(
-      within(otherRow!).queryByRole("button", { name: "归档" }),
-    ).not.toBeInTheDocument()
+      within(otherRow!).getByRole("button", {
+        name: "会话操作：Other row",
+      }),
+    ).toBeVisible()
   })
 
   it("cancels the generating current conversation before archiving it from the row dialog", async () => {
@@ -1387,7 +1409,10 @@ describe("ConversationWorkspace", () => {
       })
     })
 
-    await user.click(screen.getByRole("button", { name: "归档" }))
+    await user.click(
+      screen.getByRole("button", { name: "会话操作：Branch proof" }),
+    )
+    await user.click(screen.getByRole("menuitem", { name: "归档" }))
     const dialog = screen.getByRole("alertdialog", { name: "归档会话？" })
     expect(within(dialog).getByText("归档将打断正在进行的生成。")).toBeVisible()
 
@@ -1471,7 +1496,10 @@ describe("ConversationWorkspace", () => {
       .getByRole("button", { name: "Other row" })
       .closest("li")
     expect(otherRow).not.toBeNull()
-    await user.click(within(otherRow!).getByRole("button", { name: "归档" }))
+    await user.click(
+      within(otherRow!).getByRole("button", { name: "会话操作：Other row" }),
+    )
+    await user.click(screen.getByRole("menuitem", { name: "归档" }))
     const dialog = screen.getByRole("alertdialog", { name: "归档会话？" })
     expect(
       within(dialog).queryByText("归档将打断正在进行的生成。"),
@@ -1517,7 +1545,10 @@ describe("ConversationWorkspace", () => {
     })
     render(<ConversationWorkspace />)
 
-    await user.click(screen.getByRole("button", { name: "归档" }))
+    await user.click(
+      screen.getByRole("button", { name: "会话操作：Branch proof" }),
+    )
+    await user.click(screen.getByRole("menuitem", { name: "归档" }))
     const dialog = screen.getByRole("alertdialog", { name: "归档会话？" })
     expect(within(dialog).getByText("归档将打断正在进行的生成。")).toBeVisible()
 
@@ -1541,6 +1572,381 @@ describe("ConversationWorkspace", () => {
     })
     expect(providerClient.cancelGeneration).not.toHaveBeenCalled()
     expect(useConversationStore.getState().isArchived).toBe(true)
+  })
+
+  it("offers rename plus archive or unarchive per row archive state", async () => {
+    const user = userEvent.setup()
+    const archivedSummary = {
+      id: "conversation-other",
+      title: "Archived row",
+      rootNodeId: "other-root",
+      isArchived: true,
+      updatedAt: 1,
+    }
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(right.id)
+    useConversationStore.setState({
+      history: {
+        status: "ready",
+        summaries: [
+          { ...tree.conversation, updatedAt: right.createdAt },
+          archivedSummary,
+        ],
+        error: null,
+      },
+    })
+    render(<ConversationWorkspace />)
+
+    await user.click(
+      screen.getByRole("button", { name: "会话操作：Branch proof" }),
+    )
+    expect(screen.getByRole("menuitem", { name: "重命名" })).toBeVisible()
+    expect(screen.getByRole("menuitem", { name: "归档" })).toBeVisible()
+    expect(
+      screen.queryByRole("menuitem", { name: "取消归档" }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole("menuitem", { name: "删除" })).toBeVisible()
+
+    await user.keyboard("{Escape}")
+    await user.click(
+      screen.getByRole("button", { name: "会话操作：Archived row" }),
+    )
+    expect(screen.getByRole("menuitem", { name: "重命名" })).toBeVisible()
+    expect(screen.getByRole("menuitem", { name: "取消归档" })).toBeVisible()
+    expect(
+      screen.queryByRole("menuitem", { name: "归档" }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole("menuitem", { name: "删除" })).toBeVisible()
+  })
+
+  it("renames through the dialog with prefill, validation, and localized errors", async () => {
+    const user = userEvent.setup()
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(right.id)
+    useConversationStore.setState({
+      history: {
+        status: "ready",
+        summaries: [{ ...tree.conversation, updatedAt: right.createdAt }],
+        error: null,
+      },
+    })
+    render(<ConversationWorkspace />)
+
+    await user.click(
+      screen.getByRole("button", { name: "会话操作：Branch proof" }),
+    )
+    await user.click(screen.getByRole("menuitem", { name: "重命名" }))
+
+    const dialog = screen.getByRole("dialog", { name: "重命名会话" })
+    const input = within(dialog).getByRole<HTMLInputElement>("textbox", {
+      name: "会话标题",
+    })
+    expect(input).toHaveValue("Branch proof")
+    expect(input).toHaveFocus()
+    expect(input.selectionStart).toBe(0)
+    expect(input.selectionEnd).toBe("Branch proof".length)
+
+    const saveButton = within(dialog).getByRole("button", { name: "保存" })
+    await user.clear(input)
+    expect(saveButton).toBeDisabled()
+    expect(within(dialog).getByText("标题不能为空。")).toBeVisible()
+    await user.type(input, "界".repeat(201))
+    expect(saveButton).toBeDisabled()
+    expect(within(dialog).getByText("标题不能超过 200 个字符。")).toBeVisible()
+    expect(client.renameConversation).not.toHaveBeenCalled()
+
+    client.renameConversation.mockResolvedValueOnce({
+      ...tree.conversation,
+      title: "手动重命名",
+    })
+    await user.clear(input)
+    await user.type(input, "  手动重命名  ")
+    expect(saveButton).toBeEnabled()
+    await user.click(saveButton)
+
+    await waitFor(() => {
+      expect(client.renameConversation).toHaveBeenCalledWith({
+        conversationId: root.conversationId,
+        title: "手动重命名",
+      })
+    })
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    })
+    expect(useConversationStore.getState().title).toBe("手动重命名")
+    expect(screen.getByRole("button", { name: "手动重命名" })).toBeVisible()
+
+    client.renameConversation.mockRejectedValueOnce(
+      new ConversationCommandError({
+        code: "not_found",
+        message: "Conversation is gone.",
+        retryable: false,
+      }),
+    )
+    await user.click(
+      screen.getByRole("button", { name: "会话操作：手动重命名" }),
+    )
+    await user.click(screen.getByRole("menuitem", { name: "重命名" }))
+    const retryDialog = screen.getByRole("dialog", { name: "重命名会话" })
+    const retryInput = within(retryDialog).getByRole("textbox", {
+      name: "会话标题",
+    })
+    expect(retryInput).toHaveValue("手动重命名")
+    await user.click(within(retryDialog).getByRole("button", { name: "保存" }))
+    expect(
+      await within(retryDialog).findByText("未找到请求的资源。"),
+    ).toBeVisible()
+    expect(retryDialog).toBeVisible()
+    expect(
+      within(retryDialog).queryByText("Conversation is gone."),
+    ).not.toBeInTheDocument()
+  })
+
+  it("deletes the current conversation back to the blank new-conversation state", async () => {
+    const user = userEvent.setup()
+    const otherSummary = {
+      id: "conversation-other",
+      title: "Other row",
+      rootNodeId: "other-root",
+      isArchived: false,
+      updatedAt: 1,
+    }
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(right.id)
+    useConversationStore.setState({
+      history: {
+        status: "ready",
+        summaries: [
+          { ...tree.conversation, updatedAt: right.createdAt },
+          otherSummary,
+        ],
+        error: null,
+      },
+    })
+    client.deleteConversation.mockResolvedValueOnce({
+      conversationId: root.conversationId,
+    })
+    render(<ConversationWorkspace />)
+
+    await user.click(
+      screen.getByRole("button", { name: "会话操作：Branch proof" }),
+    )
+    await user.click(screen.getByRole("menuitem", { name: "删除" }))
+    const dialog = screen.getByRole("alertdialog", { name: "删除会话？" })
+    expect(within(dialog).getByText("Branch proof")).toBeVisible()
+    expect(
+      within(dialog).getByText(
+        "删除后无法恢复，该会话及其全部消息将被永久移除。",
+      ),
+    ).toBeVisible()
+    expect(
+      within(dialog).queryByText("删除将打断正在进行的生成并放弃其结果。"),
+    ).not.toBeInTheDocument()
+    const confirmButton = within(dialog).getByRole("button", { name: "删除" })
+    expect(confirmButton).toHaveAttribute("data-variant", "destructive")
+    expect(client.deleteConversation).not.toHaveBeenCalled()
+
+    await user.click(confirmButton)
+
+    await waitFor(() => {
+      expect(client.deleteConversation).toHaveBeenCalledWith(
+        root.conversationId,
+      )
+    })
+    expect(await screen.findByTestId("blank-conversation-pane")).toBeVisible()
+    const state = useConversationStore.getState()
+    expect(state.conversationId).toBeNull()
+    expect(state.status).toBe("idle")
+    expect(state.title).toBeNull()
+    // No landing conversation is auto-loaded; the remaining row survives.
+    expect(client.loadConversationTree).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole("button", { name: /^Other row/ })).toBeVisible()
+
+    // Cancelling the dialog performs no deletion.
+    await user.click(
+      screen.getByRole("button", { name: "会话操作：Other row" }),
+    )
+    await user.click(screen.getByRole("menuitem", { name: "删除" }))
+    await user.click(screen.getByRole("button", { name: "取消" }))
+    expect(client.deleteConversation).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+  })
+
+  it("cancels the active run before deleting and shows the interrupt warning", async () => {
+    const user = userEvent.setup()
+    const generationId = "55555555-5555-4555-8555-555555555555"
+    seedGenerationRun({
+      runId: 61,
+      conversationId: root.conversationId,
+      parentNodeId: right.id,
+      priorChildIds: [],
+      generationId,
+      model: "fixture-model",
+      phase: "streaming",
+      thinking: "",
+      content: "PARTIAL_REPLY",
+    })
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(right.id)
+    useConversationStore.setState({
+      history: {
+        status: "ready",
+        summaries: [{ ...tree.conversation, updatedAt: right.createdAt }],
+        error: null,
+      },
+    })
+    client.deleteConversation.mockResolvedValueOnce({
+      conversationId: root.conversationId,
+    })
+    render(<ConversationWorkspace />)
+
+    await user.click(
+      screen.getByRole("button", { name: "会话操作：Branch proof" }),
+    )
+    await user.click(screen.getByRole("menuitem", { name: "删除" }))
+    const dialog = screen.getByRole("alertdialog", { name: "删除会话？" })
+    expect(
+      within(dialog).getByText("删除将打断正在进行的生成并放弃其结果。"),
+    ).toBeVisible()
+
+    await user.click(within(dialog).getByRole("button", { name: "删除" }))
+
+    await waitFor(() => {
+      expect(providerClient.cancelGeneration).toHaveBeenCalledWith(generationId)
+      expect(client.deleteConversation).toHaveBeenCalledWith(
+        root.conversationId,
+      )
+    })
+    const [cancelOrder] =
+      providerClient.cancelGeneration.mock.invocationCallOrder
+    const [deleteOrder] = client.deleteConversation.mock.invocationCallOrder
+    expect(cancelOrder).toBeDefined()
+    expect(deleteOrder).toBeDefined()
+    expect(cancelOrder!).toBeLessThan(deleteOrder!)
+    await waitFor(() => {
+      const state = useConversationStore.getState()
+      expect(state.conversationId).toBeNull()
+      expect(state.generationRuns[root.conversationId]).toBeUndefined()
+      expect(state.history.status).toBe("empty")
+    })
+  })
+
+  it("deletes a non-current row without disturbing the loaded conversation", async () => {
+    const user = userEvent.setup()
+    const otherSummary = {
+      id: "conversation-other",
+      title: "Other row",
+      rootNodeId: "other-root",
+      isArchived: false,
+      updatedAt: 1,
+    }
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(right.id)
+    useConversationStore.setState({
+      history: {
+        status: "ready",
+        summaries: [
+          { ...tree.conversation, updatedAt: right.createdAt },
+          otherSummary,
+        ],
+        error: null,
+      },
+    })
+    client.deleteConversation.mockResolvedValueOnce({
+      conversationId: otherSummary.id,
+    })
+    render(<ConversationWorkspace />)
+
+    await user.click(
+      screen.getByRole("button", { name: "会话操作：Other row" }),
+    )
+    await user.click(screen.getByRole("menuitem", { name: "删除" }))
+    await user.click(screen.getByRole("button", { name: "删除" }))
+
+    await waitFor(() => {
+      expect(client.deleteConversation).toHaveBeenCalledWith(otherSummary.id)
+    })
+    const state = useConversationStore.getState()
+    expect(state.conversationId).toBe(root.conversationId)
+    expect(state.status).toBe("ready")
+    expect(state.history.summaries.map((item) => item.id)).toEqual([
+      root.conversationId,
+    ])
+    expect(
+      screen.queryByRole("button", { name: /^Other row/ }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByTestId("conversation-pane")).toBeVisible()
+  })
+
+  it("unarchives an archived row straight from the menu without a confirm dialog", async () => {
+    const user = userEvent.setup()
+    const archivedSummary = {
+      id: "conversation-other",
+      title: "Archived row",
+      rootNodeId: "other-root",
+      isArchived: true,
+      updatedAt: 1,
+    }
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(right.id)
+    useConversationStore.setState({
+      history: {
+        status: "ready",
+        summaries: [
+          { ...tree.conversation, updatedAt: right.createdAt },
+          archivedSummary,
+        ],
+        error: null,
+      },
+    })
+    client.unarchiveConversation.mockResolvedValueOnce({
+      id: archivedSummary.id,
+      title: archivedSummary.title,
+      rootNodeId: archivedSummary.rootNodeId,
+      isArchived: false,
+    })
+    render(<ConversationWorkspace />)
+
+    const otherRow = screen
+      .getByRole("button", { name: /^Archived row/ })
+      .closest("li")
+    expect(within(otherRow!).getByText("已归档")).toBeVisible()
+
+    await user.click(
+      within(otherRow!).getByRole("button", { name: "会话操作：Archived row" }),
+    )
+    await user.click(screen.getByRole("menuitem", { name: "取消归档" }))
+
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(client.unarchiveConversation).toHaveBeenCalledWith(
+        archivedSummary.id,
+      )
+    })
+    await waitFor(() => {
+      expect(within(otherRow!).queryByText("已归档")).not.toBeInTheDocument()
+    })
+    // The loaded conversation keeps its projection untouched.
+    const state = useConversationStore.getState()
+    expect(state.conversationId).toBe(root.conversationId)
+    expect(state.isArchived).toBe(false)
+    expect(state.status).toBe("ready")
+    expect(
+      state.history.summaries.find((item) => item.id === archivedSummary.id)
+        ?.isArchived,
+    ).toBe(false)
   })
 
   it("opens SettingsDialog via contextual '配置服务提供商以生成' and updates to '生成回复' after choosing a global default", async () => {

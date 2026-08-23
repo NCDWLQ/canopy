@@ -1,5 +1,14 @@
 import * as React from "react"
-import { Archive, PanelLeftClose, PanelLeftOpen, SquarePen } from "lucide-react"
+import {
+  Archive,
+  ArchiveRestore,
+  MoreHorizontal,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Pencil,
+  SquarePen,
+  Trash2,
+} from "lucide-react"
 import { useShallow } from "zustand/react/shallow"
 
 import { Composer, type ComposerAction } from "./Composer"
@@ -9,6 +18,7 @@ import {
   type UserGenerationAction,
 } from "./ConversationPane"
 import { OutlineTree } from "./OutlineTree"
+import { RenameConversationDialog } from "./RenameConversationDialog"
 import { useConversationTitleUpdates } from "../hooks/useConversationTitleUpdates"
 import { useWorkspaceGenerationController } from "../hooks/useWorkspaceGenerationController"
 import {
@@ -33,6 +43,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Tooltip,
   TooltipContent,
@@ -162,6 +179,12 @@ export function ConversationWorkspace({
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true)
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(false)
   const [pendingArchiveId, setPendingArchiveId] = React.useState<string | null>(
+    null,
+  )
+  const [pendingRenameId, setPendingRenameId] = React.useState<string | null>(
+    null,
+  )
+  const [pendingDeleteId, setPendingDeleteId] = React.useState<string | null>(
     null,
   )
 
@@ -321,6 +344,18 @@ export function ConversationWorkspace({
   // background run on a non-current conversation.
   const pendingArchiveInterrupts =
     pendingArchiveId !== null && activeRunIds.has(pendingArchiveId)
+  const pendingRenameSummary =
+    pendingRenameId === null
+      ? null
+      : (store.history.summaries.find((item) => item.id === pendingRenameId) ??
+        null)
+  const pendingDeleteSummary =
+    pendingDeleteId === null
+      ? null
+      : (store.history.summaries.find((item) => item.id === pendingDeleteId) ??
+        null)
+  const pendingDeleteInterrupts =
+    pendingDeleteId !== null && activeRunIds.has(pendingDeleteId)
 
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
@@ -413,19 +448,69 @@ export function ConversationWorkspace({
                             </Badge>
                           )}
                         </button>
-                        {!summary.isArchived && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="absolute inset-y-0 right-1 my-auto size-7 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 hover:text-foreground"
-                            aria-label={t("conversation.workspace.archive")}
-                            title={t("conversation.workspace.archive")}
-                            onClick={() => setPendingArchiveId(summary.id)}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="absolute inset-y-0 right-1 my-auto size-7 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 data-[state=open]:opacity-100 hover:text-foreground"
+                              aria-label={t(
+                                "conversation.workspace.conversationMenu",
+                                { title: summary.title },
+                              )}
+                              title={t(
+                                "conversation.workspace.conversationMenu",
+                                {
+                                  title: summary.title,
+                                },
+                              )}
+                            >
+                              <MoreHorizontal
+                                className="size-3.5"
+                                aria-hidden="true"
+                              />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent
+                            align="end"
+                            className="w-auto min-w-40"
                           >
-                            <Archive className="size-3.5" aria-hidden="true" />
-                          </Button>
-                        )}
+                            <DropdownMenuItem
+                              onSelect={() => setPendingRenameId(summary.id)}
+                            >
+                              <Pencil />
+                              {t("conversation.workspace.rename")}
+                            </DropdownMenuItem>
+                            {summary.isArchived ? (
+                              <DropdownMenuItem
+                                onSelect={() =>
+                                  void controller.unarchiveConversation(
+                                    summary.id,
+                                  )
+                                }
+                              >
+                                <ArchiveRestore />
+                                {t("conversation.workspace.unarchive")}
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem
+                                onSelect={() => setPendingArchiveId(summary.id)}
+                              >
+                                <Archive />
+                                {t("conversation.workspace.archive")}
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              variant="destructive"
+                              onSelect={() => setPendingDeleteId(summary.id)}
+                            >
+                              <Trash2 />
+                              {t("common.delete")}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </li>
                   )
@@ -732,6 +817,66 @@ export function ConversationWorkspace({
               }}
             >
               {t("conversation.workspace.archiveConfirmAction")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {pendingRenameSummary !== null && (
+        <RenameConversationDialog
+          key={pendingRenameSummary.id}
+          currentTitle={pendingRenameSummary.title}
+          onClose={() => setPendingRenameId(null)}
+          onRename={(title) =>
+            useConversationStore
+              .getState()
+              .renameConversation(client, pendingRenameSummary.id, title)
+          }
+        />
+      )}
+
+      <AlertDialog
+        open={pendingDeleteId !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDeleteId(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("conversation.workspace.deleteConfirmTitle")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDeleteSummary !== null && (
+                <span className="block font-medium text-foreground">
+                  {pendingDeleteSummary.title}
+                </span>
+              )}
+              <span className="block">
+                {t("conversation.workspace.deleteConfirmBody")}
+              </span>
+              {pendingDeleteInterrupts && (
+                <span className="block">
+                  {t("conversation.workspace.deleteConfirmInterrupts")}
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPendingDeleteId(null)}>
+              {t("common.cancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                const target = pendingDeleteId
+                setPendingDeleteId(null)
+                if (target !== null) {
+                  void controller.deleteConversation(target)
+                }
+              }}
+            >
+              {t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

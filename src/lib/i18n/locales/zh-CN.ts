@@ -65,6 +65,20 @@ export const zhCN = {
   "conversation.workspace.archiveConfirmInterrupts":
     "归档将打断正在进行的生成。",
   "conversation.workspace.archiveConfirmAction": "归档",
+  "conversation.workspace.conversationMenu": ({ title }: { title: string }) =>
+    `会话操作：${title}`,
+  "conversation.workspace.rename": "重命名",
+  "conversation.workspace.unarchive": "取消归档",
+  "conversation.workspace.renameDialogTitle": "重命名会话",
+  "conversation.workspace.renameDialogLabel": "会话标题",
+  "conversation.workspace.renameDialogTitleBlank": "标题不能为空。",
+  "conversation.workspace.renameDialogTitleTooLong":
+    "标题不能超过 200 个字符。",
+  "conversation.workspace.deleteConfirmTitle": "删除会话？",
+  "conversation.workspace.deleteConfirmBody":
+    "删除后无法恢复，该会话及其全部消息将被永久移除。",
+  "conversation.workspace.deleteConfirmInterrupts":
+    "删除将打断正在进行的生成并放弃其结果。",
 
   // ConversationPane.tsx
   "conversation.pane.thinking": "正在思考",
