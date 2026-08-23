@@ -236,6 +236,9 @@ function createConversationClient() {
       .mockResolvedValue(tree),
     loadActivePath: vi.fn<ConversationClient["loadActivePath"]>(),
     archiveConversation: vi.fn<ConversationClient["archiveConversation"]>(),
+    writeExportFile: vi
+      .fn<ConversationClient["writeExportFile"]>()
+      .mockResolvedValue({ bytesWritten: 0 }),
     setConversationProvider: vi
       .fn<NonNullable<ConversationClient["setConversationProvider"]>>()
       .mockImplementation((input) =>

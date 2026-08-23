@@ -17,6 +17,7 @@ export const commandErrorKeys = {
   provider_unavailable: "errors.providerUnavailable",
   network_failure: "errors.networkFailure",
   cancelled: "errors.cancelled",
+  export_file_write: "errors.exportFileWrite",
   internal: "errors.internal",
 } satisfies Record<UiErrorCode, StaticMessageKey>
 

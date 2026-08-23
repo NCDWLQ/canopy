@@ -18,6 +18,7 @@ const EXPECTED_CODES = [
   "provider_unavailable",
   "network_failure",
   "cancelled",
+  "export_file_write",
   "internal",
 ] as const
 

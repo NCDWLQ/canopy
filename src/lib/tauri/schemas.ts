@@ -60,6 +60,13 @@ const titleSchema = unicodeScalarStringSchema
 const contentSchema = unicodeScalarStringSchema
   .refine(containsNonRustWhitespace)
   .refine((value) => new TextEncoder().encode(value).byteLength <= 1024 * 1024)
+// Export payloads aggregate many nodes plus headings, so the byte cap keeps
+// generous headroom above the per-node limit (mirrors MAX_EXPORT_CONTENT_BYTES).
+const exportContentSchema = unicodeScalarStringSchema
+  .refine(containsNonRustWhitespace)
+  .refine(
+    (value) => new TextEncoder().encode(value).byteLength <= 16 * 1024 * 1024,
+  )
 
 export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
   z.union([
@@ -99,6 +106,15 @@ export const loadActivePathRequestSchema = z
   .strict()
 export const archiveConversationRequestSchema =
   loadConversationTreeRequestSchema
+export const writeExportFileRequestSchema = z
+  .object({
+    path: idSchema,
+    content: exportContentSchema,
+  })
+  .strict()
+export const writeExportFileResultSchema = z
+  .object({ bytes_written: z.number().int().safe().nonnegative() })
+  .strict()
 export const setConversationProviderRequestSchema = z
   .object({
     conversation_id: idSchema,
@@ -139,6 +155,7 @@ export const commandErrorCodeSchema = z.enum([
   "provider_unavailable",
   "network_failure",
   "cancelled",
+  "export_file_write",
   "internal",
 ])
 
@@ -233,4 +250,7 @@ export type ConversationTreeDto = z.infer<typeof conversationTreeDtoSchema>
 export type ActivePathDto = z.infer<typeof activePathDtoSchema>
 export type ConversationProviderBindingResultDto = z.infer<
   typeof conversationProviderBindingResultSchema
+>
+export type WriteExportFileResultDto = z.infer<
+  typeof writeExportFileResultSchema
 >
