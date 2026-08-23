@@ -16,6 +16,7 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import type { ConversationClient } from "@/lib/tauri"
+import { useTranslation } from "@/lib/i18n"
 
 export type ConversationProviderPickerProps = {
   conversationClient: ConversationClient
@@ -37,6 +38,7 @@ export function ConversationProviderPicker({
   readOnly,
   onManageProviders,
 }: ConversationProviderPickerProps) {
+  const { t } = useTranslation()
   const providers = useProviderStore((state) => state.providers)
   const activeProviderId = useProviderStore((state) => state.activeProviderId)
   const setConversationProvider = useConversationStore(
@@ -125,13 +127,16 @@ export function ConversationProviderPicker({
     void persist(binding, nextEffort)
   }
 
+  const effortLabels = {
+    low: t("conversation.providerPicker.effortLow"),
+    medium: t("conversation.providerPicker.effortMedium"),
+    high: t("conversation.providerPicker.effortHigh"),
+  } as const
   const effortLabel =
-    reasoningEffort === null
-      ? null
-      : ({ low: "低", medium: "中", high: "高" } as const)[reasoningEffort]
+    reasoningEffort === null ? null : effortLabels[reasoningEffort]
   const triggerLabel =
     highlightedModel === null
-      ? "未配置服务提供商"
+      ? t("conversation.providerPicker.triggerUnconfigured")
       : effortLabel === null
         ? highlightedModel
         : `${highlightedModel} · ${effortLabel}`
@@ -144,7 +149,7 @@ export function ConversationProviderPicker({
           variant="ghost"
           size="sm"
           disabled={readOnly}
-          aria-label="选择模型与推理强度"
+          aria-label={t("conversation.providerPicker.open")}
         >
           <span className="max-w-40 truncate">{triggerLabel}</span>
           <ChevronDown data-icon="inline-end" aria-hidden="true" />
@@ -156,7 +161,7 @@ export function ConversationProviderPicker({
             id="conversation-provider-picker-providers-label"
             className="px-1 text-xs font-medium text-muted-foreground"
           >
-            服务提供商
+            {t("conversation.providerPicker.providers")}
           </p>
           <div
             role="listbox"
@@ -180,7 +185,7 @@ export function ConversationProviderPicker({
                   <span className="min-w-0 truncate">{provider.name}</span>
                   {provider.id === activeProviderId && (
                     <span className="ml-auto shrink-0 text-xs font-normal text-muted-foreground">
-                      默认
+                      {t("common.default")}
                     </span>
                   )}
                 </span>
@@ -188,7 +193,7 @@ export function ConversationProviderPicker({
             ))}
             {providers.length === 0 && (
               <p className="px-1 py-2 text-xs text-muted-foreground">
-                尚未配置服务提供商。
+                {t("conversation.providerPicker.noProviders")}
               </p>
             )}
           </div>
@@ -199,7 +204,7 @@ export function ConversationProviderPicker({
             id="conversation-provider-picker-models-label"
             className="px-1 text-xs font-medium text-muted-foreground"
           >
-            模型
+            {t("conversation.providerPicker.models")}
           </p>
           <div
             role="listbox"
@@ -221,7 +226,7 @@ export function ConversationProviderPicker({
                   <span className="min-w-0 truncate">{item}</span>
                   {item === highlightedProvider?.model && (
                     <span className="ml-auto shrink-0 text-xs font-normal text-muted-foreground">
-                      默认
+                      {t("common.default")}
                     </span>
                   )}
                 </span>
@@ -229,7 +234,7 @@ export function ConversationProviderPicker({
             ))}
             {highlightedProviderId === null && (
               <p className="px-1 py-2 text-xs text-muted-foreground">
-                选择服务提供商后可选模型。
+                {t("conversation.providerPicker.noModelsHint")}
               </p>
             )}
           </div>
@@ -237,7 +242,7 @@ export function ConversationProviderPicker({
         <Separator />
         <div>
           <p className="px-1 text-xs font-medium text-muted-foreground">
-            推理强度
+            {t("conversation.providerPicker.reasoningEffort")}
           </p>
           <ToggleGroup
             type="single"
@@ -250,17 +255,29 @@ export function ConversationProviderPicker({
             className="w-full"
             disabled={readOnly || saving}
           >
-            <ToggleGroupItem value="default" aria-label="默认">
-              默认
+            <ToggleGroupItem
+              value="default"
+              aria-label={t("conversation.providerPicker.effortDefault")}
+            >
+              {t("conversation.providerPicker.effortDefault")}
             </ToggleGroupItem>
-            <ToggleGroupItem value="low" aria-label="低">
-              低
+            <ToggleGroupItem
+              value="low"
+              aria-label={t("conversation.providerPicker.effortLow")}
+            >
+              {t("conversation.providerPicker.effortLow")}
             </ToggleGroupItem>
-            <ToggleGroupItem value="medium" aria-label="中">
-              中
+            <ToggleGroupItem
+              value="medium"
+              aria-label={t("conversation.providerPicker.effortMedium")}
+            >
+              {t("conversation.providerPicker.effortMedium")}
             </ToggleGroupItem>
-            <ToggleGroupItem value="high" aria-label="高">
-              高
+            <ToggleGroupItem
+              value="high"
+              aria-label={t("conversation.providerPicker.effortHigh")}
+            >
+              {t("conversation.providerPicker.effortHigh")}
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
@@ -275,7 +292,7 @@ export function ConversationProviderPicker({
           }}
         >
           <Settings2 data-icon="inline-start" />
-          管理服务提供商…
+          {t("conversation.providerPicker.manageProviders")}
         </Button>
       </PopoverContent>
     </Popover>

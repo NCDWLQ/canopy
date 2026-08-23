@@ -39,6 +39,7 @@ fn register_commands<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Bu
         providers::commands::set_active_provider,
         providers::commands::set_auto_generate_title,
         providers::commands::set_title_model_binding,
+        providers::commands::set_language,
         providers::commands::reveal_provider_api_key,
         providers::commands::generate_from_active_path,
         providers::commands::cancel_generation,
@@ -211,5 +212,57 @@ mod tests {
                 json!({ "accepted": false })
             );
         }
+    }
+
+    #[test]
+    fn set_language_command_is_registered_and_validates_before_database_access() {
+        let app = register_commands(test::mock_builder())
+            .manage(DbInstances::default())
+            .manage(crate::providers::GenerationRuntime::default())
+            .build(test::mock_context(test::noop_assets()))
+            .expect("mock application builds");
+        let webview = WebviewWindowBuilder::new(&app, "main", Default::default())
+            .build()
+            .expect("mock webview builds");
+        let invoke = |body: serde_json::Value| {
+            test::get_ipc_response(
+                &webview,
+                InvokeRequest {
+                    cmd: "set_language".to_owned(),
+                    callback: CallbackFn(0),
+                    error: CallbackFn(1),
+                    url: "tauri://localhost".parse().expect("test URL is valid"),
+                    body: tauri::ipc::InvokeBody::Json(body),
+                    headers: Default::default(),
+                    invoke_key: test::INVOKE_KEY.to_owned(),
+                },
+            )
+        };
+
+        let rejected = invoke(json!({ "request": { "language": "klingon" } }))
+            .expect_err("unknown language is rejected as invalid input");
+        assert_eq!(
+            rejected,
+            json!({
+                "code": "invalid_input",
+                "message": "请求包含无效输入。",
+                "retryable": false,
+                "details": { "field": "language", "reason": "invalid_language" }
+            })
+        );
+
+        // A valid value passes DTO validation; without a managed database the
+        // registered command fails closed exactly like every other
+        // database-backed command.
+        let reaches_database = invoke(json!({ "request": { "language": "zh-CN" } }))
+            .expect_err("valid language reaches database resolution");
+        assert_eq!(
+            reaches_database,
+            json!({
+                "code": "database_unavailable",
+                "message": "会话数据库当前不可用。",
+                "retryable": true
+            })
+        );
     }
 }

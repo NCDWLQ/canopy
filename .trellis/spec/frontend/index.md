@@ -17,6 +17,7 @@ Canopy foundation and first-week architecture.
 |-------|-------------|--------|
 | [Directory Structure](./directory-structure.md) | Feature-oriented modules and ownership | Initial |
 | [Component Guidelines](./component-guidelines.md) | Component patterns, shadcn/ReUI settings controls, composition | Current |
+| [i18n Guidelines](./i18n-guidelines.md) | Typed-dictionary locales, language preference IPC, translation boundaries | Current |
 | [Hook Guidelines](./hook-guidelines.md) | Custom hooks, Zustand selectors, and effects | Initial |
 | [State Management](./state-management.md) | SQLite durability and normalized Zustand state | Current |
 | [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | Initial |

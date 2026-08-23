@@ -16,6 +16,7 @@ const UUID_V4_PATTERN =
 export const generationUuidSchema = z.string().regex(UUID_V4_PATTERN)
 export const protocolSchema = z.enum(["openai_compatible", "anthropic"])
 export const reasoningEffortSchema = z.enum(["low", "medium", "high"])
+export const languagePreferenceSchema = z.enum(["system", "zh-CN", "en"])
 
 const endpointSchema = unicodeScalarStringSchema.refine((value) => {
   try {
@@ -93,6 +94,10 @@ export const setTitleModelBindingRequestSchema = z
   .strict()
 export const setTitleModelBindingResultSchema =
   setTitleModelBindingRequestSchema
+export const setLanguageRequestSchema = z
+  .object({ language: languagePreferenceSchema })
+  .strict()
+export const setLanguageResultSchema = setLanguageRequestSchema
 export const revealProviderApiKeyRequestSchema = deleteProviderRequestSchema
 export const revealProviderApiKeyResultSchema = z
   .object({ api_key: secretSchema.nullable() })
@@ -138,6 +143,7 @@ export const listProvidersResultSchema = z
     active_provider_id: idSchema.nullable().optional(),
     auto_generate_title: z.boolean(),
     title_model_binding: titleModelBindingDtoSchema.nullable(),
+    language: languagePreferenceSchema,
   })
   .strict()
   .superRefine((result, context) => {

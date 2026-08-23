@@ -31,7 +31,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
-import type { ProviderClient } from "@/lib/tauri"
+import { ConversationCommandError, type ProviderClient } from "@/lib/tauri"
+import { commandErrorMessage, useTranslation } from "@/lib/i18n"
 
 type ProviderDraft = {
   id?: string
@@ -43,13 +44,21 @@ type ProviderDraft = {
   hasApiKey: boolean
 }
 
+/**
+ * Semantic breadcrumb detail for the editor route: a new-provider draft, a
+ * concrete provider name (user data, never localized), or the edit fallback.
+ * Derived into text at render time so locale switches re-translate instantly.
+ */
+export type ProviderDetailCrumb =
+  { kind: "new" } | { kind: "name"; name: string } | { kind: "editFallback" }
+
 export type ProviderSettingsEditorProps = {
   client: ProviderClient
   readOnly: boolean
   providerId: string | null
   onBack: () => void
   onSaved: (provider: ProviderView) => void
-  onDetailLabelChange: (label: string) => void
+  onDetailCrumbChange: (crumb: ProviderDetailCrumb) => void
 }
 
 const emptyDraft = (): ProviderDraft => ({
@@ -87,8 +96,9 @@ export function ProviderSettingsEditor({
   providerId,
   onBack,
   onSaved,
-  onDetailLabelChange,
+  onDetailCrumbChange,
 }: ProviderSettingsEditorProps) {
+  const { t } = useTranslation()
   const phase = useProviderStore((state) => state.phase)
   const providers = useProviderStore((state) => state.providers)
   const storeError = useProviderStore((state) =>
@@ -133,16 +143,20 @@ export function ProviderSettingsEditor({
 
   React.useEffect(() => {
     if (draft.id === undefined) {
-      onDetailLabelChange("新建")
+      onDetailCrumbChange({ kind: "new" })
       return
     }
     if (draft.name.trim() !== "") {
-      onDetailLabelChange(draft.name)
+      onDetailCrumbChange({ kind: "name", name: draft.name })
       return
     }
     const found = providers.find((item) => item.id === draft.id)
-    onDetailLabelChange(found?.name ?? "编辑")
-  }, [draft.id, draft.name, providers, onDetailLabelChange])
+    onDetailCrumbChange(
+      found === undefined
+        ? { kind: "editFallback" }
+        : { kind: "name", name: found.name },
+    )
+  }, [draft.id, draft.name, providers, onDetailCrumbChange])
 
   const updateDraft = <K extends keyof ProviderDraft>(
     key: K,
@@ -163,7 +177,9 @@ export function ProviderSettingsEditor({
       setModels(result)
     } catch (error: unknown) {
       setModelsError(
-        error instanceof Error ? error.message : "获取模型列表失败。",
+        error instanceof ConversationCommandError
+          ? commandErrorMessage(error.code)
+          : t("settings.providers.fetchModelsFailed"),
       )
     } finally {
       setModelsLoading(false)
@@ -249,25 +265,31 @@ export function ProviderSettingsEditor({
           className="flex min-w-0 flex-col gap-4"
         >
           <h2 id="provider-settings-title" className="font-medium">
-            {draft.id === undefined ? "新建模型提供商" : "编辑模型提供商"}
+            {draft.id === undefined
+              ? t("settings.providers.editorNewTitle")
+              : t("settings.providers.editorEditTitle")}
           </h2>
           {storeError !== null && (
             <Alert variant="destructive">
-              <AlertTitle>操作未完成</AlertTitle>
-              <AlertDescription>{storeError.message}</AlertDescription>
+              <AlertTitle>{t("settings.providers.incompleteAlert")}</AlertTitle>
+              <AlertDescription>
+                {commandErrorMessage(storeError.code)}
+              </AlertDescription>
             </Alert>
           )}
           {readOnly && (
             <Alert>
-              <AlertTitle>只读</AlertTitle>
+              <AlertTitle>{t("settings.providers.readOnlyAlert")}</AlertTitle>
               <AlertDescription>
-                查看已归档会话时无法修改模型提供商设置。
+                {t("settings.providers.readOnlyAlertBody")}
               </AlertDescription>
             </Alert>
           )}
           <FieldGroup>
             <Field data-disabled={mutationDisabled}>
-              <FieldLabel htmlFor="provider-name">名称</FieldLabel>
+              <FieldLabel htmlFor="provider-name">
+                {t("settings.providers.nameField")}
+              </FieldLabel>
               <Input
                 id="provider-name"
                 value={draft.name}
@@ -278,7 +300,9 @@ export function ProviderSettingsEditor({
               />
             </Field>
             <Field data-disabled={mutationDisabled}>
-              <FieldLabel htmlFor="provider-protocol">协议</FieldLabel>
+              <FieldLabel htmlFor="provider-protocol">
+                {t("settings.providers.protocolField")}
+              </FieldLabel>
               <Select
                 value={draft.protocol}
                 disabled={mutationDisabled}
@@ -287,12 +311,14 @@ export function ProviderSettingsEditor({
                 }
               >
                 <SelectTrigger id="provider-protocol" className="w-full">
-                  <SelectValue placeholder="选择协议" />
+                  <SelectValue
+                    placeholder={t("settings.providers.protocolPlaceholder")}
+                  />
                 </SelectTrigger>
                 <SelectContent position="popper">
                   <SelectGroup>
                     <SelectItem value="openai_compatible">
-                      OpenAI 兼容
+                      {t("settings.providers.protocolOpenaiCompatible")}
                     </SelectItem>
                     <SelectItem value="anthropic">
                       Anthropic Messages
@@ -302,7 +328,9 @@ export function ProviderSettingsEditor({
               </Select>
             </Field>
             <Field data-disabled={mutationDisabled}>
-              <FieldLabel htmlFor="provider-endpoint">基础端点</FieldLabel>
+              <FieldLabel htmlFor="provider-endpoint">
+                {t("settings.providers.endpointField")}
+              </FieldLabel>
               <Input
                 id="provider-endpoint"
                 type="url"
@@ -320,19 +348,20 @@ export function ProviderSettingsEditor({
               />
               {draft.protocol === "anthropic" && (
                 <FieldDescription>
-                  Anthropic 兼容网关需带各自前缀，如 DeepSeek 填
-                  https://api.deepseek.com/anthropic。
+                  {t("settings.providers.endpointHint")}
                 </FieldDescription>
               )}
             </Field>
             <Field data-disabled={mutationDisabled}>
-              <FieldLabel htmlFor="provider-model-add">模型列表</FieldLabel>
+              <FieldLabel htmlFor="provider-model-add">
+                {t("settings.providers.modelsField")}
+              </FieldLabel>
               <div className="flex gap-2">
                 <Input
                   id="provider-model-add"
                   value={modelAddition}
                   onChange={(event) => setModelAddition(event.target.value)}
-                  placeholder="手动输入模型名"
+                  placeholder={t("settings.providers.modelInputPlaceholder")}
                   disabled={mutationDisabled}
                 />
                 <Button
@@ -341,7 +370,7 @@ export function ProviderSettingsEditor({
                   disabled={mutationDisabled || !modelAddition.trim()}
                   onClick={() => addModel(modelAddition)}
                 >
-                  添加
+                  {t("common.add")}
                 </Button>
                 <Button
                   type="button"
@@ -354,7 +383,7 @@ export function ProviderSettingsEditor({
                   onClick={() => void fetchModels()}
                 >
                   {modelsLoading && <Spinner data-icon="inline-start" />}
-                  获取模型列表
+                  {t("settings.providers.fetchModels")}
                 </Button>
               </div>
               {modelsError !== null && (
@@ -374,7 +403,9 @@ export function ProviderSettingsEditor({
                       {model}
                       <button
                         type="button"
-                        aria-label={`移除 ${model}`}
+                        aria-label={t("settings.providers.removeModelAria", {
+                          model,
+                        })}
                         disabled={mutationDisabled || draft.models.length <= 1}
                         onClick={() => removeModel(model)}
                         className="rounded-sm opacity-60 transition-opacity hover:opacity-100 disabled:pointer-events-none"
@@ -397,7 +428,9 @@ export function ProviderSettingsEditor({
                           type="button"
                           size="xs"
                           variant="ghost"
-                          aria-label={`加入模型：${model.id}`}
+                          aria-label={t("settings.providers.addModelAria", {
+                            model: model.id,
+                          })}
                           disabled={mutationDisabled}
                           onClick={() => addModel(model.id)}
                         >
@@ -412,7 +445,9 @@ export function ProviderSettingsEditor({
             <Field
               data-disabled={mutationDisabled || draft.models.length === 0}
             >
-              <FieldLabel htmlFor="provider-default-model">默认模型</FieldLabel>
+              <FieldLabel htmlFor="provider-default-model">
+                {t("settings.providers.defaultModelField")}
+              </FieldLabel>
               <Select
                 value={
                   draft.models.includes(draft.model) ? draft.model : undefined
@@ -423,7 +458,11 @@ export function ProviderSettingsEditor({
                 }}
               >
                 <SelectTrigger id="provider-default-model" className="w-full">
-                  <SelectValue placeholder="选择默认模型" />
+                  <SelectValue
+                    placeholder={t(
+                      "settings.providers.defaultModelPlaceholder",
+                    )}
+                  />
                 </SelectTrigger>
                 <SelectContent position="popper">
                   <SelectGroup>
@@ -437,7 +476,9 @@ export function ProviderSettingsEditor({
               </Select>
             </Field>
             <Field data-disabled={mutationDisabled}>
-              <FieldLabel htmlFor="provider-api-key">API 密钥</FieldLabel>
+              <FieldLabel htmlFor="provider-api-key">
+                {t("settings.providers.apiKeyField")}
+              </FieldLabel>
               <InputGroup>
                 <InputGroupInput
                   id="provider-api-key"
@@ -448,14 +489,18 @@ export function ProviderSettingsEditor({
                   placeholder={
                     draft.id !== undefined && draft.hasApiKey
                       ? undefined
-                      : "可选"
+                      : t("settings.providers.apiKeyOptional")
                   }
                   disabled={mutationDisabled}
                 />
                 <InputGroupAddon align="inline-end">
                   <InputGroupButton
                     size="icon-sm"
-                    aria-label={showApiKey ? "隐藏 API 密钥" : "显示 API 密钥"}
+                    aria-label={
+                      showApiKey
+                        ? t("settings.providers.hideApiKey")
+                        : t("settings.providers.showApiKey")
+                    }
                     disabled={mutationDisabled}
                     onClick={() => setShowApiKey((visible) => !visible)}
                   >
@@ -473,14 +518,14 @@ export function ProviderSettingsEditor({
       </div>
       <DialogFooter className="mx-0 mb-0 shrink-0 rounded-none">
         <Button type="button" variant="outline" onClick={onBack}>
-          取消
+          {t("common.cancel")}
         </Button>
         <Button
           type="submit"
-          aria-label="保存模型提供商"
+          aria-label={t("settings.providers.saveAria")}
           disabled={mutationDisabled}
         >
-          保存
+          {t("common.save")}
         </Button>
       </DialogFooter>
     </form>

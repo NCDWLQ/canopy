@@ -7,6 +7,8 @@ import {
 } from "lucide-react"
 import { Toaster as SonnerToaster, toast } from "sonner"
 
+import { t } from "@/lib/i18n"
+
 function Toaster(props: React.ComponentProps<typeof SonnerToaster>) {
   return (
     <SonnerToaster
@@ -52,7 +54,7 @@ export function showClickableToast({
   toast.custom((id) => (
     <button
       type="button"
-      aria-label="跳转到会话"
+      aria-label={t("conversation.toast.jumpToConversation")}
       className="flex w-full cursor-pointer items-start gap-3 rounded-[var(--radius)] border border-border bg-popover p-4 text-left text-popover-foreground shadow-lg outline-none transition-colors hover:bg-muted hover:border-ring/40 focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
       onClick={() => {
         onSelect()

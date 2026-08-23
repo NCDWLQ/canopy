@@ -27,6 +27,7 @@ function client() {
     setActiveProvider: vi.fn(),
     setAutoGenerateTitle: vi.fn().mockResolvedValue(true),
     setTitleModelBinding: vi.fn().mockResolvedValue(null),
+    setLanguage: vi.fn().mockResolvedValue("system"),
     revealProviderApiKey: vi.fn().mockResolvedValue(null),
     listProviderModels: vi.fn(),
     generateFromActivePath: vi.fn(),

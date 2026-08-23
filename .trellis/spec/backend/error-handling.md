@@ -59,10 +59,13 @@ pub struct CommandError {
 ```
 
 - `code` is stable control-flow data.
-- `message` is a concise, safe user-facing summary, not a source error dump.
-- `message` is Simplified Chinese because Canopy is currently a single-locale
-  Chinese product. Localization changes the safe summary only; it never changes
-  `code`, `retryable`, `details`, or the serialized field shape.
+- `message` is a concise, safe summary retained for wire/debug visibility, not
+  a source error dump. The UI does not render it: user-facing error copy is
+  mapped on the frontend from `code` (`commandErrorMessage` in
+  `src/lib/i18n`), so the same error follows the active UI locale.
+- `message` stays Simplified Chinese (a stable wire value asserted by Rust
+  tests). Localization changes only the frontend dictionary mapping; it never
+  changes `code`, `retryable`, `details`, or the serialized field shape.
 - `retryable` is decided by the central mapper, not by individual components.
 - `details` is optional, structured, non-sensitive context such as an input
   field name, a safe resource identifier, or a provider retry delay. It is not
@@ -134,8 +137,9 @@ Presentation rules:
 - UI text may add presentation context, but branching behavior depends on
   `code` and `retryable`, never message matching.
 - The UI does not expose a raw machine error code as user copy. Keep the code in
-  normalized state for control flow and diagnostics, and render the safe Chinese
-  `message` with a contextual Chinese heading.
+  normalized state for control flow and diagnostics, and render the localized
+  dictionary text mapped from that `code` (`commandErrorMessage`) with a
+  contextual localized heading; never render the backend `message` string.
 
 Example contract-preserving localization:
 
@@ -149,9 +153,11 @@ CommandError {
 ```
 
 Rust mapping/serialization tests and any shared fixture that models real Rust
-output must assert the localized message together with the unchanged machine
-fields. Arbitrary fixture messages may remain non-Chinese only when the test is
-explicitly proving opaque message preservation rather than product copy.
+output must assert the Chinese `message` wire value together with the unchanged
+machine fields. Frontend tests assert the dictionary text mapped from `code`,
+not the wire `message`. Arbitrary fixture messages may remain non-Chinese only
+when the test is explicitly proving opaque message preservation rather than
+product copy.
 
 ## Common Mistakes
 

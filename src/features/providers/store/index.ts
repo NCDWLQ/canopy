@@ -7,6 +7,14 @@ import type {
 } from "../types"
 import { ConversationCommandError, type ProviderClient } from "@/lib/tauri"
 import type { UiError } from "@/lib/tauri/types"
+import {
+  effectiveLocale,
+  resolveLocalePreference,
+  resolveSystemLocale,
+  t,
+  type LocalePreference,
+} from "@/lib/i18n"
+import { useLocaleStore } from "@/lib/i18n/locale-store"
 export type ProviderState = (
   | {
       phase: "idle" | "loading" | "unconfigured"
@@ -27,6 +35,7 @@ export type ProviderState = (
 ) & {
   autoGenerateTitle: boolean
   titleModelBinding: TitleModelBinding | null
+  language: LocalePreference
 }
 
 export type ProviderStore = ProviderState & {
@@ -51,11 +60,17 @@ export type ProviderStore = ProviderState & {
     client: ProviderClient,
     binding: TitleModelBinding | null,
   ) => Promise<void>
+  setLanguage: (
+    client: ProviderClient,
+    language: LocalePreference,
+  ) => Promise<void>
 }
 
+// Display sites render this through commandErrorMessage(code); the message
+// field carries localized text only for wire/debug inspection.
 const INTERNAL_ERROR: UiError = {
   code: "internal",
-  message: "发生意外错误。",
+  message: t("errors.internal"),
   retryable: false,
 }
 
@@ -76,6 +91,7 @@ function readyOrUnconfigured(
   activeProviderId: string | null,
   autoGenerateTitle: boolean,
   titleModelBinding: TitleModelBinding | null,
+  language: LocalePreference,
 ): ProviderState {
   if (activeProviderId !== null) {
     return {
@@ -84,6 +100,7 @@ function readyOrUnconfigured(
       activeProviderId,
       autoGenerateTitle,
       titleModelBinding,
+      language,
     }
   }
   return {
@@ -92,7 +109,25 @@ function readyOrUnconfigured(
     activeProviderId: null,
     autoGenerateTitle,
     titleModelBinding,
+    language,
   }
+}
+
+function detectedSystemLocale(): ReturnType<typeof resolveSystemLocale> {
+  return resolveSystemLocale(
+    typeof navigator === "undefined" ? [] : navigator.languages,
+  )
+}
+
+/**
+ * Applies a stored preference over the detected system locale onto the UI
+ * locale store (design 08-22-i18n §3). No-op when the resolved locale already
+ * matches, so an unchanged preference never re-renders the tree.
+ */
+function applyLanguagePreference(language: LocalePreference): void {
+  const resolved = effectiveLocale(language, detectedSystemLocale())
+  const { locale, setLocale } = useLocaleStore.getState()
+  if (resolved !== locale) setLocale(resolved)
 }
 
 export const useProviderStore = create<ProviderStore>((set, get) => {
@@ -107,6 +142,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
       activeProviderId: previous.activeProviderId,
       autoGenerateTitle: previous.autoGenerateTitle,
       titleModelBinding: previous.titleModelBinding,
+      language: previous.language,
     })
     return { epoch, previous }
   }
@@ -119,6 +155,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
       activeProviderId: previous.activeProviderId,
       autoGenerateTitle: previous.autoGenerateTitle,
       titleModelBinding: previous.titleModelBinding,
+      language: previous.language,
       error: normalizeError(error),
     })
   }
@@ -129,20 +166,29 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
     activeProviderId: null,
     autoGenerateTitle: true,
     titleModelBinding: null,
+    language: "system",
 
     loadProviders: async (client) => {
       const { epoch, previous } = beginRequest()
       try {
         const result = await client.listProviders()
         if (isCurrent(epoch)) {
+          // The zod-validated client already guarantees the three literal
+          // values; resolveLocalePreference additionally absorbs untyped
+          // fixtures (App smoke mocks) that bypass the bridge.
+          const language = resolveLocalePreference(result.language)
           set(
             readyOrUnconfigured(
               result.providers,
               result.activeProviderId,
               result.autoGenerateTitle,
               result.titleModelBinding,
+              language,
             ),
           )
+          // Boot hydration (design 08-22-i18n §3): only an explicit preference
+          // overrides the locale detected at startup; "system" keeps it.
+          if (language !== "system") applyLanguagePreference(language)
         }
       } catch (error: unknown) {
         fail(epoch, previous, error)
@@ -165,6 +211,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
               previous.activeProviderId,
               previous.autoGenerateTitle,
               previous.titleModelBinding,
+              previous.language,
             ),
           )
         }
@@ -195,6 +242,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
             previous.titleModelBinding?.providerId === providerId
               ? null
               : previous.titleModelBinding,
+            previous.language,
           ),
         )
         return deleted
@@ -215,6 +263,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
               activeProviderId,
               previous.autoGenerateTitle,
               previous.titleModelBinding,
+              previous.language,
             ),
           )
         }
@@ -234,6 +283,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
               previous.activeProviderId,
               autoGenerateTitle,
               previous.titleModelBinding,
+              previous.language,
             ),
           )
         }
@@ -253,8 +303,32 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
               previous.activeProviderId,
               previous.autoGenerateTitle,
               titleModelBinding,
+              previous.language,
             ),
           )
+        }
+      } catch (error: unknown) {
+        fail(epoch, previous, error)
+      }
+    },
+
+    setLanguage: async (client, language) => {
+      const { epoch, previous } = beginRequest()
+      try {
+        const stored = await client.setLanguage(language)
+        if (isCurrent(epoch)) {
+          set(
+            readyOrUnconfigured(
+              previous.providers,
+              previous.activeProviderId,
+              previous.autoGenerateTitle,
+              previous.titleModelBinding,
+              stored,
+            ),
+          )
+          // Unlike boot hydration, an explicit "system" selection recomputes
+          // the detected locale so the UI follows the OS again immediately.
+          applyLanguagePreference(stored)
         }
       } catch (error: unknown) {
         fail(epoch, previous, error)

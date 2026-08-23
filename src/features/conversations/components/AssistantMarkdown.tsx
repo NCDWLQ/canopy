@@ -1,3 +1,4 @@
+import { useMemo } from "react"
 import type { ComponentProps, ReactNode } from "react"
 import { code } from "@streamdown/code"
 import {
@@ -10,6 +11,8 @@ import {
   type StreamdownTranslations,
   type UrlTransform,
 } from "streamdown"
+
+import { useTranslation } from "@/lib/i18n"
 
 export type AssistantMarkdownProps = {
   content: string
@@ -52,18 +55,6 @@ const MARKDOWN_CONTROLS = {
   code: { copy: true, download: false },
   mermaid: false,
 } satisfies ControlsConfig
-
-const MARKDOWN_TRANSLATIONS = {
-  copyCode: "复制代码",
-  copied: "已复制",
-  copyTable: "复制表格",
-  copyTableAsCsv: "复制为 CSV",
-  copyTableAsMarkdown: "复制为 Markdown",
-  copyTableAsTsv: "复制为 TSV",
-  tableFormatCsv: "CSV",
-  tableFormatMarkdown: "Markdown",
-  tableFormatTsv: "TSV",
-} satisfies Partial<StreamdownTranslations>
 
 const safeUrlTransform: UrlTransform = (url) => {
   try {
@@ -144,6 +135,25 @@ export function AssistantMarkdown({
   content,
   isStreaming = false,
 }: AssistantMarkdownProps) {
+  const { t } = useTranslation()
+  // streamdown's control labels come from the dictionary so they follow the
+  // active locale; `t` is a stable function, so the map is rebuilt only when
+  // the locale switches.
+  const translations = useMemo(
+    () =>
+      ({
+        copyCode: t("conversation.markdown.copyCode"),
+        copied: t("conversation.markdown.copied"),
+        copyTable: t("conversation.markdown.copyTable"),
+        copyTableAsCsv: t("conversation.markdown.copyTableAsCsv"),
+        copyTableAsMarkdown: t("conversation.markdown.copyTableAsMarkdown"),
+        copyTableAsTsv: t("conversation.markdown.copyTableAsTsv"),
+        tableFormatCsv: t("conversation.markdown.tableFormatCsv"),
+        tableFormatMarkdown: t("conversation.markdown.tableFormatMarkdown"),
+        tableFormatTsv: t("conversation.markdown.tableFormatTsv"),
+      }) satisfies Partial<StreamdownTranslations>,
+    [t],
+  )
   return (
     <Streamdown
       className="assistant-markdown min-w-0 break-words text-sm text-foreground [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-offset-2 [&_button]:focus-visible:outline-ring"
@@ -155,7 +165,7 @@ export function AssistantMarkdown({
       plugins={MARKDOWN_PLUGINS}
       rehypePlugins={SAFE_REHYPE_PLUGINS}
       skipHtml
-      translations={MARKDOWN_TRANSLATIONS}
+      translations={translations}
       urlTransform={safeUrlTransform}
     >
       {content}

@@ -17,6 +17,7 @@ import type {
   GenerationTerminalView,
 } from "@/features/providers/types"
 import { showClickableToast } from "@/components/ui/toaster"
+import { commandErrorMessage, useTranslation } from "@/lib/i18n"
 import {
   generationIdFromBridgeError,
   type ConversationClient,
@@ -55,6 +56,7 @@ export function useWorkspaceGenerationController({
   conversationClient,
   providerClient,
 }: WorkspaceGenerationControllerOptions): WorkspaceGenerationController {
+  const { t } = useTranslation()
   const providerPhase = useProviderStore((state) => state.phase)
   const conversationId = useConversationStore((state) => state.conversationId)
   const activeNodeRole = useConversationStore((state) =>
@@ -98,7 +100,9 @@ export function useWorkspaceGenerationController({
       if (store.conversationId === target.conversationId) return
       const title =
         payload.parentPreview ??
-        (kind === "completed" ? "已生成回复" : "生成失败")
+        (kind === "completed"
+          ? t("conversation.generation.replyGeneratedToast")
+          : t("conversation.generation.generationFailedToast"))
       const body = kind === "completed" ? payload.replyPreview : payload.detail
       showClickableToast({
         kind: kind === "completed" ? "success" : "error",
@@ -111,7 +115,7 @@ export function useWorkspaceGenerationController({
         },
       })
     },
-    [conversationClient],
+    [conversationClient, t],
   )
 
   // The run record (and its prompt preview) is deleted by a successful
@@ -149,7 +153,7 @@ export function useWorkspaceGenerationController({
           if (useConversationStore.getState().failGeneration(runId, error)) {
             notifyBackgroundTerminal(target, "failed", {
               parentPreview,
-              detail: error.message,
+              detail: commandErrorMessage(error.code),
             })
           }
         }
@@ -162,7 +166,7 @@ export function useWorkspaceGenerationController({
         ) {
           notifyBackgroundTerminal(target, "failed", {
             parentPreview,
-            detail: normalized.message,
+            detail: commandErrorMessage(normalized.code),
           })
         }
       }
@@ -212,7 +216,7 @@ export function useWorkspaceGenerationController({
         ) {
           notifyBackgroundTerminal(target, "failed", {
             parentPreview,
-            detail: terminal.error.message,
+            detail: commandErrorMessage(terminal.error.code),
           })
         }
       }
@@ -314,7 +318,7 @@ export function useWorkspaceGenerationController({
             ) {
               notifyBackgroundTerminal(target, "failed", {
                 parentPreview,
-                detail: normalizedError.message,
+                detail: commandErrorMessage(normalizedError.code),
               })
             }
           }
@@ -348,17 +352,17 @@ export function useWorkspaceGenerationController({
   let unavailableReason: string | null = null
   if (!canGenerate && !canCancel) {
     if (providerPhase !== "ready") {
-      unavailableReason = "请先配置服务提供商。"
+      unavailableReason = t("conversation.generation.unavailableProvider")
     } else if (conversationId === null) {
-      unavailableReason = "请先新建或加载会话。"
+      unavailableReason = t("conversation.generation.unavailableNoConversation")
     } else if (isArchived) {
-      unavailableReason = "已归档的会话为只读。"
+      unavailableReason = t("conversation.generation.unavailableArchived")
     } else if (pathProjection.kind === "error") {
-      unavailableReason = "当前会话路径异常，无法生成回复。"
+      unavailableReason = t("conversation.generation.unavailableInvalidPath")
     } else if (activeNodeRole !== "user") {
-      unavailableReason = "请选择一条用户消息以生成回复。"
+      unavailableReason = t("conversation.generation.unavailableNotUserNode")
     } else if (mutationLocked) {
-      unavailableReason = "请等待当前回复完成。"
+      unavailableReason = t("conversation.generation.unavailableRunActive")
     }
   }
 

@@ -1,0 +1,260 @@
+import type { Dictionary } from "./zh-CN"
+
+/**
+ * English dictionary. `satisfies Dictionary` keeps the key set and every
+ * interpolation signature in lockstep with zh-CN at compile time.
+ */
+export const en = {
+  // Shared UI vocabulary (shadcn primitives and generic buttons/labels).
+  "common.close": "Close",
+  "common.loading": "Loading",
+  "common.more": "More",
+  "common.cancel": "Cancel",
+  "common.delete": "Delete",
+  "common.save": "Save",
+  "common.add": "Add",
+  "common.default": "Default",
+  "common.settings": "Settings",
+  "common.breadcrumb": "Breadcrumb",
+
+  // CommandErrorCode mapping plus frontend fallback error copy.
+  "errors.invalidInput": "The request contains invalid input.",
+  "errors.notFound": "The requested resource was not found.",
+  "errors.treeIntegrity": "The conversation tree could not be verified.",
+  "errors.databaseUnavailable": "The database is currently unavailable.",
+  "errors.migrationFailure": "The database migration failed.",
+  "errors.providerAuthentication": "Provider authentication is required.",
+  "errors.rateLimited": "The provider rate limit was reached.",
+  "errors.providerUnavailable": "The provider is currently unavailable.",
+  "errors.networkFailure": "The provider network request failed.",
+  "errors.cancelled": "Generation was cancelled.",
+  "errors.internal": "An unexpected error occurred.",
+  "errors.unsafeTreeProjection":
+    "The conversation tree cannot be shown safely.",
+
+  // ConversationWorkspace.tsx
+  "conversation.workspace.sidebar": "Conversation tree sidebar",
+  "conversation.workspace.newConversation": "New conversation",
+  "conversation.workspace.history": "History",
+  "conversation.workspace.historyList": "Conversation history",
+  "conversation.workspace.generatingReply": "Generating reply",
+  "conversation.workspace.archivedBadge": "Archived",
+  "conversation.workspace.archive": "Archive",
+  "conversation.workspace.loadingHistory": "Loading history…",
+  "conversation.workspace.emptyHistory": "No saved conversations yet.",
+  "conversation.workspace.retryHistory": "Retry loading history",
+  "conversation.workspace.treeSection": "Conversation tree",
+  "conversation.workspace.noConversationLoaded": "No conversation loaded.",
+  "conversation.workspace.collapseSidebar": "Collapse sidebar",
+  "conversation.workspace.expandSidebar": "Expand sidebar",
+  "conversation.workspace.archivedReadonlyBadge": "Archived — read-only",
+  "conversation.workspace.blankTitle": "Start a new conversation",
+  "conversation.workspace.blankHint":
+    "Type your first message below. It is saved once you send it.",
+  "conversation.workspace.firstMessagePlaceholder": "Type your first message…",
+  "conversation.workspace.loadingHistoryPane": "Loading conversation history…",
+  "conversation.workspace.placeholderArchived":
+    "This conversation is archived and cannot be edited.",
+  "conversation.workspace.placeholderGenerating": "Generating reply…",
+  "conversation.workspace.placeholderNextMessage": "Type your next message…",
+  "conversation.workspace.placeholderDraftOnly":
+    "You can draft a message, but the current path cannot send right now.",
+  "conversation.workspace.archiveConfirmTitle": "Archive this conversation?",
+  "conversation.workspace.archiveConfirmBody":
+    "Archiving makes the conversation read-only and marks it as archived in history.",
+  "conversation.workspace.archiveConfirmInterrupts":
+    "Archiving will interrupt the generation in progress.",
+  "conversation.workspace.archiveConfirmAction": "Archive",
+
+  // ConversationPane.tsx
+  "conversation.pane.thinking": "Thinking",
+  "conversation.pane.generationFailed": "Reply failed",
+  "conversation.pane.persistFailed": "This reply could not be saved",
+  "conversation.pane.regenerate": "Regenerate",
+  "conversation.pane.replyStopped": "Reply stopped",
+  "conversation.pane.loading": "Loading conversation…",
+  "conversation.pane.errorTitle": "Something went wrong",
+  "conversation.pane.retry": "Retry",
+  "conversation.pane.empty": "No message selected.",
+  "conversation.pane.saving": "Saving message",
+
+  // Composer.tsx
+  "conversation.composer.placeholder": "Type a message…",
+  "conversation.composer.label": "Message input",
+  "conversation.composer.cancelGeneration": "Cancel generation",
+  "conversation.composer.send": "Send message",
+
+  // MessageNode.tsx
+  "conversation.message.saveAsBranch": "Save as new branch",
+  "conversation.message.createBranch": "Create branch",
+  "conversation.message.generateReply": "Generate reply",
+  "conversation.message.configureProvider": "Configure a provider to generate",
+  "conversation.message.regenerate": "Regenerate",
+  "conversation.message.editAsBranch": "Edit as new branch",
+  "conversation.message.branchFromHere": "Branch from here",
+  "conversation.message.copied": "Copied",
+  "conversation.message.copy": "Copy",
+  "conversation.message.editContent": "Edit message content",
+  "conversation.message.branchPlaceholder": "Type a branch message…",
+  "conversation.message.branchContent": "Branch message content",
+
+  // MessageBubble.tsx
+  "conversation.messageBubble.roleSystem": "System",
+  "conversation.messageBubble.roleUser": "User",
+  "conversation.messageBubble.roleAssistant": "Assistant",
+  "conversation.messageBubble.roleTool": "Tool",
+  "conversation.messageBubble.messageAria": ({ role }: { role: string }) =>
+    `${role} message`,
+
+  // ThinkingBlock.tsx
+  "conversation.thinking.thinking": "Thinking…",
+  "conversation.thinking.process": "Thought process",
+
+  // OutlineTree.tsx
+  "conversation.outline.tree": "Conversation tree",
+  "conversation.outline.togglePreview": ({
+    expanded,
+    label,
+  }: {
+    expanded: boolean
+    label: string
+  }) => (expanded ? `Collapse ${label}` : `Expand ${label}`),
+  "conversation.outline.messageFallback": "message",
+  "conversation.outline.noReplies": "No replies to this message yet",
+  "conversation.outline.emptyContent": "Empty",
+
+  // AssistantMarkdown.tsx (streamdown translations)
+  "conversation.markdown.copyCode": "Copy code",
+  "conversation.markdown.copied": "Copied",
+  "conversation.markdown.copyTable": "Copy table",
+  "conversation.markdown.copyTableAsCsv": "Copy as CSV",
+  "conversation.markdown.copyTableAsMarkdown": "Copy as Markdown",
+  "conversation.markdown.copyTableAsTsv": "Copy as TSV",
+  "conversation.markdown.tableFormatCsv": "CSV",
+  "conversation.markdown.tableFormatMarkdown": "Markdown",
+  "conversation.markdown.tableFormatTsv": "TSV",
+
+  // useWorkspaceGenerationController.ts
+  "conversation.generation.replyGeneratedToast": "Reply generated",
+  "conversation.generation.generationFailedToast": "Generation failed",
+  "conversation.generation.unavailableProvider": "Configure a provider first.",
+  "conversation.generation.unavailableNoConversation":
+    "Create or load a conversation first.",
+  "conversation.generation.unavailableArchived":
+    "Archived conversations are read-only.",
+  "conversation.generation.unavailableInvalidPath":
+    "The current conversation path is broken; replies cannot be generated.",
+  "conversation.generation.unavailableNotUserNode":
+    "Select a user message to generate a reply.",
+  "conversation.generation.unavailableRunActive":
+    "Wait for the current reply to finish.",
+
+  // toaster.tsx
+  "conversation.toast.jumpToConversation": "Jump to conversation",
+
+  // ConversationProviderPicker.tsx
+  "conversation.providerPicker.triggerUnconfigured": "No provider configured",
+  "conversation.providerPicker.open": "Select model and reasoning effort",
+  "conversation.providerPicker.providers": "Providers",
+  "conversation.providerPicker.noProviders": "No providers configured yet.",
+  "conversation.providerPicker.models": "Models",
+  "conversation.providerPicker.noModelsHint":
+    "Select a provider to choose a model.",
+  "conversation.providerPicker.reasoningEffort": "Reasoning effort",
+  "conversation.providerPicker.effortDefault": "Default",
+  "conversation.providerPicker.effortLow": "Low",
+  "conversation.providerPicker.effortMedium": "Medium",
+  "conversation.providerPicker.effortHigh": "High",
+  "conversation.providerPicker.manageProviders": "Manage providers…",
+
+  // SettingsDialog.tsx
+  "settings.dialog.description": "Workspace settings",
+  "settings.dialog.navLabel": "Settings categories",
+  "settings.dialog.generalCategory": "General",
+  "settings.dialog.providersCategory": "Model Providers",
+  "settings.dialog.conversationsCategory": "Conversations",
+
+  // GeneralSettingsPanel.tsx
+  "settings.general.title": "General",
+  "settings.general.language": "Language",
+  "settings.general.languageDescription":
+    "Choose the language used across the interface",
+  "settings.general.languageSystem": "Follow system",
+  "settings.general.languageZhCn": "简体中文",
+  "settings.general.languageEn": "English",
+  "settings.general.updateFailed": "Language setting was not saved",
+
+  // ConversationSettingsPanel.tsx
+  "settings.conversation.title": "Conversations",
+  "settings.conversation.autoGenerateTitle": "Auto-generate titles",
+  "settings.conversation.autoGenerateTitleDescription":
+    "After the first exchange, titles are generated automatically with the model configured below",
+  "settings.conversation.titleModel": "Title model",
+  "settings.conversation.followSession": "Follow conversation",
+
+  // ProviderSettingsPanel.tsx + ProviderSettingsList.tsx
+  "settings.providers.crumbEdit": "Edit",
+  "settings.providers.crumbNew": "New",
+  "settings.providers.backToList": "Model Providers",
+  "settings.providers.backToListAria": "Back to model providers",
+  "settings.providers.allProviders": "All providers",
+  "settings.providers.create": "New",
+  "settings.providers.empty": "No model providers added yet.",
+  "settings.providers.editAria": ({ name }: { name: string }) =>
+    `Edit: ${name}`,
+  "settings.providers.defaultBadgeAria": "Current global default",
+  "settings.providers.moreActionsAria": ({ name }: { name: string }) =>
+    `More actions: ${name}`,
+  "settings.providers.alreadyDefault": "Already the current default provider",
+  "settings.providers.setAsDefault": "Set as default",
+  "settings.providers.setAsDefaultDisabledAria":
+    "Set as default (already the current default provider)",
+  "settings.providers.deleteDisabled": "The default provider cannot be deleted",
+  "settings.providers.deleteDisabledAria":
+    "Delete (the default provider cannot be deleted)",
+  "settings.providers.deleteTitle": "Delete model provider?",
+  "settings.providers.deleteConfirm": ({ name }: { name: string }) =>
+    `Delete “${name}”?`,
+  "settings.providers.deleteConfirmBody":
+    "Conversations using it will fall back to the global default.",
+
+  // ProviderSettingsEditor.tsx
+  "settings.providers.editorNewTitle": "New model provider",
+  "settings.providers.editorEditTitle": "Edit model provider",
+  "settings.providers.incompleteAlert": "Action not completed",
+  "settings.providers.readOnlyAlert": "Read-only",
+  "settings.providers.readOnlyAlertBody":
+    "Provider settings cannot be changed while viewing an archived conversation.",
+  "settings.providers.nameField": "Name",
+  "settings.providers.protocolField": "Protocol",
+  "settings.providers.protocolPlaceholder": "Select a protocol",
+  "settings.providers.protocolOpenaiCompatible": "OpenAI compatible",
+  "settings.providers.endpointField": "Base endpoint",
+  "settings.providers.endpointHint":
+    "Anthropic-compatible gateways need their own prefix; for DeepSeek enter https://api.deepseek.com/anthropic.",
+  "settings.providers.modelsField": "Models",
+  "settings.providers.modelInputPlaceholder": "Enter a model name",
+  "settings.providers.fetchModels": "Fetch models",
+  "settings.providers.fetchModelsFailed": "Failed to fetch models.",
+  "settings.providers.removeModelAria": ({ model }: { model: string }) =>
+    `Remove ${model}`,
+  "settings.providers.addModelAria": ({ model }: { model: string }) =>
+    `Add model: ${model}`,
+  "settings.providers.defaultModelField": "Default model",
+  "settings.providers.defaultModelPlaceholder": "Select a default model",
+  "settings.providers.apiKeyField": "API key",
+  "settings.providers.apiKeyOptional": "Optional",
+  "settings.providers.showApiKey": "Show API key",
+  "settings.providers.hideApiKey": "Hide API key",
+  "settings.providers.saveAria": "Save model provider",
+
+  // formatProviderModelsSummary.ts
+  "providers.modelsSummary.empty": "No models added",
+  "providers.modelsSummary.more": ({
+    head,
+    remaining,
+  }: {
+    head: string
+    remaining: number
+  }) => (remaining === 1 ? `${head} +1 more` : `${head} +${remaining} more`),
+} satisfies Dictionary

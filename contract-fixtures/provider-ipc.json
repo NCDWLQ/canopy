@@ -6,6 +6,7 @@
     "set_active_provider",
     "set_auto_generate_title",
     "set_title_model_binding",
+    "set_language",
     "reveal_provider_api_key",
     "list_provider_models",
     "generate_from_active_path",
@@ -35,6 +36,9 @@
     },
     "set_title_model_binding": {
       "binding": null
+    },
+    "set_language": {
+      "language": "zh-CN"
     },
     "reveal_provider_api_key": {
       "provider_id": "provider-fixture"
@@ -83,10 +87,14 @@
       ],
       "active_provider_id": "provider-fixture",
       "auto_generate_title": true,
-      "title_model_binding": null
+      "title_model_binding": null,
+      "language": "system"
     },
     "active": {
       "active_provider_id": "provider-fixture"
+    },
+    "set_language": {
+      "language": "zh-CN"
     },
     "reveal_api_key": {
       "api_key": "fixture-revealed-key-sentinel"

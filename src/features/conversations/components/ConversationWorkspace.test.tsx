@@ -194,12 +194,14 @@ function createMockProviderClient() {
       activeProviderId: provider.id,
       autoGenerateTitle: true,
       titleModelBinding: null,
+      language: "system",
     }),
     saveProvider: vi.fn<ProviderClient["saveProvider"]>(),
     deleteProvider: vi.fn<ProviderClient["deleteProvider"]>(),
     setActiveProvider: vi.fn<ProviderClient["setActiveProvider"]>(),
     setAutoGenerateTitle: vi.fn<ProviderClient["setAutoGenerateTitle"]>(),
     setTitleModelBinding: vi.fn<ProviderClient["setTitleModelBinding"]>(),
+    setLanguage: vi.fn<ProviderClient["setLanguage"]>(),
     revealProviderApiKey: vi
       .fn<ProviderClient["revealProviderApiKey"]>()
       .mockResolvedValue(null),
@@ -331,6 +333,9 @@ describe("ConversationWorkspace", () => {
 
     await user.click(settingsButton)
     expect(screen.getByRole("dialog")).toHaveAccessibleName("设置")
+    // The dialog opens on the general category; provider settings are one
+    // nav click away.
+    await user.click(screen.getByRole("button", { name: "模型提供商" }))
     expect(screen.getByRole("heading", { name: "全部提供商" })).toBeVisible()
     await user.click(screen.getByRole("button", { name: "关闭" }))
 
@@ -350,6 +355,7 @@ describe("ConversationWorkspace", () => {
     )
     await user.click(screen.getByRole("button", { name: "管理服务提供商…" }))
     expect(screen.getByRole("dialog")).toHaveAccessibleName("设置")
+    await user.click(screen.getByRole("button", { name: "模型提供商" }))
     expect(screen.getByRole("heading", { name: "全部提供商" })).toBeVisible()
     await user.click(screen.getByRole("button", { name: "关闭" }))
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
@@ -738,6 +744,7 @@ describe("ConversationWorkspace", () => {
       activeProviderId: null,
       autoGenerateTitle: true,
       titleModelBinding: null,
+      language: "system",
     })
     client.createConversation.mockResolvedValueOnce(rootOnlyTree)
     render(<ConversationWorkspace />)
@@ -859,9 +866,12 @@ describe("ConversationWorkspace", () => {
 
     await user.click(screen.getByRole("button", { name: "发送消息" }))
 
+    // The blank-conversation alert maps the error through
+    // commandErrorMessage(code); the raw backend message is never echoed.
+    expect(await screen.findByText("会话数据库当前不可用。")).toBeVisible()
     expect(
-      await screen.findByText("Conversation could not be saved."),
-    ).toBeVisible()
+      screen.queryByText("Conversation could not be saved."),
+    ).not.toBeInTheDocument()
     expect(composer).toHaveValue(rootOnlyTree.nodes[0]!.content)
     expect(composer).toBeEnabled()
     await user.click(screen.getByRole("button", { name: "发送消息" }))
@@ -1120,8 +1130,13 @@ describe("ConversationWorkspace", () => {
 
     render(<ConversationWorkspace />)
 
-    expect(screen.getAllByText("无法安全显示会话树。")).toHaveLength(2)
+    // Both the sidebar fallback and the pane banner render the per-code
+    // representative copy (commandErrorMessage); the raw store error message
+    // is never echoed to the UI.
+    expect(screen.queryByText("无法安全显示会话树。")).not.toBeInTheDocument()
+    expect(screen.getAllByText("无法验证会话树。")).toHaveLength(2)
     const pane = screen.getByTestId("conversation-pane")
+    expect(within(pane).getByText("无法验证会话树。")).toBeVisible()
     expect(within(pane).queryByText(root.content)).not.toBeInTheDocument()
     expect(within(pane).queryByText(left.content)).not.toBeInTheDocument()
     expect(within(pane).queryByText(right.content)).not.toBeInTheDocument()
@@ -1536,6 +1551,7 @@ describe("ConversationWorkspace", () => {
       activeProviderId: null,
       autoGenerateTitle: true,
       titleModelBinding: null,
+      language: "system",
     })
     providerClient.saveProvider = vi.fn().mockResolvedValueOnce({
       id: "provider-1",
@@ -1566,6 +1582,7 @@ describe("ConversationWorkspace", () => {
 
     await user.click(configButton)
     expect(screen.getByRole("dialog")).toHaveAccessibleName("设置")
+    await user.click(screen.getByRole("button", { name: "模型提供商" }))
     await user.click(screen.getByRole("button", { name: "新建" }))
 
     await user.type(screen.getByLabelText("名称"), "Fixture provider")

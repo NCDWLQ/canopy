@@ -1,3 +1,4 @@
+import type { LocalePreference } from "@/lib/i18n"
 import type { ConversationNodeView } from "@/lib/tauri/types"
 import type { UiError } from "@/lib/tauri/types"
 
@@ -40,6 +41,7 @@ export type ListProvidersView = {
   activeProviderId: string | null
   autoGenerateTitle: boolean
   titleModelBinding: TitleModelBinding | null
+  language: LocalePreference
 }
 
 export type ModelSummaryView = {

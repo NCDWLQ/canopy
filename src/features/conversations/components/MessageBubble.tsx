@@ -1,6 +1,7 @@
 import type { ReactNode } from "react"
 
 import type { PathMessageView } from "../types"
+import { useTranslation } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 
 export type MessageBubbleProps = {
@@ -11,13 +12,6 @@ export type MessageBubbleProps = {
   className?: string
 }
 
-const ROLE_LABELS: Record<PathMessageView["role"], string> = {
-  system: "系统",
-  user: "用户",
-  assistant: "助手",
-  tool: "工具",
-}
-
 export function MessageBubble({
   role,
   children,
@@ -25,12 +19,22 @@ export function MessageBubble({
   footer,
   className,
 }: MessageBubbleProps) {
-  const roleLabel = ROLE_LABELS[role]
+  const { t } = useTranslation()
+  const roleLabels: Record<PathMessageView["role"], string> = {
+    system: t("conversation.messageBubble.roleSystem"),
+    user: t("conversation.messageBubble.roleUser"),
+    assistant: t("conversation.messageBubble.roleAssistant"),
+    tool: t("conversation.messageBubble.roleTool"),
+  }
+  const roleLabel = roleLabels[role]
+  const messageAria = t("conversation.messageBubble.messageAria", {
+    role: roleLabel,
+  })
 
   if (role === "user") {
     return (
       <article
-        aria-label={`${roleLabel}消息`}
+        aria-label={messageAria}
         className={cn("group flex flex-col items-end my-3 w-full", className)}
       >
         <div className="max-w-[85%] rounded-2xl bg-muted px-4 py-2.5 text-sm text-foreground">
@@ -49,7 +53,7 @@ export function MessageBubble({
   if (role === "assistant") {
     return (
       <article
-        aria-label={`${roleLabel}消息`}
+        aria-label={messageAria}
         className={cn(
           "group flex flex-col items-start my-4 w-full text-foreground",
           className,
@@ -68,7 +72,7 @@ export function MessageBubble({
 
   return (
     <article
-      aria-label={`${roleLabel}消息`}
+      aria-label={messageAria}
       className={cn("group my-3 flex flex-col items-center w-full", className)}
     >
       <div className="max-w-[85%] rounded-lg border bg-card/60 px-3 py-2 text-xs text-muted-foreground">

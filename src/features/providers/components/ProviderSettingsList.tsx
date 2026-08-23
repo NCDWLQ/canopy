@@ -23,6 +23,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import type { ProviderClient } from "@/lib/tauri"
+import { useTranslation } from "@/lib/i18n"
 
 export type ProviderSettingsListProps = {
   client: ProviderClient
@@ -35,6 +36,7 @@ export function ProviderSettingsList({
   readOnly,
   onEdit,
 }: ProviderSettingsListProps) {
+  const { t } = useTranslation()
   const phase = useProviderStore((state) => state.phase)
   const providers = useProviderStore((state) => state.providers)
   const activeProviderId = useProviderStore((state) => state.activeProviderId)
@@ -60,7 +62,7 @@ export function ProviderSettingsList({
         >
           <div className="flex items-center justify-between gap-2">
             <h2 id="provider-list-title" className="font-medium">
-              全部提供商
+              {t("settings.providers.allProviders")}
             </h2>
             <Button
               type="button"
@@ -70,13 +72,13 @@ export function ProviderSettingsList({
               onClick={() => onEdit(null)}
             >
               <Plus data-icon="inline-start" />
-              新建
+              {t("settings.providers.create")}
             </Button>
           </div>
           <div className="flex flex-col gap-1 rounded-lg border p-1">
             {providers.length === 0 ? (
               <p className="p-3 text-sm text-muted-foreground">
-                尚未添加模型提供商。
+                {t("settings.providers.empty")}
               </p>
             ) : (
               providers.map((provider) => {
@@ -90,7 +92,9 @@ export function ProviderSettingsList({
                       type="button"
                       variant="ghost"
                       className="h-auto min-w-0 flex-1 justify-start py-2 hover:bg-transparent"
-                      aria-label={`编辑：${provider.name}`}
+                      aria-label={t("settings.providers.editAria", {
+                        name: provider.name,
+                      })}
                       onClick={() => onEdit(provider.id)}
                     >
                       <span className="flex w-full min-w-0 items-start gap-2">
@@ -105,9 +109,11 @@ export function ProviderSettingsList({
                         {isDefault && (
                           <span
                             className="shrink-0 self-center text-xs font-normal text-muted-foreground"
-                            aria-label="当前全局默认"
+                            aria-label={t(
+                              "settings.providers.defaultBadgeAria",
+                            )}
                           >
-                            默认
+                            {t("common.default")}
                           </span>
                         )}
                       </span>
@@ -119,7 +125,9 @@ export function ProviderSettingsList({
                           variant="ghost"
                           size="icon"
                           className="shrink-0 hover:bg-transparent"
-                          aria-label={`更多操作：${provider.name}`}
+                          aria-label={t("settings.providers.moreActionsAria", {
+                            name: provider.name,
+                          })}
                           disabled={mutationDisabled}
                         >
                           <EllipsisVertical />
@@ -132,15 +140,17 @@ export function ProviderSettingsList({
                         {isDefault ? (
                           <span
                             className="flex w-full"
-                            title="已是当前默认提供商"
+                            title={t("settings.providers.alreadyDefault")}
                           >
                             <DropdownMenuItem
                               disabled
                               className="w-full"
-                              aria-label="设为默认（已是当前默认提供商）"
+                              aria-label={t(
+                                "settings.providers.setAsDefaultDisabledAria",
+                              )}
                             >
                               <Star />
-                              设为默认
+                              {t("settings.providers.setAsDefault")}
                             </DropdownMenuItem>
                           </span>
                         ) : (
@@ -150,23 +160,25 @@ export function ProviderSettingsList({
                             }
                           >
                             <Star />
-                            设为默认
+                            {t("settings.providers.setAsDefault")}
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuSeparator />
                         {isDefault ? (
                           <span
                             className="flex w-full"
-                            title="当前为默认提供商，无法删除"
+                            title={t("settings.providers.deleteDisabled")}
                           >
                             <DropdownMenuItem
                               variant="destructive"
                               disabled
                               className="w-full"
-                              aria-label="删除（当前为默认提供商，无法删除）"
+                              aria-label={t(
+                                "settings.providers.deleteDisabledAria",
+                              )}
                             >
                               <Trash2 />
-                              删除
+                              {t("common.delete")}
                             </DropdownMenuItem>
                           </span>
                         ) : (
@@ -175,7 +187,7 @@ export function ProviderSettingsList({
                             onSelect={() => setProviderPendingDelete(provider)}
                           >
                             <Trash2 />
-                            删除
+                            {t("common.delete")}
                           </DropdownMenuItem>
                         )}
                       </DropdownMenuContent>
@@ -197,15 +209,17 @@ export function ProviderSettingsList({
           <AlertDialogHeader>
             <AlertDialogTitle>
               {providerPendingDelete === null
-                ? "删除模型提供商？"
-                : `删除「${providerPendingDelete.name}」？`}
+                ? t("settings.providers.deleteTitle")
+                : t("settings.providers.deleteConfirm", {
+                    name: providerPendingDelete.name,
+                  })}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              使用它的会话将回退到全局默认。
+              {t("settings.providers.deleteConfirmBody")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
               disabled={
@@ -218,7 +232,7 @@ export function ProviderSettingsList({
                 void handleDelete(providerPendingDelete.id)
               }}
             >
-              删除
+              {t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

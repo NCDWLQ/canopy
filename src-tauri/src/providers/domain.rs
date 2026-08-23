@@ -35,6 +35,39 @@ impl Protocol {
     }
 }
 
+/// Persisted UI language preference stored under the `language` key in
+/// `app_settings`. `System` follows the OS locale and is the default while
+/// the key is absent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LanguagePreference {
+    System,
+    ZhCn,
+    En,
+}
+
+impl LanguagePreference {
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "system" => Some(Self::System),
+            "zh-CN" => Some(Self::ZhCn),
+            "en" => Some(Self::En),
+            _ => None,
+        }
+    }
+
+    pub fn from_setting_text(value: &str) -> Result<Self, ProviderError> {
+        Self::parse(value).ok_or(ProviderError::Protocol)
+    }
+
+    pub fn as_setting_text(self) -> &'static str {
+        match self {
+            Self::System => "system",
+            Self::ZhCn => "zh-CN",
+            Self::En => "en",
+        }
+    }
+}
+
 #[derive(Clone)]
 pub enum ApiKeyAction {
     Keep,

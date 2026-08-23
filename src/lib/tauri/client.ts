@@ -9,6 +9,7 @@ import type {
   PathMessageView,
   TreeNodeView,
 } from "@/features/conversations/types"
+import { t } from "@/lib/i18n"
 import type { ConversationNodeView, UiError, UiErrorCode } from "./types"
 
 import {
@@ -275,10 +276,13 @@ export function normalizeCommandError(
   })
 }
 
+// Local fallback errors keep the wire contract (code/message/retryable); the
+// message text is localized for debug inspection while display sites use
+// commandErrorMessage(code).
 function invalidInputError(): ConversationCommandError {
   return new ConversationCommandError({
     code: "invalid_input",
-    message: "请求包含无效输入。",
+    message: t("errors.invalidInput"),
     retryable: false,
   })
 }
@@ -286,7 +290,7 @@ function invalidInputError(): ConversationCommandError {
 export function internalError(): ConversationCommandError {
   return new ConversationCommandError({
     code: "internal",
-    message: "发生意外错误。",
+    message: t("errors.internal"),
     retryable: false,
   })
 }

@@ -1,6 +1,9 @@
 import * as React from "react"
 
-import { ProviderSettingsEditor } from "./ProviderSettingsEditor"
+import {
+  ProviderSettingsEditor,
+  type ProviderDetailCrumb,
+} from "./ProviderSettingsEditor"
 import { ProviderSettingsList } from "./ProviderSettingsList"
 import { useProviderStore } from "../store"
 import type { ProviderView } from "../types"
@@ -13,6 +16,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import type { ProviderClient } from "@/lib/tauri"
+import { useTranslation } from "@/lib/i18n"
 
 export type ProviderSettingsPanelProps = {
   client: ProviderClient
@@ -26,9 +30,21 @@ export function ProviderSettingsPanel({
   client,
   readOnly,
 }: ProviderSettingsPanelProps) {
+  const { t } = useTranslation()
   const [route, setRoute] = React.useState<ProviderRoute>({ view: "list" })
   const providers = useProviderStore((state) => state.providers)
-  const [detailCrumbLabel, setDetailCrumbLabel] = React.useState("编辑")
+  // Stored as a semantic value, not rendered text, so a locale switch derives
+  // the label fresh from `t()` instead of replaying the previous language.
+  const [detailCrumb, setDetailCrumb] = React.useState<ProviderDetailCrumb>({
+    kind: "editFallback",
+  })
+
+  const detailCrumbLabel =
+    detailCrumb.kind === "new"
+      ? t("settings.providers.crumbNew")
+      : detailCrumb.kind === "name"
+        ? detailCrumb.name
+        : t("settings.providers.crumbEdit")
 
   const goToList = React.useCallback(() => {
     setRoute({ view: "list" })
@@ -38,32 +54,42 @@ export function ProviderSettingsPanel({
     (providerId: string | null) => {
       setRoute({ view: "edit", providerId })
       if (providerId === null) {
-        setDetailCrumbLabel("新建")
+        setDetailCrumb({ kind: "new" })
         return
       }
       const found = providers.find((item) => item.id === providerId)
-      setDetailCrumbLabel(found?.name ?? "编辑")
+      setDetailCrumb(
+        found === undefined
+          ? { kind: "editFallback" }
+          : { kind: "name", name: found.name },
+      )
     },
     [providers],
   )
 
   const handleSaved = React.useCallback((saved: ProviderView) => {
     setRoute({ view: "edit", providerId: saved.id })
-    setDetailCrumbLabel(saved.name.trim() !== "" ? saved.name : "编辑")
+    setDetailCrumb(
+      saved.name.trim() !== ""
+        ? { kind: "name", name: saved.name }
+        : { kind: "editFallback" },
+    )
   }, [])
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="border-b px-4 py-3 pr-12">
-        <Breadcrumb aria-label="面包屑">
+        <Breadcrumb aria-label={t("common.breadcrumb")}>
           <BreadcrumbList>
             <BreadcrumbItem>
-              <span>设置</span>
+              <span>{t("common.settings")}</span>
             </BreadcrumbItem>
             <BreadcrumbSeparator />
             {route.view === "list" ? (
               <BreadcrumbItem>
-                <BreadcrumbPage>模型提供商</BreadcrumbPage>
+                <BreadcrumbPage>
+                  {t("settings.providers.backToList")}
+                </BreadcrumbPage>
               </BreadcrumbItem>
             ) : (
               <>
@@ -71,10 +97,10 @@ export function ProviderSettingsPanel({
                   <BreadcrumbLink asChild>
                     <button
                       type="button"
-                      aria-label="返回模型提供商列表"
+                      aria-label={t("settings.providers.backToListAria")}
                       onClick={goToList}
                     >
-                      模型提供商
+                      {t("settings.providers.backToList")}
                     </button>
                   </BreadcrumbLink>
                 </BreadcrumbItem>
@@ -103,7 +129,7 @@ export function ProviderSettingsPanel({
           providerId={route.providerId}
           onBack={goToList}
           onSaved={handleSaved}
-          onDetailLabelChange={setDetailCrumbLabel}
+          onDetailCrumbChange={setDetailCrumb}
         />
       )}
     </div>

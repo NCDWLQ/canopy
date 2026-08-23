@@ -724,3 +724,30 @@ worktree 流程完成窗口状态任务:默认窗口 800×600→1200×800(逻辑
 ### Status
 
 [OK] **Completed**
+
+
+## Session 33: i18n support: zh-CN + en typed-dictionary UI localization
+
+**Date**: 2026-08-23
+**Task**: i18n support: zh-CN + en typed-dictionary UI localization
+**Branch**: `feat/i18n`
+
+### Summary
+
+Planned and implemented full i18n support (task 08-22-i18n) in worktree canopy-i18n on feat/i18n: zero-dependency typed dictionary core (src/lib/i18n, 178 keys x zh-CN/en, compile-time key checks), language preference IPC (set_language + list_providers.language via app_settings kv, shared fixture both sides), error display routed to commandErrorMessage(code) instead of backend message, all ~24 components migrated, General settings panel (default category, Settings2 icon after user feedback), startup hydration + html lang sync. Specs updated: new frontend/i18n-guidelines.md; single-locale and zh-message-render clauses revised. Gates: pnpm check EXIT=0 (24 files/223 tests), cargo test/clippy/fmt clean. GUI manual acceptance pending; PR to main not yet created.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `92f3dc4` | (see git log) |
+| `91e7ec6` | (see git log) |
+| `9eec50a` | (see git log) |
+| `3bfab43` | (see git log) |
+| `2a68497` | (see git log) |
+| `fa0b2fd` | (see git log) |
+| `3c1da83` | (see git log) |
+
+### Status
+
+[OK] **Completed**

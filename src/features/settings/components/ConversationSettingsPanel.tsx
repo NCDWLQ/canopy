@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import type { ProviderClient } from "@/lib/tauri"
+import { useTranslation } from "@/lib/i18n"
 
 const FOLLOW_SESSION_TITLE_MODEL = "follow"
 
@@ -53,6 +54,7 @@ export function ConversationSettingsPanel({
   client,
   readOnly,
 }: ConversationSettingsPanelProps) {
+  const { t } = useTranslation()
   const phase = useProviderStore((state) => state.phase)
   const providers = useProviderStore((state) => state.providers)
   const autoGenerateTitle = useProviderStore((state) => state.autoGenerateTitle)
@@ -73,14 +75,16 @@ export function ConversationSettingsPanel({
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="border-b px-4 py-3 pr-12">
-        <Breadcrumb aria-label="面包屑">
+        <Breadcrumb aria-label={t("common.breadcrumb")}>
           <BreadcrumbList>
             <BreadcrumbItem>
-              <span>设置</span>
+              <span>{t("common.settings")}</span>
             </BreadcrumbItem>
             <BreadcrumbSeparator />
             <BreadcrumbItem>
-              <BreadcrumbPage>会话</BreadcrumbPage>
+              <BreadcrumbPage>
+                {t("settings.conversation.title")}
+              </BreadcrumbPage>
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
@@ -91,17 +95,17 @@ export function ConversationSettingsPanel({
           className="flex flex-col gap-4"
         >
           <h2 id="conversation-settings-title" className="font-medium">
-            会话
+            {t("settings.conversation.title")}
           </h2>
           <FieldGroup>
             <FieldSet>
               <Field orientation="horizontal" data-disabled={mutationDisabled}>
                 <FieldContent>
                   <FieldLabel htmlFor="auto-generate-title">
-                    自动生成标题
+                    {t("settings.conversation.autoGenerateTitle")}
                   </FieldLabel>
                   <FieldDescription>
-                    首轮对话后，使用下方配置的模型自动生成标题
+                    {t("settings.conversation.autoGenerateTitleDescription")}
                   </FieldDescription>
                 </FieldContent>
                 <Switch
@@ -118,7 +122,9 @@ export function ConversationSettingsPanel({
                 className="pl-4"
                 data-disabled={mutationDisabled || !autoGenerateTitle}
               >
-                <FieldLabel htmlFor="title-model">标题模型</FieldLabel>
+                <FieldLabel htmlFor="title-model">
+                  {t("settings.conversation.titleModel")}
+                </FieldLabel>
                 <Select
                   value={titleModelValue}
                   disabled={mutationDisabled || !autoGenerateTitle}
@@ -135,7 +141,7 @@ export function ConversationSettingsPanel({
                   <SelectContent position="popper" align="start">
                     <SelectGroup>
                       <SelectItem value={FOLLOW_SESSION_TITLE_MODEL}>
-                        跟随会话
+                        {t("settings.conversation.followSession")}
                       </SelectItem>
                     </SelectGroup>
                     {providers.some(
