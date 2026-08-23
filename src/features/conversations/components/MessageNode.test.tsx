@@ -272,11 +272,94 @@ describe("MessageNode", () => {
         canEdit={false}
         onCreateBranch={vi.fn()}
         onEditAsBranch={vi.fn()}
+        onExportMessage={vi.fn()}
       />,
     )
 
     expect(
       screen.queryByRole("button", { name: "复制" }),
+    ).not.toBeInTheDocument()
+  })
+
+  it("renders the export action on assistant messages and reports the node id", async () => {
+    const user = userEvent.setup()
+    const onExportMessage = vi.fn()
+    render(
+      <MessageNode
+        message={assistantMessage}
+        canBranch={false}
+        canEdit={false}
+        onCreateBranch={vi.fn()}
+        onEditAsBranch={vi.fn()}
+        onExportMessage={onExportMessage}
+      />,
+    )
+
+    const exportBtn = screen.getByRole("button", { name: "导出对话至该消息" })
+    expect(exportBtn).toBeVisible()
+    expect(exportBtn).toHaveAttribute("title", "导出对话至该消息")
+    expect(exportBtn).toHaveAttribute("data-variant", "ghost")
+    expect(exportBtn).toHaveAttribute("data-size", "icon")
+    expect(exportBtn).toHaveClass(
+      "size-7",
+      "text-muted-foreground",
+      "hover:text-foreground",
+    )
+    expect(exportBtn).toBeEnabled()
+
+    await user.click(exportBtn)
+    expect(onExportMessage).toHaveBeenCalledWith(assistantMessage.id)
+    expect(onExportMessage).toHaveBeenCalledTimes(1)
+  })
+
+  it("does not render the export action on user messages", () => {
+    render(
+      <MessageNode
+        message={userMessage}
+        canBranch={false}
+        canEdit={false}
+        onCreateBranch={vi.fn()}
+        onEditAsBranch={vi.fn()}
+        onExportMessage={vi.fn()}
+      />,
+    )
+
+    expect(
+      screen.queryByRole("button", { name: "导出对话至该消息" }),
+    ).not.toBeInTheDocument()
+  })
+
+  it("disables the export action while the conversation is generating", () => {
+    render(
+      <MessageNode
+        message={assistantMessage}
+        canBranch={false}
+        canEdit={false}
+        onCreateBranch={vi.fn()}
+        onEditAsBranch={vi.fn()}
+        onExportMessage={vi.fn()}
+        exportDisabled={true}
+      />,
+    )
+
+    expect(
+      screen.getByRole("button", { name: "导出对话至该消息" }),
+    ).toBeDisabled()
+  })
+
+  it("keeps the export action hidden without an export handler", () => {
+    render(
+      <MessageNode
+        message={assistantMessage}
+        canBranch={false}
+        canEdit={false}
+        onCreateBranch={vi.fn()}
+        onEditAsBranch={vi.fn()}
+      />,
+    )
+
+    expect(
+      screen.queryByRole("button", { name: "导出对话至该消息" }),
     ).not.toBeInTheDocument()
   })
 })

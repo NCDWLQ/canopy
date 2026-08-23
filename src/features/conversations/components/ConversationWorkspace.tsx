@@ -663,6 +663,12 @@ export function ConversationWorkspace({
               onEditAsBranch={(nodeId, content) =>
                 void controller.editNodeAsBranch(nodeId, content)
               }
+              onExportMessage={(nodeId) => {
+                void useConversationStore
+                  .getState()
+                  .exportUpToMessage(client, nodeId)
+              }}
+              exportDisabled={isRunActive(currentRun)}
               transientGeneration={
                 transientBubbleVisible ? transientGeneration : null
               }

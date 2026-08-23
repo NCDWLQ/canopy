@@ -8,7 +8,8 @@
     "load_conversation_tree",
     "load_active_path",
     "archive_conversation",
-    "set_conversation_provider"
+    "set_conversation_provider",
+    "write_export_file"
   ],
   "requests": {
     "create_conversation": {
@@ -48,6 +49,10 @@
         "model": "fixture-model"
       },
       "reasoning_effort": "medium"
+    },
+    "write_export_file": {
+      "path": "/exports/Fixture conversation.md",
+      "content": "# Fixture conversation\n\n## 用户\n\n  preserved root content\n"
     }
   },
   "successes": {
@@ -228,6 +233,9 @@
       "provider_id": "provider-fixture",
       "model": "fixture-model",
       "reasoning_effort": "medium"
+    },
+    "write_export_file": {
+      "bytes_written": 60
     }
   },
   "errors": [
@@ -292,6 +300,11 @@
     {
       "code": "cancelled",
       "message": "Cancelled.",
+      "retryable": false
+    },
+    {
+      "code": "export_file_write",
+      "message": "写入导出文件失败。",
       "retryable": false
     },
     {
@@ -363,6 +376,9 @@
       "conversation_id": "conversation-fixture",
       "active_node_id": null,
       "nodes": []
+    },
+    "write_export_file": {
+      "bytes_written": "60"
     }
   },
   "malformed_errors": [

@@ -244,6 +244,7 @@ function createClient() {
         path: [],
       }),
     archiveConversation: () => Promise.resolve(conversation),
+    writeExportFile: () => Promise.resolve({ bytesWritten: 0 }),
   } satisfies ConversationClient
 }
 

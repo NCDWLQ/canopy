@@ -28,6 +28,7 @@ export const en = {
   "errors.providerUnavailable": "The provider is currently unavailable.",
   "errors.networkFailure": "The provider network request failed.",
   "errors.cancelled": "Generation was cancelled.",
+  "errors.exportFileWrite": "Failed to write the export file.",
   "errors.internal": "An unexpected error occurred.",
   "errors.unsafeTreeProjection":
     "The conversation tree cannot be shown safely.",
@@ -97,6 +98,14 @@ export const en = {
   "conversation.message.editContent": "Edit message content",
   "conversation.message.branchPlaceholder": "Type a branch message…",
   "conversation.message.branchContent": "Branch message content",
+  "conversation.message.export": "Export conversation up to this message",
+
+  // exportMarkdown.ts + store export action
+  "conversation.export.success": ({ fileName }: { fileName: string }) =>
+    `Exported: ${fileName}`,
+  "conversation.export.failed": "Export failed",
+  "conversation.export.userLabel": "User",
+  "conversation.export.assistantLabel": "Assistant",
 
   // MessageBubble.tsx
   "conversation.messageBubble.roleSystem": "System",

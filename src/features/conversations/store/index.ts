@@ -1,5 +1,8 @@
 import { create } from "zustand"
+import { save } from "@tauri-apps/plugin-dialog"
+import { toast } from "sonner"
 
+import { buildExportMarkdown, sanitizeExportFilename } from "../exportMarkdown"
 import type {
   ConversationNodeView,
   ConversationSummaryView,
@@ -9,7 +12,7 @@ import type {
   UiError,
 } from "../types"
 import type { GenerationEventView } from "@/features/providers/types"
-import { t } from "@/lib/i18n"
+import { commandErrorMessage, t } from "@/lib/i18n"
 import { ConversationCommandError, type ConversationClient } from "@/lib/tauri"
 import type { SetConversationProviderInput } from "@/lib/tauri"
 
@@ -147,6 +150,10 @@ export type ConversationStore = ConversationTreeState & {
     client: ConversationClient,
     sourceNodeId: string,
     content: string,
+  ) => Promise<void>
+  exportUpToMessage: (
+    client: ConversationClient,
+    anchorNodeId: string,
   ) => Promise<void>
   archiveConversation: (
     client: ConversationClient,
@@ -1286,6 +1293,52 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
           return
         }
         set({ status: "error", error: normalizeUiError(error) })
+      }
+    },
+
+    exportUpToMessage: async (client, anchorNodeId) => {
+      const state = get()
+      const projection = selectActivePath(state)
+      if (
+        state.conversationId === null ||
+        state.status !== "ready" ||
+        projection.kind !== "ready" ||
+        // The streaming reply is not durable yet, so a run for this
+        // conversation blocks the export (the button is disabled with the
+        // same condition; this guard covers stale clicks).
+        isRunActive(state.generationRuns[state.conversationId])
+      ) {
+        return
+      }
+      const anchorIndex = projection.path.findIndex(
+        (node) => node.id === anchorNodeId,
+      )
+      if (anchorIndex === -1) return
+
+      const title = state.title ?? ""
+      const markdown = buildExportMarkdown({
+        messages: projection.path.slice(0, anchorIndex + 1),
+        title,
+        userLabel: t("conversation.export.userLabel"),
+        assistantLabel: t("conversation.export.assistantLabel"),
+      })
+      try {
+        const target = await save({
+          defaultPath: `${sanitizeExportFilename(title)}.md`,
+          filters: [{ name: "Markdown", extensions: ["md"] }],
+        })
+        // A cancelled save dialog is a silent no-op: no write, no toast.
+        if (target === null) return
+        await client.writeExportFile({ path: target, content: markdown })
+        toast.success(
+          t("conversation.export.success", {
+            fileName: target.split(/[\\/]/).at(-1) ?? target,
+          }),
+        )
+      } catch (error: unknown) {
+        toast.error(t("conversation.export.failed"), {
+          description: commandErrorMessage(normalizeUiError(error).code),
+        })
       }
     },
 

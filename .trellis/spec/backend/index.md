@@ -16,6 +16,7 @@ Canopy foundation and first-week architecture.
 | Guide | Description | Status |
 |-------|-------------|--------|
 | [Directory Structure](./directory-structure.md) | Rust/Tauri module organization and ownership | Initial |
+| [App Capabilities](./app-capabilities.md) | Tauri plugin wiring, minimal permissions, OS IO via Rust commands | Current |
 | [Database Guidelines](./database-guidelines.md) | SQLite schema, repositories, queries, migrations | Initial |
 | [Error Handling](./error-handling.md) | Cross-layer error types, redaction, UI handling | Initial |
 | [Quality Guidelines](./quality-guidelines.md) | Backend standards and testing strategy | Initial |

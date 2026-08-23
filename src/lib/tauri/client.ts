@@ -29,12 +29,15 @@ import {
   nodeDtoSchema,
   setConversationProviderRequestSchema,
   conversationProviderBindingResultSchema,
+  writeExportFileRequestSchema,
+  writeExportFileResultSchema,
   type ActivePathDto,
   type ConversationDto,
   type ConversationSummaryDto,
   type ConversationTreeDto,
   type NodeDto,
   type ConversationProviderBindingResultDto,
+  type WriteExportFileResultDto,
 } from "./schemas"
 
 export const CONVERSATION_COMMANDS = {
@@ -47,6 +50,7 @@ export const CONVERSATION_COMMANDS = {
   loadActivePath: "load_active_path",
   archiveConversation: "archive_conversation",
   setConversationProvider: "set_conversation_provider",
+  writeExportFile: "write_export_file",
 } as const
 
 export interface InvokeTransport {
@@ -90,6 +94,8 @@ export type SetConversationProviderInput = {
   binding: { providerId: string; model: string } | null
   reasoningEffort: "low" | "medium" | "high" | null
 }
+export type WriteExportFileInput = { path: string; content: string }
+export type WriteExportFileResult = { bytesWritten: number }
 
 export type ConversationClient = Omit<
   ReturnType<typeof createConversationClient>,
@@ -224,6 +230,17 @@ export function createConversationClient(
         mapConversationProviderBinding,
       )
     },
+
+    writeExportFile(input: WriteExportFileInput) {
+      return call(
+        transport,
+        CONVERSATION_COMMANDS.writeExportFile,
+        writeExportFileRequestSchema,
+        { path: input.path, content: input.content },
+        writeExportFileResultSchema,
+        mapWriteExportFileResult,
+      )
+    },
   }
 }
 
@@ -348,6 +365,12 @@ function mapConversationProviderBinding(
     model: dto.model ?? null,
     reasoningEffort: dto.reasoning_effort ?? null,
   }
+}
+
+function mapWriteExportFileResult(
+  dto: WriteExportFileResultDto,
+): WriteExportFileResult {
+  return { bytesWritten: dto.bytes_written }
 }
 
 function mapConversationTree(dto: ConversationTreeDto): ConversationTreeView {

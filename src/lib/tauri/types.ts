@@ -31,6 +31,7 @@ export type UiErrorCode =
   | "provider_unavailable"
   | "network_failure"
   | "cancelled"
+  | "export_file_write"
   | "internal"
 
 export type UiError = {

@@ -9,6 +9,8 @@ export {
   type CreateConversationInput,
   type EditNodeAsBranchInput,
   type SetConversationProviderInput,
+  type WriteExportFileInput,
+  type WriteExportFileResult,
   type InvokeTransport,
 } from "./client"
 
