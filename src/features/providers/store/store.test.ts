@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { useProviderStore } from "./index"
 import type { ProviderView } from "../types"
+import { useLocaleStore } from "@/lib/i18n/locale-store"
 
 const provider: ProviderView = {
   id: "provider-1",
@@ -23,6 +24,7 @@ function client() {
     setActiveProvider: vi.fn(),
     setAutoGenerateTitle: vi.fn(),
     setTitleModelBinding: vi.fn(),
+    setLanguage: vi.fn(),
     revealProviderApiKey: vi.fn(),
     listProviderModels: vi.fn(),
     generateFromActivePath: vi.fn(),
@@ -38,7 +40,9 @@ describe("provider store", () => {
       activeProviderId: null,
       autoGenerateTitle: true,
       titleModelBinding: null,
+      language: "system",
     })
+    useLocaleStore.getState().setLocale("zh-CN")
   })
 
   it("loads the redacted provider list and active provider", async () => {
@@ -48,6 +52,7 @@ describe("provider store", () => {
       activeProviderId: provider.id,
       autoGenerateTitle: true,
       titleModelBinding: null,
+      language: "system",
     })
     await useProviderStore.getState().loadProviders(bridge)
     expect(useProviderStore.getState()).toMatchObject({
@@ -55,6 +60,47 @@ describe("provider store", () => {
       providers: [provider],
       activeProviderId: provider.id,
     })
+  })
+
+  it("hydrates an explicit language preference from the provider list", async () => {
+    const bridge = client()
+    bridge.listProviders.mockResolvedValueOnce({
+      providers: [provider],
+      activeProviderId: provider.id,
+      autoGenerateTitle: true,
+      titleModelBinding: null,
+      language: "en",
+    })
+    await useProviderStore.getState().loadProviders(bridge)
+    expect(useProviderStore.getState().language).toBe("en")
+    expect(useLocaleStore.getState().locale).toBe("en")
+  })
+
+  it("keeps the detected locale when the stored language is system", async () => {
+    const bridge = client()
+    bridge.listProviders.mockResolvedValueOnce({
+      providers: [provider],
+      activeProviderId: provider.id,
+      autoGenerateTitle: true,
+      titleModelBinding: null,
+      language: "system",
+    })
+    await useProviderStore.getState().loadProviders(bridge)
+    expect(useProviderStore.getState().language).toBe("system")
+    expect(useLocaleStore.getState().locale).toBe("zh-CN")
+  })
+
+  it("persists the language preference and applies it to the UI locale", async () => {
+    const bridge = client()
+    bridge.setLanguage.mockResolvedValueOnce("en")
+    useProviderStore.setState({
+      phase: "ready",
+      providers: [provider],
+      activeProviderId: provider.id,
+    })
+    await useProviderStore.getState().setLanguage(bridge, "en")
+    expect(useProviderStore.getState().language).toBe("en")
+    expect(useLocaleStore.getState().locale).toBe("en")
   })
 
   it("stores only the redacted save result and does not auto-activate a new provider", async () => {

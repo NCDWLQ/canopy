@@ -27,6 +27,7 @@ function client() {
     setActiveProvider: vi.fn(),
     setAutoGenerateTitle: vi.fn().mockResolvedValue(true),
     setTitleModelBinding: vi.fn().mockResolvedValue(null),
+    setLanguage: vi.fn().mockResolvedValue("system"),
     revealProviderApiKey: vi.fn().mockResolvedValue(null),
     listProviderModels: vi.fn(),
     generateFromActivePath: vi.fn(),
@@ -58,10 +59,11 @@ describe("SettingsDialog", () => {
       activeProviderId: provider.id,
       autoGenerateTitle: true,
       titleModelBinding: null,
+      language: "system",
     })
   })
 
-  it("opens on the provider list with category nav and breadcrumb", async () => {
+  it("opens on the general category; providers render on demand", async () => {
     const user = userEvent.setup()
     render(
       <SettingsDialog client={client() as ProviderClient} readOnly={false} />,
@@ -70,8 +72,14 @@ describe("SettingsDialog", () => {
     expect(screen.getByRole("dialog")).toHaveAccessibleName("设置")
     expect(screen.getByRole("navigation", { name: "设置分类" })).toBeVisible()
     expect(
-      screen.getByRole("button", { name: "模型提供商", current: "page" }),
+      screen.getByRole("button", { name: "通用", current: "page" }),
     ).toBeVisible()
+    expect(screen.getByRole("combobox", { name: "语言" })).toBeVisible()
+    expect(
+      screen.queryByRole("heading", { name: "全部提供商" }),
+    ).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "模型提供商" }))
     expect(screen.getByRole("heading", { name: "全部提供商" })).toBeVisible()
     expect(screen.getByLabelText("当前全局默认")).toHaveTextContent("默认")
     expect(screen.getByText("fixture-model")).toBeVisible()
@@ -83,11 +91,38 @@ describe("SettingsDialog", () => {
     await user.keyboard("{Escape}")
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
     await user.click(screen.getByRole("button", { name: "设置" }))
-    expect(screen.getByRole("heading", { name: "全部提供商" })).toBeVisible()
+    // Reopening resets to the general category and clears the editor.
+    expect(screen.getByRole("combobox", { name: "语言" })).toBeVisible()
     expect(screen.queryByLabelText("名称")).not.toBeInTheDocument()
   })
 
-  it("supports controlled opening and resets to the provider list on reopen", async () => {
+  it("navigates from the default general panel to providers", async () => {
+    const user = userEvent.setup()
+    render(
+      <SettingsDialog client={client() as ProviderClient} readOnly={false} />,
+    )
+    await user.click(screen.getByRole("button", { name: "设置" }))
+    const providers = screen.getByRole("button", { name: "模型提供商" })
+    expect(providers).toBeVisible()
+    expect(providers).not.toHaveAttribute("aria-current")
+    expect(
+      screen.getByRole("button", { name: "通用", current: "page" }),
+    ).toBeVisible()
+    expect(
+      screen.queryByRole("heading", { name: "全部提供商" }),
+    ).not.toBeInTheDocument()
+
+    await user.click(providers)
+    expect(
+      screen.getByRole("button", { name: "模型提供商", current: "page" }),
+    ).toBeVisible()
+    expect(screen.getByRole("heading", { name: "全部提供商" })).toBeVisible()
+    expect(
+      screen.queryByRole("combobox", { name: "语言" }),
+    ).not.toBeInTheDocument()
+  })
+
+  it("supports controlled opening and resets to the general panel on reopen", async () => {
     const user = userEvent.setup()
     const onOpenChange = vi.fn()
     const bridge = client() as ProviderClient
@@ -107,7 +142,8 @@ describe("SettingsDialog", () => {
         onOpenChange={onOpenChange}
       />,
     )
-    expect(screen.getByRole("heading", { name: "全部提供商" })).toBeVisible()
+    expect(screen.getByRole("combobox", { name: "语言" })).toBeVisible()
+    await user.click(screen.getByRole("button", { name: "模型提供商" }))
     await user.click(
       screen.getByRole("button", { name: `编辑：${provider.name}` }),
     )
@@ -129,8 +165,11 @@ describe("SettingsDialog", () => {
         onOpenChange={onOpenChange}
       />,
     )
-    expect(screen.getByRole("heading", { name: "全部提供商" })).toBeVisible()
+    expect(screen.getByRole("combobox", { name: "语言" })).toBeVisible()
     expect(screen.queryByLabelText("名称")).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole("heading", { name: "全部提供商" }),
+    ).not.toBeInTheDocument()
   })
 
   it("clears provider editor state when switching to conversation and back", async () => {
@@ -141,6 +180,7 @@ describe("SettingsDialog", () => {
       <SettingsDialog client={bridge as ProviderClient} readOnly={false} />,
     )
     await user.click(screen.getByRole("button", { name: "设置" }))
+    await user.click(screen.getByRole("button", { name: "模型提供商" }))
     await user.click(
       screen.getByRole("button", { name: `编辑：${provider.name}` }),
     )
