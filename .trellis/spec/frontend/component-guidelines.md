@@ -366,10 +366,12 @@ The correct form is deterministic, fixture-driven, and independent of SQLite and
 - `FieldDescription` helptext has no trailing period (or `。`).
 - The outline uses tree/treeitem semantics or an equivalent tested Radix pattern, visible focus, correct expanded/selected state, and roving keyboard focus.
 - Every icon-only action has an accessible name. Menus, dialogs, and tooltips use Radix focus management.
-- Canopy is currently a single-locale Simplified Chinese product. User-visible
-  copy, placeholders, tooltips, live regions, and accessible names use Chinese;
-  set the document language to `zh-CN`. Do not introduce locale state or an
-  i18n runtime until the product requires a second locale.
+- Canopy ships two UI locales (`zh-CN`, `en`) through the typed dictionary in
+  `src/lib/i18n` (see [i18n Guidelines](./i18n-guidelines.md)). Components
+  never hard-code user-visible copy: text, placeholders, tooltips, live
+  regions, and accessible names come from `t()` / `useTranslation()`;
+  `App.tsx` keeps `document.documentElement.lang` in sync with the active
+  locale.
 - Preserve brand and technical values such as `Canopy`, `OpenAI`, `API`, URLs,
   and model identifiers. Never translate user-authored conversation content or
   provider/model output.
@@ -378,17 +380,21 @@ The correct form is deterministic, fixture-driven, and independent of SQLite and
 
 Role enums remain stable domain values and are mapped only for presentation:
 
-```ts
-const ROLE_LABELS: Record<PathMessageView["role"], string> = {
-  system: "系统",
-  user: "用户",
-  assistant: "助手",
-  tool: "工具",
+```tsx
+// MessageBubble builds labels from the i18n dictionary at render time.
+const ROLE_LABEL_KEYS: Record<PathMessageView["role"], StaticMessageKey> = {
+  system: "conversation.roles.system",
+  user: "conversation.roles.user",
+  assistant: "conversation.roles.assistant",
+  tool: "conversation.roles.tool",
 }
+const { t } = useTranslation()
+// t(ROLE_LABEL_KEYS[role]) → 系统 / System
 ```
 
-Tests query the Chinese accessible name while contract and state tests continue
-to assert the original enum value.
+Tests query the Chinese accessible name (the test setup pins the locale store
+to `zh-CN`) while contract and state tests continue to assert the original
+enum value.
 
 ### Design Decision: Assistant Markdown Rendering Boundary
 
