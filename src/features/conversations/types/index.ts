@@ -73,9 +73,10 @@ export type ConversationSearchResultView = {
   hits: readonly SearchHitView[]
 }
 
-// One-shot reveal request produced by picking a search result: the pane
-// switches to the hit's branch, scrolls to the message, and highlights
-// matches until the next navigation clears it.
+// One-shot reveal request produced by picking a search result or a mind-map
+// node: the pane switches to the hit's branch, scrolls to the message, and
+// highlights matches until the next navigation clears it. Mind-map clicks
+// pass an empty query (scroll positioning only, no highlighting).
 export type SearchReveal = {
   conversationId: string
   nodeId: string | null

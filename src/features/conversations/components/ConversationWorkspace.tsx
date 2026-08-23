@@ -165,6 +165,9 @@ export function ConversationWorkspace({
   const initializeHistory = useConversationStore(
     (state) => state.initializeHistory,
   )
+  const selectBranchAtNode = useConversationStore(
+    (state) => state.selectBranchAtNode,
+  )
   const pathProjection = useConversationStore(useShallow(selectActivePath))
   const controller = useWorkspaceGenerationController({
     conversationClient: client,
@@ -759,7 +762,7 @@ export function ConversationWorkspace({
                 rootNodeId={store.rootNodeId}
                 nodesById={store.nodesById}
                 activePathIds={visiblePath.map((message) => message.id)}
-                onSelect={controller.selectNode}
+                onSelect={selectBranchAtNode}
               />
             ) : projectionError !== null ? (
               <div className="p-6 text-sm text-destructive" role="alert">

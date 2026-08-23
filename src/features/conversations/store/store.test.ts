@@ -1129,6 +1129,82 @@ describe("conversation store", () => {
   })
 })
 
+describe("selectBranchAtNode", () => {
+  let client: ReturnType<typeof createMockClient>
+
+  beforeEach(() => {
+    client = createMockClient()
+    client.loadConversationTree.mockResolvedValue(tree)
+    resetStore()
+  })
+
+  async function loadConversationFirst() {
+    useConversationStore.setState({
+      history: {
+        status: "ready",
+        summaries: [summary],
+        error: null,
+      },
+    })
+    await useConversationStore
+      .getState()
+      .selectConversation(client, conversation.id)
+  }
+
+  it("activates the branch through the clicked node to its newest leaf", async () => {
+    await loadConversationFirst()
+
+    useConversationStore.getState().selectBranchAtNode(assistant.id)
+
+    const state = useConversationStore.getState()
+    expect(state.activeNodeId).toBe(right.id)
+    // Queryless reveal scrolls the pane to the clicked message only.
+    expect(state.reveal).toEqual({
+      conversationId: conversation.id,
+      nodeId: assistant.id,
+      query: "",
+    })
+    for (const id of [root.id, assistant.id, right.id]) {
+      expect(state.expandedIds.has(id)).toBe(true)
+    }
+    const projection = selectActivePath(state)
+    expect(projection.kind).toBe("ready")
+    if (projection.kind === "ready") {
+      expect(projection.path.map((message) => message.id)).toEqual([
+        root.id,
+        assistant.id,
+        right.id,
+      ])
+    }
+  })
+
+  it("keeps a leaf click on itself and reveals it", async () => {
+    await loadConversationFirst()
+
+    useConversationStore.getState().selectBranchAtNode(left.id)
+
+    const state = useConversationStore.getState()
+    expect(state.activeNodeId).toBe(left.id)
+    expect(state.reveal).toEqual({
+      conversationId: conversation.id,
+      nodeId: left.id,
+      query: "",
+    })
+  })
+
+  it("ignores unknown node ids without touching state", async () => {
+    await loadConversationFirst()
+    const before = useConversationStore.getState()
+
+    useConversationStore.getState().selectBranchAtNode("ghost-node")
+
+    const state = useConversationStore.getState()
+    expect(state.activeNodeId).toBe(before.activeNodeId)
+    expect(state.reveal).toBe(before.reveal)
+    expect(state.expandedIds).toBe(before.expandedIds)
+  })
+})
+
 describe("revealSearchHit", () => {
   let client: ReturnType<typeof createMockClient>
 

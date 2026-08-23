@@ -14,9 +14,11 @@ glance. A mind-map style canvas makes the tree shape legible.
   `@xyflow/react` (React Flow v12) + `d3-hierarchy` for tidy-tree layout.
 - Nodes: role-styled cards (user vs assistant), preview text, active-path
   highlight; edges: bezier, active-path edges highlighted.
-- Interactions: click node → `selectNode(id)` (switches active path);
-  pan/zoom/fit-view; MiniMap; collapse/expand subtrees with a collapsed
-  branch-count badge.
+- Interactions: click node → activate the branch THROUGH that node (store
+  `selectBranchAtNode`: active path extends to the subtree's newest leaf,
+  matching search-reveal semantics; a queryless reveal scrolls the message
+  pane to the clicked node); canvas fits the newly active path; pan/zoom;
+  MiniMap; collapse/expand subtrees with a collapsed branch-count badge.
 - Entry point: a view toggle in the conversation workspace that opens the
   mind-map view over the message pane, OutlineTree remains the
   a11y/keyboard navigation surface.

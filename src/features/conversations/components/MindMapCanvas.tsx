@@ -6,6 +6,8 @@ import {
   MiniMap,
   Position,
   ReactFlow,
+  ReactFlowProvider,
+  useReactFlow,
   type NodeProps,
   type NodeTypes,
 } from "@xyflow/react"
@@ -144,13 +146,24 @@ export type MindMapCanvasProps = {
   onSelect: (nodeId: string) => void
 }
 
-export function MindMapCanvas({
+export function MindMapCanvas(props: MindMapCanvasProps) {
+  // The inner view needs useReactFlow for camera control, which requires a
+  // provider above the component that renders <ReactFlow>.
+  return (
+    <ReactFlowProvider>
+      <MindMapCanvasView {...props} />
+    </ReactFlowProvider>
+  )
+}
+
+function MindMapCanvasView({
   rootNodeId,
   nodesById,
   activePathIds,
   onSelect,
 }: MindMapCanvasProps) {
   const { t } = useTranslation()
+  const { fitView } = useReactFlow()
   // Collapse state is scoped to a conversation: when the root changes the
   // previous set is discarded instead of being reset through an effect.
   const [collapseState, setCollapseState] = React.useState<{
@@ -161,6 +174,30 @@ export function MindMapCanvas({
     collapseState.rootNodeId === rootNodeId
       ? collapseState.collapsedIds
       : EMPTY_COLLAPSED_IDS
+
+  // Selecting a node should bring the whole root -> node path into view.
+  // The store owns path derivation, so the click only arms the flag and the
+  // fit runs once the updated activePathIds prop arrives.
+  const fitAfterSelectRef = React.useRef(false)
+  React.useEffect(() => {
+    if (!fitAfterSelectRef.current) return
+    fitAfterSelectRef.current = false
+    const reducedMotion =
+      window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false
+    void fitView({
+      nodes: activePathIds.map((id) => ({ id })),
+      padding: 0.2,
+      maxZoom: 0.9,
+      duration: reducedMotion ? 0 : 400,
+    })
+  }, [activePathIds, fitView])
+
+  const handleNodeClick: NonNullable<
+    React.ComponentProps<typeof ReactFlow>["onNodeClick"]
+  > = (_, node) => {
+    fitAfterSelectRef.current = true
+    onSelect(node.id)
+  }
 
   const handleToggleBranch = React.useCallback(
     (nodeId: string) => {
@@ -215,7 +252,7 @@ export function MindMapCanvas({
         nodes={nodes}
         edges={layout.edges}
         nodeTypes={NODE_TYPES}
-        onNodeClick={(_, node) => onSelect(node.id)}
+        onNodeClick={handleNodeClick}
         fitView
         fitViewOptions={{ padding: 0.15, maxZoom: 0.9 }}
         minZoom={0.1}
