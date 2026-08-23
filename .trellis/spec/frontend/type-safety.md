@@ -118,10 +118,11 @@ Content limits use UTF-8 byte length, not JavaScript UTF-16 code units.
 
 ### 6. Tests Required
 
-- Assert all eight command names, the outer `request` wrapper, and exact
+- Assert all twelve command names, the outer `request` wrapper, and exact
   snake-case request fields through an injected transport. For discovery,
   also assert deterministic summary ordering, safe timestamps, and duplicate
-  ID rejection.
+  ID rejection. When a command is added or removed, update the count wording
+  alongside `CONVERSATION_COMMAND_NAMES` and the shared fixture.
 - Decode every shared success fixture and reject malformed conversation, node,
   tree, and active-path fixtures.
 - Exercise all public error codes, malformed errors, nullability, nested
