@@ -8,6 +8,9 @@
     "load_conversation_tree",
     "load_active_path",
     "archive_conversation",
+    "rename_conversation",
+    "delete_conversation",
+    "unarchive_conversation",
     "set_conversation_provider"
   ],
   "requests": {
@@ -39,6 +42,16 @@
       "active_node_id": "user-right"
     },
     "archive_conversation": {
+      "conversation_id": "conversation-fixture"
+    },
+    "rename_conversation": {
+      "conversation_id": "conversation-fixture",
+      "title": "Renamed fixture conversation"
+    },
+    "delete_conversation": {
+      "conversation_id": "conversation-fixture"
+    },
+    "unarchive_conversation": {
       "conversation_id": "conversation-fixture"
     },
     "set_conversation_provider": {
@@ -78,6 +91,21 @@
       "title": "Fixture conversation",
       "root_node_id": "root",
       "is_archived": true
+    },
+    "renamed_conversation": {
+      "id": "conversation-fixture",
+      "title": "Renamed fixture conversation",
+      "root_node_id": "root",
+      "is_archived": false
+    },
+    "deleted_conversation": {
+      "conversation_id": "conversation-fixture"
+    },
+    "unarchived_conversation": {
+      "id": "conversation-fixture",
+      "title": "Fixture conversation",
+      "root_node_id": "root",
+      "is_archived": false
     },
     "root_node": {
       "id": "root",

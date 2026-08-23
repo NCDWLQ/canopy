@@ -13,9 +13,10 @@ use canopy_lib::{
             ActivePathDto, AppendNodeRequest, ArchiveConversationRequest,
             ConversationCommandService, ConversationDto, ConversationSummaryDto,
             ConversationTreeDto, CreateBranchRequest, CreateConversationRequest,
-            EditNodeAsBranchRequest, IdentityTimeSource, ListConversationsRequest,
-            LoadActivePathRequest, LoadConversationTreeRequest, NodeDto,
-            CONVERSATION_COMMAND_NAMES,
+            DeleteConversationRequest, DeleteConversationSuccess, EditNodeAsBranchRequest,
+            IdentityTimeSource, ListConversationsRequest, LoadActivePathRequest,
+            LoadConversationTreeRequest, NodeDto, RenameConversationRequest,
+            UnarchiveConversationRequest, CONVERSATION_COMMAND_NAMES,
         },
         ConversationPersistenceService, NewConversation, NewNode, PersistenceError, Role,
     },
@@ -107,6 +108,9 @@ fn shared_fixture_round_trips_rust_requests_dtos_errors_and_exact_command_names(
     assert_request!("load_conversation_tree", LoadConversationTreeRequest);
     assert_request!("load_active_path", LoadActivePathRequest);
     assert_request!("archive_conversation", ArchiveConversationRequest);
+    assert_request!("rename_conversation", RenameConversationRequest);
+    assert_request!("delete_conversation", DeleteConversationRequest);
+    assert_request!("unarchive_conversation", UnarchiveConversationRequest);
     assert_request!(
         "set_conversation_provider",
         canopy_lib::conversations::commands::SetConversationProviderRequest
@@ -138,6 +142,27 @@ fn shared_fixture_round_trips_rust_requests_dtos_errors_and_exact_command_names(
     assert_eq!(
         serde_json::to_value(path).expect("active path DTO reserializes"),
         fixture["successes"]["active_path"]
+    );
+    let renamed: ConversationDto =
+        serde_json::from_value(fixture["successes"]["renamed_conversation"].clone())
+            .expect("renamed conversation DTO decodes");
+    assert_eq!(
+        serde_json::to_value(renamed).expect("renamed conversation DTO reserializes"),
+        fixture["successes"]["renamed_conversation"]
+    );
+    let deleted: DeleteConversationSuccess =
+        serde_json::from_value(fixture["successes"]["deleted_conversation"].clone())
+            .expect("deleted conversation DTO decodes");
+    assert_eq!(
+        serde_json::to_value(deleted).expect("deleted conversation DTO reserializes"),
+        fixture["successes"]["deleted_conversation"]
+    );
+    let unarchived: ConversationDto =
+        serde_json::from_value(fixture["successes"]["unarchived_conversation"].clone())
+            .expect("unarchived conversation DTO decodes");
+    assert_eq!(
+        serde_json::to_value(unarchived).expect("unarchived conversation DTO reserializes"),
+        fixture["successes"]["unarchived_conversation"]
     );
 
     let errors: Vec<CommandError> =

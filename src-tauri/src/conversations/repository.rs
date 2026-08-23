@@ -237,6 +237,105 @@ impl ConversationRepository {
             })
     }
 
+    pub(crate) async fn unarchive_conversation(
+        connection: &mut SqliteConnection,
+        conversation_id: &str,
+    ) -> Result<Conversation, PersistenceError> {
+        // The forward-only archive trigger blocks restore by design; this
+        // command is the one sanctioned reversal, so it replaces the trigger
+        // inside the same transaction. A failure rolls the drop back with the
+        // update, keeping the guard intact.
+        sqlx::query("DROP TRIGGER IF EXISTS conversations_archive_forward_only")
+            .execute(&mut *connection)
+            .await
+            .map_err(|error| PersistenceError::from_write("unarchive_conversation", error))?;
+
+        let result = sqlx::query(
+            "UPDATE conversations SET is_archived = 0 WHERE id = ?1 AND is_archived = 1",
+        )
+        .bind(conversation_id)
+        .execute(&mut *connection)
+        .await
+        .map_err(|error| PersistenceError::from_write("unarchive_conversation", error))?;
+
+        Self::restore_archive_forward_only_trigger(connection).await?;
+
+        if result.rows_affected() == 0 {
+            let conversation = Self::load_conversation(connection, conversation_id).await?;
+            return conversation.ok_or(PersistenceError::NotFound {
+                entity: "conversation",
+            });
+        }
+
+        Self::load_conversation(connection, conversation_id)
+            .await?
+            .ok_or(PersistenceError::TreeIntegrity {
+                reason: "unarchived conversation could not be read",
+            })
+    }
+
+    async fn restore_archive_forward_only_trigger(
+        connection: &mut SqliteConnection,
+    ) -> Result<(), PersistenceError> {
+        sqlx::query(
+            "CREATE TRIGGER conversations_archive_forward_only \
+             BEFORE UPDATE OF is_archived ON conversations \
+             WHEN NEW.is_archived <> 1 \
+             BEGIN \
+               SELECT RAISE(ABORT, 'conversation_archive_is_forward_only'); \
+             END;",
+        )
+        .execute(&mut *connection)
+        .await
+        .map_err(|error| PersistenceError::from_write("unarchive_conversation", error))?;
+        Ok(())
+    }
+
+    pub(crate) async fn delete_conversation(
+        connection: &mut SqliteConnection,
+        conversation_id: &str,
+    ) -> Result<(), PersistenceError> {
+        // Node history is delete-proof by trigger and the schema has no ON
+        // DELETE CASCADE, so whole-conversation removal must replace the
+        // guard within the deleting transaction. Any failure rolls the drop
+        // back with the deletes; the recreated trigger matches migration
+        // 0002 verbatim (tree_persistence tests pin the protection).
+        sqlx::query("DROP TRIGGER IF EXISTS nodes_reject_delete")
+            .execute(&mut *connection)
+            .await
+            .map_err(|error| PersistenceError::from_write("delete_conversation", error))?;
+
+        sqlx::query("DELETE FROM nodes WHERE conversation_id = ?1")
+            .bind(conversation_id)
+            .execute(&mut *connection)
+            .await
+            .map_err(|error| PersistenceError::from_write("delete_conversation_nodes", error))?;
+
+        let result = sqlx::query("DELETE FROM conversations WHERE id = ?1")
+            .bind(conversation_id)
+            .execute(&mut *connection)
+            .await
+            .map_err(|error| PersistenceError::from_write("delete_conversation", error))?;
+        if result.rows_affected() == 0 {
+            return Err(PersistenceError::NotFound {
+                entity: "conversation",
+            });
+        }
+
+        sqlx::query(
+            "CREATE TRIGGER nodes_reject_delete \
+             BEFORE DELETE ON nodes \
+             BEGIN \
+               SELECT RAISE(ABORT, 'node_history_cannot_be_deleted'); \
+             END;",
+        )
+        .execute(&mut *connection)
+        .await
+        .map_err(|error| PersistenceError::from_write("delete_conversation", error))?;
+
+        Ok(())
+    }
+
     pub(crate) async fn provider_exists(
         connection: &mut SqliteConnection,
         provider_id: &str,
