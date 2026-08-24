@@ -75,12 +75,9 @@ export function GeneralSettingsPanel({
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         <section
-          aria-labelledby="general-settings-title"
+          aria-label={t("settings.general.title")}
           className="flex flex-col gap-4"
         >
-          <h2 id="general-settings-title" className="font-medium">
-            {t("settings.general.title")}
-          </h2>
           {storeError !== null && (
             <Alert variant="destructive">
               <AlertTitle>{t("settings.general.updateFailed")}</AlertTitle>

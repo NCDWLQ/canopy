@@ -91,12 +91,9 @@ export function ConversationSettingsPanel({
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         <section
-          aria-labelledby="conversation-settings-title"
+          aria-label={t("settings.conversation.title")}
           className="flex flex-col gap-4"
         >
-          <h2 id="conversation-settings-title" className="font-medium">
-            {t("settings.conversation.title")}
-          </h2>
           <FieldGroup>
             <FieldSet>
               <Field orientation="horizontal" data-disabled={mutationDisabled}>

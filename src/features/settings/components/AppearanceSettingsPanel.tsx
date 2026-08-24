@@ -75,12 +75,9 @@ export function AppearanceSettingsPanel({
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         <section
-          aria-labelledby="appearance-settings-title"
+          aria-label={t("settings.appearance.title")}
           className="flex flex-col gap-4"
         >
-          <h2 id="appearance-settings-title" className="font-medium">
-            {t("settings.appearance.title")}
-          </h2>
           {storeError !== null && (
             <Alert variant="destructive">
               <AlertTitle>{t("settings.appearance.updateFailed")}</AlertTitle>

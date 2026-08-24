@@ -261,14 +261,13 @@ export function ProviderSettingsEditor({
     >
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         <section
-          aria-labelledby="provider-settings-title"
+          aria-label={
+            draft.id === undefined
+              ? t("settings.providers.editorNewTitle")
+              : t("settings.providers.editorEditTitle")
+          }
           className="flex min-w-0 flex-col gap-4"
         >
-          <h2 id="provider-settings-title" className="font-medium">
-            {draft.id === undefined
-              ? t("settings.providers.editorNewTitle")
-              : t("settings.providers.editorEditTitle")}
-          </h2>
           {storeError !== null && (
             <Alert variant="destructive">
               <AlertTitle>{t("settings.providers.incompleteAlert")}</AlertTitle>

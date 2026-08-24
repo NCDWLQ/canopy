@@ -112,7 +112,6 @@ describe("SettingsDialog", () => {
     expect(
       screen.getByRole("button", { name: "外观", current: "page" }),
     ).toBeVisible()
-    expect(screen.getByRole("heading", { name: "外观" })).toBeVisible()
     expect(screen.getByRole("combobox", { name: "主题模式" })).toBeVisible()
     expect(
       screen.queryByRole("combobox", { name: "语言" }),
@@ -210,7 +209,6 @@ describe("SettingsDialog", () => {
     const field = screen.getByLabelText("API 密钥")
     await waitFor(() => expect(field).toHaveValue("STORED_SECRET_SENTINEL"))
     await user.click(screen.getByRole("button", { name: "会话" }))
-    expect(screen.getByRole("heading", { name: "会话" })).toBeVisible()
     expect(screen.getByRole("switch", { name: "自动生成标题" })).toBeVisible()
     expect(screen.queryByLabelText("API 密钥")).not.toBeInTheDocument()
     await user.click(screen.getByRole("button", { name: "模型提供商" }))

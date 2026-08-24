@@ -403,9 +403,7 @@ describe("ProviderSettingsPanel", () => {
       />,
     )
     await user.click(screen.getByRole("button", { name: "新建" }))
-    expect(
-      screen.getByRole("heading", { name: "新建模型提供商" }),
-    ).toBeVisible()
+    expect(screen.getByLabelText("名称")).toBeVisible()
     await user.type(screen.getByLabelText("名称"), "draft")
     await user.click(screen.getByRole("button", { name: "取消" }))
     expect(screen.getByRole("heading", { name: "全部提供商" })).toBeVisible()
