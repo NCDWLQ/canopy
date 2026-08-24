@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "Settings IPC command pattern and dictionary conventions"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Settings panel UI structure and shadcn controls"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Tauri IPC boundary validation and Zod schema contracts"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Zustand store hydration and SQLite durability"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Cross-layer coordination across SQLite, Tauri IPC, Zustand, and React UI"}
