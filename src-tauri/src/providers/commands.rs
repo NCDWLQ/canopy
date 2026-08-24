@@ -16,7 +16,8 @@ use super::model_list::{list_models, ModelSummary};
 use super::{
     generation::{prepare_generation, GenerationOutcome, GenerationStage},
     ApiKeyAction, GenerationRuntime, LanguagePreference, NativeCredentialStore, Protocol,
-    ProviderError, ProviderInput, ProviderService, RedactedProvider, TitleModelBinding,
+    ProviderError, ProviderInput, ProviderService, RedactedProvider, ThemePreference,
+    TitleModelBinding,
 };
 
 pub const PROVIDER_COMMAND_NAMES: &[&str] = &[
@@ -27,6 +28,7 @@ pub const PROVIDER_COMMAND_NAMES: &[&str] = &[
     "set_auto_generate_title",
     "set_title_model_binding",
     "set_language",
+    "set_theme",
     "reveal_provider_api_key",
     "list_provider_models",
     "generate_from_active_path",
@@ -157,6 +159,7 @@ pub struct ListProvidersResult {
     pub auto_generate_title: bool,
     pub title_model_binding: Option<TitleModelBindingDto>,
     pub language: String,
+    pub theme: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -218,6 +221,18 @@ pub struct SetLanguageRequest {
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct SetLanguageResult {
     pub language: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct SetThemeRequest {
+    pub theme: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct SetThemeResult {
+    pub theme: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -340,12 +355,14 @@ pub async fn list_providers(
         .await
         .map_err(CommandError::from)?;
     let language = service.get_language().await.map_err(CommandError::from)?;
+    let theme = service.get_theme().await.map_err(CommandError::from)?;
     Ok(ListProvidersResult {
         providers: providers.into_iter().map(ProviderDto::from).collect(),
         active_provider_id,
         auto_generate_title,
         title_model_binding: title_model_binding.map(Into::into),
         language: language.as_setting_text().to_owned(),
+        theme: theme.as_setting_text().to_owned(),
     })
 }
 
@@ -399,6 +416,25 @@ pub async fn set_language(
         .await
         .map(|language| SetLanguageResult {
             language: language.as_setting_text().to_owned(),
+        })
+        .map_err(CommandError::from)
+}
+
+#[tauri::command]
+pub async fn set_theme(
+    request: SetThemeRequest,
+    instances: State<'_, DbInstances>,
+) -> Result<SetThemeResult, CommandError> {
+    let theme = ThemePreference::parse(&request.theme)
+        .ok_or_else(|| CommandError::invalid_input("theme", "invalid_theme"))?;
+    let pool = managed_sqlite_pool(instances.inner())
+        .await
+        .map_err(CommandError::from)?;
+    production_service(pool)
+        .set_theme(theme)
+        .await
+        .map(|theme| SetThemeResult {
+            theme: theme.as_setting_text().to_owned(),
         })
         .map_err(CommandError::from)
 }

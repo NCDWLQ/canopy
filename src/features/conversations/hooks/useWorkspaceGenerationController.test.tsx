@@ -266,6 +266,7 @@ function createProviderClient() {
       autoGenerateTitle: true,
       titleModelBinding: null,
       language: "system",
+      theme: "system",
     }),
     saveProvider: vi.fn<ProviderClient["saveProvider"]>(),
     deleteProvider: vi.fn<ProviderClient["deleteProvider"]>(),
@@ -273,6 +274,7 @@ function createProviderClient() {
     setAutoGenerateTitle: vi.fn<ProviderClient["setAutoGenerateTitle"]>(),
     setTitleModelBinding: vi.fn<ProviderClient["setTitleModelBinding"]>(),
     setLanguage: vi.fn<ProviderClient["setLanguage"]>(),
+    setTheme: vi.fn<ProviderClient["setTheme"]>(),
     revealProviderApiKey: vi
       .fn<ProviderClient["revealProviderApiKey"]>()
       .mockResolvedValue(null),

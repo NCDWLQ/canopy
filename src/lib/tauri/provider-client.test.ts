@@ -11,6 +11,7 @@ import {
 import {
   listProvidersResultSchema,
   setLanguageRequestSchema,
+  setThemeRequestSchema,
 } from "./provider-schemas"
 import type { InvokeTransport } from "./client"
 
@@ -61,6 +62,7 @@ describe("provider Tauri contract", () => {
         },
       },
       set_language: fixture.successes.set_language,
+      set_theme: fixture.successes.set_theme,
       reveal_provider_api_key: fixture.successes.reveal_api_key,
       list_provider_models: { models: [{ id: "fixture-model" }] },
       cancel_generation: fixture.successes.cancel,
@@ -80,6 +82,7 @@ describe("provider Tauri contract", () => {
       autoGenerateTitle: true,
       titleModelBinding: null,
       language: "system",
+      theme: "system",
     })
     await expect(
       client.saveProvider({
@@ -106,6 +109,7 @@ describe("provider Tauri contract", () => {
       model: "fixture-model",
     })
     await expect(client.setLanguage("zh-CN")).resolves.toBe("zh-CN")
+    await expect(client.setTheme("dark")).resolves.toBe("dark")
     await expect(client.revealProviderApiKey("provider-fixture")).resolves.toBe(
       "fixture-revealed-key-sentinel",
     )
@@ -127,6 +131,9 @@ describe("provider Tauri contract", () => {
     })
     expect(transport.calls[6]?.args).toEqual({
       request: { language: "zh-CN" },
+    })
+    expect(transport.calls[7]?.args).toEqual({
+      request: { theme: "dark" },
     })
   })
 
@@ -153,7 +160,27 @@ describe("provider Tauri contract", () => {
     expect(setLanguageRequestSchema.safeParse({}).success).toBe(false)
   })
 
-  it("decodes the provider list language and rejects responses without a valid one", () => {
+  it("sends set_theme as a single-field request and validates the closed theme set", async () => {
+    const transport = recordingTransport({
+      set_theme: fixture.successes.set_theme,
+    })
+    const client = createProviderClient(transport, new FakeChannelFactory())
+
+    await expect(client.setTheme("dark")).resolves.toBe("dark")
+    expect(transport.calls[0]?.args).toEqual({ request: { theme: "dark" } })
+    expect(
+      setThemeRequestSchema.safeParse({ theme: "solarized" }).success,
+    ).toBe(false)
+    expect(setThemeRequestSchema.safeParse({ theme: "DARK" }).success).toBe(
+      false,
+    )
+    expect(
+      setThemeRequestSchema.safeParse({ theme: "light", extra: true }).success,
+    ).toBe(false)
+    expect(setThemeRequestSchema.safeParse({}).success).toBe(false)
+  })
+
+  it("decodes the provider list language and theme, and rejects responses without valid ones", () => {
     expect(
       listProvidersResultSchema.safeParse(fixture.successes.providers).success,
     ).toBe(true)
@@ -167,6 +194,18 @@ describe("provider Tauri contract", () => {
       listProvidersResultSchema.safeParse({
         ...fixture.successes.providers,
         language: undefined,
+      }).success,
+    ).toBe(false)
+    expect(
+      listProvidersResultSchema.safeParse({
+        ...fixture.successes.providers,
+        theme: "solarized",
+      }).success,
+    ).toBe(false)
+    expect(
+      listProvidersResultSchema.safeParse({
+        ...fixture.successes.providers,
+        theme: undefined,
       }).success,
     ).toBe(false)
   })

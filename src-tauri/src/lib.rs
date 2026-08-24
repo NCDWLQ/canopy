@@ -50,6 +50,7 @@ fn register_commands<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Bu
         providers::commands::set_auto_generate_title,
         providers::commands::set_title_model_binding,
         providers::commands::set_language,
+        providers::commands::set_theme,
         providers::commands::reveal_provider_api_key,
         providers::commands::generate_from_active_path,
         providers::commands::cancel_generation,
@@ -298,6 +299,55 @@ mod tests {
         // database-backed command.
         let reaches_database = invoke(json!({ "request": { "language": "zh-CN" } }))
             .expect_err("valid language reaches database resolution");
+        assert_eq!(
+            reaches_database,
+            json!({
+                "code": "database_unavailable",
+                "message": "会话数据库当前不可用。",
+                "retryable": true
+            })
+        );
+    }
+
+    #[test]
+    fn set_theme_command_is_registered_and_validates_before_database_access() {
+        let app = register_commands(test::mock_builder())
+            .manage(DbInstances::default())
+            .manage(crate::providers::GenerationRuntime::default())
+            .build(test::mock_context(test::noop_assets()))
+            .expect("mock application builds");
+        let webview = WebviewWindowBuilder::new(&app, "main", Default::default())
+            .build()
+            .expect("mock webview builds");
+        let invoke = |body: serde_json::Value| {
+            test::get_ipc_response(
+                &webview,
+                InvokeRequest {
+                    cmd: "set_theme".to_owned(),
+                    callback: CallbackFn(0),
+                    error: CallbackFn(1),
+                    url: "tauri://localhost".parse().expect("test URL is valid"),
+                    body: tauri::ipc::InvokeBody::Json(body),
+                    headers: Default::default(),
+                    invoke_key: test::INVOKE_KEY.to_owned(),
+                },
+            )
+        };
+
+        let rejected = invoke(json!({ "request": { "theme": "solarized" } }))
+            .expect_err("unknown theme is rejected as invalid input");
+        assert_eq!(
+            rejected,
+            json!({
+                "code": "invalid_input",
+                "message": "请求包含无效输入。",
+                "retryable": false,
+                "details": { "field": "theme", "reason": "invalid_theme" }
+            })
+        );
+
+        let reaches_database = invoke(json!({ "request": { "theme": "dark" } }))
+            .expect_err("valid theme reaches database resolution");
         assert_eq!(
             reaches_database,
             json!({

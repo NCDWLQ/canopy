@@ -1,6 +1,7 @@
 import * as React from "react"
-import { Bot, MessageSquare, Settings2 } from "lucide-react"
+import { Bot, MessageSquare, Palette, Settings2 } from "lucide-react"
 
+import { AppearanceSettingsPanel } from "./AppearanceSettingsPanel"
 import { ConversationSettingsPanel } from "./ConversationSettingsPanel"
 import { GeneralSettingsPanel } from "./GeneralSettingsPanel"
 import { ProviderSettingsPanel } from "@/features/providers/components/ProviderSettingsPanel"
@@ -27,7 +28,7 @@ export type SettingsDialogProps = SettingsDialogBaseProps &
     | { open: boolean; onOpenChange: (open: boolean) => void }
   )
 
-type SettingsCategory = "general" | "providers" | "conversation"
+type SettingsCategory = "general" | "appearance" | "providers" | "conversation"
 
 export function SettingsDialog(props: SettingsDialogProps) {
   const { client, readOnly } = props
@@ -92,6 +93,16 @@ export function SettingsDialog(props: SettingsDialogProps) {
             </Button>
             <Button
               type="button"
+              variant={category === "appearance" ? "secondary" : "ghost"}
+              className="w-full justify-start"
+              aria-current={category === "appearance" ? "page" : undefined}
+              onClick={() => selectCategory("appearance")}
+            >
+              <Palette data-icon="inline-start" />
+              {t("settings.dialog.appearanceCategory")}
+            </Button>
+            <Button
+              type="button"
               variant={category === "providers" ? "secondary" : "ghost"}
               className="w-full justify-start"
               aria-current={category === "providers" ? "page" : undefined}
@@ -115,6 +126,8 @@ export function SettingsDialog(props: SettingsDialogProps) {
             {open &&
               (category === "general" ? (
                 <GeneralSettingsPanel client={client} readOnly={readOnly} />
+              ) : category === "appearance" ? (
+                <AppearanceSettingsPanel client={client} readOnly={readOnly} />
               ) : category === "conversation" ? (
                 <ConversationSettingsPanel
                   client={client}

@@ -211,6 +211,7 @@ export const zhCN = {
   "settings.dialog.description": "工作区设置",
   "settings.dialog.navLabel": "设置分类",
   "settings.dialog.generalCategory": "通用",
+  "settings.dialog.appearanceCategory": "外观",
   "settings.dialog.providersCategory": "模型提供商",
   "settings.dialog.conversationsCategory": "会话",
 
@@ -222,6 +223,15 @@ export const zhCN = {
   "settings.general.languageZhCn": "简体中文",
   "settings.general.languageEn": "English",
   "settings.general.updateFailed": "语言设置未保存",
+
+  // AppearanceSettingsPanel.tsx
+  "settings.appearance.title": "外观",
+  "settings.appearance.theme": "主题模式",
+  "settings.appearance.themeDescription": "选择界面显示主题",
+  "settings.appearance.themeSystem": "跟随系统",
+  "settings.appearance.themeLight": "浅色模式",
+  "settings.appearance.themeDark": "深色模式",
+  "settings.appearance.updateFailed": "外观设置未保存",
 
   // ConversationSettingsPanel.tsx
   "settings.conversation.title": "会话",

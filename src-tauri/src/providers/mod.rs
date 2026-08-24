@@ -14,7 +14,8 @@ mod titles;
 pub use credentials::{CredentialStore, NativeCredentialStore};
 pub use domain::{
     ApiKeyAction, LanguagePreference, Protocol, Provider, ProviderInput, RedactedProvider,
-    TitleModelBinding, ValidatedEndpoint, MIGRATED_PROVIDER_ID, MIGRATED_PROVIDER_NAME,
+    ThemePreference, TitleModelBinding, ValidatedEndpoint, MIGRATED_PROVIDER_ID,
+    MIGRATED_PROVIDER_NAME,
 };
 pub use error::ProviderError;
 pub use generation::GenerationRuntime;

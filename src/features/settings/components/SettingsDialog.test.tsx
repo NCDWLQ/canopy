@@ -28,6 +28,7 @@ function client() {
     setAutoGenerateTitle: vi.fn().mockResolvedValue(true),
     setTitleModelBinding: vi.fn().mockResolvedValue(null),
     setLanguage: vi.fn().mockResolvedValue("system"),
+    setTheme: vi.fn().mockResolvedValue("system"),
     revealProviderApiKey: vi.fn().mockResolvedValue(null),
     listProviderModels: vi.fn(),
     generateFromActivePath: vi.fn(),
@@ -60,6 +61,7 @@ describe("SettingsDialog", () => {
       autoGenerateTitle: true,
       titleModelBinding: null,
       language: "system",
+      theme: "system",
     })
   })
 
@@ -94,6 +96,27 @@ describe("SettingsDialog", () => {
     // Reopening resets to the general category and clears the editor.
     expect(screen.getByRole("combobox", { name: "语言" })).toBeVisible()
     expect(screen.queryByLabelText("名称")).not.toBeInTheDocument()
+  })
+
+  it("navigates from the default general panel to appearance", async () => {
+    const user = userEvent.setup()
+    render(
+      <SettingsDialog client={client() as ProviderClient} readOnly={false} />,
+    )
+    await user.click(screen.getByRole("button", { name: "设置" }))
+    const appearance = screen.getByRole("button", { name: "外观" })
+    expect(appearance).toBeVisible()
+    expect(appearance).not.toHaveAttribute("aria-current")
+
+    await user.click(appearance)
+    expect(
+      screen.getByRole("button", { name: "外观", current: "page" }),
+    ).toBeVisible()
+    expect(screen.getByRole("heading", { name: "外观" })).toBeVisible()
+    expect(screen.getByRole("combobox", { name: "主题模式" })).toBeVisible()
+    expect(
+      screen.queryByRole("combobox", { name: "语言" }),
+    ).not.toBeInTheDocument()
   })
 
   it("navigates from the default general panel to providers", async () => {

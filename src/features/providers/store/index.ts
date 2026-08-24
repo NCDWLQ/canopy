@@ -15,6 +15,12 @@ import {
   type LocalePreference,
 } from "@/lib/i18n"
 import { useLocaleStore } from "@/lib/i18n/locale-store"
+import {
+  resolveThemePreference,
+  useThemeStore,
+  type ThemePreference,
+} from "@/lib/theme"
+
 export type ProviderState = (
   | {
       phase: "idle" | "loading" | "unconfigured"
@@ -36,6 +42,7 @@ export type ProviderState = (
   autoGenerateTitle: boolean
   titleModelBinding: TitleModelBinding | null
   language: LocalePreference
+  theme: ThemePreference
 }
 
 export type ProviderStore = ProviderState & {
@@ -64,6 +71,7 @@ export type ProviderStore = ProviderState & {
     client: ProviderClient,
     language: LocalePreference,
   ) => Promise<void>
+  setTheme: (client: ProviderClient, theme: ThemePreference) => Promise<void>
 }
 
 // Display sites render this through commandErrorMessage(code); the message
@@ -92,6 +100,7 @@ function readyOrUnconfigured(
   autoGenerateTitle: boolean,
   titleModelBinding: TitleModelBinding | null,
   language: LocalePreference,
+  theme: ThemePreference,
 ): ProviderState {
   if (activeProviderId !== null) {
     return {
@@ -101,6 +110,7 @@ function readyOrUnconfigured(
       autoGenerateTitle,
       titleModelBinding,
       language,
+      theme,
     }
   }
   return {
@@ -110,6 +120,7 @@ function readyOrUnconfigured(
     autoGenerateTitle,
     titleModelBinding,
     language,
+    theme,
   }
 }
 
@@ -143,6 +154,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
       autoGenerateTitle: previous.autoGenerateTitle,
       titleModelBinding: previous.titleModelBinding,
       language: previous.language,
+      theme: previous.theme,
     })
     return { epoch, previous }
   }
@@ -156,6 +168,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
       autoGenerateTitle: previous.autoGenerateTitle,
       titleModelBinding: previous.titleModelBinding,
       language: previous.language,
+      theme: previous.theme,
       error: normalizeError(error),
     })
   }
@@ -167,6 +180,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
     autoGenerateTitle: true,
     titleModelBinding: null,
     language: "system",
+    theme: "system",
 
     loadProviders: async (client) => {
       const { epoch, previous } = beginRequest()
@@ -177,6 +191,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
           // values; resolveLocalePreference additionally absorbs untyped
           // fixtures (App smoke mocks) that bypass the bridge.
           const language = resolveLocalePreference(result.language)
+          const theme = resolveThemePreference(result.theme)
           set(
             readyOrUnconfigured(
               result.providers,
@@ -184,11 +199,13 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
               result.autoGenerateTitle,
               result.titleModelBinding,
               language,
+              theme,
             ),
           )
           // Boot hydration (design 08-22-i18n §3): only an explicit preference
           // overrides the locale detected at startup; "system" keeps it.
           if (language !== "system") applyLanguagePreference(language)
+          useThemeStore.getState().setThemePreference(theme)
         }
       } catch (error: unknown) {
         fail(epoch, previous, error)
@@ -212,6 +229,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
               previous.autoGenerateTitle,
               previous.titleModelBinding,
               previous.language,
+              previous.theme,
             ),
           )
         }
@@ -243,6 +261,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
               ? null
               : previous.titleModelBinding,
             previous.language,
+            previous.theme,
           ),
         )
         return deleted
@@ -264,6 +283,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
               previous.autoGenerateTitle,
               previous.titleModelBinding,
               previous.language,
+              previous.theme,
             ),
           )
         }
@@ -284,6 +304,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
               autoGenerateTitle,
               previous.titleModelBinding,
               previous.language,
+              previous.theme,
             ),
           )
         }
@@ -304,6 +325,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
               previous.autoGenerateTitle,
               titleModelBinding,
               previous.language,
+              previous.theme,
             ),
           )
         }
@@ -324,11 +346,34 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
               previous.autoGenerateTitle,
               previous.titleModelBinding,
               stored,
+              previous.theme,
             ),
           )
           // Unlike boot hydration, an explicit "system" selection recomputes
           // the detected locale so the UI follows the OS again immediately.
           applyLanguagePreference(stored)
+        }
+      } catch (error: unknown) {
+        fail(epoch, previous, error)
+      }
+    },
+
+    setTheme: async (client, theme) => {
+      const { epoch, previous } = beginRequest()
+      try {
+        const stored = await client.setTheme(theme)
+        if (isCurrent(epoch)) {
+          set(
+            readyOrUnconfigured(
+              previous.providers,
+              previous.activeProviderId,
+              previous.autoGenerateTitle,
+              previous.titleModelBinding,
+              previous.language,
+              stored,
+            ),
+          )
+          useThemeStore.getState().setThemePreference(stored)
         }
       } catch (error: unknown) {
         fail(epoch, previous, error)

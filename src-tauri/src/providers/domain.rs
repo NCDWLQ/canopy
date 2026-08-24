@@ -68,6 +68,39 @@ impl LanguagePreference {
     }
 }
 
+/// Persisted UI theme preference stored under the `theme` key in
+/// `app_settings`. `System` follows the OS/system color scheme and is the
+/// default while the key is absent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThemePreference {
+    System,
+    Light,
+    Dark,
+}
+
+impl ThemePreference {
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "system" => Some(Self::System),
+            "light" => Some(Self::Light),
+            "dark" => Some(Self::Dark),
+            _ => None,
+        }
+    }
+
+    pub fn from_setting_text(value: &str) -> Result<Self, ProviderError> {
+        Self::parse(value).ok_or(ProviderError::Protocol)
+    }
+
+    pub fn as_setting_text(self) -> &'static str {
+        match self {
+            Self::System => "system",
+            Self::Light => "light",
+            Self::Dark => "dark",
+        }
+    }
+}
+
 #[derive(Clone)]
 pub enum ApiKeyAction {
     Keep,

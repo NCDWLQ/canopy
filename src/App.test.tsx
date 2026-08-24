@@ -1,6 +1,7 @@
 import { act, render, screen } from "@testing-library/react"
 import App from "./App"
 import { useLocaleStore } from "@/lib/i18n/locale-store"
+import { useThemeStore } from "@/lib/theme"
 
 // Mock tauri client so we don't call real IPC in component tests
 vi.mock("@/lib/tauri", () => ({
@@ -9,13 +10,21 @@ vi.mock("@/lib/tauri", () => ({
   }),
   createProviderClient: () => ({
     listProviders: () =>
-      Promise.resolve({ providers: [], activeProviderId: null }),
+      Promise.resolve({
+        providers: [],
+        activeProviderId: null,
+        autoGenerateTitle: true,
+        titleModelBinding: null,
+        language: "system",
+        theme: "system",
+      }),
   }),
 }))
 
 describe("Canopy scaffold", () => {
   beforeEach(() => {
     useLocaleStore.getState().setLocale("zh-CN")
+    useThemeStore.getState().setThemePreference("light")
   })
 
   it("renders the ConversationWorkspace", async () => {
@@ -41,5 +50,24 @@ describe("Canopy scaffold", () => {
       useLocaleStore.getState().setLocale("zh-CN")
     })
     expect(document.documentElement.lang).toBe("zh-CN")
+  })
+
+  it("syncs document dark class and colorScheme with active theme", async () => {
+    render(<App />)
+    await screen.findByRole("heading", { name: "开始新会话" })
+    expect(document.documentElement.classList.contains("dark")).toBe(false)
+    expect(document.documentElement.style.colorScheme).toBe("light")
+
+    act(() => {
+      useThemeStore.getState().setThemePreference("dark")
+    })
+    expect(document.documentElement.classList.contains("dark")).toBe(true)
+    expect(document.documentElement.style.colorScheme).toBe("dark")
+
+    act(() => {
+      useThemeStore.getState().setThemePreference("light")
+    })
+    expect(document.documentElement.classList.contains("dark")).toBe(false)
+    expect(document.documentElement.style.colorScheme).toBe("light")
   })
 })

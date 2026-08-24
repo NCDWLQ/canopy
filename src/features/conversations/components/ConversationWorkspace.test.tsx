@@ -232,6 +232,7 @@ function createMockProviderClient() {
       autoGenerateTitle: true,
       titleModelBinding: null,
       language: "system",
+      theme: "system",
     }),
     saveProvider: vi.fn<ProviderClient["saveProvider"]>(),
     deleteProvider: vi.fn<ProviderClient["deleteProvider"]>(),
@@ -239,6 +240,7 @@ function createMockProviderClient() {
     setAutoGenerateTitle: vi.fn<ProviderClient["setAutoGenerateTitle"]>(),
     setTitleModelBinding: vi.fn<ProviderClient["setTitleModelBinding"]>(),
     setLanguage: vi.fn<ProviderClient["setLanguage"]>(),
+    setTheme: vi.fn<ProviderClient["setTheme"]>(),
     revealProviderApiKey: vi
       .fn<ProviderClient["revealProviderApiKey"]>()
       .mockResolvedValue(null),
@@ -784,6 +786,7 @@ describe("ConversationWorkspace", () => {
       autoGenerateTitle: true,
       titleModelBinding: null,
       language: "system",
+      theme: "system",
     })
     client.createConversation.mockResolvedValueOnce(rootOnlyTree)
     render(<ConversationWorkspace />)
@@ -1988,6 +1991,7 @@ describe("ConversationWorkspace", () => {
       autoGenerateTitle: true,
       titleModelBinding: null,
       language: "system",
+      theme: "system",
     })
     providerClient.saveProvider = vi.fn().mockResolvedValueOnce({
       id: "provider-1",

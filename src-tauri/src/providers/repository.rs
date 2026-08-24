@@ -9,6 +9,7 @@ pub(crate) const ACTIVE_PROVIDER_SETTING_KEY: &str = "active_provider_id";
 pub(crate) const AUTO_GENERATE_TITLE_SETTING_KEY: &str = "auto_generate_title";
 pub(crate) const TITLE_MODEL_BINDING_SETTING_KEY: &str = "title_model_binding";
 pub(crate) const LANGUAGE_SETTING_KEY: &str = "language";
+pub(crate) const THEME_SETTING_KEY: &str = "theme";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CredentialOperationKind {

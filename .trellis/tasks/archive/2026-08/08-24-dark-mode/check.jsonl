@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Code quality standards and forbidden patterns"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Strict TypeScript and runtime validation standards"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "Translation boundaries and settings persistence rules"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Verification of cross-layer data flow and error matrix"}
