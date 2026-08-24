@@ -1,6 +1,12 @@
 import { cleanup, render, screen } from "@testing-library/react"
-import { describe, expect, it } from "vitest"
+import userEvent from "@testing-library/user-event"
+import { describe, expect, it, vi } from "vitest"
 
+vi.mock("@tauri-apps/plugin-opener", () => ({
+  openUrl: vi.fn().mockResolvedValue(undefined),
+}))
+
+import { openUrl } from "@tauri-apps/plugin-opener"
 import { AssistantMarkdown } from "./AssistantMarkdown"
 import { MessageNode } from "./MessageNode"
 
@@ -137,7 +143,8 @@ describe("AssistantMarkdown", () => {
     expect(screen.getByRole("button", { name: "复制代码" })).toBeEnabled()
   })
 
-  it("allows only reviewed absolute link protocols", () => {
+  it("allows only reviewed absolute link protocols and opens them via plugin-opener on click", async () => {
+    const user = userEvent.setup()
     render(
       <AssistantMarkdown
         content={`[安全网页](https://example.com/path)
@@ -156,6 +163,9 @@ describe("AssistantMarkdown", () => {
       "href",
       "mailto:team@example.com",
     )
+
+    await user.click(safeLink)
+    expect(openUrl).toHaveBeenCalledWith("https://example.com/path")
 
     for (const label of ["脚本", "数据", "文件", "桌面", "相对"]) {
       expect(screen.getByText(label, { exact: false }).closest("a")).toBeNull()

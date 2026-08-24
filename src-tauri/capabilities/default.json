@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Allows the desktop shell to use core Tauri APIs. SQL remains Rust-only; the dialog is limited to save.",
   "windows": ["main"],
-  "permissions": ["core:default", "dialog:allow-save"]
+  "permissions": ["core:default", "dialog:allow-save", "opener:default"]
 }

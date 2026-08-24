@@ -1,5 +1,6 @@
 import { useMemo } from "react"
-import type { ComponentProps, ReactNode } from "react"
+import type { ComponentProps, MouseEvent, ReactNode } from "react"
+import { openUrl } from "@tauri-apps/plugin-opener"
 import { code } from "@streamdown/code"
 import {
   Streamdown,
@@ -83,12 +84,22 @@ function SafeLink(props: MarkdownAnchorProps) {
     return <span>{children}</span>
   }
 
+  const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault()
+    void openUrl(href).catch(() => {
+      if (typeof window !== "undefined") {
+        window.open(href, "_blank", "noopener,noreferrer")
+      }
+    })
+  }
+
   return (
     <a
       className="rounded-sm font-medium text-primary underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       href={href}
       target="_blank"
       rel="noopener noreferrer"
+      onClick={handleClick}
     >
       {children}
     </a>
