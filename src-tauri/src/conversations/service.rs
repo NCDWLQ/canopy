@@ -404,6 +404,46 @@ impl ConversationPersistenceService {
         Ok(conversation)
     }
 
+    pub async fn rename_conversation(
+        &self,
+        conversation_id: &str,
+        title: &str,
+    ) -> Result<Conversation, PersistenceError> {
+        let mut transaction = self.pool.begin().await?;
+        if !ConversationRepository::update_title(&mut transaction, conversation_id, title).await? {
+            return Err(PersistenceError::NotFound {
+                entity: "conversation",
+            });
+        }
+        let conversation =
+            ConversationRepository::load_conversation(&mut transaction, conversation_id)
+                .await?
+                .ok_or(PersistenceError::TreeIntegrity {
+                    reason: "renamed conversation could not be read",
+                })?;
+        transaction.commit().await?;
+        Ok(conversation)
+    }
+
+    pub async fn unarchive_conversation(
+        &self,
+        conversation_id: &str,
+    ) -> Result<Conversation, PersistenceError> {
+        let mut transaction = self.pool.begin().await?;
+        let conversation =
+            ConversationRepository::unarchive_conversation(&mut transaction, conversation_id)
+                .await?;
+        transaction.commit().await?;
+        Ok(conversation)
+    }
+
+    pub async fn delete_conversation(&self, conversation_id: &str) -> Result<(), PersistenceError> {
+        let mut transaction = self.pool.begin().await?;
+        ConversationRepository::delete_conversation(&mut transaction, conversation_id).await?;
+        transaction.commit().await?;
+        Ok(())
+    }
+
     async fn require_writable_conversation(
         connection: &mut sqlx::SqliteConnection,
         conversation_id: &str,

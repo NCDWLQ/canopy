@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "后端质量门检查项"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "前端质量门检查项"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "IPC 五处同组变更的跨层一致性检查"}
+{"file": ".trellis/tasks/08-23-conversation-manage/research/codebase-survey.md", "reason": "对照改动面清单逐项核查遗漏"}

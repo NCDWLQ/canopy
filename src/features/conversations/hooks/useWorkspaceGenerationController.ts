@@ -38,6 +38,8 @@ export type WorkspaceGenerationController = {
   cancel: () => void
   selectNode: (nodeId: string) => void
   archiveConversation: (targetId?: string) => Promise<void>
+  deleteConversation: (targetId: string) => Promise<void>
+  unarchiveConversation: (targetId: string) => Promise<void>
   createConversation: (content: string) => Promise<boolean>
   loadConversation: (conversationId: string) => Promise<void>
   appendNode: (content: string) => Promise<void>
@@ -387,6 +389,22 @@ export function useWorkspaceGenerationController({
       await useConversationStore
         .getState()
         .archiveConversation(conversationClient, target)
+    },
+    deleteConversation: async (targetId) => {
+      // Confirm-time interruption: deleting a conversation with an active
+      // run (current or background) cancels it first so the run cannot
+      // persist into a deleted conversation.
+      cancelRunFor(targetId)
+      await useConversationStore
+        .getState()
+        .deleteConversation(conversationClient, targetId)
+    },
+    unarchiveConversation: async (targetId) => {
+      // Unarchiving is non-destructive and archived conversations have no
+      // runs, so it goes straight to the store action.
+      await useConversationStore
+        .getState()
+        .unarchiveConversation(conversationClient, targetId)
     },
     createConversation: async (content) => {
       const prior = useConversationStore.getState()
