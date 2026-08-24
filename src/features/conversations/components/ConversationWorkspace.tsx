@@ -763,6 +763,10 @@ export function ConversationWorkspace({
                 nodesById={store.nodesById}
                 activePathIds={visiblePath.map((message) => message.id)}
                 onSelect={selectBranchAtNode}
+                onOpenInConversation={(nodeId) => {
+                  selectBranchAtNode(nodeId)
+                  setIsMindMapOpen(false)
+                }}
               />
             ) : projectionError !== null ? (
               <div className="p-6 text-sm text-destructive" role="alert">

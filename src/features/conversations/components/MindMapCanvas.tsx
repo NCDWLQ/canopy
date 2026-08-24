@@ -122,6 +122,9 @@ function MindMapNodeCard({ data }: NodeProps<MindMapFlowNode>) {
             event.stopPropagation()
             data.onToggleBranch(data.nodeId)
           }}
+          onDoubleClick={(event) => {
+            event.stopPropagation()
+          }}
         >
           {isCollapsed ? (
             <Plus aria-hidden="true" />
@@ -144,6 +147,8 @@ export type MindMapCanvasProps = {
   /** Ordered root -> active node IDs from the store's path selector. */
   activePathIds: readonly string[]
   onSelect: (nodeId: string) => void
+  /** Leave the canvas and open the conversation pane on this message. */
+  onOpenInConversation: (nodeId: string) => void
 }
 
 export function MindMapCanvas(props: MindMapCanvasProps) {
@@ -161,6 +166,7 @@ function MindMapCanvasView({
   nodesById,
   activePathIds,
   onSelect,
+  onOpenInConversation,
 }: MindMapCanvasProps) {
   const { t } = useTranslation()
   const { fitView } = useReactFlow()
@@ -197,6 +203,12 @@ function MindMapCanvasView({
   > = (_, node) => {
     fitAfterSelectRef.current = true
     onSelect(node.id)
+  }
+
+  const handleNodeDoubleClick: NonNullable<
+    React.ComponentProps<typeof ReactFlow>["onNodeDoubleClick"]
+  > = (_, node) => {
+    onOpenInConversation(node.id)
   }
 
   const handleToggleBranch = React.useCallback(
@@ -253,6 +265,8 @@ function MindMapCanvasView({
         edges={layout.edges}
         nodeTypes={NODE_TYPES}
         onNodeClick={handleNodeClick}
+        onNodeDoubleClick={handleNodeDoubleClick}
+        zoomOnDoubleClick={false}
         fitView
         fitViewOptions={{ padding: 0.15, maxZoom: 0.9 }}
         minZoom={0.1}

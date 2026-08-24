@@ -17,8 +17,10 @@ glance. A mind-map style canvas makes the tree shape legible.
 - Interactions: click node → activate the branch THROUGH that node (store
   `selectBranchAtNode`: active path extends to the subtree's newest leaf,
   matching search-reveal semantics; a queryless reveal scrolls the message
-  pane to the clicked node); canvas fits the newly active path; pan/zoom;
-  MiniMap; collapse/expand subtrees with a collapsed branch-count badge.
+  pane to the clicked node); double-click node → switch back to the
+  conversation pane and locate that message; canvas fits the newly active
+  path; pan/zoom; MiniMap; collapse/expand subtrees with a collapsed
+  branch-count badge.
 - Entry point: a view toggle in the conversation workspace that opens the
   mind-map view over the message pane, OutlineTree remains the
   a11y/keyboard navigation surface.
@@ -37,6 +39,8 @@ glance. A mind-map style canvas makes the tree shape legible.
 2. Mind-map renders the full tree of the active conversation; collapsed
    subtree state visible via branch-count badge.
 3. Clicking a node selects it: active path in the main message pane and the
-   highlighted path in the canvas update consistently.
+   highlighted path in the canvas update consistently. Double-clicking a
+   node card closes the mind-map and scrolls the conversation pane to that
+   message.
 4. Empty / single-node conversations render without errors.
 5. No regression to existing OutlineTree / message pane behavior.

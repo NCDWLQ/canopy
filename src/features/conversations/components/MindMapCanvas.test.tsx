@@ -110,6 +110,7 @@ describe("MindMapCanvas", () => {
         nodesById={nodesById}
         activePathIds={activePathIds}
         onSelect={vi.fn()}
+        onOpenInConversation={vi.fn()}
       />,
     )
 
@@ -135,6 +136,7 @@ describe("MindMapCanvas", () => {
         nodesById={nodesById}
         activePathIds={activePathIds}
         onSelect={vi.fn()}
+        onOpenInConversation={vi.fn()}
       />,
     )
 
@@ -168,12 +170,47 @@ describe("MindMapCanvas", () => {
         nodesById={nodesById}
         activePathIds={activePathIds}
         onSelect={onSelect}
+        onOpenInConversation={vi.fn()}
       />,
     )
 
     fireEvent.click(screen.getByText("LEFT"))
 
     expect(onSelect).toHaveBeenCalledWith("user-left")
+  })
+
+  it("emits the double-clicked node id through onOpenInConversation", () => {
+    const onOpenInConversation = vi.fn()
+    render(
+      <MindMapCanvas
+        rootNodeId="root"
+        nodesById={nodesById}
+        activePathIds={activePathIds}
+        onSelect={vi.fn()}
+        onOpenInConversation={onOpenInConversation}
+      />,
+    )
+
+    fireEvent.doubleClick(screen.getByText("LEFT"))
+
+    expect(onOpenInConversation).toHaveBeenCalledWith("user-left")
+  })
+
+  it("does not open conversation when collapsing a branch", () => {
+    const onOpenInConversation = vi.fn()
+    render(
+      <MindMapCanvas
+        rootNodeId="root"
+        nodesById={nodesById}
+        activePathIds={activePathIds}
+        onSelect={vi.fn()}
+        onOpenInConversation={onOpenInConversation}
+      />,
+    )
+
+    fireEvent.doubleClick(screen.getByRole("button", { name: "收起 A 的分支" }))
+
+    expect(onOpenInConversation).not.toHaveBeenCalled()
   })
 
   it("collapses and re-expands branches from the node button", () => {
@@ -183,6 +220,7 @@ describe("MindMapCanvas", () => {
         nodesById={nodesById}
         activePathIds={activePathIds}
         onSelect={vi.fn()}
+        onOpenInConversation={vi.fn()}
       />,
     )
 
@@ -208,6 +246,7 @@ describe("MindMapCanvas", () => {
         }}
         activePathIds={["only"]}
         onSelect={vi.fn()}
+        onOpenInConversation={vi.fn()}
       />,
     )
 
@@ -233,6 +272,7 @@ describe("MindMapCanvas", () => {
         }}
         activePathIds={["root"]}
         onSelect={vi.fn()}
+        onOpenInConversation={vi.fn()}
       />,
     )
 
@@ -255,6 +295,7 @@ describe("MindMapCanvas", () => {
         nodesById={nodesById}
         activePathIds={activePathIds}
         onSelect={vi.fn()}
+        onOpenInConversation={vi.fn()}
       />,
     )
 

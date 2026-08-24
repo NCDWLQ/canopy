@@ -1,4 +1,11 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react"
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { StrictMode } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -2072,6 +2079,48 @@ describe("ConversationWorkspace", () => {
       within(pane7).queryByRole("button", { name: "重新生成" }),
     ).not.toBeInTheDocument()
     unmount7()
+  })
+
+  it("opens the conversation pane on the double-clicked mind-map node", async () => {
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+    class DOMMatrixReadOnlyStub {
+      readonly m22 = 1
+    }
+    vi.stubGlobal("DOMMatrixReadOnly", DOMMatrixReadOnlyStub)
+
+    client.listConversations.mockResolvedValueOnce([
+      { ...tree.conversation, updatedAt: right.createdAt },
+    ])
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+
+    render(<ConversationWorkspace />)
+    const pane = await screen.findByTestId("conversation-pane")
+    expect(within(pane).getByText(right.content)).toBeVisible()
+    expect(within(pane).queryByText(left.content)).not.toBeInTheDocument()
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "切换思维导图视图" }),
+    )
+    expect(screen.queryByTestId("conversation-pane")).not.toBeInTheDocument()
+    const mindMap = screen.getByRole("region", { name: "会话思维导图" })
+    expect(mindMap).toBeVisible()
+
+    fireEvent.doubleClick(within(mindMap).getByText("LEFT_BRANCH_SENTINEL"))
+
+    const conversationPane = await screen.findByTestId("conversation-pane")
+    expect(within(conversationPane).getByText(left.content)).toBeVisible()
+    expect(
+      within(conversationPane).queryByText(right.content),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole("region", { name: "会话思维导图" }),
+    ).not.toBeInTheDocument()
+    expect(scrollIntoView).toHaveBeenCalledWith(
+      expect.objectContaining({ block: "start" }),
+    )
   })
 })
 
