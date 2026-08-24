@@ -76,15 +76,16 @@ export function MessageNode({
   const assistantContentRef = React.useRef<HTMLDivElement>(null)
 
   // Reveal positioning + match highlighting for the search-selected message.
-  // The scroll target is the match itself, not the article: centering a
-  // message taller than the viewport can leave the match off-screen. Plain
-  // text roles scroll to their inline <mark>; assistant content renders
+  // The scroll target is the match itself, not the article: a message taller
+  // than the viewport must still show its revealed part. Anchoring is the
+  // message start (top), never the center — long bubbles read from the top.
+  // Plain text roles scroll to their inline <mark>; assistant content renders
   // through the markdown pipeline, so the CSS Custom Highlight API marks the
   // first-occurrence match on the already-rendered article (no-op in jsdom
-  // or engines without the API). Center the assistant's exact DOM Range
-  // geometrically because a containing paragraph may itself exceed the
-  // viewport; fall back to that containing element when range geometry or
-  // element scrolling is unavailable.
+  // or engines without the API). Align the assistant's exact DOM Range to
+  // the container top geometrically because a containing paragraph may
+  // itself exceed the viewport; fall back to that containing element when
+  // range geometry or element scrolling is unavailable.
   React.useEffect(() => {
     if (highlightQuery === undefined) return
     const article = revealArticleRef.current
@@ -100,7 +101,7 @@ export function MessageNode({
     if (message.role !== "assistant") {
       const matchTarget = article.querySelector("mark") ?? article
       matchTarget.scrollIntoView?.({
-        block: "center",
+        block: "start",
         inline: "nearest",
         behavior,
       })
@@ -128,16 +129,13 @@ export function MessageNode({
       hasUsableGeometry
     ) {
       scrollContainer.scrollBy({
-        top:
-          matchRect.top -
-          containerRect.top -
-          (containerRect.height - matchRect.height) / 2,
+        top: matchRect.top - containerRect.top,
         behavior,
       })
     } else {
       const fallbackTarget = matchRange?.startContainer.parentElement ?? article
       fallbackTarget.scrollIntoView?.({
-        block: "center",
+        block: "start",
         inline: "nearest",
         behavior,
       })

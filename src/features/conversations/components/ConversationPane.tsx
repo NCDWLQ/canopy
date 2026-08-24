@@ -30,8 +30,9 @@ export type ConversationPaneProps = {
   onRegenerate: () => void
   userGenerationAction?: UserGenerationAction | null
   assistantRegenerationAction?: AssistantRegenerationAction | null
-  // Active search reveal: scrolls the hit message into view (centered) and
-  // highlights matches until the next navigation clears it.
+  // Active search/mind-map reveal: scrolls the hit message into view
+  // anchored at its start and highlights matches until the next navigation
+  // clears it.
   reveal?: SearchReveal | null
 }
 
