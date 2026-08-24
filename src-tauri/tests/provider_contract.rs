@@ -4,7 +4,7 @@ use canopy_lib::providers::commands::{
     ListProviderModelsRequest, ListProvidersRequest, ListProvidersResult, ProviderDto,
     RevealProviderApiKeyRequest, RevealProviderApiKeyResult, SaveProviderRequest,
     SetActiveProviderRequest, SetActiveProviderResult, SetLanguageRequest, SetLanguageResult,
-    PROVIDER_COMMAND_NAMES,
+    SetThemeRequest, SetThemeResult, PROVIDER_COMMAND_NAMES,
 };
 use serde_json::Value;
 
@@ -30,6 +30,7 @@ fn shared_provider_fixture_round_trips_rust_wire_types() {
     request!("delete_provider", DeleteProviderRequest);
     request!("set_active_provider", SetActiveProviderRequest);
     request!("set_language", SetLanguageRequest);
+    request!("set_theme", SetThemeRequest);
     request!("reveal_provider_api_key", RevealProviderApiKeyRequest);
     request!("list_provider_models", ListProviderModelsRequest);
     request!("generate_from_active_path", GenerateFromActivePathRequest);
@@ -64,6 +65,12 @@ fn shared_provider_fixture_round_trips_rust_wire_types() {
     assert_eq!(
         serde_json::to_value(language).unwrap(),
         fixture["successes"]["set_language"]
+    );
+    let theme: SetThemeResult =
+        serde_json::from_value(fixture["successes"]["set_theme"].clone()).unwrap();
+    assert_eq!(
+        serde_json::to_value(theme).unwrap(),
+        fixture["successes"]["set_theme"]
     );
     let revealed: RevealProviderApiKeyResult =
         serde_json::from_value(fixture["successes"]["reveal_api_key"].clone()).unwrap();

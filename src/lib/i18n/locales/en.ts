@@ -215,6 +215,7 @@ export const en = {
   "settings.dialog.description": "Workspace settings",
   "settings.dialog.navLabel": "Settings categories",
   "settings.dialog.generalCategory": "General",
+  "settings.dialog.appearanceCategory": "Appearance",
   "settings.dialog.providersCategory": "Model Providers",
   "settings.dialog.conversationsCategory": "Conversations",
 
@@ -227,6 +228,16 @@ export const en = {
   "settings.general.languageZhCn": "简体中文",
   "settings.general.languageEn": "English",
   "settings.general.updateFailed": "Language setting was not saved",
+
+  // AppearanceSettingsPanel.tsx
+  "settings.appearance.title": "Appearance",
+  "settings.appearance.theme": "Theme mode",
+  "settings.appearance.themeDescription":
+    "Choose the display theme used across the interface",
+  "settings.appearance.themeSystem": "Follow system",
+  "settings.appearance.themeLight": "Light",
+  "settings.appearance.themeDark": "Dark",
+  "settings.appearance.updateFailed": "Appearance setting was not saved",
 
   // ConversationSettingsPanel.tsx
   "settings.conversation.title": "Conversations",

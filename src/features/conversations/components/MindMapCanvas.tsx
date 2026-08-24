@@ -23,6 +23,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { useTranslation } from "@/lib/i18n"
+import { useTheme } from "@/lib/theme"
 
 import "@xyflow/react/dist/style.css"
 
@@ -169,13 +170,14 @@ function MindMapCanvasView({
   onOpenInConversation,
 }: MindMapCanvasProps) {
   const { t } = useTranslation()
+  const { resolvedTheme } = useTheme()
   const { fitView } = useReactFlow()
   // Collapse state is scoped to a conversation: when the root changes the
   // previous set is discarded instead of being reset through an effect.
   const [collapseState, setCollapseState] = React.useState<{
-    rootNodeId: string
+    rootNodeId: string | null
     collapsedIds: ReadonlySet<string>
-  }>(() => ({ rootNodeId, collapsedIds: new Set() }))
+  }>({ rootNodeId: null, collapsedIds: EMPTY_COLLAPSED_IDS })
   const collapsedIds =
     collapseState.rootNodeId === rootNodeId
       ? collapseState.collapsedIds
@@ -261,6 +263,7 @@ function MindMapCanvasView({
           re-fits the viewport */}
       <ReactFlow
         key={rootNodeId}
+        colorMode={resolvedTheme}
         nodes={nodes}
         edges={layout.edges}
         nodeTypes={NODE_TYPES}

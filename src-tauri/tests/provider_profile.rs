@@ -10,7 +10,7 @@ use canopy_lib::conversations::{
 };
 use canopy_lib::providers::{
     ApiKeyAction, CredentialStore, LanguagePreference, Protocol, ProviderError, ProviderInput,
-    ProviderService, RedactedProvider, TitleModelBinding,
+    ProviderService, RedactedProvider, ThemePreference, TitleModelBinding,
 };
 use secrecy::{ExposeSecret, SecretString};
 use serde_json::json;
@@ -146,6 +146,61 @@ fn language_preference_settings_round_trip_through_the_settings_kv() {
             .await
             .unwrap();
         assert!(service.get_language().await.is_err());
+    });
+}
+
+#[test]
+fn theme_preference_settings_round_trip_through_the_settings_kv() {
+    run_async(async {
+        let pool = migrated_pool().await;
+        let service = ProviderService::new(pool.clone(), Arc::new(FakeCredentialStore::default()));
+
+        // A missing key means "system": the UI follows the OS color scheme.
+        assert_eq!(
+            service.get_theme().await.unwrap(),
+            ThemePreference::System
+        );
+
+        // Every stored preference round-trips through the settings kv.
+        assert_eq!(
+            service
+                .set_theme(ThemePreference::Dark)
+                .await
+                .unwrap(),
+            ThemePreference::Dark
+        );
+        assert_eq!(
+            service.get_theme().await.unwrap(),
+            ThemePreference::Dark
+        );
+        let stored: Option<String> =
+            sqlx::query_scalar("SELECT value FROM app_settings WHERE key = 'theme'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(stored.as_deref(), Some("dark"));
+        assert_eq!(
+            service.set_theme(ThemePreference::Light).await.unwrap(),
+            ThemePreference::Light
+        );
+        assert_eq!(
+            service
+                .set_theme(ThemePreference::System)
+                .await
+                .unwrap(),
+            ThemePreference::System
+        );
+        assert_eq!(
+            service.get_theme().await.unwrap(),
+            ThemePreference::System
+        );
+
+        // Dirty stored values fail closed instead of silently resetting.
+        sqlx::query("UPDATE app_settings SET value = 'solarized' WHERE key = 'theme'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert!(service.get_theme().await.is_err());
     });
 }
 

@@ -1,6 +1,7 @@
 import { Channel } from "@tauri-apps/api/core"
 
 import { t, type LocalePreference } from "@/lib/i18n"
+import type { ThemePreference } from "@/lib/theme"
 import type {
   GenerationEventView,
   GenerationTerminalView,
@@ -43,6 +44,8 @@ import {
   setAutoGenerateTitleResultSchema,
   setLanguageRequestSchema,
   setLanguageResultSchema,
+  setThemeRequestSchema,
+  setThemeResultSchema,
   setTitleModelBindingRequestSchema,
   setTitleModelBindingResultSchema,
   type GenerationEventDto,
@@ -60,6 +63,7 @@ export const PROVIDER_COMMANDS = {
   setAutoGenerateTitle: "set_auto_generate_title",
   setTitleModelBinding: "set_title_model_binding",
   setLanguage: "set_language",
+  setTheme: "set_theme",
   revealProviderApiKey: "reveal_provider_api_key",
   listProviderModels: "list_provider_models",
   generateFromActivePath: "generate_from_active_path",
@@ -204,6 +208,17 @@ export function createProviderClient(
         { language },
         setLanguageResultSchema,
         (value) => value.language,
+      )
+    },
+
+    async setTheme(theme: ThemePreference): Promise<ThemePreference> {
+      return providerCall(
+        transport,
+        PROVIDER_COMMANDS.setTheme,
+        setThemeRequestSchema,
+        { theme },
+        setThemeResultSchema,
+        (value) => value.theme,
       )
     },
 
@@ -487,6 +502,7 @@ function mapListProviders(dto: ListProvidersResultDto): ListProvidersView {
             model: dto.title_model_binding.model,
           },
     language: dto.language,
+    theme: dto.theme,
   }
 }
 

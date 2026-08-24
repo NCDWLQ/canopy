@@ -7,12 +7,12 @@ use sqlx::SqlitePool;
 use super::{
     domain::{
         validate_model, validate_models, validate_name, ApiKeyAction, LanguagePreference, Provider,
-        ProviderInput, RedactedProvider, TitleModelBinding, ValidatedEndpoint,
+        ProviderInput, RedactedProvider, ThemePreference, TitleModelBinding, ValidatedEndpoint,
     },
     repository::{
         CredentialOperation, CredentialOperationKind, ProviderRepository,
         ACTIVE_PROVIDER_SETTING_KEY, AUTO_GENERATE_TITLE_SETTING_KEY, LANGUAGE_SETTING_KEY,
-        TITLE_MODEL_BINDING_SETTING_KEY,
+        THEME_SETTING_KEY, TITLE_MODEL_BINDING_SETTING_KEY,
     },
     CredentialStore, ProviderError,
 };
@@ -124,6 +124,32 @@ impl ProviderService {
         .await?;
         transaction.commit().await?;
         Ok(language)
+    }
+
+    /// Reads the persisted UI theme preference. An absent key means
+    /// `System` (follow the OS/system color scheme), matching the default.
+    pub async fn get_theme(&self) -> Result<ThemePreference, ProviderError> {
+        let _guard = self.operation_lock.lock().await;
+        let mut transaction = self.pool.begin().await?;
+        let theme = read_theme(&mut transaction).await?;
+        transaction.commit().await?;
+        Ok(theme)
+    }
+
+    pub async fn set_theme(
+        &self,
+        theme: ThemePreference,
+    ) -> Result<ThemePreference, ProviderError> {
+        let _guard = self.operation_lock.lock().await;
+        let mut transaction = self.pool.begin().await?;
+        ProviderRepository::set_setting(
+            &mut transaction,
+            THEME_SETTING_KEY,
+            theme.as_setting_text(),
+        )
+        .await?;
+        transaction.commit().await?;
+        Ok(theme)
     }
 
     pub async fn set_title_model_binding(
@@ -644,6 +670,18 @@ async fn read_language(
     {
         None => Ok(LanguagePreference::System),
         Some(value) => LanguagePreference::from_setting_text(value),
+    }
+}
+
+async fn read_theme(
+    connection: &mut sqlx::SqliteConnection,
+) -> Result<ThemePreference, ProviderError> {
+    match ProviderRepository::get_setting(connection, THEME_SETTING_KEY)
+        .await?
+        .as_deref()
+    {
+        None => Ok(ThemePreference::System),
+        Some(value) => ThemePreference::from_setting_text(value),
     }
 }
 

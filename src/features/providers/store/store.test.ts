@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { useProviderStore } from "./index"
 import type { ProviderView } from "../types"
 import { useLocaleStore } from "@/lib/i18n/locale-store"
+import { useThemeStore } from "@/lib/theme"
 
 const provider: ProviderView = {
   id: "provider-1",
@@ -25,6 +26,7 @@ function client() {
     setAutoGenerateTitle: vi.fn(),
     setTitleModelBinding: vi.fn(),
     setLanguage: vi.fn(),
+    setTheme: vi.fn(),
     revealProviderApiKey: vi.fn(),
     listProviderModels: vi.fn(),
     generateFromActivePath: vi.fn(),
@@ -41,8 +43,10 @@ describe("provider store", () => {
       autoGenerateTitle: true,
       titleModelBinding: null,
       language: "system",
+      theme: "system",
     })
     useLocaleStore.getState().setLocale("zh-CN")
+    useThemeStore.getState().setThemePreference("system")
   })
 
   it("loads the redacted provider list and active provider", async () => {
@@ -53,6 +57,7 @@ describe("provider store", () => {
       autoGenerateTitle: true,
       titleModelBinding: null,
       language: "system",
+      theme: "system",
     })
     await useProviderStore.getState().loadProviders(bridge)
     expect(useProviderStore.getState()).toMatchObject({
@@ -101,6 +106,36 @@ describe("provider store", () => {
     await useProviderStore.getState().setLanguage(bridge, "en")
     expect(useProviderStore.getState().language).toBe("en")
     expect(useLocaleStore.getState().locale).toBe("en")
+  })
+
+  it("hydrates an explicit theme preference from the provider list", async () => {
+    const bridge = client()
+    bridge.listProviders.mockResolvedValueOnce({
+      providers: [provider],
+      activeProviderId: provider.id,
+      autoGenerateTitle: true,
+      titleModelBinding: null,
+      language: "system",
+      theme: "dark",
+    })
+    await useProviderStore.getState().loadProviders(bridge)
+    expect(useProviderStore.getState().theme).toBe("dark")
+    expect(useThemeStore.getState().theme).toBe("dark")
+    expect(useThemeStore.getState().resolvedTheme).toBe("dark")
+  })
+
+  it("persists the theme preference and applies it to the UI theme store", async () => {
+    const bridge = client()
+    bridge.setTheme.mockResolvedValueOnce("dark")
+    useProviderStore.setState({
+      phase: "ready",
+      providers: [provider],
+      activeProviderId: provider.id,
+    })
+    await useProviderStore.getState().setTheme(bridge, "dark")
+    expect(useProviderStore.getState().theme).toBe("dark")
+    expect(useThemeStore.getState().theme).toBe("dark")
+    expect(useThemeStore.getState().resolvedTheme).toBe("dark")
   })
 
   it("stores only the redacted save result and does not auto-activate a new provider", async () => {
