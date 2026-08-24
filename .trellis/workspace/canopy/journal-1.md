@@ -852,3 +852,24 @@ Double-clicking a mind-map node card now switches to the conversation pane, acti
 ### Next Steps
 
 - Open a PR for feat/mindmap-view against main
+
+
+## Session 38: Add Dark Mode Support and Appearance Settings Category
+
+**Date**: 2026-08-24
+**Task**: Add Dark Mode Support and Appearance Settings Category
+**Branch**: `feat/dark-mode`
+
+### Summary
+
+Implemented dark mode support with SQLite settings persistence, frontend theme store with system media query listener, dedicated Appearance settings category in SettingsDialog, and MindMap ReactFlow color mode integration. All unit/integration tests and quality gates passed.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9307240` | (see git log) |
+
+### Status
+
+[OK] **Completed**
