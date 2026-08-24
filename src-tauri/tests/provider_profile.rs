@@ -156,23 +156,14 @@ fn theme_preference_settings_round_trip_through_the_settings_kv() {
         let service = ProviderService::new(pool.clone(), Arc::new(FakeCredentialStore::default()));
 
         // A missing key means "system": the UI follows the OS color scheme.
-        assert_eq!(
-            service.get_theme().await.unwrap(),
-            ThemePreference::System
-        );
+        assert_eq!(service.get_theme().await.unwrap(), ThemePreference::System);
 
         // Every stored preference round-trips through the settings kv.
         assert_eq!(
-            service
-                .set_theme(ThemePreference::Dark)
-                .await
-                .unwrap(),
+            service.set_theme(ThemePreference::Dark).await.unwrap(),
             ThemePreference::Dark
         );
-        assert_eq!(
-            service.get_theme().await.unwrap(),
-            ThemePreference::Dark
-        );
+        assert_eq!(service.get_theme().await.unwrap(), ThemePreference::Dark);
         let stored: Option<String> =
             sqlx::query_scalar("SELECT value FROM app_settings WHERE key = 'theme'")
                 .fetch_one(&pool)
@@ -184,16 +175,10 @@ fn theme_preference_settings_round_trip_through_the_settings_kv() {
             ThemePreference::Light
         );
         assert_eq!(
-            service
-                .set_theme(ThemePreference::System)
-                .await
-                .unwrap(),
+            service.set_theme(ThemePreference::System).await.unwrap(),
             ThemePreference::System
         );
-        assert_eq!(
-            service.get_theme().await.unwrap(),
-            ThemePreference::System
-        );
+        assert_eq!(service.get_theme().await.unwrap(), ThemePreference::System);
 
         // Dirty stored values fail closed instead of silently resetting.
         sqlx::query("UPDATE app_settings SET value = 'solarized' WHERE key = 'theme'")
