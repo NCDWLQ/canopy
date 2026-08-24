@@ -554,3 +554,63 @@ Use when implementing or styling conversation message displays (`MessageBubble`,
   accessibility contract. It must not be a second footer or header action.
   The workspace header contains no Generate or Cancel slot; active cancellation
   belongs to the Composer's circular action.
+
+## Design Decision: Mind-map Canvas View
+
+**Context**: The conversation tree also renders as a mind-map style canvas
+(`MindMapCanvas`, React Flow v12 + `d3-hierarchy` tidy tree, left-to-right).
+React Flow was chosen because nodes are real React components (shadcn/Tailwind
+styling reuse) and pan/zoom/minimap/fit-view ship built-in on DOM/SVG — no
+WebGL dependency on WebKitGTK.
+
+**Decision**:
+
+- `MindMapCanvas` is fully controlled: `rootNodeId`, `nodesById`,
+  `activePathIds`, `onSelect` props only, no store access inside. The
+  root-to-active chain stays owned by the store's `selectActivePath`; the
+  workspace maps its path to `activePathIds`. Never re-derive the active
+  path in the canvas.
+- Clicking a canvas node means activating the whole branch through it:
+  the workspace wires `onSelect` to the store action
+  `selectBranchAtNode(nodeId)`, which targets the subtree's newest leaf
+  (`newestLeafDescendant`, same semantics as `revealSearchHit`) and sets a
+  queryless `reveal` so the message pane scrolls to the clicked node
+  without highlighting. Plain `selectNode` truncates the path at the
+  clicked node and is wrong for the mind-map. The canvas then fits the
+  updated path via `useReactFlow().fitView` (queued by React Flow until
+  the next node adopt; camera效果 only verifiable in a real browser, not
+  jsdom).
+- Layout lives in the pure module `features/conversations/mindmapLayout.ts`
+  (defensive validation mirroring `projectVisibleRows`: null on missing
+  nodes, parent mismatch, or cycle; component renders the
+  `errors.unsafeTreeProjection` alert). Collapse state is component-local
+  and scoped to the current root via derived state, not an effect reset.
+- Flow nodes declare explicit `width`/`height` matching the fixed card
+  metrics exported from the layout module.
+- Flow nodes also declare `handles` (`MINDMAP_NODE_HANDLES`: target left,
+  source right, card-local coordinates). React Flow **silently drops every
+  edge** whose endpoint nodes lack handle bounds (`isNodeInitialized` fails
+  before the error-008 path is even reached) — nodes render fine while all
+  edges vanish. Declarative handles avoid DOM measurement, so edges exist on
+  first paint and in jsdom; do not rely on `<Handle>` components inside the
+  card for this view.
+- Declared handles alone are NOT enough in a real browser: once the node
+  ResizeObserver completes measurement, `updateNodeInternals` overwrites
+  handleBounds from a `querySelectorAll('.source'/'.target')` DOM scan —
+  with no Handle elements that scan yields `{source: null, target: null}`
+  and every edge silently vanishes until the next node-store update
+  re-adopts the user nodes (symptom: "edges missing until a node is
+  clicked"). Keep the declaration (first paint + jsdom, where
+  offsetWidth 0 means the measurement pass never runs) AND matching
+  invisible `<Handle>` elements in the card; the regression test mocks
+  offsetWidth/offsetHeight to exercise the overwrite path. Without them React Flow keeps
+  nodes `visibility: hidden` until measured, which never happens in jsdom
+  and flashes in production.
+- Testing recipe (jsdom): stub `ResizeObserver` with a class whose
+  `observe` synchronously invokes the callback with a `{ target,
+  contentRect }` entry, stub `DOMMatrixReadOnly` (`m22 = 1`), and spy
+  `HTMLElement.prototype.getBoundingClientRect` to a non-zero rect. Click
+  nodes/buttons with `fireEvent`, not `userEvent`: jsdom dispatches pointer
+  events with a null `view`, which crashes d3-zoom's drag bookkeeping.
+- Keep React Flow's attribution visible (MIT courtesy); the OutlineTree
+  remains the keyboard-accessible navigation surface for the same tree.

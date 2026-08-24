@@ -146,6 +146,16 @@ export const zhCN = {
   "conversation.outline.noReplies": "该消息暂无回复",
   "conversation.outline.emptyContent": "无内容",
 
+  // MindMapCanvas.tsx + ConversationWorkspace.tsx
+  "conversation.mindmap.toggleView": "切换思维导图视图",
+  "conversation.mindmap.canvas": "会话思维导图",
+  "conversation.mindmap.collapseBranch": ({ label }: { label: string }) =>
+    `收起 ${label} 的分支`,
+  "conversation.mindmap.expandBranch": ({ label }: { label: string }) =>
+    `展开 ${label} 的分支`,
+  "conversation.mindmap.hiddenCount": ({ count }: { count: number }) =>
+    `${count} 条已折叠`,
+
   // SearchDialog.tsx
   "search.openButton": "搜索会话",
   "search.title": "搜索会话",

@@ -9,6 +9,7 @@ import {
   Search,
   SquarePen,
   Trash2,
+  Waypoints,
 } from "lucide-react"
 import { useShallow } from "zustand/react/shallow"
 
@@ -18,6 +19,7 @@ import {
   type AssistantRegenerationAction,
   type UserGenerationAction,
 } from "./ConversationPane"
+import { MindMapCanvas } from "./MindMapCanvas"
 import { OutlineTree } from "./OutlineTree"
 import { RenameConversationDialog } from "./RenameConversationDialog"
 import { SearchDialog } from "./SearchDialog"
@@ -175,6 +177,9 @@ export function ConversationWorkspace({
   const initializeHistory = useConversationStore(
     (state) => state.initializeHistory,
   )
+  const selectBranchAtNode = useConversationStore(
+    (state) => state.selectBranchAtNode,
+  )
   const pathProjection = useConversationStore(useShallow(selectActivePath))
   const controller = useWorkspaceGenerationController({
     conversationClient: client,
@@ -183,6 +188,7 @@ export function ConversationWorkspace({
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true)
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(false)
   const [isSearchOpen, setIsSearchOpen] = React.useState(false)
+  const [isMindMapOpen, setIsMindMapOpen] = React.useState(false)
   const [pendingArchiveId, setPendingArchiveId] = React.useState<string | null>(
     null,
   )
@@ -736,6 +742,30 @@ export function ConversationWorkspace({
               />
             )}
           </div>
+          {!isBlankConversation && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-8"
+                    aria-label={t("conversation.mindmap.toggleView")}
+                    title={t("conversation.mindmap.toggleView")}
+                    aria-pressed={isMindMapOpen}
+                    disabled={store.status === "loading"}
+                    onClick={() => setIsMindMapOpen((isOpen) => !isOpen)}
+                  >
+                    <Waypoints className="size-4" aria-hidden="true" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {t("conversation.mindmap.toggleView")}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
         </header>
 
         {isBlankConversation ? (
@@ -805,7 +835,30 @@ export function ConversationWorkspace({
               )}
             </AlertDescription>
           </Alert>
-        ) : store.conversationId === null ? null : (
+        ) : store.conversationId === null ? null : isMindMapOpen ? (
+          <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden p-3">
+            {store.rootNodeId !== null && isProjectionValid ? (
+              <MindMapCanvas
+                rootNodeId={store.rootNodeId}
+                nodesById={store.nodesById}
+                activePathIds={visiblePath.map((message) => message.id)}
+                onSelect={selectBranchAtNode}
+                onOpenInConversation={(nodeId) => {
+                  selectBranchAtNode(nodeId)
+                  setIsMindMapOpen(false)
+                }}
+              />
+            ) : projectionError !== null ? (
+              <div className="p-6 text-sm text-destructive" role="alert">
+                {commandErrorMessage(projectionError.code)}
+              </div>
+            ) : (
+              <div className="p-6 text-sm text-muted-foreground">
+                {t("conversation.workspace.noConversationLoaded")}
+              </div>
+            )}
+          </div>
+        ) : (
           <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
             <ConversationPane
               path={visiblePath}

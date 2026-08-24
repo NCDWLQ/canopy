@@ -138,6 +138,7 @@ export type ConversationStore = ConversationTreeState & {
   selectConversation: (client: ConversationClient, id: string) => Promise<void>
   loadConversation: (client: ConversationClient, id: string) => Promise<void>
   selectNode: (nodeId: string) => void
+  selectBranchAtNode: (nodeId: string) => void
   revealSearchHit: (
     client: ConversationClient,
     conversationId: string,
@@ -1190,6 +1191,26 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
       const projection = selectActivePath({ ...state, activeNodeId: nodeId })
       if (projection.kind !== "ready") return
       set({ activeNodeId: nodeId, reveal: null })
+    },
+
+    // Mind-map selection: activating a node means activating the whole
+    // branch through it. The active path targets the newest leaf of the
+    // node's subtree (matching revealSearchHit semantics), and a queryless
+    // reveal scrolls the conversation pane to the clicked message without
+    // highlighting anything.
+    selectBranchAtNode: (nodeId) => {
+      const state = get()
+      if (state.conversationId === null) return
+      if (!Object.hasOwn(state.nodesById, nodeId)) return
+      const targetId =
+        newestLeafDescendant(state.nodesById, state.fullNodes, nodeId) ?? nodeId
+      const projection = selectActivePath({ ...state, activeNodeId: targetId })
+      if (projection.kind !== "ready") return
+      set({
+        activeNodeId: targetId,
+        expandedIds: expandedIdsFromNodes(state.fullNodes, targetId),
+        reveal: { conversationId: state.conversationId, nodeId, query: "" },
+      })
     },
 
     revealSearchHit: async (client, conversationId, nodeId, query) => {

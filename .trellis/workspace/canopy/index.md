@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 36
-- **Last Active**: 2026-08-23
+- **Total Sessions**: 37
+- **Last Active**: 2026-08-24
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~801 | Active |
+| `journal-1.md` | ~853 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 37 | 2026-08-24 | Mind-map double-click opens conversation pane | `4c9f59f` | `feat/mindmap-view` |
 | 36 | 2026-08-23 | Conversation rename, delete & unarchive | `47d3e7b`, `83bf690`, `9628025`, `f9edbe4` | `feat/conversation-manage` |
 | 35 | 2026-08-23 | Finish conversation search | `a20da0e` | `feat/search` |
 | 34 | 2026-08-23 | 对话导出功能 | `f954182`, `4144b81` | `feat/conversation-export` |

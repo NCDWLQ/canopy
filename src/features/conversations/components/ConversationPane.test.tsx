@@ -391,11 +391,11 @@ describe("ConversationPane search reveal", () => {
       />,
     )
     expect(scrollIntoView).toHaveBeenCalledWith(
-      expect.objectContaining({ block: "center" }),
+      expect.objectContaining({ block: "start" }),
     )
     expect(scrollIntoView).toHaveBeenCalledTimes(2)
     // The scroll targets the matched text, not the message article: a long
-    // message centered on its article can leave the match off-screen.
+    // message anchored on its article can leave the match off-screen.
     const scrollTarget = scrollIntoView.mock.contexts.at(-1) as
       Element | undefined
     expect(scrollTarget?.tagName).toBe("MARK")
@@ -421,13 +421,13 @@ describe("ConversationPane search reveal", () => {
     )
 
     expect(scrollIntoView).toHaveBeenCalledWith({
-      block: "center",
+      block: "start",
       inline: "nearest",
       behavior: "auto",
     })
   })
 
-  it("centers the exact assistant match range inside a long markdown block", () => {
+  it("aligns the exact assistant match range to the container top inside a long markdown block", () => {
     const scrollIntoView = vi.fn()
     const scrollBy = vi.fn()
     installScrollIntoView(scrollIntoView)
@@ -497,7 +497,7 @@ describe("ConversationPane search reveal", () => {
       )
 
       expect(scrollBy).toHaveBeenCalledWith({
-        top: 530,
+        top: 720,
         behavior: "smooth",
       })
       expect(scrollIntoView).not.toHaveBeenCalled()

@@ -146,6 +146,16 @@ export const en = {
   "conversation.outline.noReplies": "No replies to this message yet",
   "conversation.outline.emptyContent": "Empty",
 
+  // MindMapCanvas.tsx + ConversationWorkspace.tsx
+  "conversation.mindmap.toggleView": "Toggle mind-map view",
+  "conversation.mindmap.canvas": "Conversation mind map",
+  "conversation.mindmap.collapseBranch": ({ label }: { label: string }) =>
+    `Collapse branches of ${label}`,
+  "conversation.mindmap.expandBranch": ({ label }: { label: string }) =>
+    `Expand branches of ${label}`,
+  "conversation.mindmap.hiddenCount": ({ count }: { count: number }) =>
+    `${count} collapsed`,
+
   // SearchDialog.tsx
   "search.openButton": "Search conversations",
   "search.title": "Search conversations",
