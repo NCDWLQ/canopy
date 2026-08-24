@@ -794,3 +794,37 @@ Hardened search matching, result limits, reveal scrolling, stale-query handling,
 ### Status
 
 [OK] **Completed**
+
+
+## Session 36: Mind-map double-click opens conversation pane
+
+**Date**: 2026-08-24
+**Task**: Mind-map double-click opens conversation pane
+**Branch**: `feat/mindmap-view`
+
+### Summary
+
+Double-clicking a mind-map node card now switches to the conversation pane, activates that branch, and scrolls to the clicked message. A later container-transform overlay was discarded before shipping. Task 08-23-mindmap-view archived; feat/mindmap-view pushed.
+
+### Main Changes
+
+- Double-click a mind-map node card to leave the canvas, select the branch through that node, and reveal the message
+- Discarded the in-progress card-to-fullscreen FLIP overlay so only the double-click navigation shipped
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4c9f59f` | (see git log) |
+
+### Testing
+
+- [OK] MindMapCanvas and ConversationWorkspace tests for double-click navigation; pnpm check on the landed commit
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Open a PR for feat/mindmap-view against main
