@@ -979,3 +979,24 @@ Truncated the rendered conversation path at a pending branch origin, added a loc
 ### Status
 
 [OK] **Completed**
+
+
+## Session 44: Conversation Panorama terminology refactor
+
+**Date**: 2026-08-25
+**Task**: Conversation Panorama terminology refactor
+**Branch**: `main`
+
+### Summary
+
+Renamed the conversation mind-map view to Conversation Panorama across the internal workspace view route, components, layout modules, typed i18n keys, tests, and frontend guidelines. Preserved React Flow interactions and validated with 336 frontend tests, lint, typecheck, Prettier, and production build.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9ac9926` | (see git log) |
+
+### Status
+
+[OK] **Completed**
