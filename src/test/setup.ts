@@ -1,5 +1,5 @@
 import "@testing-library/jest-dom/vitest"
-import { afterEach } from "vitest"
+import { afterEach, beforeEach, vi } from "vitest"
 import { cleanup } from "@testing-library/react"
 
 import { useLocaleStore } from "@/lib/i18n/locale-store"
@@ -10,6 +10,16 @@ import { useLocaleStore } from "@/lib/i18n/locale-store"
 // module (and its module-scope dictionary reads) loads. `setLocale` itself
 // lives on the store; the i18n barrel intentionally exports only read APIs.
 useLocaleStore.getState().setLocale("zh-CN")
+
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+beforeEach(() => {
+  vi.stubGlobal("ResizeObserver", ResizeObserverStub)
+})
 
 afterEach(() => {
   cleanup()
