@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 39
+- **Total Sessions**: 40
 - **Last Active**: 2026-08-25
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~896 | Active |
+| `journal-1.md` | ~917 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 40 | 2026-08-25 | Show pending branch origin marker | `f5c555f` | `main` |
 | 39 | 2026-08-25 | Focus branch creation in Composer | `ee3056f` | `main` |
 | 38 | 2026-08-24 | Add Dark Mode Support and Appearance Settings Category | `9307240` | `feat/dark-mode` |
 | 37 | 2026-08-24 | Mind-map double-click opens conversation pane | `4c9f59f` | `feat/mindmap-view` |

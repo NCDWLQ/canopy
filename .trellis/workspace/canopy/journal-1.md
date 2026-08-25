@@ -894,3 +894,24 @@ Moved assistant branch input into the persistent Composer, preserving visible me
 ### Status
 
 [OK] **Completed**
+
+
+## Session 40: Show pending branch origin marker
+
+**Date**: 2026-08-25
+**Task**: Show pending branch origin marker
+**Branch**: `main`
+
+### Summary
+
+Truncated the rendered conversation path at a pending branch origin, added a localized shadcn Marker separator with GitBranch icon, preserved durable tree state and drafts, and cleared stale intent on tree navigation.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f5c555f` | (see git log) |
+
+### Status
+
+[OK] **Completed**
