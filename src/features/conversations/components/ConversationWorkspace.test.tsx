@@ -576,7 +576,7 @@ describe("ConversationWorkspace", () => {
     await waitFor(() => {
       expect(within(pane).getByText("BACKGROUND_PART_MORE")).toBeVisible()
     })
-    expect(screen.getByRole("button", { name: "取消生成" })).toBeEnabled()
+    expect(screen.getByRole("button", { name: "停止生成" })).toBeEnabled()
   })
 
   it("shows a retryable discovery error instead of the empty form", async () => {
@@ -764,6 +764,7 @@ describe("ConversationWorkspace", () => {
 
     expect(composer).toHaveFocus()
     expect(composer).toHaveValue(branchUser.content)
+    expect(composer).toHaveAttribute("placeholder", "输入分支消息…")
     expect(screen.getByRole("button", { name: "发送消息" })).toBeEnabled()
     expect(within(pane).getByText(assistant.content)).toBeVisible()
     expect(within(pane).queryByText(right.content)).not.toBeInTheDocument()
@@ -1129,7 +1130,7 @@ describe("ConversationWorkspace", () => {
     expect(screen.getByRole("textbox", { name: "消息输入框" })).toBeEnabled()
     expect(screen.getByRole("textbox", { name: "消息输入框" })).toHaveAttribute(
       "placeholder",
-      "可输入草稿；当前路径暂无法发送。",
+      "当前位置不可直接发送，可创建分支",
     )
     expect(screen.getByRole("button", { name: "发送消息" })).toBeDisabled()
   })
@@ -1575,7 +1576,7 @@ describe("ConversationWorkspace", () => {
       })
     })
 
-    const cancelButton = screen.getByRole("button", { name: "取消生成" })
+    const cancelButton = screen.getByRole("button", { name: "停止生成" })
     expect(cancelButton).toBeVisible()
     expect(cancelButton).toBeEnabled()
     // The header archive entry point is gone; the history-row "…" menu stays
@@ -1882,7 +1883,7 @@ describe("ConversationWorkspace", () => {
         ?.phase,
     ).toBe("streaming")
     expect(useConversationStore.getState().status).toBe("ready")
-    expect(screen.getByRole("button", { name: "取消生成" })).toBeEnabled()
+    expect(screen.getByRole("button", { name: "停止生成" })).toBeEnabled()
   })
 
   it("decides interruption at confirm time when the run finishes while the dialog is open", async () => {
@@ -2413,7 +2414,7 @@ describe("ConversationWorkspace", () => {
     expect(composer).toBeEnabled()
     expect(composer).toHaveAttribute(
       "placeholder",
-      "可输入草稿；当前路径暂无法发送。",
+      "当前位置不可直接发送，可创建分支",
     )
 
     // 1. During streaming: textarea editable, Cancel button active, Send hidden
@@ -2426,7 +2427,7 @@ describe("ConversationWorkspace", () => {
       })
     })
     expect(composer).toBeEnabled()
-    expect(screen.getByRole("button", { name: "取消生成" })).toBeEnabled()
+    expect(screen.getByRole("button", { name: "停止生成" })).toBeEnabled()
     expect(
       screen.queryByRole("button", { name: "发送消息" }),
     ).not.toBeInTheDocument()
@@ -2450,7 +2451,7 @@ describe("ConversationWorkspace", () => {
     expect(composer).toBeEnabled()
     expect(composer).toHaveValue("MY_PERSISTENT_DRAFT")
     expect(
-      screen.queryByRole("button", { name: "取消生成" }),
+      screen.queryByRole("button", { name: "停止生成" }),
     ).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "发送消息" })).toBeDisabled()
 
@@ -2464,7 +2465,7 @@ describe("ConversationWorkspace", () => {
     expect(composer).toBeEnabled()
     expect(composer).toHaveValue("MY_PERSISTENT_DRAFT_APPEND")
     expect(
-      screen.queryByRole("button", { name: "取消生成" }),
+      screen.queryByRole("button", { name: "停止生成" }),
     ).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "发送消息" })).toBeDisabled()
   })
@@ -2518,7 +2519,7 @@ describe("ConversationWorkspace", () => {
     expect(screen.getByRole("textbox", { name: "消息输入框" })).toBeDisabled()
     expect(screen.getByRole("textbox", { name: "消息输入框" })).toHaveAttribute(
       "placeholder",
-      "对话已归档，无法修改。",
+      "对话已归档（只读）",
     )
     unmount3()
 

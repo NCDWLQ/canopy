@@ -16,7 +16,7 @@ describe("t", () => {
     expect(t("common.close")).toBe("关闭")
     expect(t("conversation.workspace.newConversation")).toBe("新建对话")
     expect(t("conversation.workspace.placeholderDraftOnly")).toBe(
-      "可输入草稿；当前路径暂无法发送。",
+      "当前位置不可直接发送，可创建分支",
     )
   })
 

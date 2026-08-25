@@ -50,15 +50,16 @@ export const en = {
   "conversation.workspace.archivedReadonlyBadge": "Archived — read-only",
   "conversation.workspace.blankTitle": "Start a new conversation",
   "conversation.workspace.blankHint":
-    "Type your first message below. It is saved once you send it.",
+    "Type a message below to start the conversation",
   "conversation.workspace.firstMessagePlaceholder": "Type your first message…",
   "conversation.workspace.loadingHistoryPane": "Loading conversation history…",
   "conversation.workspace.placeholderArchived":
-    "This conversation is archived and cannot be edited.",
+    "Conversation is archived (read-only)",
   "conversation.workspace.placeholderGenerating": "Generating reply…",
+  "conversation.workspace.placeholderBranchMessage": "Type a branch message…",
   "conversation.workspace.placeholderNextMessage": "Type your next message…",
   "conversation.workspace.placeholderDraftOnly":
-    "You can draft a message, but the current path cannot send right now.",
+    "Cannot send directly here; create a branch to continue",
   "conversation.workspace.archiveConfirmTitle": "Archive this conversation?",
   "conversation.workspace.archiveConfirmBody":
     "Archiving makes the conversation read-only and marks it as archived in history.",
@@ -96,7 +97,7 @@ export const en = {
   // Composer.tsx
   "conversation.composer.placeholder": "Type a message…",
   "conversation.composer.label": "Message input",
-  "conversation.composer.cancelGeneration": "Cancel generation",
+  "conversation.composer.cancelGeneration": "Stop generating",
   "conversation.composer.send": "Send message",
 
   // MessageNode.tsx

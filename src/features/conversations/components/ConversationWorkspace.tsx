@@ -994,9 +994,11 @@ export function ConversationWorkspace({
                     ? t("conversation.workspace.placeholderArchived")
                     : isRunActive(currentRun) && !transientBubbleVisible
                       ? t("conversation.workspace.placeholderGenerating")
-                      : canAppend
-                        ? t("conversation.workspace.placeholderNextMessage")
-                        : t("conversation.workspace.placeholderDraftOnly")
+                      : activeBranchComposerTarget !== null
+                        ? t("conversation.workspace.placeholderBranchMessage")
+                        : canAppend
+                          ? t("conversation.workspace.placeholderNextMessage")
+                          : t("conversation.workspace.placeholderDraftOnly")
                 }
               />
             </div>

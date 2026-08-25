@@ -51,14 +51,15 @@ export const zhCN = {
   "conversation.workspace.expandSidebar": "展开侧栏",
   "conversation.workspace.archivedReadonlyBadge": "已归档 — 只读",
   "conversation.workspace.blankTitle": "开始新对话",
-  "conversation.workspace.blankHint": "在下方输入第一条消息。发送后才会保存。",
+  "conversation.workspace.blankHint": "在下方输入消息，开启新对话",
   "conversation.workspace.firstMessagePlaceholder": "输入第一条消息…",
   "conversation.workspace.loadingHistoryPane": "正在加载对话历史记录…",
-  "conversation.workspace.placeholderArchived": "对话已归档，无法修改。",
+  "conversation.workspace.placeholderArchived": "对话已归档（只读）",
   "conversation.workspace.placeholderGenerating": "回复生成中…",
-  "conversation.workspace.placeholderNextMessage": "输入下一条用户消息…",
+  "conversation.workspace.placeholderBranchMessage": "输入分支消息…",
+  "conversation.workspace.placeholderNextMessage": "输入下一条消息…",
   "conversation.workspace.placeholderDraftOnly":
-    "可输入草稿；当前路径暂无法发送。",
+    "当前位置不可直接发送，可创建分支",
   "conversation.workspace.archiveConfirmTitle": "归档对话？",
   "conversation.workspace.archiveConfirmBody":
     "归档后对话转为只读，并在历史记录中标记为已归档。",
@@ -96,7 +97,7 @@ export const zhCN = {
   // Composer.tsx
   "conversation.composer.placeholder": "输入消息…",
   "conversation.composer.label": "消息输入框",
-  "conversation.composer.cancelGeneration": "取消生成",
+  "conversation.composer.cancelGeneration": "停止生成",
   "conversation.composer.send": "发送消息",
 
   // MessageNode.tsx

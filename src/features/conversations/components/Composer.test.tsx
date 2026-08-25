@@ -82,7 +82,7 @@ describe("Composer", () => {
     )
 
     const composer = screen.getByRole("textbox", { name: "消息输入框" })
-    const cancelButton = screen.getByRole("button", { name: "取消生成" })
+    const cancelButton = screen.getByRole("button", { name: "停止生成" })
 
     expect(composer).toBeEnabled()
     expect(cancelButton).toBeEnabled()
@@ -163,7 +163,7 @@ describe("Composer", () => {
       />,
     )
     expect(composer).toHaveValue("PRESERVED_DRAFT_SENTINEL")
-    expect(screen.getByRole("button", { name: "取消生成" })).toBeEnabled()
+    expect(screen.getByRole("button", { name: "停止生成" })).toBeEnabled()
 
     // Transition to completed (send enabled)
     rerender(
@@ -222,7 +222,7 @@ describe("Composer", () => {
       />,
     )
 
-    const cancelButton = screen.getByRole("button", { name: "取消生成" })
+    const cancelButton = screen.getByRole("button", { name: "停止生成" })
     expect(cancelButton).toBeVisible()
     expect(cancelButton).toBeEnabled()
 
