@@ -1,0 +1,5 @@
+{"kind":"spec","path":".trellis/spec/frontend/quality-guidelines.md","reason":"Apply the frontend quality gate and avoid unrelated behavioral changes during the terminology migration."}
+{"kind":"spec","path":".trellis/spec/frontend/type-safety.md","reason":"Ensure typed locale dictionaries, renamed exports, and strict TypeScript contracts remain valid."}
+{"kind":"research","path":"src/features/conversations/components/ConversationPanorama.test.tsx","reason":"Verify the renamed Panorama component still covers React Flow edges, node selection, double-click, collapse, and unsafe projection behavior."}
+{"kind":"research","path":"src/features/conversations/components/ConversationWorkspace.test.tsx","reason":"Verify the renamed internal view route and accessible labels preserve the workspace transition contract."}
+{"kind":"research","path":"src/lib/i18n/index.test.ts","reason":"Verify locale key parity after the namespace rename."}

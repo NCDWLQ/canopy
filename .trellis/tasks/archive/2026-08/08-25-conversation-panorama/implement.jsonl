@@ -1,0 +1,5 @@
+{"kind":"spec","path":".trellis/spec/frontend/component-guidelines.md","reason":"Preserve the React Flow canvas contract, explicit handles/dimensions, controlled props, and jsdom testing recipe while renaming the component and layout module."}
+{"kind":"spec","path":".trellis/spec/frontend/i18n-guidelines.md","reason":"Rename typed locale keys in both dictionaries without breaking source-of-truth parity or hard-coded UI copy rules."}
+{"kind":"research","path":"src/features/conversations/components/ConversationWorkspace.tsx","reason":"The workspace owns the internal view route/state and the branch-to-conversation transition that must be renamed without behavior changes."}
+{"kind":"research","path":"src/features/conversations/components/ConversationPanorama.tsx","reason":"Renamed primary component; retain controlled React Flow behavior, node handles, collapse state, and accessibility semantics."}
+{"kind":"research","path":"src/features/conversations/panoramaLayout.ts","reason":"Renamed pure layout module; preserve defensive tree validation and all layout geometry."}
