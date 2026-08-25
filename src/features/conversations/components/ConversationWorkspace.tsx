@@ -20,7 +20,6 @@ import {
   type UserGenerationAction,
 } from "./ConversationPane"
 import { MindMapCanvas } from "./MindMapCanvas"
-import { OutlineTree } from "./OutlineTree"
 import { RenameConversationDialog } from "./RenameConversationDialog"
 import { SearchDialog } from "./SearchDialog"
 import { useConversationTitleUpdates } from "../hooks/useConversationTitleUpdates"
@@ -171,7 +170,6 @@ export function ConversationWorkspace({
       reveal: state.reveal,
       generationRuns: state.generationRuns,
       history: state.history,
-      toggleExpanded: state.toggleExpanded,
       clearError: state.clearError,
       retryHistory: state.retryHistory,
       selectConversation: state.selectConversation,
@@ -728,34 +726,6 @@ export function ConversationWorkspace({
                 </AlertDescription>
               </Alert>
             )}
-          </section>
-          <section>
-            <div className="sticky top-0 z-10 bg-sidebar px-2.5 pb-1 pt-6 text-sm font-medium text-muted-foreground/70">
-              {t("conversation.workspace.treeSection")}
-            </div>
-            <div>
-              {store.rootNodeId !== null && isProjectionValid ? (
-                <OutlineTree
-                  rootNodeId={store.rootNodeId}
-                  activeNodeId={store.activeNodeId ?? ""}
-                  nodesById={store.nodesById}
-                  expandedIds={store.expandedIds}
-                  onToggle={store.toggleExpanded}
-                  onSelect={controller.selectNode}
-                />
-              ) : projectionError !== null ? (
-                <div
-                  className="px-2.5 py-3 text-sm text-destructive"
-                  role="alert"
-                >
-                  {commandErrorMessage(projectionError.code)}
-                </div>
-              ) : (
-                <div className="px-2.5 py-3 text-sm text-muted-foreground">
-                  {t("conversation.workspace.noConversationLoaded")}
-                </div>
-              )}
-            </div>
           </section>
         </div>
         <footer className="shrink-0 p-2">

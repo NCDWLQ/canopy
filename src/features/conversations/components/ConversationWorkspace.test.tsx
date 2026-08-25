@@ -357,7 +357,7 @@ describe("ConversationWorkspace", () => {
     const user = userEvent.setup()
     render(<ConversationWorkspace />)
     const sidebar = screen.getByRole("complementary", {
-      name: "会话树侧栏",
+      name: "会话侧栏",
     })
 
     const settingsButton = within(sidebar).getByRole("button", {
@@ -410,10 +410,11 @@ describe("ConversationWorkspace", () => {
       right.content,
     )
 
-    const sidebar = screen.getByRole("complementary", { name: "会话树侧栏" })
+    const sidebar = screen.getByRole("complementary", { name: "会话侧栏" })
     expect(within(sidebar).getByText("Canopy")).toBeVisible()
     expect(within(sidebar).getByText("历史记录")).toBeVisible()
-    expect(within(sidebar).getByText("会话树")).toBeVisible()
+    expect(within(sidebar).queryByText("会话树")).not.toBeInTheDocument()
+    expect(within(sidebar).queryByText(root.content)).not.toBeInTheDocument()
     expect(
       within(sidebar).getByRole("button", { name: "新建会话" }),
     ).toBeVisible()
@@ -589,7 +590,7 @@ describe("ConversationWorkspace", () => {
     )
     render(<ConversationWorkspace />)
 
-    const sidebar = screen.getByLabelText("会话树侧栏")
+    const sidebar = screen.getByLabelText("会话侧栏")
     expect(
       await within(sidebar).findByRole("button", {
         name: "重试加载历史记录",
@@ -656,40 +657,6 @@ describe("ConversationWorkspace", () => {
       within(pane).queryByRole("heading", { name: "用户原始标记" }),
     ).not.toBeInTheDocument()
     expect(within(pane).getByText("## 用户原始标记")).toBeVisible()
-  })
-
-  it("supports roving tree focus and arrow-key parent/child navigation", async () => {
-    const user = userEvent.setup()
-    await useConversationStore
-      .getState()
-      .loadConversation(client, root.conversationId)
-    render(<ConversationWorkspace />)
-
-    const rootItem = screen.getByRole("treeitem", { name: /ROOT_SENTINEL/ })
-    rootItem.focus()
-    await user.keyboard("{ArrowDown}")
-
-    const assistantItem = screen.getByRole("treeitem", {
-      name: /ASSISTANT_SENTINEL/,
-    })
-    expect(assistantItem).toHaveFocus()
-    expect(assistantItem).toHaveAttribute("tabindex", "0")
-
-    await user.keyboard("{ArrowRight}")
-    expect(assistantItem).toHaveAttribute("aria-expanded", "true")
-    await user.keyboard("{ArrowDown}{ArrowDown}{Enter}")
-
-    const rightItem = screen.getByRole("treeitem", {
-      name: /RIGHT_BRANCH_SENTINEL/,
-    })
-    expect(rightItem).toHaveFocus()
-    expect(rightItem).toHaveAttribute("aria-selected", "true")
-    expect(
-      within(screen.getByTestId("conversation-pane")).queryByText(left.content),
-    ).not.toBeInTheDocument()
-
-    await user.keyboard("{ArrowLeft}")
-    expect(assistantItem).toHaveFocus()
   })
 
   it("keeps an archived conversation readable and disables every write affordance", async () => {
@@ -808,9 +775,6 @@ describe("ConversationWorkspace", () => {
       useConversationStore.getState().nodesById[assistant.id]?.childIds,
     ).toEqual([left.id, right.id])
     expect(
-      screen.getByRole("treeitem", { name: /RIGHT_BRANCH_SENTINEL/ }),
-    ).toBeVisible()
-    expect(
       within(pane).queryByRole("textbox", { name: "分支消息内容" }),
     ).not.toBeInTheDocument()
 
@@ -830,10 +794,6 @@ describe("ConversationWorkspace", () => {
     ).not.toBeInTheDocument()
     expect(within(pane).queryByText(right.content)).not.toBeInTheDocument()
     expect(useConversationStore.getState().fullNodes[right.id]).toEqual(right)
-    expect(
-      screen.getByRole("treeitem", { name: /RIGHT_BRANCH_SENTINEL/ }),
-    ).toBeVisible()
-
     act(() => {
       useConversationStore.setState((state) => ({
         fullNodes: {
@@ -1523,11 +1483,11 @@ describe("ConversationWorkspace", () => {
 
     render(<ConversationWorkspace />)
 
-    // Both the sidebar fallback and the pane banner render the per-code
-    // representative copy (commandErrorMessage); the raw store error message
-    // is never echoed to the UI.
+    // The pane renders the per-code representative copy
+    // (commandErrorMessage); the raw store error message is never echoed to
+    // the UI, and the removed sidebar tree no longer duplicates this state.
     expect(screen.queryByText("无法安全显示会话树。")).not.toBeInTheDocument()
-    expect(screen.getAllByText("无法验证会话树。")).toHaveLength(2)
+    expect(screen.getAllByText("无法验证会话树。")).toHaveLength(1)
     const pane = screen.getByTestId("conversation-pane")
     expect(within(pane).getByText("无法验证会话树。")).toBeVisible()
     expect(within(pane).queryByText(root.content)).not.toBeInTheDocument()

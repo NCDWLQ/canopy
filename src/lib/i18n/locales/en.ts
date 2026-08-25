@@ -34,7 +34,7 @@ export const en = {
     "The conversation tree cannot be shown safely.",
 
   // ConversationWorkspace.tsx
-  "conversation.workspace.sidebar": "Conversation tree sidebar",
+  "conversation.workspace.sidebar": "Conversation sidebar",
   "conversation.workspace.newConversation": "New conversation",
   "conversation.workspace.history": "History",
   "conversation.workspace.historyList": "Conversation history",
@@ -44,7 +44,6 @@ export const en = {
   "conversation.workspace.loadingHistory": "Loading history…",
   "conversation.workspace.emptyHistory": "No saved conversations yet.",
   "conversation.workspace.retryHistory": "Retry loading history",
-  "conversation.workspace.treeSection": "Conversation tree",
   "conversation.workspace.noConversationLoaded": "No conversation loaded.",
   "conversation.workspace.collapseSidebar": "Collapse sidebar",
   "conversation.workspace.expandSidebar": "Expand sidebar",

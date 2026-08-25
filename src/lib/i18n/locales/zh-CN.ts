@@ -36,7 +36,7 @@ export const zhCN = {
   "errors.unsafeTreeProjection": "无法安全显示会话树。",
 
   // ConversationWorkspace.tsx
-  "conversation.workspace.sidebar": "会话树侧栏",
+  "conversation.workspace.sidebar": "会话侧栏",
   "conversation.workspace.newConversation": "新建会话",
   "conversation.workspace.history": "历史记录",
   "conversation.workspace.historyList": "会话历史记录",
@@ -46,7 +46,6 @@ export const zhCN = {
   "conversation.workspace.loadingHistory": "正在加载历史记录…",
   "conversation.workspace.emptyHistory": "暂无已保存的会话。",
   "conversation.workspace.retryHistory": "重试加载历史记录",
-  "conversation.workspace.treeSection": "会话树",
   "conversation.workspace.noConversationLoaded": "尚未加载会话。",
   "conversation.workspace.collapseSidebar": "收起侧栏",
   "conversation.workspace.expandSidebar": "展开侧栏",
