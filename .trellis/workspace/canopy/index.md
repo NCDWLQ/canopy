@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 41
+- **Total Sessions**: 42
 - **Last Active**: 2026-08-25
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~939 | Active |
+| `journal-1.md` | ~960 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 42 | 2026-08-25 | 统一中文文案为「对话」 | `06d13af` | `main` |
 | 41 | 2026-08-25 | 移除侧栏会话树 | `9798b35`, `e81b15c` | `main` |
 | 40 | 2026-08-25 | Show pending branch origin marker | `f5c555f` | `main` |
 | 39 | 2026-08-25 | Focus branch creation in Composer | `ee3056f` | `main` |

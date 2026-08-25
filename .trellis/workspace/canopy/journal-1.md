@@ -937,3 +937,24 @@ Truncated the rendered conversation path at a pending branch origin, added a loc
 ### Status
 
 [OK] **Completed**
+
+
+## Session 42: 统一中文文案为「对话」
+
+**Date**: 2026-08-25
+**Task**: 统一中文文案为「对话」
+**Branch**: `main`
+
+### Summary
+
+将面向用户的简体中文文案统一由「会话」优化为更自然的「对话」，并同步更新后端错误文案与全量测试用例。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `06d13af` | (see git log) |
+
+### Status
+
+[OK] **Completed**
