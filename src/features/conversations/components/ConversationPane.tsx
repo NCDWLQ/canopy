@@ -288,7 +288,7 @@ export function ConversationPane({
               {pendingBranchOriginId === msg.id && (
                 <Marker
                   variant="separator"
-                  className="my-6"
+                  className="my-6 animate-in fade-in-0 zoom-in-95 duration-150 ease-[var(--ease-out)] motion-reduce:animate-none"
                   role="separator"
                   aria-label={t("conversation.pane.branchOrigin")}
                 >
