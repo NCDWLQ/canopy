@@ -958,3 +958,24 @@ Truncated the rendered conversation path at a pending branch origin, added a loc
 ### Status
 
 [OK] **Completed**
+
+
+## Session 43: 分支消息提交后自动生成
+
+**Date**: 2026-08-25
+**Task**: 分支消息提交后自动生成
+**Branch**: `main`
+
+### Summary
+
+统一分支 Composer 交互：从助手创建分支、编辑用户消息为分支后，权威用户节点持久化成功即自动启动一次精确回复生成；补充控制器与工作区回归测试，更新前端状态规范。通过完整 Vitest（336 tests）、lint、typecheck 与生产构建。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ce132ce` | (see git log) |
+
+### Status
+
+[OK] **Completed**
