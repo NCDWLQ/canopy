@@ -145,25 +145,25 @@ impl From<PersistenceError> for CommandError {
             },
             PersistenceError::TreeIntegrity { reason } => Self {
                 code: CommandErrorCode::TreeIntegrity,
-                message: "无法验证会话树。".to_owned(),
+                message: "无法验证对话树。".to_owned(),
                 retryable: false,
                 details: Some(json!({ "reason": reason })),
             },
             PersistenceError::InvalidStoredData { field } => Self {
                 code: CommandErrorCode::TreeIntegrity,
-                message: "会话树包含无效的存储数据。".to_owned(),
+                message: "对话树包含无效的存储数据。".to_owned(),
                 retryable: false,
                 details: Some(json!({ "field": field })),
             },
             PersistenceError::DatabaseUnavailable => Self {
                 code: CommandErrorCode::DatabaseUnavailable,
-                message: "会话数据库当前不可用。".to_owned(),
+                message: "对话数据库当前不可用。".to_owned(),
                 retryable: true,
                 details: None,
             },
             PersistenceError::Storage(error) if is_transient_storage_error(&error) => Self {
                 code: CommandErrorCode::DatabaseUnavailable,
-                message: "会话数据库当前不可用。".to_owned(),
+                message: "对话数据库当前不可用。".to_owned(),
                 retryable: true,
                 details: None,
             },
@@ -200,12 +200,12 @@ mod tests {
 
         let unavailable = CommandError::from(PersistenceError::DatabaseUnavailable);
         assert_eq!(unavailable.code, CommandErrorCode::DatabaseUnavailable);
-        assert_eq!(unavailable.message, "会话数据库当前不可用。");
+        assert_eq!(unavailable.message, "对话数据库当前不可用。");
         assert!(unavailable.retryable);
 
         let corrupt = CommandError::from(PersistenceError::InvalidStoredData { field: "role" });
         assert_eq!(corrupt.code, CommandErrorCode::TreeIntegrity);
-        assert_eq!(corrupt.message, "会话树包含无效的存储数据。");
+        assert_eq!(corrupt.message, "对话树包含无效的存储数据。");
     }
 
     #[test]

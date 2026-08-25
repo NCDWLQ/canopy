@@ -211,7 +211,7 @@ mod tests {
                 response,
                 json!({
                     "code": "database_unavailable",
-                    "message": "会话数据库当前不可用。",
+                    "message": "对话数据库当前不可用。",
                     "retryable": true
                 })
             );
@@ -304,7 +304,7 @@ mod tests {
             reaches_database,
             json!({
                 "code": "database_unavailable",
-                "message": "会话数据库当前不可用。",
+                "message": "对话数据库当前不可用。",
                 "retryable": true
             })
         );
@@ -353,7 +353,7 @@ mod tests {
             reaches_database,
             json!({
                 "code": "database_unavailable",
-                "message": "会话数据库当前不可用。",
+                "message": "对话数据库当前不可用。",
                 "retryable": true
             })
         );

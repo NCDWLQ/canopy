@@ -62,7 +62,7 @@ describe("SearchDialog", () => {
     ])
 
     expect(
-      screen.getByText("输入关键词以搜索消息内容与会话标题。"),
+      screen.getByText("输入关键词以搜索消息内容与对话标题。"),
     ).toBeInTheDocument()
 
     await user.type(searchInput(), "西瓜")
@@ -94,7 +94,7 @@ describe("SearchDialog", () => {
 
     await user.type(searchInput(), "不存在的词")
     await waitFor(
-      () => expect(screen.getByText("没有匹配的会话。")).toBeInTheDocument(),
+      () => expect(screen.getByText("没有匹配的对话。")).toBeInTheDocument(),
       { timeout: 2000 },
     )
   })
@@ -103,9 +103,9 @@ describe("SearchDialog", () => {
     const user = userEvent.setup()
     // Rejection mimics the serialized CommandError wire shape the Tauri
     // transport delivers, carried on an Error instance for lint compliance.
-    const wireFailure = Object.assign(new Error("会话数据库当前不可用。"), {
+    const wireFailure = Object.assign(new Error("对话数据库当前不可用。"), {
       code: "database_unavailable",
-      message: "会话数据库当前不可用。",
+      message: "对话数据库当前不可用。",
       retryable: true,
     } as const)
     renderDialog(() => Promise.reject(wireFailure))
@@ -114,7 +114,7 @@ describe("SearchDialog", () => {
     await waitFor(
       () =>
         expect(screen.getByRole("alert")).toHaveTextContent(
-          "会话数据库当前不可用。",
+          "对话数据库当前不可用。",
         ),
       { timeout: 2000 },
     )
@@ -154,7 +154,7 @@ describe("SearchDialog", () => {
     })
     await user.type(searchInput(), "籽")
     await waitFor(
-      () => expect(screen.getByText("没有匹配的会话。")).toBeInTheDocument(),
+      () => expect(screen.getByText("没有匹配的对话。")).toBeInTheDocument(),
       { timeout: 2000 },
     )
 

@@ -322,7 +322,7 @@ describe("ConversationWorkspace", () => {
       </StrictMode>,
     )
 
-    expect(screen.getByText("正在加载会话历史记录…")).toBeVisible()
+    expect(screen.getByText("正在加载对话历史记录…")).toBeVisible()
     await waitFor(() => {
       expect(client.listConversations).toHaveBeenCalledTimes(1)
       expect(client.loadConversationTree).toHaveBeenCalledTimes(1)
@@ -330,9 +330,9 @@ describe("ConversationWorkspace", () => {
         tree.conversation.id,
       )
     })
-    expect(screen.getByText("正在加载会话历史记录…")).toBeVisible()
+    expect(screen.getByText("正在加载对话历史记录…")).toBeVisible()
     expect(
-      screen.queryByRole("heading", { name: "开始新会话" }),
+      screen.queryByRole("heading", { name: "开始新对话" }),
     ).not.toBeInTheDocument()
 
     act(() => {
@@ -349,7 +349,7 @@ describe("ConversationWorkspace", () => {
     expect(within(pane).getByText(right.content)).toBeVisible()
     expect(within(pane).queryByText(left.content)).not.toBeInTheDocument()
     expect(
-      screen.queryByRole("heading", { name: "开始新会话" }),
+      screen.queryByRole("heading", { name: "开始新对话" }),
     ).not.toBeInTheDocument()
   })
 
@@ -357,7 +357,7 @@ describe("ConversationWorkspace", () => {
     const user = userEvent.setup()
     render(<ConversationWorkspace />)
     const sidebar = screen.getByRole("complementary", {
-      name: "会话侧栏",
+      name: "对话侧栏",
     })
 
     const settingsButton = within(sidebar).getByRole("button", {
@@ -410,18 +410,18 @@ describe("ConversationWorkspace", () => {
       right.content,
     )
 
-    const sidebar = screen.getByRole("complementary", { name: "会话侧栏" })
+    const sidebar = screen.getByRole("complementary", { name: "对话侧栏" })
     expect(within(sidebar).getByText("Canopy")).toBeVisible()
     expect(within(sidebar).getByText("历史记录")).toBeVisible()
-    expect(within(sidebar).queryByText("会话树")).not.toBeInTheDocument()
+    expect(within(sidebar).queryByText("对话树")).not.toBeInTheDocument()
     expect(within(sidebar).queryByText(root.content)).not.toBeInTheDocument()
     expect(
-      within(sidebar).getByRole("button", { name: "新建会话" }),
+      within(sidebar).getByRole("button", { name: "新建对话" }),
     ).toBeVisible()
 
     await user.click(screen.getByRole("button", { name: "收起侧栏" }))
 
-    const newChatButton = screen.getByRole("button", { name: "新建会话" })
+    const newChatButton = screen.getByRole("button", { name: "新建对话" })
     expect(newChatButton).toBeVisible()
 
     await user.click(newChatButton)
@@ -557,7 +557,7 @@ describe("ConversationWorkspace", () => {
     expect(
       within(generatingRow!).getByRole("status", { name: "正在生成回复" }),
     ).toBeVisible()
-    expect(screen.getByRole("button", { name: "新建会话" })).toBeEnabled()
+    expect(screen.getByRole("button", { name: "新建对话" })).toBeEnabled()
 
     await user.click(screen.getByRole("button", { name: /^Other history/ }))
     await waitFor(() => {
@@ -590,14 +590,14 @@ describe("ConversationWorkspace", () => {
     )
     render(<ConversationWorkspace />)
 
-    const sidebar = screen.getByLabelText("会话侧栏")
+    const sidebar = screen.getByLabelText("对话侧栏")
     expect(
       await within(sidebar).findByRole("button", {
         name: "重试加载历史记录",
       }),
     ).toBeVisible()
     expect(
-      screen.queryByRole("heading", { name: "开始新会话" }),
+      screen.queryByRole("heading", { name: "开始新对话" }),
     ).not.toBeInTheDocument()
 
     client.listConversations.mockResolvedValueOnce([])
@@ -605,7 +605,7 @@ describe("ConversationWorkspace", () => {
       within(sidebar).getByRole("button", { name: "重试加载历史记录" }),
     )
     expect(
-      await screen.findByRole("heading", { name: "开始新会话" }),
+      await screen.findByRole("heading", { name: "开始新对话" }),
     ).toBeVisible()
   })
 
@@ -684,7 +684,7 @@ describe("ConversationWorkspace", () => {
 
     render(<ConversationWorkspace />)
 
-    expect(screen.getByRole("button", { name: "新建会话" })).toBeVisible()
+    expect(screen.getByRole("button", { name: "新建对话" })).toBeVisible()
     expect(screen.getByText("已归档 — 只读")).toBeVisible()
     expect(
       within(screen.getByTestId("conversation-pane")).getByText(right.content),
@@ -1078,7 +1078,7 @@ describe("ConversationWorkspace", () => {
     const composer = await screen.findByRole("textbox", {
       name: "消息输入框",
     })
-    expect(screen.getByRole("button", { name: "新建会话" })).toBeVisible()
+    expect(screen.getByRole("button", { name: "新建对话" })).toBeVisible()
     expect(screen.queryByLabelText("Title")).not.toBeInTheDocument()
     expect(screen.queryByLabelText("First message")).not.toBeInTheDocument()
     await user.type(composer, "ONE_USER_ROOT_SENTINEL")
@@ -1139,7 +1139,7 @@ describe("ConversationWorkspace", () => {
     ).toBeVisible()
     const before = useConversationStore.getState()
 
-    await user.click(screen.getByRole("button", { name: "新建会话" }))
+    await user.click(screen.getByRole("button", { name: "新建对话" }))
 
     expect(screen.getByTestId("blank-conversation-pane")).toBeVisible()
     expect(
@@ -1221,7 +1221,7 @@ describe("ConversationWorkspace", () => {
 
     // The blank-conversation alert maps the error through
     // commandErrorMessage(code); the raw backend message is never echoed.
-    expect(await screen.findByText("会话数据库当前不可用。")).toBeVisible()
+    expect(await screen.findByText("对话数据库当前不可用。")).toBeVisible()
     expect(
       screen.queryByText("Conversation could not be saved."),
     ).not.toBeInTheDocument()
@@ -1250,7 +1250,7 @@ describe("ConversationWorkspace", () => {
     render(<ConversationWorkspace />)
 
     expect(
-      await screen.findByRole("button", { name: "新建会话" }),
+      await screen.findByRole("button", { name: "新建对话" }),
     ).toBeEnabled()
     expect(await screen.findByText("已归档 — 只读")).toBeVisible()
   })
@@ -1486,10 +1486,10 @@ describe("ConversationWorkspace", () => {
     // The pane renders the per-code representative copy
     // (commandErrorMessage); the raw store error message is never echoed to
     // the UI, and the removed sidebar tree no longer duplicates this state.
-    expect(screen.queryByText("无法安全显示会话树。")).not.toBeInTheDocument()
-    expect(screen.getAllByText("无法验证会话树。")).toHaveLength(1)
+    expect(screen.queryByText("无法安全显示对话树。")).not.toBeInTheDocument()
+    expect(screen.getAllByText("无法验证对话树。")).toHaveLength(1)
     const pane = screen.getByTestId("conversation-pane")
-    expect(within(pane).getByText("无法验证会话树。")).toBeVisible()
+    expect(within(pane).getByText("无法验证对话树。")).toBeVisible()
     expect(within(pane).queryByText(root.content)).not.toBeInTheDocument()
     expect(within(pane).queryByText(left.content)).not.toBeInTheDocument()
     expect(within(pane).queryByText(right.content)).not.toBeInTheDocument()
@@ -1560,17 +1560,17 @@ describe("ConversationWorkspace", () => {
     // visible and enabled during streaming, and merely opening its dialog
     // must never interrupt anything.
     const menuTrigger = screen.getByRole("button", {
-      name: "会话操作：Branch proof",
+      name: "对话操作：Branch proof",
     })
     expect(menuTrigger).toBeVisible()
     expect(menuTrigger).toBeEnabled()
     await user.click(menuTrigger)
     await user.click(screen.getByRole("menuitem", { name: "归档" }))
-    const dialog = screen.getByRole("alertdialog", { name: "归档会话？" })
+    const dialog = screen.getByRole("alertdialog", { name: "归档对话？" })
     expect(within(dialog).getByText("Branch proof")).toBeVisible()
     expect(
       within(dialog).getByText(
-        "归档后会话转为只读，并在历史记录中标记为已归档。",
+        "归档后对话转为只读，并在历史记录中标记为已归档。",
       ),
     ).toBeVisible()
     expect(within(dialog).getByText("归档将打断正在进行的生成。")).toBeVisible()
@@ -1597,7 +1597,7 @@ describe("ConversationWorkspace", () => {
     expect(providerClient.cancelGeneration).toHaveBeenCalledWith(generationId)
     expect(providerClient.cancelGeneration).toHaveBeenCalledTimes(1)
     expect(menuTrigger).toBeEnabled()
-    expect(menuTrigger).toHaveAttribute("title", "会话操作：Branch proof")
+    expect(menuTrigger).toHaveAttribute("title", "对话操作：Branch proof")
   })
 
   it("archives a non-current history row by ID from the confirm dialog without disturbing the loaded conversation", async () => {
@@ -1637,11 +1637,11 @@ describe("ConversationWorkspace", () => {
     // The workspace is writable and ready — the state that used to render the
     // header archive button. Each row exposes exactly one "…" menu trigger;
     // no header entry.
-    expect(screen.getAllByRole("button", { name: /会话操作：/ })).toHaveLength(
+    expect(screen.getAllByRole("button", { name: /对话操作：/ })).toHaveLength(
       2,
     )
     const menuTrigger = within(otherRow!).getByRole("button", {
-      name: "会话操作：Other row",
+      name: "对话操作：Other row",
     })
     // Sibling buttons inside one group wrapper — no nested <button> markup.
     const rowWrapper = menuTrigger.parentElement
@@ -1670,11 +1670,11 @@ describe("ConversationWorkspace", () => {
 
     await user.click(menuTrigger)
     await user.click(screen.getByRole("menuitem", { name: "归档" }))
-    const dialog = screen.getByRole("alertdialog", { name: "归档会话？" })
+    const dialog = screen.getByRole("alertdialog", { name: "归档对话？" })
     expect(within(dialog).getByText("Other row")).toBeVisible()
     expect(
       within(dialog).getByText(
-        "归档后会话转为只读，并在历史记录中标记为已归档。",
+        "归档后对话转为只读，并在历史记录中标记为已归档。",
       ),
     ).toBeVisible()
     expect(
@@ -1705,7 +1705,7 @@ describe("ConversationWorkspace", () => {
     // The row keeps its "…" trigger; the archive action now lives inside it.
     expect(
       within(otherRow!).getByRole("button", {
-        name: "会话操作：Other row",
+        name: "对话操作：Other row",
       }),
     ).toBeVisible()
   })
@@ -1754,10 +1754,10 @@ describe("ConversationWorkspace", () => {
     })
 
     await user.click(
-      screen.getByRole("button", { name: "会话操作：Branch proof" }),
+      screen.getByRole("button", { name: "对话操作：Branch proof" }),
     )
     await user.click(screen.getByRole("menuitem", { name: "归档" }))
-    const dialog = screen.getByRole("alertdialog", { name: "归档会话？" })
+    const dialog = screen.getByRole("alertdialog", { name: "归档对话？" })
     expect(within(dialog).getByText("归档将打断正在进行的生成。")).toBeVisible()
 
     await user.click(within(dialog).getByRole("button", { name: "归档" }))
@@ -1841,10 +1841,10 @@ describe("ConversationWorkspace", () => {
       .closest("li")
     expect(otherRow).not.toBeNull()
     await user.click(
-      within(otherRow!).getByRole("button", { name: "会话操作：Other row" }),
+      within(otherRow!).getByRole("button", { name: "对话操作：Other row" }),
     )
     await user.click(screen.getByRole("menuitem", { name: "归档" }))
-    const dialog = screen.getByRole("alertdialog", { name: "归档会话？" })
+    const dialog = screen.getByRole("alertdialog", { name: "归档对话？" })
     expect(
       within(dialog).queryByText("归档将打断正在进行的生成。"),
     ).not.toBeInTheDocument()
@@ -1890,10 +1890,10 @@ describe("ConversationWorkspace", () => {
     render(<ConversationWorkspace />)
 
     await user.click(
-      screen.getByRole("button", { name: "会话操作：Branch proof" }),
+      screen.getByRole("button", { name: "对话操作：Branch proof" }),
     )
     await user.click(screen.getByRole("menuitem", { name: "归档" }))
-    const dialog = screen.getByRole("alertdialog", { name: "归档会话？" })
+    const dialog = screen.getByRole("alertdialog", { name: "归档对话？" })
     expect(within(dialog).getByText("归档将打断正在进行的生成。")).toBeVisible()
 
     act(() => {
@@ -1944,7 +1944,7 @@ describe("ConversationWorkspace", () => {
     render(<ConversationWorkspace />)
 
     await user.click(
-      screen.getByRole("button", { name: "会话操作：Branch proof" }),
+      screen.getByRole("button", { name: "对话操作：Branch proof" }),
     )
     expect(screen.getByRole("menuitem", { name: "重命名" })).toBeVisible()
     expect(screen.getByRole("menuitem", { name: "归档" })).toBeVisible()
@@ -1955,7 +1955,7 @@ describe("ConversationWorkspace", () => {
 
     await user.keyboard("{Escape}")
     await user.click(
-      screen.getByRole("button", { name: "会话操作：Archived row" }),
+      screen.getByRole("button", { name: "对话操作：Archived row" }),
     )
     expect(screen.getByRole("menuitem", { name: "重命名" })).toBeVisible()
     expect(screen.getByRole("menuitem", { name: "取消归档" })).toBeVisible()
@@ -1981,13 +1981,13 @@ describe("ConversationWorkspace", () => {
     render(<ConversationWorkspace />)
 
     await user.click(
-      screen.getByRole("button", { name: "会话操作：Branch proof" }),
+      screen.getByRole("button", { name: "对话操作：Branch proof" }),
     )
     await user.click(screen.getByRole("menuitem", { name: "重命名" }))
 
-    const dialog = screen.getByRole("dialog", { name: "重命名会话" })
+    const dialog = screen.getByRole("dialog", { name: "重命名对话" })
     const input = within(dialog).getByRole<HTMLInputElement>("textbox", {
-      name: "会话标题",
+      name: "对话标题",
     })
     expect(input).toHaveValue("Branch proof")
     expect(input).toHaveFocus()
@@ -2032,12 +2032,12 @@ describe("ConversationWorkspace", () => {
       }),
     )
     await user.click(
-      screen.getByRole("button", { name: "会话操作：手动重命名" }),
+      screen.getByRole("button", { name: "对话操作：手动重命名" }),
     )
     await user.click(screen.getByRole("menuitem", { name: "重命名" }))
-    const retryDialog = screen.getByRole("dialog", { name: "重命名会话" })
+    const retryDialog = screen.getByRole("dialog", { name: "重命名对话" })
     const retryInput = within(retryDialog).getByRole("textbox", {
-      name: "会话标题",
+      name: "对话标题",
     })
     expect(retryInput).toHaveValue("手动重命名")
     await user.click(within(retryDialog).getByRole("button", { name: "保存" }))
@@ -2079,14 +2079,14 @@ describe("ConversationWorkspace", () => {
     render(<ConversationWorkspace />)
 
     await user.click(
-      screen.getByRole("button", { name: "会话操作：Branch proof" }),
+      screen.getByRole("button", { name: "对话操作：Branch proof" }),
     )
     await user.click(screen.getByRole("menuitem", { name: "删除" }))
-    const dialog = screen.getByRole("alertdialog", { name: "删除会话？" })
+    const dialog = screen.getByRole("alertdialog", { name: "删除对话？" })
     expect(within(dialog).getByText("Branch proof")).toBeVisible()
     expect(
       within(dialog).getByText(
-        "删除后无法恢复，该会话及其全部消息将被永久移除。",
+        "删除后无法恢复，该对话及其全部消息将被永久移除。",
       ),
     ).toBeVisible()
     expect(
@@ -2114,7 +2114,7 @@ describe("ConversationWorkspace", () => {
 
     // Cancelling the dialog performs no deletion.
     await user.click(
-      screen.getByRole("button", { name: "会话操作：Other row" }),
+      screen.getByRole("button", { name: "对话操作：Other row" }),
     )
     await user.click(screen.getByRole("menuitem", { name: "删除" }))
     await user.click(screen.getByRole("button", { name: "取消" }))
@@ -2153,10 +2153,10 @@ describe("ConversationWorkspace", () => {
     render(<ConversationWorkspace />)
 
     await user.click(
-      screen.getByRole("button", { name: "会话操作：Branch proof" }),
+      screen.getByRole("button", { name: "对话操作：Branch proof" }),
     )
     await user.click(screen.getByRole("menuitem", { name: "删除" }))
-    const dialog = screen.getByRole("alertdialog", { name: "删除会话？" })
+    const dialog = screen.getByRole("alertdialog", { name: "删除对话？" })
     expect(
       within(dialog).getByText("删除将打断正在进行的生成并放弃其结果。"),
     ).toBeVisible()
@@ -2212,7 +2212,7 @@ describe("ConversationWorkspace", () => {
     render(<ConversationWorkspace />)
 
     await user.click(
-      screen.getByRole("button", { name: "会话操作：Other row" }),
+      screen.getByRole("button", { name: "对话操作：Other row" }),
     )
     await user.click(screen.getByRole("menuitem", { name: "删除" }))
     await user.click(screen.getByRole("button", { name: "删除" }))
@@ -2269,7 +2269,7 @@ describe("ConversationWorkspace", () => {
     expect(within(otherRow!).getByText("已归档")).toBeVisible()
 
     await user.click(
-      within(otherRow!).getByRole("button", { name: "会话操作：Archived row" }),
+      within(otherRow!).getByRole("button", { name: "对话操作：Archived row" }),
     )
     await user.click(screen.getByRole("menuitem", { name: "取消归档" }))
 
@@ -2496,7 +2496,7 @@ describe("ConversationWorkspace", () => {
     expect(screen.getByRole("textbox", { name: "消息输入框" })).toBeDisabled()
     expect(screen.getByRole("textbox", { name: "消息输入框" })).toHaveAttribute(
       "placeholder",
-      "会话已归档，无法修改。",
+      "对话已归档，无法修改。",
     )
     unmount3()
 
@@ -2826,7 +2826,7 @@ describe("ConversationWorkspace", () => {
       screen.getByRole("button", { name: "切换思维导图视图" }),
     )
     expect(screen.queryByTestId("conversation-pane")).not.toBeInTheDocument()
-    const mindMap = screen.getByRole("region", { name: "会话思维导图" })
+    const mindMap = screen.getByRole("region", { name: "对话思维导图" })
     expect(mindMap).toBeVisible()
 
     fireEvent.doubleClick(within(mindMap).getByText("LEFT_BRANCH_SENTINEL"))
@@ -2837,7 +2837,7 @@ describe("ConversationWorkspace", () => {
       within(conversationPane).queryByText(right.content),
     ).not.toBeInTheDocument()
     expect(
-      screen.queryByRole("region", { name: "会话思维导图" }),
+      screen.queryByRole("region", { name: "对话思维导图" }),
     ).not.toBeInTheDocument()
     expect(scrollIntoView).toHaveBeenCalledWith(
       expect.objectContaining({ block: "start" }),
@@ -2907,7 +2907,7 @@ describe("ConversationWorkspace sidebar reveal", () => {
     await waitFor(() => expect(scrollIntoView).toHaveBeenCalled())
     scrollIntoView.mockClear()
 
-    await user.click(screen.getByRole("button", { name: "搜索会话" }))
+    await user.click(screen.getByRole("button", { name: "搜索对话" }))
     await user.type(screen.getByLabelText("搜索消息或标题…"), "LEFT")
     await user.click(
       await screen.findByRole(

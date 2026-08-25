@@ -208,7 +208,7 @@ describe("SettingsDialog", () => {
     )
     const field = screen.getByLabelText("API 密钥")
     await waitFor(() => expect(field).toHaveValue("STORED_SECRET_SENTINEL"))
-    await user.click(screen.getByRole("button", { name: "会话" }))
+    await user.click(screen.getByRole("button", { name: "对话" }))
     expect(screen.getByRole("switch", { name: "自动生成标题" })).toBeVisible()
     expect(screen.queryByLabelText("API 密钥")).not.toBeInTheDocument()
     await user.click(screen.getByRole("button", { name: "模型提供商" }))

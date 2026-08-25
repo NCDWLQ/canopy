@@ -87,7 +87,7 @@ describe("ConversationSettingsPanel", () => {
     ).toHaveClass("pl-4")
     await user.click(screen.getByRole("combobox", { name: "标题模型" }))
     expect(
-      await screen.findByRole("option", { name: "跟随会话" }),
+      await screen.findByRole("option", { name: "跟随对话" }),
     ).toBeVisible()
     expect(screen.getByRole("group", { name: provider.name })).toBeVisible()
     await user.click(

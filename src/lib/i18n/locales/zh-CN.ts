@@ -23,8 +23,8 @@ export const zhCN = {
   // CommandErrorCode mapping plus frontend fallback error copy.
   "errors.invalidInput": "请求包含无效输入。",
   "errors.notFound": "未找到请求的资源。",
-  "errors.treeIntegrity": "无法验证会话树。",
-  "errors.databaseUnavailable": "会话数据库当前不可用。",
+  "errors.treeIntegrity": "无法验证对话树。",
+  "errors.databaseUnavailable": "对话数据库当前不可用。",
   "errors.migrationFailure": "数据库迁移失败。",
   "errors.providerAuthentication": "需要服务提供商身份验证。",
   "errors.rateLimited": "已达到服务提供商的速率限制。",
@@ -33,50 +33,50 @@ export const zhCN = {
   "errors.cancelled": "生成已取消。",
   "errors.exportFileWrite": "写入导出文件失败。",
   "errors.internal": "发生意外错误。",
-  "errors.unsafeTreeProjection": "无法安全显示会话树。",
+  "errors.unsafeTreeProjection": "无法安全显示对话树。",
 
   // ConversationWorkspace.tsx
-  "conversation.workspace.sidebar": "会话侧栏",
-  "conversation.workspace.newConversation": "新建会话",
+  "conversation.workspace.sidebar": "对话侧栏",
+  "conversation.workspace.newConversation": "新建对话",
   "conversation.workspace.history": "历史记录",
-  "conversation.workspace.historyList": "会话历史记录",
+  "conversation.workspace.historyList": "对话历史记录",
   "conversation.workspace.generatingReply": "正在生成回复",
   "conversation.workspace.archivedBadge": "已归档",
   "conversation.workspace.archive": "归档",
   "conversation.workspace.loadingHistory": "正在加载历史记录…",
-  "conversation.workspace.emptyHistory": "暂无已保存的会话。",
+  "conversation.workspace.emptyHistory": "暂无已保存的对话。",
   "conversation.workspace.retryHistory": "重试加载历史记录",
-  "conversation.workspace.noConversationLoaded": "尚未加载会话。",
+  "conversation.workspace.noConversationLoaded": "尚未加载对话。",
   "conversation.workspace.collapseSidebar": "收起侧栏",
   "conversation.workspace.expandSidebar": "展开侧栏",
   "conversation.workspace.archivedReadonlyBadge": "已归档 — 只读",
-  "conversation.workspace.blankTitle": "开始新会话",
+  "conversation.workspace.blankTitle": "开始新对话",
   "conversation.workspace.blankHint": "在下方输入第一条消息。发送后才会保存。",
   "conversation.workspace.firstMessagePlaceholder": "输入第一条消息…",
-  "conversation.workspace.loadingHistoryPane": "正在加载会话历史记录…",
-  "conversation.workspace.placeholderArchived": "会话已归档，无法修改。",
+  "conversation.workspace.loadingHistoryPane": "正在加载对话历史记录…",
+  "conversation.workspace.placeholderArchived": "对话已归档，无法修改。",
   "conversation.workspace.placeholderGenerating": "回复生成中…",
   "conversation.workspace.placeholderNextMessage": "输入下一条用户消息…",
   "conversation.workspace.placeholderDraftOnly":
     "可输入草稿；当前路径暂无法发送。",
-  "conversation.workspace.archiveConfirmTitle": "归档会话？",
+  "conversation.workspace.archiveConfirmTitle": "归档对话？",
   "conversation.workspace.archiveConfirmBody":
-    "归档后会话转为只读，并在历史记录中标记为已归档。",
+    "归档后对话转为只读，并在历史记录中标记为已归档。",
   "conversation.workspace.archiveConfirmInterrupts":
     "归档将打断正在进行的生成。",
   "conversation.workspace.archiveConfirmAction": "归档",
   "conversation.workspace.conversationMenu": ({ title }: { title: string }) =>
-    `会话操作：${title}`,
+    `对话操作：${title}`,
   "conversation.workspace.rename": "重命名",
   "conversation.workspace.unarchive": "取消归档",
-  "conversation.workspace.renameDialogTitle": "重命名会话",
-  "conversation.workspace.renameDialogLabel": "会话标题",
+  "conversation.workspace.renameDialogTitle": "重命名对话",
+  "conversation.workspace.renameDialogLabel": "对话标题",
   "conversation.workspace.renameDialogTitleBlank": "标题不能为空。",
   "conversation.workspace.renameDialogTitleTooLong":
     "标题不能超过 200 个字符。",
-  "conversation.workspace.deleteConfirmTitle": "删除会话？",
+  "conversation.workspace.deleteConfirmTitle": "删除对话？",
   "conversation.workspace.deleteConfirmBody":
-    "删除后无法恢复，该会话及其全部消息将被永久移除。",
+    "删除后无法恢复，该对话及其全部消息将被永久移除。",
   "conversation.workspace.deleteConfirmInterrupts":
     "删除将打断正在进行的生成并放弃其结果。",
 
@@ -86,7 +86,7 @@ export const zhCN = {
   "conversation.pane.persistFailed": "这条回复未能保存",
   "conversation.pane.regenerate": "重新生成",
   "conversation.pane.replyStopped": "回复已停止",
-  "conversation.pane.loading": "正在加载会话…",
+  "conversation.pane.loading": "正在加载对话…",
   "conversation.pane.errorTitle": "出错了",
   "conversation.pane.retry": "重试",
   "conversation.pane.empty": "尚未选择消息。",
@@ -134,7 +134,7 @@ export const zhCN = {
   "conversation.thinking.process": "思考过程",
 
   // OutlineTree.tsx
-  "conversation.outline.tree": "会话树",
+  "conversation.outline.tree": "对话树",
   "conversation.outline.togglePreview": ({
     expanded,
     label,
@@ -148,7 +148,7 @@ export const zhCN = {
 
   // MindMapCanvas.tsx + ConversationWorkspace.tsx
   "conversation.mindmap.toggleView": "切换思维导图视图",
-  "conversation.mindmap.canvas": "会话思维导图",
+  "conversation.mindmap.canvas": "对话思维导图",
   "conversation.mindmap.collapseBranch": ({ label }: { label: string }) =>
     `收起 ${label} 的分支`,
   "conversation.mindmap.expandBranch": ({ label }: { label: string }) =>
@@ -157,13 +157,13 @@ export const zhCN = {
     `${count} 条已折叠`,
 
   // SearchDialog.tsx
-  "search.openButton": "搜索会话",
-  "search.title": "搜索会话",
-  "search.description": "按关键词搜索消息内容与会话标题。",
+  "search.openButton": "搜索对话",
+  "search.title": "搜索对话",
+  "search.description": "按关键词搜索消息内容与对话标题。",
   "search.placeholder": "搜索消息或标题…",
-  "search.hint": "输入关键词以搜索消息内容与会话标题。",
+  "search.hint": "输入关键词以搜索消息内容与对话标题。",
   "search.searching": "正在搜索…",
-  "search.noResults": "没有匹配的会话。",
+  "search.noResults": "没有匹配的对话。",
   "search.resultsRegion": "搜索结果",
   "search.titleMatched": "标题匹配",
 
@@ -182,16 +182,16 @@ export const zhCN = {
   "conversation.generation.replyGeneratedToast": "已生成回复",
   "conversation.generation.generationFailedToast": "生成失败",
   "conversation.generation.unavailableProvider": "请先配置服务提供商。",
-  "conversation.generation.unavailableNoConversation": "请先新建或加载会话。",
-  "conversation.generation.unavailableArchived": "已归档的会话为只读。",
+  "conversation.generation.unavailableNoConversation": "请先新建或加载对话。",
+  "conversation.generation.unavailableArchived": "已归档的对话为只读。",
   "conversation.generation.unavailableInvalidPath":
-    "当前会话路径异常，无法生成回复。",
+    "当前对话路径异常，无法生成回复。",
   "conversation.generation.unavailableNotUserNode":
     "请选择一条用户消息以生成回复。",
   "conversation.generation.unavailableRunActive": "请等待当前回复完成。",
 
   // toaster.tsx
-  "conversation.toast.jumpToConversation": "跳转到会话",
+  "conversation.toast.jumpToConversation": "跳转到对话",
 
   // ConversationProviderPicker.tsx
   "conversation.providerPicker.triggerUnconfigured": "未配置服务提供商",
@@ -213,7 +213,7 @@ export const zhCN = {
   "settings.dialog.generalCategory": "通用",
   "settings.dialog.appearanceCategory": "外观",
   "settings.dialog.providersCategory": "模型提供商",
-  "settings.dialog.conversationsCategory": "会话",
+  "settings.dialog.conversationsCategory": "对话",
 
   // GeneralSettingsPanel.tsx
   "settings.general.title": "通用",
@@ -234,12 +234,12 @@ export const zhCN = {
   "settings.appearance.updateFailed": "外观设置未保存",
 
   // ConversationSettingsPanel.tsx
-  "settings.conversation.title": "会话",
+  "settings.conversation.title": "对话",
   "settings.conversation.autoGenerateTitle": "自动生成标题",
   "settings.conversation.autoGenerateTitleDescription":
     "首轮对话后，使用下方配置的模型自动生成标题",
   "settings.conversation.titleModel": "标题模型",
-  "settings.conversation.followSession": "跟随会话",
+  "settings.conversation.followSession": "跟随对话",
 
   // ProviderSettingsPanel.tsx + ProviderSettingsList.tsx
   "settings.providers.crumbEdit": "编辑",
@@ -263,7 +263,7 @@ export const zhCN = {
   "settings.providers.deleteTitle": "删除模型提供商？",
   "settings.providers.deleteConfirm": ({ name }: { name: string }) =>
     `删除「${name}」？`,
-  "settings.providers.deleteConfirmBody": "使用它的会话将回退到全局默认。",
+  "settings.providers.deleteConfirmBody": "使用它的对话将回退到全局默认。",
 
   // ProviderSettingsEditor.tsx
   "settings.providers.editorNewTitle": "新建模型提供商",
@@ -271,7 +271,7 @@ export const zhCN = {
   "settings.providers.incompleteAlert": "操作未完成",
   "settings.providers.readOnlyAlert": "只读",
   "settings.providers.readOnlyAlertBody":
-    "查看已归档会话时无法修改模型提供商设置。",
+    "查看已归档对话时无法修改模型提供商设置。",
   "settings.providers.nameField": "名称",
   "settings.providers.protocolField": "协议",
   "settings.providers.protocolPlaceholder": "选择协议",

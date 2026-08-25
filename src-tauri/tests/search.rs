@@ -94,7 +94,7 @@ async fn seed(pool: &SqlitePool) {
     create_conversation(
         pool,
         "conv-beta",
-        "会话分支讨论",
+        "对话分支讨论",
         "beta-root",
         "讨论分支结构",
         1_500,

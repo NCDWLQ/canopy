@@ -30,15 +30,15 @@ describe("Canopy scaffold", () => {
   it("renders the ConversationWorkspace", async () => {
     render(<App />)
     expect(
-      await screen.findByRole("heading", { name: "开始新会话" }),
+      await screen.findByRole("heading", { name: "开始新对话" }),
     ).toBeVisible()
     expect(screen.getByRole("textbox", { name: "消息输入框" })).toBeEnabled()
-    expect(screen.getByRole("button", { name: "新建会话" })).toBeVisible()
+    expect(screen.getByRole("button", { name: "新建对话" })).toBeVisible()
   })
 
   it("syncs <html lang> with the active locale", async () => {
     render(<App />)
-    await screen.findByRole("heading", { name: "开始新会话" })
+    await screen.findByRole("heading", { name: "开始新对话" })
     expect(document.documentElement.lang).toBe("zh-CN")
 
     act(() => {
@@ -54,7 +54,7 @@ describe("Canopy scaffold", () => {
 
   it("syncs document dark class and colorScheme with active theme", async () => {
     render(<App />)
-    await screen.findByRole("heading", { name: "开始新会话" })
+    await screen.findByRole("heading", { name: "开始新对话" })
     expect(document.documentElement.classList.contains("dark")).toBe(false)
     expect(document.documentElement.style.colorScheme).toBe("light")
 

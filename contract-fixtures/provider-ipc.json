@@ -166,7 +166,7 @@
       "stage": "persistence",
       "error": {
         "code": "database_unavailable",
-        "message": "会话数据库当前不可用。",
+        "message": "对话数据库当前不可用。",
         "retryable": true
       }
     },

@@ -276,7 +276,7 @@ describe("MindMapCanvas", () => {
       />,
     )
 
-    expect(screen.getByRole("alert")).toHaveTextContent("无法安全显示会话树。")
+    expect(screen.getByRole("alert")).toHaveTextContent("无法安全显示对话树。")
   })
 
   it("keeps edges after the post-mount measurement pass", () => {

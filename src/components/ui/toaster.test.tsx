@@ -25,7 +25,7 @@ describe("toaster", () => {
 
     // The whole card is one button; sonner itself has no per-toast click
     // handler, so this assertion guards the custom-card wiring end to end.
-    const card = await screen.findByRole("button", { name: "跳转到会话" })
+    const card = await screen.findByRole("button", { name: "跳转到对话" })
     expect(card).toHaveTextContent("提示词预览")
     expect(card).toHaveTextContent("回复预览")
 

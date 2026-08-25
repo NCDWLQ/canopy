@@ -125,7 +125,7 @@ describe("AppearanceSettingsPanel", () => {
       expect(screen.getByRole("alert")).toHaveTextContent("外观设置未保存"),
     )
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "会话数据库当前不可用。",
+      "对话数据库当前不可用。",
     )
     expect(
       screen.getByRole("combobox", { name: "主题模式" }),

@@ -159,7 +159,7 @@ describe("GeneralSettingsPanel", () => {
       expect(screen.getByRole("alert")).toHaveTextContent("语言设置未保存"),
     )
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "会话数据库当前不可用。",
+      "对话数据库当前不可用。",
     )
     // The select still reflects the unchanged persisted preference.
     expect(screen.getByRole("combobox", { name: "语言" })).toHaveTextContent(
