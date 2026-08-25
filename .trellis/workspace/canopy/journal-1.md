@@ -873,3 +873,24 @@ Implemented dark mode support with SQLite settings persistence, frontend theme s
 ### Status
 
 [OK] **Completed**
+
+
+## Session 39: Focus branch creation in Composer
+
+**Date**: 2026-08-25
+**Task**: Focus branch creation in Composer
+**Branch**: `main`
+
+### Summary
+
+Moved assistant branch input into the persistent Composer, preserving visible messages and drafts; added focus, retry, conversation-switch lifecycle coverage, and updated frontend component contracts.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ee3056f` | (see git log) |
+
+### Status
+
+[OK] **Completed**
