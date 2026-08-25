@@ -521,239 +521,241 @@ export function ConversationWorkspace({
       <aside
         id="conversation-tree-sidebar"
         aria-label={t("conversation.workspace.sidebar")}
-        className={`flex shrink-0 flex-col border-r border-border/70 bg-sidebar text-sidebar-foreground transition-[width] duration-300 motion-reduce:transition-none ${
-          isSidebarOpen ? "w-64 md:w-80" : "w-0 overflow-hidden border-none"
+        className={`flex shrink-0 flex-col overflow-hidden border-border/70 bg-sidebar text-sidebar-foreground transition-[width] duration-250 ease-[var(--ease-out)] motion-reduce:transition-none ${
+          isSidebarOpen ? "w-64 border-r md:w-80" : "w-0 border-r-0"
         }`}
         aria-hidden={!isSidebarOpen}
         inert={!isSidebarOpen}
       >
-        <div className="flex h-12 shrink-0 items-center justify-between gap-2 px-3 text-sm font-semibold">
-          <span className="font-bold tracking-tight">Canopy</span>
-          <div className="flex items-center gap-1">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="size-8"
-                    aria-label={t("search.openButton")}
-                    title={t("search.openButton")}
-                    disabled={store.history.summaries.length === 0}
-                    onClick={() => setIsSearchOpen(true)}
-                  >
-                    <Search className="size-4" aria-hidden="true" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{t("search.openButton")}</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="size-8"
-                    aria-label={t("conversation.workspace.newConversation")}
-                    title={t("conversation.workspace.newConversation")}
-                    disabled={store.status === "loading"}
-                    onClick={store.enterConversationCreation}
-                  >
-                    <SquarePen className="size-4" aria-hidden="true" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {t("conversation.workspace.newConversation")}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-        </div>
-        <div
-          ref={historyScrollRef}
-          className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-2"
-        >
-          <section>
-            <div className="sticky top-0 z-10 bg-sidebar px-2.5 pb-1 pt-3 text-sm font-medium text-muted-foreground/70">
-              {t("conversation.workspace.history")}
+        <div className="flex h-full w-64 shrink-0 flex-col md:w-80">
+          <div className="flex h-12 shrink-0 items-center justify-between gap-2 px-3 text-sm font-semibold">
+            <span className="font-bold tracking-tight">Canopy</span>
+            <div className="flex items-center gap-1">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-8"
+                      aria-label={t("search.openButton")}
+                      title={t("search.openButton")}
+                      disabled={store.history.summaries.length === 0}
+                      onClick={() => setIsSearchOpen(true)}
+                    >
+                      <Search className="size-4" aria-hidden="true" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{t("search.openButton")}</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-8"
+                      aria-label={t("conversation.workspace.newConversation")}
+                      title={t("conversation.workspace.newConversation")}
+                      disabled={store.status === "loading"}
+                      onClick={store.enterConversationCreation}
+                    >
+                      <SquarePen className="size-4" aria-hidden="true" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {t("conversation.workspace.newConversation")}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
-            {store.history.summaries.length > 0 && (
-              <ul
-                aria-label={t("conversation.workspace.historyList")}
-                className="flex flex-col gap-1"
-              >
-                {store.history.summaries.map((summary) => {
-                  const isCurrent =
-                    !isBlankConversation && store.conversationId === summary.id
-                  const isGenerating = activeRunIds.has(summary.id)
-                  return (
-                    <li key={summary.id}>
-                      <div
-                        className={cn(
-                          "group relative flex items-center rounded-lg transition-colors motion-reduce:transition-none",
-                          isCurrent
-                            ? "bg-sidebar-accent"
-                            : "hover:bg-sidebar-accent",
-                        )}
-                      >
-                        <button
-                          type="button"
+          </div>
+          <div
+            ref={historyScrollRef}
+            className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-2"
+          >
+            <section>
+              <div className="sticky top-0 z-10 bg-sidebar px-2.5 pb-1 pt-3 text-sm font-medium text-muted-foreground/70">
+                {t("conversation.workspace.history")}
+              </div>
+              {store.history.summaries.length > 0 && (
+                <ul
+                  aria-label={t("conversation.workspace.historyList")}
+                  className="flex flex-col gap-1"
+                >
+                  {store.history.summaries.map((summary) => {
+                    const isCurrent =
+                      !isBlankConversation && store.conversationId === summary.id
+                    const isGenerating = activeRunIds.has(summary.id)
+                    return (
+                      <li key={summary.id}>
+                        <div
                           className={cn(
-                            "flex h-9 w-full min-w-0 cursor-pointer items-center justify-between gap-2 rounded-lg pl-2.5 pr-9 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
-                            isCurrent && "font-medium",
+                            "group relative flex items-center rounded-lg transition-colors motion-reduce:transition-none",
+                            isCurrent
+                              ? "bg-sidebar-accent"
+                              : "hover:bg-sidebar-accent",
                           )}
-                          aria-current={isCurrent ? "page" : undefined}
-                          data-conversation-id={summary.id}
-                          disabled={store.status === "loading"}
-                          onClick={() =>
-                            void store.selectConversation(client, summary.id)
-                          }
                         >
-                          <span
-                            className="min-w-0 truncate"
-                            title={summary.title}
-                          >
-                            {summary.title}
-                          </span>
-                          {isGenerating && (
-                            <Spinner
-                              className="size-3.5 shrink-0 text-muted-foreground"
-                              aria-label={t(
-                                "conversation.workspace.generatingReply",
-                              )}
-                            />
-                          )}
-                          {summary.isArchived && (
-                            <Badge className="shrink-0" variant="secondary">
-                              {t("conversation.workspace.archivedBadge")}
-                            </Badge>
-                          )}
-                        </button>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="absolute inset-y-0 right-1 my-auto size-7 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 data-[state=open]:opacity-100 hover:text-foreground"
-                              aria-label={t(
-                                "conversation.workspace.conversationMenu",
-                                { title: summary.title },
-                              )}
-                              title={t(
-                                "conversation.workspace.conversationMenu",
-                                {
-                                  title: summary.title,
-                                },
-                              )}
-                            >
-                              <MoreHorizontal
-                                className="size-3.5"
-                                aria-hidden="true"
-                              />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent
-                            align="end"
-                            className="w-auto min-w-40"
-                          >
-                            <DropdownMenuItem
-                              onSelect={() => setPendingRenameId(summary.id)}
-                            >
-                              <Pencil />
-                              {t("conversation.workspace.rename")}
-                            </DropdownMenuItem>
-                            {summary.isArchived ? (
-                              <DropdownMenuItem
-                                onSelect={() =>
-                                  void controller.unarchiveConversation(
-                                    summary.id,
-                                  )
-                                }
-                              >
-                                <ArchiveRestore />
-                                {t("conversation.workspace.unarchive")}
-                              </DropdownMenuItem>
-                            ) : (
-                              <DropdownMenuItem
-                                onSelect={() => setPendingArchiveId(summary.id)}
-                              >
-                                <Archive />
-                                {t("conversation.workspace.archive")}
-                              </DropdownMenuItem>
+                          <button
+                            type="button"
+                            className={cn(
+                              "flex h-9 w-full min-w-0 cursor-pointer items-center justify-between gap-2 rounded-lg pl-2.5 pr-9 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
+                              isCurrent && "font-medium",
                             )}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              variant="destructive"
-                              onSelect={() => setPendingDeleteId(summary.id)}
+                            aria-current={isCurrent ? "page" : undefined}
+                            data-conversation-id={summary.id}
+                            disabled={store.status === "loading"}
+                            onClick={() =>
+                              void store.selectConversation(client, summary.id)
+                            }
+                          >
+                            <span
+                              className="min-w-0 truncate"
+                              title={summary.title}
                             >
-                              <Trash2 />
-                              {t("common.delete")}
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-            {store.history.status === "loading" &&
-              store.history.summaries.length === 0 && (
+                              {summary.title}
+                            </span>
+                            {isGenerating && (
+                              <Spinner
+                                className="size-3.5 shrink-0 text-muted-foreground"
+                                aria-label={t(
+                                  "conversation.workspace.generatingReply",
+                                )}
+                              />
+                            )}
+                            {summary.isArchived && (
+                              <Badge className="shrink-0" variant="secondary">
+                                {t("conversation.workspace.archivedBadge")}
+                              </Badge>
+                            )}
+                          </button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="absolute inset-y-0 right-1 my-auto size-7 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 data-[state=open]:opacity-100 hover:text-foreground"
+                                aria-label={t(
+                                  "conversation.workspace.conversationMenu",
+                                  { title: summary.title },
+                                )}
+                                title={t(
+                                  "conversation.workspace.conversationMenu",
+                                  {
+                                    title: summary.title,
+                                  },
+                                )}
+                              >
+                                <MoreHorizontal
+                                  className="size-3.5"
+                                  aria-hidden="true"
+                                />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                              align="end"
+                              className="w-auto min-w-40"
+                            >
+                              <DropdownMenuItem
+                                onSelect={() => setPendingRenameId(summary.id)}
+                              >
+                                <Pencil />
+                                {t("conversation.workspace.rename")}
+                              </DropdownMenuItem>
+                              {summary.isArchived ? (
+                                <DropdownMenuItem
+                                  onSelect={() =>
+                                    void controller.unarchiveConversation(
+                                      summary.id,
+                                    )
+                                  }
+                                >
+                                  <ArchiveRestore />
+                                  {t("conversation.workspace.unarchive")}
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem
+                                  onSelect={() => setPendingArchiveId(summary.id)}
+                                >
+                                  <Archive />
+                                  {t("conversation.workspace.archive")}
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                variant="destructive"
+                                onSelect={() => setPendingDeleteId(summary.id)}
+                              >
+                                <Trash2 />
+                                {t("common.delete")}
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {store.history.status === "loading" &&
+                store.history.summaries.length === 0 && (
+                  <p className="px-2.5 py-3 text-sm text-muted-foreground">
+                    {t("conversation.workspace.loadingHistory")}
+                  </p>
+                )}
+              {store.history.status === "empty" && (
                 <p className="px-2.5 py-3 text-sm text-muted-foreground">
-                  {t("conversation.workspace.loadingHistory")}
+                  {t("conversation.workspace.emptyHistory")}
                 </p>
               )}
-            {store.history.status === "empty" && (
-              <p className="px-2.5 py-3 text-sm text-muted-foreground">
-                {t("conversation.workspace.emptyHistory")}
-              </p>
-            )}
-            {store.history.status === "error" && (
-              <Alert variant="destructive">
-                <AlertDescription className="flex flex-col gap-2">
-                  <p>{commandErrorMessage(store.history.error.code)}</p>
-                  {store.history.error.retryable && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => void store.retryHistory(client)}
-                    >
-                      {t("conversation.workspace.retryHistory")}
-                    </Button>
-                  )}
-                </AlertDescription>
-              </Alert>
-            )}
-          </section>
+              {store.history.status === "error" && (
+                <Alert variant="destructive">
+                  <AlertDescription className="flex flex-col gap-2">
+                    <p>{commandErrorMessage(store.history.error.code)}</p>
+                    {store.history.error.retryable && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void store.retryHistory(client)}
+                      >
+                        {t("conversation.workspace.retryHistory")}
+                      </Button>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
+            </section>
+          </div>
+          <footer className="shrink-0 p-2">
+            <SettingsDialog
+              client={providerClient}
+              readOnly={!isBlankConversation && store.isArchived}
+              open={isSettingsOpen}
+              onOpenChange={setIsSettingsOpen}
+            />
+            <SearchDialog
+              key={isSearchOpen ? "search-open" : "search-closed"}
+              open={isSearchOpen}
+              onOpenChange={setIsSearchOpen}
+              client={client}
+              onReveal={(conversationId, nodeId, query) => {
+                void store
+                  .revealSearchHit(client, conversationId, nodeId, query)
+                  .then(() => {
+                    if (
+                      useConversationStore.getState().conversationId ===
+                      conversationId
+                    ) {
+                      scrollHistoryRowIntoView(conversationId)
+                    }
+                  })
+              }}
+            />
+          </footer>
         </div>
-        <footer className="shrink-0 p-2">
-          <SettingsDialog
-            client={providerClient}
-            readOnly={!isBlankConversation && store.isArchived}
-            open={isSettingsOpen}
-            onOpenChange={setIsSettingsOpen}
-          />
-          <SearchDialog
-            key={isSearchOpen ? "search-open" : "search-closed"}
-            open={isSearchOpen}
-            onOpenChange={setIsSearchOpen}
-            client={client}
-            onReveal={(conversationId, nodeId, query) => {
-              void store
-                .revealSearchHit(client, conversationId, nodeId, query)
-                .then(() => {
-                  if (
-                    useConversationStore.getState().conversationId ===
-                    conversationId
-                  ) {
-                    scrollHistoryRowIntoView(conversationId)
-                  }
-                })
-            }}
-          />
-        </footer>
       </aside>
 
       <div className="relative flex min-w-0 flex-1 flex-col bg-background">
