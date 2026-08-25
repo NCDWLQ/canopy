@@ -13,7 +13,7 @@ import {
 } from "lucide-react"
 import { useShallow } from "zustand/react/shallow"
 
-import { Composer, type ComposerAction } from "./Composer"
+import { Composer, type ComposerAction, type ComposerHandle } from "./Composer"
 import {
   ConversationPane,
   type AssistantRegenerationAction,
@@ -80,6 +80,11 @@ type AssistantRegenerationTarget = {
   conversationId: string
   assistantNodeId: string
   parentUserNodeId: string
+}
+
+type BranchComposerTarget = {
+  conversationId: string
+  parentNodeId: string
 }
 
 function resolveAssistantRegenerationTarget(
@@ -198,6 +203,9 @@ export function ConversationWorkspace({
   const [pendingDeleteId, setPendingDeleteId] = React.useState<string | null>(
     null,
   )
+  const [branchComposerTarget, setBranchComposerTarget] =
+    React.useState<BranchComposerTarget | null>(null)
+  const composerRef = React.useRef<ComposerHandle>(null)
 
   React.useEffect(() => {
     void loadProviders(providerClient)
@@ -319,9 +327,42 @@ export function ConversationWorkspace({
     }
   })()
 
+  const activeBranchComposerTarget =
+    branchComposerTarget?.conversationId === store.conversationId &&
+    !isBlankConversation
+      ? branchComposerTarget
+      : null
+
+  React.useEffect(
+    () =>
+      useConversationStore.subscribe((current, previous) => {
+        if (
+          current.conversationId !== previous.conversationId ||
+          (!previous.isCreatingConversation &&
+            current.isCreatingConversation)
+        ) {
+          setBranchComposerTarget(null)
+        }
+      }),
+    [],
+  )
+
+  const branchParent =
+    activeBranchComposerTarget === null
+      ? undefined
+      : store.nodesById[activeBranchComposerTarget.parentNodeId]
+  const canSubmitBranch =
+    canMutate &&
+    branchParent?.role === "assistant" &&
+    branchParent.childIds.length > 0
+
   const composerAction: ComposerAction = controller.canCancel
     ? { kind: "cancel", onCancel: controller.cancel }
-    : { kind: "send", disabled: !canAppend }
+    : {
+        kind: "send",
+        disabled:
+          activeBranchComposerTarget === null ? !canAppend : !canSubmitBranch,
+      }
 
   const canCreateBranch = (nodeId: string) => {
     if (!canMutate) return false
@@ -335,6 +376,61 @@ export function ConversationWorkspace({
     const parent =
       node?.parentId === undefined ? undefined : store.fullNodes[node.parentId]
     return node?.role === "user" && parent?.role === "assistant"
+  }
+
+  const handleStartBranch = (parentNodeId: string) => {
+    const current = useConversationStore.getState()
+    const parent = current.nodesById[parentNodeId]
+    if (
+      current.isCreatingConversation ||
+      current.conversationId === null ||
+      current.isArchived ||
+      current.status !== "ready" ||
+      isRunActive(current.generationRuns[current.conversationId]) ||
+      selectActivePath(current).kind === "error" ||
+      parent?.role !== "assistant" ||
+      parent.childIds.length === 0
+    ) {
+      return
+    }
+    setBranchComposerTarget({
+      conversationId: current.conversationId,
+      parentNodeId,
+    })
+    composerRef.current?.focus()
+  }
+
+  const handleComposerSubmit = async (content: string) => {
+    const target = activeBranchComposerTarget
+    if (target === null) {
+      await controller.appendNode(content)
+      return
+    }
+
+    const previousActiveNodeId = useConversationStore.getState().activeNodeId
+    await controller.createBranch(target.parentNodeId, content)
+
+    const current = useConversationStore.getState()
+    const activeNode =
+      current.activeNodeId === null
+        ? undefined
+        : current.fullNodes[current.activeNodeId]
+    const succeeded =
+      current.conversationId === target.conversationId &&
+      current.status === "ready" &&
+      current.activeNodeId !== previousActiveNodeId &&
+      activeNode?.role === "user" &&
+      activeNode.parentId === target.parentNodeId
+
+    if (succeeded) {
+      setBranchComposerTarget((pending) =>
+        pending?.conversationId === target.conversationId &&
+        pending.parentNodeId === target.parentNodeId
+          ? null
+          : pending,
+      )
+    }
+    return succeeded
   }
 
   const handleRegenerateAssistant = (assistantNodeId: string) => {
@@ -867,9 +963,7 @@ export function ConversationWorkspace({
               onRetry={handleRetry}
               canBranch={canCreateBranch}
               canEdit={canEditAsBranch}
-              onCreateBranch={(nodeId, content) =>
-                void controller.createBranch(nodeId, content)
-              }
+              onCreateBranch={handleStartBranch}
               onEditAsBranch={(nodeId, content) =>
                 void controller.editNodeAsBranch(nodeId, content)
               }
@@ -890,7 +984,8 @@ export function ConversationWorkspace({
 
             <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10">
               <Composer
-                onSubmit={(content) => void controller.appendNode(content)}
+                ref={composerRef}
+                onSubmit={handleComposerSubmit}
                 inputDisabled={!canEditDraft}
                 action={composerAction}
                 placeholder={

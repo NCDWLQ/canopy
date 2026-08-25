@@ -202,6 +202,10 @@ type ComposerAction =
   | { kind: "send"; disabled: boolean }
   | { kind: "cancel"; onCancel: () => void };
 
+type ComposerHandle = {
+  focus: () => void;
+};
+
 type ComposerProps = {
   onSubmit: (content: string) => void | Promise<boolean | void>;
   inputDisabled: boolean;
@@ -264,6 +268,12 @@ after every save attempt, including failure.
   preserving the old assistant and Composer draft.
 - `MessageNode` displays capabilities supplied through `canBranch` / `canEdit`; it must not infer authorization from raw roles beyond visual presentation.
 - Branch and edit callbacks emit the source node ID. Editing is labeled as creating a branch and never mutates displayed history optimistically.
+- Starting a branch from an assistant is workspace-owned intent, not a
+  `MessageNode` editing mode: keep the current path rendered, preserve the
+  Composer draft, focus the Composer through `ComposerHandle`, and route the
+  next enabled Send to `createBranch` with that assistant ID. Clear the intent
+  after authoritative success or when leaving the conversation/entering a
+  blank draft; creation failure preserves both intent and draft for retry.
 - Unknown IPC payloads are decoded in `lib/tauri`, before they reach feature components.
 
 ### 4. Validation & Error Matrix
@@ -276,6 +286,9 @@ after every save attempt, including failure.
 | Active path is empty for an existing conversation | Render an error/empty boundary supplied by the container |
 | The conversation is archived | Keep history readable and disable all mutation capabilities |
 | Branch/edit capability is false | Hide or disable the action consistently and prevent keyboard activation |
+| Eligible assistant branch action is clicked | Keep the visible path unchanged, preserve and focus the Composer draft, and enable Send for branch creation |
+| Branch creation fails | Preserve the Composer draft and branch target so the user can retry |
+| Conversation changes before branch submit | Clear the stale branch target without clearing the Composer draft |
 | Status is `error` | Show the safe error message; offer retry only when `retryable` is true |
 | User cancels streaming | Preserve received partial content and show “回复已停止” without an error toast |
 | Generation is `starting` or `streaming` | Show one enabled Composer `取消生成`; only clicking it invokes exact cancellation |
@@ -299,7 +312,9 @@ after every save attempt, including failure.
 
 - `OutlineTree`: selecting, expanding, collapsing, roving focus, arrow-key navigation, and active-node semantics.
 - `ConversationPane`: exact root-to-active order and an explicit assertion that sibling content is absent.
-- `MessageNode`: branch/edit callbacks receive the source ID once; disabled actions cannot fire.
+- `MessageNode`: branch/edit callbacks receive the source ID once; branch intent
+  does not replace message content with a local textbox; disabled actions
+  cannot fire.
 - Loading, empty, provider-auth, retryable, non-retryable, streaming, and cancellation states.
 - Generation presentation covers starting, streaming, phase-derived failure
   kinds, retained cancellation content, authoritative terminal replacement,
@@ -307,6 +322,10 @@ after every save attempt, including failure.
 - Composer tests cover the Send/Cancel union, exact cancel click count, draft
   preservation across action transitions, disabled plain Enter, Shift+Enter,
   IME composition, and terminal-state draft behavior.
+- Workspace branch/Composer tests cover unchanged downstream visibility on
+  click, focus and pre-existing draft preservation, exact assistant-parent
+  submission, successful return to append behavior, failure retry, and stale
+  intent clearing across conversation switches.
 - Contextual generation tests cover Provider-ready and not-ready unanswered
   user leaves, controlled Settings opening, readiness after save without
   automatic generation, and absence for answered/assistant/archived/transient

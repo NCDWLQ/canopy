@@ -738,6 +738,259 @@ describe("ConversationWorkspace", () => {
     ).not.toBeInTheDocument()
   })
 
+  it("keeps the visible path and Composer draft when starting a branch, then returns to append behavior after success", async () => {
+    const user = userEvent.setup()
+    const branchUser: ConversationNodeView = {
+      id: "branch-user",
+      parentId: assistant.id,
+      conversationId: root.conversationId,
+      role: "user",
+      content: "BRANCH_COMPOSER_DRAFT_SENTINEL",
+      createdAt: 5,
+      metadata: null,
+    }
+    const branchAssistant: ConversationNodeView = {
+      id: "branch-assistant",
+      parentId: branchUser.id,
+      conversationId: root.conversationId,
+      role: "assistant",
+      content: "BRANCH_ASSISTANT_SENTINEL",
+      createdAt: 6,
+      metadata: null,
+    }
+    const appendedUser: ConversationNodeView = {
+      id: "appended-after-branch",
+      parentId: branchAssistant.id,
+      conversationId: root.conversationId,
+      role: "user",
+      content: "NORMAL_APPEND_SENTINEL",
+      createdAt: 7,
+      metadata: null,
+    }
+    client.createBranch.mockResolvedValueOnce(branchUser)
+    client.appendNode.mockResolvedValueOnce(appendedUser)
+    providerClient.generateFromActivePath.mockReturnValue(
+      new Promise(() => undefined),
+    )
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(right.id)
+    render(<ConversationWorkspace />)
+
+    const pane = screen.getByTestId("conversation-pane")
+    const composer = screen.getByRole("textbox", { name: "消息输入框" })
+    await user.type(composer, branchUser.content)
+    expect(within(pane).getByText(assistant.content)).toBeVisible()
+    expect(within(pane).getByText(right.content)).toBeVisible()
+
+    const assistantArticle = within(pane)
+      .getByText(assistant.content)
+      .closest("article")
+    expect(assistantArticle).not.toBeNull()
+    await user.click(
+      within(assistantArticle!).getByRole("button", {
+        name: "从此处创建分支",
+      }),
+    )
+
+    expect(composer).toHaveFocus()
+    expect(composer).toHaveValue(branchUser.content)
+    expect(screen.getByRole("button", { name: "发送消息" })).toBeEnabled()
+    expect(within(pane).getByText(assistant.content)).toBeVisible()
+    expect(within(pane).getByText(right.content)).toBeVisible()
+    expect(
+      within(pane).queryByRole("textbox", { name: "分支消息内容" }),
+    ).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "发送消息" }))
+
+    await waitFor(() => {
+      expect(client.createBranch).toHaveBeenCalledWith({
+        conversationId: root.conversationId,
+        parentNodeId: assistant.id,
+        content: branchUser.content,
+      })
+      expect(composer).toHaveValue("")
+      expect(within(pane).getByText(branchUser.content)).toBeVisible()
+    })
+    expect(within(pane).queryByText(right.content)).not.toBeInTheDocument()
+    expect(useConversationStore.getState().fullNodes[right.id]).toEqual(right)
+    expect(
+      screen.getByRole("treeitem", { name: /RIGHT_BRANCH_SENTINEL/ }),
+    ).toBeVisible()
+
+    act(() => {
+      useConversationStore.setState((state) => ({
+        fullNodes: {
+          ...state.fullNodes,
+          [branchAssistant.id]: branchAssistant,
+        },
+        nodesById: {
+          ...state.nodesById,
+          [branchUser.id]: {
+            id: branchUser.id,
+            parentId: assistant.id,
+            role: branchUser.role,
+            preview: branchUser.content,
+            childIds: [branchAssistant.id],
+          },
+          [branchAssistant.id]: {
+            id: branchAssistant.id,
+            parentId: branchUser.id,
+            role: branchAssistant.role,
+            preview: branchAssistant.content,
+            childIds: [],
+          },
+        },
+        activeNodeId: branchAssistant.id,
+      }))
+    })
+
+    await user.type(composer, appendedUser.content)
+    expect(screen.getByRole("button", { name: "发送消息" })).toBeEnabled()
+    await user.click(screen.getByRole("button", { name: "发送消息" }))
+
+    await waitFor(() => {
+      expect(client.appendNode).toHaveBeenCalledWith({
+        conversationId: root.conversationId,
+        parentNodeId: branchAssistant.id,
+        content: appendedUser.content,
+      })
+    })
+    expect(client.createBranch).toHaveBeenCalledTimes(1)
+  })
+
+  it("retains branch intent and the Composer draft when branch creation fails", async () => {
+    const user = userEvent.setup()
+    const branchUser: ConversationNodeView = {
+      id: "retry-branch-user",
+      parentId: assistant.id,
+      conversationId: root.conversationId,
+      role: "user",
+      content: "RETRY_BRANCH_DRAFT_SENTINEL",
+      createdAt: 5,
+      metadata: null,
+    }
+    client.createBranch
+      .mockRejectedValueOnce(new Error("branch failed"))
+      .mockResolvedValueOnce(branchUser)
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(right.id)
+    render(<ConversationWorkspace />)
+
+    const pane = screen.getByTestId("conversation-pane")
+    const composer = screen.getByRole("textbox", { name: "消息输入框" })
+    await user.type(composer, branchUser.content)
+    const assistantArticle = within(pane)
+      .getByText(assistant.content)
+      .closest("article")
+    expect(assistantArticle).not.toBeNull()
+    await user.click(
+      within(assistantArticle!).getByRole("button", {
+        name: "从此处创建分支",
+      }),
+    )
+    await user.click(screen.getByRole("button", { name: "发送消息" }))
+
+    await waitFor(() => {
+      expect(client.createBranch).toHaveBeenCalledTimes(1)
+      expect(composer).toHaveValue(branchUser.content)
+    })
+
+    act(() => {
+      useConversationStore.setState({ status: "ready", error: null })
+    })
+    await user.click(screen.getByRole("button", { name: "发送消息" }))
+
+    await waitFor(() => {
+      expect(client.createBranch).toHaveBeenCalledTimes(2)
+      expect(client.createBranch).toHaveBeenLastCalledWith({
+        conversationId: root.conversationId,
+        parentNodeId: assistant.id,
+        content: branchUser.content,
+      })
+      expect(composer).toHaveValue("")
+    })
+  })
+
+  it("clears branch intent when switching conversations without clearing the Composer draft", async () => {
+    const user = userEvent.setup()
+    const otherRoot: ConversationNodeView = {
+      id: "branch-switch-root",
+      conversationId: "conversation-branch-switch",
+      role: "user",
+      content: "BRANCH_SWITCH_OTHER_SENTINEL",
+      createdAt: 8,
+      metadata: null,
+    }
+    const otherTree: ConversationTreeView = {
+      conversation: {
+        id: otherRoot.conversationId,
+        title: "Branch switch history",
+        rootNodeId: otherRoot.id,
+        isArchived: false,
+      },
+      rootNodeId: otherRoot.id,
+      nodes: [otherRoot],
+      nodesById: {
+        [otherRoot.id]: {
+          id: otherRoot.id,
+          role: otherRoot.role,
+          preview: otherRoot.content,
+          childIds: [],
+        },
+      },
+    }
+    client.loadConversationTree.mockImplementation((conversationId) =>
+      Promise.resolve(
+        conversationId === otherTree.conversation.id ? otherTree : tree,
+      ),
+    )
+    await useConversationStore
+      .getState()
+      .loadConversation(client, tree.conversation.id)
+    useConversationStore.setState({
+      history: {
+        status: "ready",
+        summaries: [
+          { ...tree.conversation, updatedAt: right.createdAt },
+          { ...otherTree.conversation, updatedAt: 2 },
+        ],
+        error: null,
+      },
+    })
+    render(<ConversationWorkspace />)
+
+    const pane = await screen.findByTestId("conversation-pane")
+    await within(pane).findByText(right.content)
+    const composer = screen.getByRole("textbox", { name: "消息输入框" })
+    await user.type(composer, "BRANCH_SWITCH_DRAFT_SENTINEL")
+    const assistantArticle = within(pane)
+      .getByText(assistant.content)
+      .closest("article")
+    expect(assistantArticle).not.toBeNull()
+    await user.click(
+      within(assistantArticle!).getByRole("button", {
+        name: "从此处创建分支",
+      }),
+    )
+    expect(screen.getByRole("button", { name: "发送消息" })).toBeEnabled()
+
+    await user.click(
+      screen.getByRole("button", { name: /^Branch switch history/ }),
+    )
+    await within(pane).findByText(otherRoot.content)
+    await user.click(screen.getByRole("button", { name: /^Branch proof/ }))
+    await within(pane).findByText(right.content)
+
+    expect(composer).toHaveValue("BRANCH_SWITCH_DRAFT_SENTINEL")
+    expect(screen.getByRole("button", { name: "发送消息" })).toBeDisabled()
+    expect(client.createBranch).not.toHaveBeenCalled()
+  })
+
   it("edits as a new sibling while preserving the historical source", async () => {
     const user = userEvent.setup()
     const edited: ConversationNodeView = {

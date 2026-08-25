@@ -206,14 +206,15 @@ describe("MessageNode", () => {
     ).not.toBeInTheDocument()
   })
 
-  it("hides durable '重新生成' when entering branch mode", async () => {
+  it("emits branch intent without replacing the assistant content", async () => {
     const user = userEvent.setup()
+    const onCreateBranch = vi.fn()
     render(
       <MessageNode
         message={assistantMessage}
         canBranch={true}
         canEdit={false}
-        onCreateBranch={vi.fn()}
+        onCreateBranch={onCreateBranch}
         onEditAsBranch={vi.fn()}
         assistantRegenerationAction={{
           assistantNodeId: assistantMessage.id,
@@ -224,8 +225,13 @@ describe("MessageNode", () => {
 
     expect(screen.getByRole("button", { name: "重新生成" })).toBeVisible()
     await user.click(screen.getByRole("button", { name: "从此处创建分支" }))
+
+    expect(onCreateBranch).toHaveBeenCalledWith(assistantMessage.id)
+    expect(onCreateBranch).toHaveBeenCalledTimes(1)
+    expect(screen.getByText(assistantMessage.content)).toBeVisible()
+    expect(screen.getByRole("button", { name: "重新生成" })).toBeVisible()
     expect(
-      screen.queryByRole("button", { name: "重新生成" }),
+      screen.queryByRole("textbox", { name: "分支消息内容" }),
     ).not.toBeInTheDocument()
   })
 

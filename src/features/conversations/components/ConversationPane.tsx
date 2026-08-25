@@ -22,7 +22,7 @@ export type ConversationPaneProps = {
   onRetry?: () => void
   canBranch: (nodeId: string) => boolean
   canEdit: (nodeId: string) => boolean
-  onCreateBranch: (nodeId: string, content: string) => void
+  onCreateBranch: (nodeId: string) => void
   onEditAsBranch: (nodeId: string, content: string) => void
   onExportMessage?: (nodeId: string) => void
   exportDisabled?: boolean

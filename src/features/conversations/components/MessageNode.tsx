@@ -37,7 +37,7 @@ export type MessageNodeProps = {
   message: PathMessageView
   canBranch: boolean
   canEdit: boolean
-  onCreateBranch: (nodeId: string, content: string) => void
+  onCreateBranch: (nodeId: string) => void
   onEditAsBranch: (nodeId: string, content: string) => void
   generationAction?: UserGenerationAction
   assistantRegenerationAction?: AssistantRegenerationAction
@@ -66,11 +66,8 @@ export function MessageNode({
   const { t } = useTranslation()
   const [isEditing, setIsEditing] = React.useState(false)
   const [editContent, setEditContent] = React.useState(message.content)
-  const [isBranching, setIsBranching] = React.useState(false)
-  const [branchContent, setBranchContent] = React.useState("")
   const [isCopied, setIsCopied] = React.useState(false)
   const editInputRef = React.useRef<HTMLTextAreaElement>(null)
-  const branchInputRef = React.useRef<HTMLTextAreaElement>(null)
   const copyResetRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
   const revealArticleRef = React.useRef<HTMLElement>(null)
   const assistantContentRef = React.useRef<HTMLDivElement>(null)
@@ -158,16 +155,6 @@ export function MessageNode({
   }, [isEditing])
 
   React.useEffect(() => {
-    if (isBranching) {
-      const el = branchInputRef.current
-      if (el) {
-        el.focus()
-        el.setSelectionRange(el.value.length, el.value.length)
-      }
-    }
-  }, [isBranching])
-
-  React.useEffect(() => {
     return () => {
       if (copyResetRef.current !== null) {
         clearTimeout(copyResetRef.current)
@@ -179,14 +166,6 @@ export function MessageNode({
     if (canEdit && editContent.trim()) {
       onEditAsBranch(message.id, editContent)
       setIsEditing(false)
-    }
-  }
-
-  const handleBranchSubmit = () => {
-    if (canBranch && branchContent.trim()) {
-      onCreateBranch(message.id, branchContent)
-      setIsBranching(false)
-      setBranchContent("")
     }
   }
 
@@ -216,11 +195,9 @@ export function MessageNode({
       canBranch ||
       canExport ||
       regenerationAction !== undefined) &&
-    !isEditing &&
-    !isBranching
+    !isEditing
 
-  const showGenerationAction =
-    generationAction !== undefined && !isEditing && !isBranching
+  const showGenerationAction = generationAction !== undefined && !isEditing
 
   return (
     <MessageBubble
@@ -245,25 +222,6 @@ export function MessageNode({
             >
               <Check className="size-3.5 mr-1" aria-hidden="true" />{" "}
               {t("conversation.message.saveAsBranch")}
-            </Button>
-          </div>
-        ) : isBranching ? (
-          <div className="flex justify-end gap-2 mt-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsBranching(false)}
-            >
-              <X className="size-3.5 mr-1" aria-hidden="true" />{" "}
-              {t("common.cancel")}
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleBranchSubmit}
-              disabled={!branchContent.trim()}
-            >
-              <Check className="size-3.5 mr-1" aria-hidden="true" />{" "}
-              {t("conversation.message.createBranch")}
             </Button>
           </div>
         ) : showGenerationAction ? (
@@ -330,7 +288,7 @@ export function MessageNode({
                 className="size-7 text-muted-foreground hover:text-foreground"
                 title={t("conversation.message.branchFromHere")}
                 aria-label={t("conversation.message.branchFromHere")}
-                onClick={() => setIsBranching(true)}
+                onClick={() => onCreateBranch(message.id)}
               >
                 <GitBranch className="size-3.5" aria-hidden="true" />
               </Button>
@@ -383,15 +341,6 @@ export function MessageNode({
           value={editContent}
           onChange={(e) => setEditContent(e.target.value)}
           aria-label={t("conversation.message.editContent")}
-        />
-      ) : isBranching && canBranch ? (
-        <Textarea
-          ref={branchInputRef}
-          className="w-full resize-none rounded-none border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0"
-          placeholder={t("conversation.message.branchPlaceholder")}
-          value={branchContent}
-          onChange={(e) => setBranchContent(e.target.value)}
-          aria-label={t("conversation.message.branchContent")}
         />
       ) : message.role === "assistant" ? (
         <>
