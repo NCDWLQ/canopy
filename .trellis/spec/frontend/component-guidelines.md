@@ -219,6 +219,32 @@ owned by the main integration session. The frontend component agent imports
 them and may create component-local values that satisfy them; it must not copy
 or redefine the types or the IPC fixture payloads in component directories.
 
+### Common Mistake: Removing Indirectly Consumed Selector Fields
+
+**Symptom**: TypeScript reports that the object selected by a component is not
+assignable to a helper's state type after a field appears to become unused in
+the JSX.
+
+**Cause**: A selected field may still be consumed indirectly by a typed helper
+called from the component (for example, a helper that receives the selected
+workspace projection as a `ConversationTreeState`).
+
+**Fix**: Before pruning a selector field, search all uses of the selected
+object and either retain the field or narrow the helper's input contract when
+that is an intentional architectural change.
+
+```tsx
+const store = useConversationStore(useShallow((state) => ({
+  nodesById: state.nodesById,
+  expandedIds: state.expandedIds, // consumed by a typed helper below
+})))
+
+const projection = projectTree(store)
+```
+
+This keeps the selector, helper signature, and normalized tree contract
+consistent while removing a UI consumer such as the sidebar outline.
+
 Provider forms follow the same pattern: controlled, secret-masked fields emit a
 typed store action and never call raw Tauri transport. Existing blank key input
 means `keep`, explicit removal means `remove`, and nonblank input means
