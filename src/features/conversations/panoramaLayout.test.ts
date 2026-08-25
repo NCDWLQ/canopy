@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest"
 
 import {
-  MINDMAP_CARD_HEIGHT,
-  MINDMAP_CARD_WIDTH,
-  MINDMAP_COLUMN_STEP,
-  projectMindMapLayout,
-} from "./mindmapLayout"
+  PANORAMA_CARD_HEIGHT,
+  PANORAMA_CARD_WIDTH,
+  PANORAMA_COLUMN_STEP,
+  projectPanoramaLayout,
+} from "./panoramaLayout"
 import type { TreeNodeView } from "./types"
 
 const nodesById: Readonly<Record<string, TreeNodeView>> = {
@@ -48,15 +48,15 @@ const nodesById: Readonly<Record<string, TreeNodeView>> = {
 const activePathIds = ["root", "assistant-a", "user-right"]
 
 function nodeById(
-  layout: NonNullable<ReturnType<typeof projectMindMapLayout>>,
+  layout: NonNullable<ReturnType<typeof projectPanoramaLayout>>,
   nodeId: string,
 ) {
   return layout.nodes.find((node) => node.id === nodeId)
 }
 
-describe("projectMindMapLayout", () => {
+describe("projectPanoramaLayout", () => {
   it("lays out every visible node left-to-right with parent edges", () => {
-    const layout = projectMindMapLayout({
+    const layout = projectPanoramaLayout({
       rootNodeId: "root",
       nodesById,
       activePathIds,
@@ -78,14 +78,14 @@ describe("projectMindMapLayout", () => {
     const root = nodeById(layout!, "root")
     const assistant = nodeById(layout!, "assistant-a")
     const left = nodeById(layout!, "user-left")
-    expect(root?.position.x).toBe(-MINDMAP_CARD_WIDTH / 2)
+    expect(root?.position.x).toBe(-PANORAMA_CARD_WIDTH / 2)
     expect(assistant?.position.x).toBe(
-      MINDMAP_COLUMN_STEP - MINDMAP_CARD_WIDTH / 2,
+      PANORAMA_COLUMN_STEP - PANORAMA_CARD_WIDTH / 2,
     )
     expect(left && root ? left.position.x > root.position.x : false).toBe(true)
     // breadth coordinate stays inside the card height band
-    expect(Math.abs(root!.position.y + MINDMAP_CARD_HEIGHT / 2)).toBeLessThan(
-      MINDMAP_CARD_HEIGHT * 4,
+    expect(Math.abs(root!.position.y + PANORAMA_CARD_HEIGHT / 2)).toBeLessThan(
+      PANORAMA_CARD_HEIGHT * 4,
     )
 
     expect(layout?.edges).toHaveLength(4)
@@ -97,7 +97,7 @@ describe("projectMindMapLayout", () => {
   })
 
   it("marks only root-to-active nodes and edges as on the active path", () => {
-    const layout = projectMindMapLayout({
+    const layout = projectPanoramaLayout({
       rootNodeId: "root",
       nodesById,
       activePathIds,
@@ -129,7 +129,7 @@ describe("projectMindMapLayout", () => {
   })
 
   it("hides descendants of collapsed nodes and reports their count", () => {
-    const layout = projectMindMapLayout({
+    const layout = projectPanoramaLayout({
       rootNodeId: "root",
       nodesById,
       activePathIds: ["root", "assistant-a"],
@@ -149,7 +149,7 @@ describe("projectMindMapLayout", () => {
   })
 
   it("renders a single-node tree without edges", () => {
-    const layout = projectMindMapLayout({
+    const layout = projectPanoramaLayout({
       rootNodeId: "only",
       nodesById: {
         only: { id: "only", role: "user", preview: "SOLO", childIds: [] },
@@ -211,7 +211,7 @@ describe("projectMindMapLayout", () => {
 
     for (const unsafeNodes of cases) {
       expect(
-        projectMindMapLayout({
+        projectPanoramaLayout({
           rootNodeId: "root",
           nodesById: unsafeNodes,
           activePathIds: [],

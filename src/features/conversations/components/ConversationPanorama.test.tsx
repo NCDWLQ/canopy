@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { MindMapCanvas } from "./MindMapCanvas"
+import { ConversationPanorama } from "./ConversationPanorama"
 import type { TreeNodeView } from "../types"
 
 // jsdom ships neither of the measurement APIs React Flow expects: its
@@ -102,10 +102,10 @@ const activePathIds = ["root", "assistant-a", "user-right"]
 // fireEvent instead of userEvent: jsdom dispatches pointer events with a
 // null `view`, which crashes d3-zoom's drag bookkeeping under React Flow's
 // pan pane. Click handlers themselves are unaffected.
-describe("MindMapCanvas", () => {
+describe("ConversationPanorama", () => {
   it("renders every tree node and marks the active path", () => {
     const { container } = render(
-      <MindMapCanvas
+      <ConversationPanorama
         rootNodeId="root"
         nodesById={nodesById}
         activePathIds={activePathIds}
@@ -131,7 +131,7 @@ describe("MindMapCanvas", () => {
 
   it("draws an edge per parent link and highlights the active-path edges", () => {
     const { container } = render(
-      <MindMapCanvas
+      <ConversationPanorama
         rootNodeId="root"
         nodesById={nodesById}
         activePathIds={activePathIds}
@@ -142,7 +142,7 @@ describe("MindMapCanvas", () => {
 
     // React Flow silently drops edges whose endpoint nodes have no handle
     // bounds, so presence here is the regression guard for the declared
-    // MINDMAP_NODE_HANDLES anchors.
+    // PANORAMA_NODE_HANDLES anchors.
     expect(container.querySelectorAll(".react-flow__edge")).toHaveLength(4)
 
     const activeEdge = container.querySelector(
@@ -165,7 +165,7 @@ describe("MindMapCanvas", () => {
   it("emits the clicked node id through onSelect", () => {
     const onSelect = vi.fn()
     render(
-      <MindMapCanvas
+      <ConversationPanorama
         rootNodeId="root"
         nodesById={nodesById}
         activePathIds={activePathIds}
@@ -182,7 +182,7 @@ describe("MindMapCanvas", () => {
   it("emits the double-clicked node id through onOpenInConversation", () => {
     const onOpenInConversation = vi.fn()
     render(
-      <MindMapCanvas
+      <ConversationPanorama
         rootNodeId="root"
         nodesById={nodesById}
         activePathIds={activePathIds}
@@ -199,7 +199,7 @@ describe("MindMapCanvas", () => {
   it("does not open conversation when collapsing a branch", () => {
     const onOpenInConversation = vi.fn()
     render(
-      <MindMapCanvas
+      <ConversationPanorama
         rootNodeId="root"
         nodesById={nodesById}
         activePathIds={activePathIds}
@@ -215,7 +215,7 @@ describe("MindMapCanvas", () => {
 
   it("collapses and re-expands branches from the node button", () => {
     render(
-      <MindMapCanvas
+      <ConversationPanorama
         rootNodeId="root"
         nodesById={nodesById}
         activePathIds={activePathIds}
@@ -239,7 +239,7 @@ describe("MindMapCanvas", () => {
 
   it("does not offer a collapse control on childless nodes", () => {
     render(
-      <MindMapCanvas
+      <ConversationPanorama
         rootNodeId="only"
         nodesById={{
           only: { id: "only", role: "user", preview: "SOLO", childIds: [] },
@@ -258,7 +258,7 @@ describe("MindMapCanvas", () => {
 
   it("renders the integrity error for unsafe projections", () => {
     render(
-      <MindMapCanvas
+      <ConversationPanorama
         rootNodeId="root"
         nodesById={{
           root: { id: "root", role: "user", preview: "R", childIds: ["a"] },
@@ -290,7 +290,7 @@ describe("MindMapCanvas", () => {
     vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(80)
 
     const { container } = render(
-      <MindMapCanvas
+      <ConversationPanorama
         rootNodeId="root"
         nodesById={nodesById}
         activePathIds={activePathIds}

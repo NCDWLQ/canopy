@@ -146,14 +146,14 @@ export const en = {
   "conversation.outline.noReplies": "No replies to this message yet",
   "conversation.outline.emptyContent": "Empty",
 
-  // MindMapCanvas.tsx + ConversationWorkspace.tsx
-  "conversation.mindmap.toggleView": "Toggle mind-map view",
-  "conversation.mindmap.canvas": "Conversation mind map",
-  "conversation.mindmap.collapseBranch": ({ label }: { label: string }) =>
+  // ConversationPanorama.tsx + ConversationWorkspace.tsx
+  "conversation.panorama.toggleView": "Toggle Conversation Panorama",
+  "conversation.panorama.canvas": "Conversation Panorama",
+  "conversation.panorama.collapseBranch": ({ label }: { label: string }) =>
     `Collapse branches of ${label}`,
-  "conversation.mindmap.expandBranch": ({ label }: { label: string }) =>
+  "conversation.panorama.expandBranch": ({ label }: { label: string }) =>
     `Expand branches of ${label}`,
-  "conversation.mindmap.hiddenCount": ({ count }: { count: number }) =>
+  "conversation.panorama.hiddenCount": ({ count }: { count: number }) =>
     `${count} collapsed`,
 
   // SearchDialog.tsx

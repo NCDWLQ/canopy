@@ -2824,7 +2824,7 @@ describe("ConversationWorkspace", () => {
     unmount7()
   })
 
-  it("opens the conversation pane on the double-clicked mind-map node", async () => {
+  it("opens the conversation pane on the double-clicked Panorama node", async () => {
     const scrollIntoView = vi.fn()
     Element.prototype.scrollIntoView = scrollIntoView
     class DOMMatrixReadOnlyStub {
@@ -2845,13 +2845,13 @@ describe("ConversationWorkspace", () => {
     expect(within(pane).queryByText(left.content)).not.toBeInTheDocument()
 
     await userEvent.click(
-      screen.getByRole("button", { name: "切换思维导图视图" }),
+      screen.getByRole("button", { name: "切换对话全景视图" }),
     )
     expect(screen.queryByTestId("conversation-pane")).not.toBeInTheDocument()
-    const mindMap = screen.getByRole("region", { name: "对话思维导图" })
-    expect(mindMap).toBeVisible()
+    const panorama = screen.getByRole("region", { name: "对话全景" })
+    expect(panorama).toBeVisible()
 
-    fireEvent.doubleClick(within(mindMap).getByText("LEFT_BRANCH_SENTINEL"))
+    fireEvent.doubleClick(within(panorama).getByText("LEFT_BRANCH_SENTINEL"))
 
     const conversationPane = await screen.findByTestId("conversation-pane")
     expect(within(conversationPane).getByText(left.content)).toBeVisible()
@@ -2859,7 +2859,7 @@ describe("ConversationWorkspace", () => {
       within(conversationPane).queryByText(right.content),
     ).not.toBeInTheDocument()
     expect(
-      screen.queryByRole("region", { name: "对话思维导图" }),
+      screen.queryByRole("region", { name: "对话全景" }),
     ).not.toBeInTheDocument()
     expect(scrollIntoView).toHaveBeenCalledWith(
       expect.objectContaining({ block: "start" }),

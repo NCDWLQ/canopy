@@ -146,14 +146,14 @@ export const zhCN = {
   "conversation.outline.noReplies": "该消息暂无回复",
   "conversation.outline.emptyContent": "无内容",
 
-  // MindMapCanvas.tsx + ConversationWorkspace.tsx
-  "conversation.mindmap.toggleView": "切换思维导图视图",
-  "conversation.mindmap.canvas": "对话思维导图",
-  "conversation.mindmap.collapseBranch": ({ label }: { label: string }) =>
+  // ConversationPanorama.tsx + ConversationWorkspace.tsx
+  "conversation.panorama.toggleView": "切换对话全景视图",
+  "conversation.panorama.canvas": "对话全景",
+  "conversation.panorama.collapseBranch": ({ label }: { label: string }) =>
     `收起 ${label} 的分支`,
-  "conversation.mindmap.expandBranch": ({ label }: { label: string }) =>
+  "conversation.panorama.expandBranch": ({ label }: { label: string }) =>
     `展开 ${label} 的分支`,
-  "conversation.mindmap.hiddenCount": ({ count }: { count: number }) =>
+  "conversation.panorama.hiddenCount": ({ count }: { count: number }) =>
     `${count} 条已折叠`,
 
   // SearchDialog.tsx

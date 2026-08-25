@@ -32,7 +32,7 @@ export type ConversationPaneProps = {
   userGenerationAction?: UserGenerationAction | null
   assistantRegenerationAction?: AssistantRegenerationAction | null
   pendingBranchOriginId?: string | null
-  // Active search/mind-map reveal: scrolls the hit message into view
+  // Active search/Panorama reveal: scrolls the hit message into view
   // anchored at its start and highlights matches until the next navigation
   // clears it.
   reveal?: SearchReveal | null

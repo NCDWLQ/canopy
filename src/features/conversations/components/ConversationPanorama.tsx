@@ -15,11 +15,11 @@ import { Bot, Minus, Plus, Terminal, User, Wrench } from "lucide-react"
 
 import type { TreeNodeView } from "../types"
 import {
-  MINDMAP_CARD_HEIGHT,
-  MINDMAP_CARD_WIDTH,
-  projectMindMapLayout,
-  type MindMapFlowNode,
-} from "../mindmapLayout"
+  PANORAMA_CARD_HEIGHT,
+  PANORAMA_CARD_WIDTH,
+  projectPanoramaLayout,
+  type PanoramaFlowNode,
+} from "../panoramaLayout"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { useTranslation } from "@/lib/i18n"
@@ -49,7 +49,7 @@ const ROLE_LABEL_KEYS = {
   tool: "conversation.messageBubble.roleTool",
 } as const
 
-function MindMapNodeCard({ data }: NodeProps<MindMapFlowNode>) {
+function PanoramaNodeCard({ data }: NodeProps<PanoramaFlowNode>) {
   const { t } = useTranslation()
   const label = data.preview || t("conversation.outline.emptyContent")
   const roleLabel = t(ROLE_LABEL_KEYS[data.role])
@@ -69,9 +69,9 @@ function MindMapNodeCard({ data }: NodeProps<MindMapFlowNode>) {
         data.isOnActivePath && "border-ring/60",
         data.isActiveNode && "border-ring ring-2 ring-ring/50",
       )}
-      style={{ width: MINDMAP_CARD_WIDTH, height: MINDMAP_CARD_HEIGHT }}
+      style={{ width: PANORAMA_CARD_WIDTH, height: PANORAMA_CARD_HEIGHT }}
     >
-      {/* The declared MINDMAP_NODE_HANDLES cover the first paint, but the
+      {/* The declared PANORAMA_NODE_HANDLES cover the first paint, but the
           node ResizeObserver later overwrites handleBounds from a DOM scan
           (querySelectorAll('.source'/'.target')); with no handle elements
           that scan yields null and every edge silently disappears. Keep
@@ -99,7 +99,7 @@ function MindMapNodeCard({ data }: NodeProps<MindMapFlowNode>) {
             variant="secondary"
             className="ml-auto h-4 px-1.5 text-[10px] leading-none"
           >
-            {t("conversation.mindmap.hiddenCount", {
+            {t("conversation.panorama.hiddenCount", {
               count: data.collapsedDescendantCount,
             })}
           </Badge>
@@ -114,8 +114,8 @@ function MindMapNodeCard({ data }: NodeProps<MindMapFlowNode>) {
           className="absolute -right-3 top-1/2 z-10 flex size-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm outline-none transition-colors motion-reduce:transition-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-3.5"
           aria-label={t(
             isCollapsed
-              ? "conversation.mindmap.expandBranch"
-              : "conversation.mindmap.collapseBranch",
+              ? "conversation.panorama.expandBranch"
+              : "conversation.panorama.collapseBranch",
             { label },
           )}
           aria-expanded={!isCollapsed}
@@ -138,11 +138,11 @@ function MindMapNodeCard({ data }: NodeProps<MindMapFlowNode>) {
   )
 }
 
-const NODE_TYPES: NodeTypes = { mindMapCard: MindMapNodeCard }
+const NODE_TYPES: NodeTypes = { panoramaCard: PanoramaNodeCard }
 
 const EMPTY_COLLAPSED_IDS: ReadonlySet<string> = new Set()
 
-export type MindMapCanvasProps = {
+export type ConversationPanoramaProps = {
   rootNodeId: string
   nodesById: Readonly<Record<string, TreeNodeView>>
   /** Ordered root -> active node IDs from the store's path selector. */
@@ -152,23 +152,23 @@ export type MindMapCanvasProps = {
   onOpenInConversation: (nodeId: string) => void
 }
 
-export function MindMapCanvas(props: MindMapCanvasProps) {
+export function ConversationPanorama(props: ConversationPanoramaProps) {
   // The inner view needs useReactFlow for camera control, which requires a
   // provider above the component that renders <ReactFlow>.
   return (
     <ReactFlowProvider>
-      <MindMapCanvasView {...props} />
+      <ConversationPanoramaView {...props} />
     </ReactFlowProvider>
   )
 }
 
-function MindMapCanvasView({
+function ConversationPanoramaView({
   rootNodeId,
   nodesById,
   activePathIds,
   onSelect,
   onOpenInConversation,
-}: MindMapCanvasProps) {
+}: ConversationPanoramaProps) {
   const { t } = useTranslation()
   const { resolvedTheme } = useTheme()
   const { fitView } = useReactFlow()
@@ -231,7 +231,7 @@ function MindMapCanvasView({
 
   const layout = React.useMemo(
     () =>
-      projectMindMapLayout({
+      projectPanoramaLayout({
         rootNodeId,
         nodesById,
         activePathIds,
@@ -248,7 +248,7 @@ function MindMapCanvasView({
     )
   }
 
-  const nodes: MindMapFlowNode[] = layout.nodes.map((node) => ({
+  const nodes: PanoramaFlowNode[] = layout.nodes.map((node) => ({
     ...node,
     data: { ...node.data, onToggleBranch: handleToggleBranch },
   }))
@@ -257,7 +257,7 @@ function MindMapCanvasView({
     <div
       className="h-full w-full [--xy-background-pattern-dots-color:var(--border)]"
       role="region"
-      aria-label={t("conversation.mindmap.canvas")}
+      aria-label={t("conversation.panorama.canvas")}
     >
       {/* key by root so switching conversations remounts the flow and
           re-fits the viewport */}

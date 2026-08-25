@@ -611,17 +611,18 @@ Use when implementing or styling conversation message displays (`MessageBubble`,
   The workspace header contains no Generate or Cancel slot; active cancellation
   belongs to the Composer's circular action.
 
-## Design Decision: Mind-map Canvas View
+## Design Decision: Conversation Panorama View
 
-**Context**: The conversation tree also renders as a mind-map style canvas
-(`MindMapCanvas`, React Flow v12 + `d3-hierarchy` tidy tree, left-to-right).
+**Context**: The conversation tree also renders as a Conversation Panorama
+canvas (`ConversationPanorama`, React Flow v12 + `d3-hierarchy` tidy tree,
+left-to-right).
 React Flow was chosen because nodes are real React components (shadcn/Tailwind
 styling reuse) and pan/zoom/minimap/fit-view ship built-in on DOM/SVG — no
 WebGL dependency on WebKitGTK.
 
 **Decision**:
 
-- `MindMapCanvas` is fully controlled: `rootNodeId`, `nodesById`,
+- `ConversationPanorama` is fully controlled: `rootNodeId`, `nodesById`,
   `activePathIds`, `onSelect` props only, no store access inside. The
   root-to-active chain stays owned by the store's `selectActivePath`; the
   workspace maps its path to `activePathIds`. Never re-derive the active
@@ -632,18 +633,18 @@ WebGL dependency on WebKitGTK.
   (`newestLeafDescendant`, same semantics as `revealSearchHit`) and sets a
   queryless `reveal` so the message pane scrolls to the clicked node
   without highlighting. Plain `selectNode` truncates the path at the
-  clicked node and is wrong for the mind-map. The canvas then fits the
+  clicked node and is wrong for the Panorama. The canvas then fits the
   updated path via `useReactFlow().fitView` (queued by React Flow until
   the next node adopt; camera效果 only verifiable in a real browser, not
   jsdom).
-- Layout lives in the pure module `features/conversations/mindmapLayout.ts`
+- Layout lives in the pure module `features/conversations/panoramaLayout.ts`
   (defensive validation mirroring `projectVisibleRows`: null on missing
   nodes, parent mismatch, or cycle; component renders the
   `errors.unsafeTreeProjection` alert). Collapse state is component-local
   and scoped to the current root via derived state, not an effect reset.
 - Flow nodes declare explicit `width`/`height` matching the fixed card
   metrics exported from the layout module.
-- Flow nodes also declare `handles` (`MINDMAP_NODE_HANDLES`: target left,
+- Flow nodes also declare `handles` (`PANORAMA_NODE_HANDLES`: target left,
   source right, card-local coordinates). React Flow **silently drops every
   edge** whose endpoint nodes lack handle bounds (`isNodeInitialized` fails
   before the error-008 path is even reached) — nodes render fine while all

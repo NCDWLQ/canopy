@@ -1193,7 +1193,7 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
       set({ activeNodeId: nodeId, reveal: null })
     },
 
-    // Mind-map selection: activating a node means activating the whole
+    // Panorama selection: activating a node means activating the whole
     // branch through it. The active path targets the newest leaf of the
     // node's subtree (matching revealSearchHit semantics), and a queryless
     // reveal scrolls the conversation pane to the clicked message without

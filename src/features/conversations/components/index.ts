@@ -1,5 +1,5 @@
 export * from "./OutlineTree"
-export * from "./MindMapCanvas"
+export * from "./ConversationPanorama"
 export * from "./MessageNode"
 export * from "./ConversationPane"
 export * from "./Composer"

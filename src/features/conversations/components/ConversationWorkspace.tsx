@@ -19,7 +19,7 @@ import {
   type AssistantRegenerationAction,
   type UserGenerationAction,
 } from "./ConversationPane"
-import { MindMapCanvas } from "./MindMapCanvas"
+import { ConversationPanorama } from "./ConversationPanorama"
 import { RenameConversationDialog } from "./RenameConversationDialog"
 import { SearchDialog } from "./SearchDialog"
 import { useConversationTitleUpdates } from "../hooks/useConversationTitleUpdates"
@@ -191,7 +191,7 @@ export function ConversationWorkspace({
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true)
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(false)
   const [isSearchOpen, setIsSearchOpen] = React.useState(false)
-  const [isMindMapOpen, setIsMindMapOpen] = React.useState(false)
+  const [isPanoramaOpen, setIsPanoramaOpen] = React.useState(false)
   const [pendingArchiveId, setPendingArchiveId] = React.useState<string | null>(
     null,
   )
@@ -845,17 +845,17 @@ export function ConversationWorkspace({
                     variant="ghost"
                     size="icon"
                     className="size-8"
-                    aria-label={t("conversation.mindmap.toggleView")}
-                    title={t("conversation.mindmap.toggleView")}
-                    aria-pressed={isMindMapOpen}
+                    aria-label={t("conversation.panorama.toggleView")}
+                    title={t("conversation.panorama.toggleView")}
+                    aria-pressed={isPanoramaOpen}
                     disabled={store.status === "loading"}
-                    onClick={() => setIsMindMapOpen((isOpen) => !isOpen)}
+                    onClick={() => setIsPanoramaOpen((isOpen) => !isOpen)}
                   >
                     <Waypoints className="size-4" aria-hidden="true" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  {t("conversation.mindmap.toggleView")}
+                  {t("conversation.panorama.toggleView")}
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -929,17 +929,17 @@ export function ConversationWorkspace({
               )}
             </AlertDescription>
           </Alert>
-        ) : store.conversationId === null ? null : isMindMapOpen ? (
+        ) : store.conversationId === null ? null : isPanoramaOpen ? (
           <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden p-3">
             {store.rootNodeId !== null && isProjectionValid ? (
-              <MindMapCanvas
+              <ConversationPanorama
                 rootNodeId={store.rootNodeId}
                 nodesById={store.nodesById}
                 activePathIds={visiblePath.map((message) => message.id)}
                 onSelect={selectBranchAtNode}
                 onOpenInConversation={(nodeId) => {
                   selectBranchAtNode(nodeId)
-                  setIsMindMapOpen(false)
+                  setIsPanoramaOpen(false)
                 }}
               />
             ) : projectionError !== null ? (
