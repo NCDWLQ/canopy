@@ -1,6 +1,6 @@
 [package]
 name = "canopy"
-version = "0.2.0"
+version = "0.3.0"
 description = "Canopy desktop application"
 authors = ["Canopy contributors"]
 license = "MIT"
