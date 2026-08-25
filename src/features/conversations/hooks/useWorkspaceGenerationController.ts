@@ -491,14 +491,42 @@ export function useWorkspaceGenerationController({
       })
     },
     createBranch: async (parentNodeId, content) => {
+      let authoritativeNode: ConversationNodeView | undefined
+      const trackingClient: ConversationClient = {
+        ...conversationClient,
+        createBranch: async (input) => {
+          const node = await conversationClient.createBranch(input)
+          authoritativeNode = node
+          return node
+        },
+      }
       await useConversationStore
         .getState()
-        .createBranch(conversationClient, parentNodeId, content)
+        .createBranch(trackingClient, parentNodeId, content)
+      if (authoritativeNode === undefined) return
+      startGeneration({
+        conversationId: authoritativeNode.conversationId,
+        parentNodeId: authoritativeNode.id,
+      })
     },
     editNodeAsBranch: async (sourceNodeId, content) => {
+      let authoritativeNode: ConversationNodeView | undefined
+      const trackingClient: ConversationClient = {
+        ...conversationClient,
+        editNodeAsBranch: async (input) => {
+          const node = await conversationClient.editNodeAsBranch(input)
+          authoritativeNode = node
+          return node
+        },
+      }
       await useConversationStore
         .getState()
-        .editNodeAsBranch(conversationClient, sourceNodeId, content)
+        .editNodeAsBranch(trackingClient, sourceNodeId, content)
+      if (authoritativeNode === undefined) return
+      startGeneration({
+        conversationId: authoritativeNode.conversationId,
+        parentNodeId: authoritativeNode.id,
+      })
     },
   }
 }

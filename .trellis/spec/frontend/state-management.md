@@ -185,13 +185,15 @@ result.
   editing, but it is cleared on close and after every save attempt.
 - Deltas live only in the run record's `content`. They never enter
   `nodesById`, the active path, or the outline.
-- Creating a conversation or appending a user message starts generation only
-  after typed persistence returns authoritative data. Auto-start passes the
-  persisted node explicitly (`beginGeneration(parentNodeId)`), so the run
-  targets the node the user sent even if they browsed elsewhere meanwhile; a
-  conversation switch during persistence suppresses auto-start while leaving
-  the persisted user message intact. An implicit `beginGeneration()` (manual
-  Generate) still requires the visible path to end at the selected user node.
+- Creating a conversation, appending a user message, creating a branch, or
+  editing a user message as a branch starts generation only after typed
+  persistence returns authoritative data. The controller captures the
+  persisted node from each mutation wrapper and passes it explicitly to
+  `beginGeneration(parentNodeId)`, so the run targets the exact new user node
+  even if the user browses elsewhere meanwhile; a conversation switch during
+  persistence suppresses auto-start while leaving the persisted user message
+  intact. An implicit `beginGeneration()` (manual Generate) still requires the
+  visible path to end at the selected user node.
 - A monotonically changing UI `runId` rejects stale callbacks. Event guards
   validate against the run record — conversation, parent node, generation ID —
   not against the loaded tree: a background run must keep streaming while
@@ -260,8 +262,9 @@ result.
 
 - Assert pre-terminal deltas change transient content while normalized maps stay
   unchanged; assert inactive sibling content is absent from the active path.
-- For create and append, assert persistence resolves before generation, exact
-  returned conversation/user IDs are used, and generation occurs once.
+- For create, append, create-branch, and edit-as-branch, assert persistence
+  resolves before generation, exact returned conversation/user IDs are used,
+  and generation occurs once.
 - Cover result-before-callback, persistence failure before `started`,
   cancel-before-started, stale events, terminal stage classification, exact
   cancellation, invoke rejection, one-shot reload, target replacement,

@@ -736,9 +736,10 @@ describe("ConversationWorkspace", () => {
     }
     client.createBranch.mockResolvedValueOnce(branchUser)
     client.appendNode.mockResolvedValueOnce(appendedUser)
-    providerClient.generateFromActivePath.mockReturnValue(
-      new Promise(() => undefined),
-    )
+    providerClient.generateFromActivePath.mockResolvedValue({
+      type: "cancelled",
+      generationId: "branch-generation",
+    })
     await useConversationStore
       .getState()
       .loadConversation(client, root.conversationId)
@@ -789,6 +790,12 @@ describe("ConversationWorkspace", () => {
       expect(composer).toHaveValue("")
       expect(within(pane).getByText(branchUser.content)).toBeVisible()
     })
+    await waitFor(() =>
+      expect(
+        useConversationStore.getState().generationRuns[root.conversationId]
+          ?.phase,
+      ).toBe("cancelled"),
+    )
     expect(
       within(pane).queryByRole("separator", { name: "由此处创建分支" }),
     ).not.toBeInTheDocument()
@@ -849,6 +856,10 @@ describe("ConversationWorkspace", () => {
     client.createBranch
       .mockRejectedValueOnce(new Error("branch failed"))
       .mockResolvedValueOnce(branchUser)
+    providerClient.generateFromActivePath.mockResolvedValue({
+      type: "cancelled",
+      generationId: "branch-generation",
+    })
     await useConversationStore
       .getState()
       .loadConversation(client, root.conversationId)
@@ -1031,6 +1042,10 @@ describe("ConversationWorkspace", () => {
       createdAt: 5,
     }
     client.editNodeAsBranch.mockResolvedValueOnce(edited)
+    providerClient.generateFromActivePath.mockResolvedValue({
+      type: "cancelled",
+      generationId: "edit-generation",
+    })
     await useConversationStore
       .getState()
       .loadConversation(client, root.conversationId)
@@ -1058,6 +1073,13 @@ describe("ConversationWorkspace", () => {
       sourceNodeId: right.id,
       content: edited.content,
     })
+    await waitFor(() =>
+      expect(providerClient.generateFromActivePath).toHaveBeenCalledWith(
+        root.conversationId,
+        edited.id,
+        expect.any(Function),
+      ),
+    )
     expect(useConversationStore.getState().fullNodes[right.id]).toEqual(right)
     expect(useConversationStore.getState().fullNodes[edited.id]).toEqual(edited)
   })

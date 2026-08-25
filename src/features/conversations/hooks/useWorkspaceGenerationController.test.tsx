@@ -148,6 +148,26 @@ const appendedUser: ConversationNodeView = {
   metadata: null,
 }
 
+const branchedUser: ConversationNodeView = {
+  id: "branched-user",
+  parentId: assistant.id,
+  conversationId: conversation.id,
+  role: "user",
+  content: "BRANCHED_USER_SENTINEL",
+  createdAt: 5,
+  metadata: null,
+}
+
+const editedUser: ConversationNodeView = {
+  id: "edited-user",
+  parentId: assistant.id,
+  conversationId: conversation.id,
+  role: "user",
+  content: "EDITED_USER_SENTINEL",
+  createdAt: 5,
+  metadata: null,
+}
+
 const createdConversation: ConversationView = {
   id: "created-conversation",
   title: "CREATED_ROOT_SENTINEL",
@@ -447,6 +467,78 @@ describe("workspace generation controller", () => {
       phase: "starting",
       parentNodeId: appendedUser.id,
     })
+  })
+
+  it("starts generation once from a created branch after persistence", async () => {
+    const branch = deferred<ConversationNodeView>()
+    const terminal =
+      deferred<Awaited<ReturnType<ProviderClient["generateFromActivePath"]>>>()
+    conversationClient.createBranch.mockReturnValueOnce(branch.promise)
+    providerClient.generateFromActivePath.mockReturnValueOnce(terminal.promise)
+    const { result } = renderHook(() =>
+      useWorkspaceGenerationController({ conversationClient, providerClient }),
+    )
+
+    let branchOperation!: Promise<void>
+    act(() => {
+      branchOperation = result.current.createBranch(
+        assistant.id,
+        branchedUser.content,
+      )
+    })
+    expect(providerClient.generateFromActivePath).not.toHaveBeenCalled()
+
+    await act(async () => {
+      branch.resolve(branchedUser)
+      await branchOperation
+    })
+
+    expect(useConversationStore.getState().activeNodeId).toBe(branchedUser.id)
+    expect(providerClient.generateFromActivePath).toHaveBeenCalledTimes(1)
+    expect(providerClient.generateFromActivePath).toHaveBeenCalledWith(
+      conversation.id,
+      branchedUser.id,
+      expect.any(Function),
+    )
+
+    terminal.resolve({ type: "cancelled", generationId })
+    await waitFor(() => expect(runOf(conversation.id)?.phase).toBe("cancelled"))
+  })
+
+  it("starts generation once from an edited branch after persistence", async () => {
+    const edit = deferred<ConversationNodeView>()
+    const terminal =
+      deferred<Awaited<ReturnType<ProviderClient["generateFromActivePath"]>>>()
+    conversationClient.editNodeAsBranch.mockReturnValueOnce(edit.promise)
+    providerClient.generateFromActivePath.mockReturnValueOnce(terminal.promise)
+    const { result } = renderHook(() =>
+      useWorkspaceGenerationController({ conversationClient, providerClient }),
+    )
+
+    let editOperation!: Promise<void>
+    act(() => {
+      editOperation = result.current.editNodeAsBranch(
+        right.id,
+        editedUser.content,
+      )
+    })
+    expect(providerClient.generateFromActivePath).not.toHaveBeenCalled()
+
+    await act(async () => {
+      edit.resolve(editedUser)
+      await editOperation
+    })
+
+    expect(useConversationStore.getState().activeNodeId).toBe(editedUser.id)
+    expect(providerClient.generateFromActivePath).toHaveBeenCalledTimes(1)
+    expect(providerClient.generateFromActivePath).toHaveBeenCalledWith(
+      conversation.id,
+      editedUser.id,
+      expect.any(Function),
+    )
+
+    terminal.resolve({ type: "cancelled", generationId })
+    await waitFor(() => expect(runOf(conversation.id)?.phase).toBe("cancelled"))
   })
 
   it("starts generation once from a created conversation only after persistence", async () => {
