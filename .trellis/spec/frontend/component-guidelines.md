@@ -274,6 +274,12 @@ after every save attempt, including failure.
   next enabled Send to `createBranch` with that assistant ID. Clear the intent
   after authoritative success or when leaving the conversation/entering a
   blank draft; creation failure preserves both intent and draft for retry.
+- While branch intent is pending, the workspace projects the rendered message
+  path through (and including) the selected assistant, while leaving the
+  normalized tree and active selection intact. `ConversationPane` renders a
+  `Marker variant="separator"` immediately after that assistant, with a
+  decorative `MarkerIcon`/`GitBranch` and a localized label. Normal tree
+  navigation clears the pending target and restores the full visible path.
 - Unknown IPC payloads are decoded in `lib/tauri`, before they reach feature components.
 
 ### 4. Validation & Error Matrix
@@ -287,6 +293,8 @@ after every save attempt, including failure.
 | The conversation is archived | Keep history readable and disable all mutation capabilities |
 | Branch/edit capability is false | Hide or disable the action consistently and prevent keyboard activation |
 | Eligible assistant branch action is clicked | Keep the visible path unchanged, preserve and focus the Composer draft, and enable Send for branch creation |
+| Branch intent is pending | Render only the path through the selected assistant and a labeled branch marker; do not remove downstream nodes from normalized state |
+| Normal tree navigation occurs during branch intent | Clear the pending target and restore the selected path without clearing the Composer draft |
 | Branch creation fails | Preserve the Composer draft and branch target so the user can retry |
 | Conversation changes before branch submit | Clear the stale branch target without clearing the Composer draft |
 | Status is `error` | Show the safe error message; offer retry only when `retryable` is true |
@@ -326,6 +334,9 @@ after every save attempt, including failure.
   click, focus and pre-existing draft preservation, exact assistant-parent
   submission, successful return to append behavior, failure retry, and stale
   intent clearing across conversation switches.
+- Pending branch marker tests cover truncated rendering, durable downstream
+  node preservation, localized labels, decorative branch icon presence, and
+  restoration after normal tree navigation.
 - Contextual generation tests cover Provider-ready and not-ready unanswered
   user leaves, controlled Settings opening, readiness after save without
   automatic generation, and absence for answered/assistant/archived/transient

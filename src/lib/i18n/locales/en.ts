@@ -92,6 +92,7 @@ export const en = {
   "conversation.pane.retry": "Retry",
   "conversation.pane.empty": "No message selected.",
   "conversation.pane.saving": "Saving message",
+  "conversation.pane.branchOrigin": "Branch from here",
 
   // Composer.tsx
   "conversation.composer.placeholder": "Type a message…",

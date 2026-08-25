@@ -205,6 +205,12 @@ export function ConversationWorkspace({
   )
   const [branchComposerTarget, setBranchComposerTarget] =
     React.useState<BranchComposerTarget | null>(null)
+  // Keep the pending target through the store's authoritative active-node
+  // update during createBranch. The submit handler clears it after it has
+  // verified that the returned node is the new active branch child.
+  const branchSubmissionTargetRef = React.useRef<BranchComposerTarget | null>(
+    null,
+  )
   const composerRef = React.useRef<ComposerHandle>(null)
 
   React.useEffect(() => {
@@ -333,13 +339,30 @@ export function ConversationWorkspace({
       ? branchComposerTarget
       : null
 
+  const pendingBranchOriginIndex =
+    activeBranchComposerTarget === null
+      ? -1
+      : visiblePath.findIndex(
+          (message) => message.id === activeBranchComposerTarget.parentNodeId,
+        )
+  const renderedMessagePath =
+    pendingBranchOriginIndex === -1
+      ? visiblePath
+      : visiblePath.slice(0, pendingBranchOriginIndex + 1)
+  const pendingBranchOriginId =
+    pendingBranchOriginIndex === -1 || activeBranchComposerTarget === null
+      ? null
+      : activeBranchComposerTarget.parentNodeId
+
   React.useEffect(
     () =>
       useConversationStore.subscribe((current, previous) => {
         if (
           current.conversationId !== previous.conversationId ||
           (!previous.isCreatingConversation &&
-            current.isCreatingConversation)
+            current.isCreatingConversation) ||
+          (current.activeNodeId !== previous.activeNodeId &&
+            branchSubmissionTargetRef.current === null)
         ) {
           setBranchComposerTarget(null)
         }
@@ -408,7 +431,12 @@ export function ConversationWorkspace({
     }
 
     const previousActiveNodeId = useConversationStore.getState().activeNodeId
-    await controller.createBranch(target.parentNodeId, content)
+    branchSubmissionTargetRef.current = target
+    try {
+      await controller.createBranch(target.parentNodeId, content)
+    } finally {
+      branchSubmissionTargetRef.current = null
+    }
 
     const current = useConversationStore.getState()
     const activeNode =
@@ -957,7 +985,7 @@ export function ConversationWorkspace({
         ) : (
           <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
             <ConversationPane
-              path={visiblePath}
+              path={renderedMessagePath}
               status={projectionError === null ? store.status : "error"}
               error={projectionError ?? store.error}
               onRetry={handleRetry}
@@ -974,11 +1002,14 @@ export function ConversationWorkspace({
               }}
               exportDisabled={isRunActive(currentRun)}
               transientGeneration={
-                transientBubbleVisible ? transientGeneration : null
+                pendingBranchOriginId === null && transientBubbleVisible
+                  ? transientGeneration
+                  : null
               }
               onRegenerate={controller.generate}
               userGenerationAction={userGenerationAction}
               assistantRegenerationAction={assistantRegenerationAction}
+              pendingBranchOriginId={pendingBranchOriginId}
               reveal={store.reveal}
             />
 

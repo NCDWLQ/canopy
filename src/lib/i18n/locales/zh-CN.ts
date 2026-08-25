@@ -92,6 +92,7 @@ export const zhCN = {
   "conversation.pane.retry": "重试",
   "conversation.pane.empty": "尚未选择消息。",
   "conversation.pane.saving": "正在保存消息",
+  "conversation.pane.branchOrigin": "由此处创建分支",
 
   // Composer.tsx
   "conversation.composer.placeholder": "输入消息…",

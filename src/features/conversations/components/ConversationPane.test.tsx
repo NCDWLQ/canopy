@@ -1,9 +1,10 @@
-import { render, screen, within } from "@testing-library/react"
+import { act, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { ConversationPane } from "./ConversationPane"
 import type { PathMessageView } from "../types"
+import { useLocaleStore } from "@/lib/i18n/locale-store"
 
 const originalScrollIntoView = Object.getOwnPropertyDescriptor(
   Element.prototype,
@@ -18,6 +19,7 @@ function installScrollIntoView(mock: ReturnType<typeof vi.fn>) {
 }
 
 afterEach(() => {
+  useLocaleStore.getState().setLocale("zh-CN")
   if (originalScrollIntoView === undefined) {
     Reflect.deleteProperty(Element.prototype, "scrollIntoView")
   } else {
@@ -62,6 +64,46 @@ const assistant2: PathMessageView = {
 }
 
 describe("ConversationPane", () => {
+  it("renders the localized pending branch marker immediately after its assistant origin", () => {
+    render(
+      <ConversationPane
+        path={[user1, assistant1]}
+        status="ready"
+        canBranch={() => false}
+        canEdit={() => false}
+        onCreateBranch={vi.fn()}
+        onEditAsBranch={vi.fn()}
+        transientGeneration={null}
+        onRegenerate={vi.fn()}
+        pendingBranchOriginId={assistant1.id}
+      />,
+    )
+
+    const marker = screen.getByRole("separator", {
+      name: "由此处创建分支",
+    })
+    const assistantArticle = screen
+      .getByText(assistant1.content)
+      .closest("article")
+
+    expect(marker).toBeVisible()
+    expect(marker).toHaveAttribute("data-variant", "separator")
+    expect(marker).toHaveTextContent("由此处创建分支")
+    expect(marker.querySelector('[data-slot="marker-icon"]')).toHaveAttribute(
+      "aria-hidden",
+      "true",
+    )
+    expect(marker.querySelector('[data-slot="marker-icon"] svg')).not.toBeNull()
+    expect(assistantArticle?.nextElementSibling).toBe(marker)
+
+    act(() => {
+      useLocaleStore.getState().setLocale("en")
+    })
+    expect(
+      screen.getByRole("separator", { name: "Branch from here" }),
+    ).toHaveTextContent("Branch from here")
+  })
+
   it("passes userGenerationAction only to the last user message on the path", () => {
     const onSelect = vi.fn()
     render(

@@ -9,7 +9,8 @@ import {
   type UserGenerationAction,
 } from "./MessageNode"
 import { Button } from "@/components/ui/button"
-import { AlertCircle, RefreshCw } from "lucide-react"
+import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker"
+import { AlertCircle, GitBranch, RefreshCw } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import { commandErrorMessage, useTranslation } from "@/lib/i18n"
 
@@ -30,6 +31,7 @@ export type ConversationPaneProps = {
   onRegenerate: () => void
   userGenerationAction?: UserGenerationAction | null
   assistantRegenerationAction?: AssistantRegenerationAction | null
+  pendingBranchOriginId?: string | null
   // Active search/mind-map reveal: scrolls the hit message into view
   // anchored at its start and highlights matches until the next navigation
   // clears it.
@@ -157,6 +159,7 @@ export function ConversationPane({
   onRegenerate,
   userGenerationAction,
   assistantRegenerationAction,
+  pendingBranchOriginId = null,
   reveal = null,
 }: ConversationPaneProps) {
   const { t } = useTranslation()
@@ -264,24 +267,40 @@ export function ConversationPane({
               ? assistantRegenerationAction
               : undefined
           return (
-            <MessageNode
-              key={msg.id}
-              message={msg}
-              canBranch={canBranch(msg.id)}
-              canEdit={canEdit(msg.id)}
-              onCreateBranch={onCreateBranch}
-              onEditAsBranch={onEditAsBranch}
-              onExportMessage={onExportMessage}
-              exportDisabled={exportDisabled}
-              generationAction={nodeGenerationAction}
-              assistantRegenerationAction={nodeAssistantRegenerationAction}
-              highlightQuery={
-                revealNodeId !== null && revealNodeId === msg.id
-                  ? revealQuery
-                  : undefined
-              }
-              scrollContainerRef={containerRef}
-            />
+            <React.Fragment key={msg.id}>
+              <MessageNode
+                message={msg}
+                canBranch={canBranch(msg.id)}
+                canEdit={canEdit(msg.id)}
+                onCreateBranch={onCreateBranch}
+                onEditAsBranch={onEditAsBranch}
+                onExportMessage={onExportMessage}
+                exportDisabled={exportDisabled}
+                generationAction={nodeGenerationAction}
+                assistantRegenerationAction={nodeAssistantRegenerationAction}
+                highlightQuery={
+                  revealNodeId !== null && revealNodeId === msg.id
+                    ? revealQuery
+                    : undefined
+                }
+                scrollContainerRef={containerRef}
+              />
+              {pendingBranchOriginId === msg.id && (
+                <Marker
+                  variant="separator"
+                  className="my-6"
+                  role="separator"
+                  aria-label={t("conversation.pane.branchOrigin")}
+                >
+                  <MarkerIcon>
+                    <GitBranch />
+                  </MarkerIcon>
+                  <MarkerContent>
+                    {t("conversation.pane.branchOrigin")}
+                  </MarkerContent>
+                </Marker>
+              )}
+            </React.Fragment>
           )
         })}
         {transientGeneration !== null && (

@@ -738,7 +738,7 @@ describe("ConversationWorkspace", () => {
     ).not.toBeInTheDocument()
   })
 
-  it("keeps the visible path and Composer draft when starting a branch, then returns to append behavior after success", async () => {
+  it("truncates at the pending branch origin while preserving the Composer draft, then returns to append behavior after success", async () => {
     const user = userEvent.setup()
     const branchUser: ConversationNodeView = {
       id: "branch-user",
@@ -798,7 +798,18 @@ describe("ConversationWorkspace", () => {
     expect(composer).toHaveValue(branchUser.content)
     expect(screen.getByRole("button", { name: "发送消息" })).toBeEnabled()
     expect(within(pane).getByText(assistant.content)).toBeVisible()
-    expect(within(pane).getByText(right.content)).toBeVisible()
+    expect(within(pane).queryByText(right.content)).not.toBeInTheDocument()
+    const branchMarker = within(pane).getByRole("separator", {
+      name: "由此处创建分支",
+    })
+    expect(branchMarker).toHaveAttribute("data-variant", "separator")
+    expect(useConversationStore.getState().fullNodes[right.id]).toEqual(right)
+    expect(
+      useConversationStore.getState().nodesById[assistant.id]?.childIds,
+    ).toEqual([left.id, right.id])
+    expect(
+      screen.getByRole("treeitem", { name: /RIGHT_BRANCH_SENTINEL/ }),
+    ).toBeVisible()
     expect(
       within(pane).queryByRole("textbox", { name: "分支消息内容" }),
     ).not.toBeInTheDocument()
@@ -814,6 +825,9 @@ describe("ConversationWorkspace", () => {
       expect(composer).toHaveValue("")
       expect(within(pane).getByText(branchUser.content)).toBeVisible()
     })
+    expect(
+      within(pane).queryByRole("separator", { name: "由此处创建分支" }),
+    ).not.toBeInTheDocument()
     expect(within(pane).queryByText(right.content)).not.toBeInTheDocument()
     expect(useConversationStore.getState().fullNodes[right.id]).toEqual(right)
     expect(
@@ -893,11 +907,19 @@ describe("ConversationWorkspace", () => {
         name: "从此处创建分支",
       }),
     )
+    expect(within(pane).queryByText(right.content)).not.toBeInTheDocument()
+    expect(
+      within(pane).getByRole("separator", { name: "由此处创建分支" }),
+    ).toBeVisible()
     await user.click(screen.getByRole("button", { name: "发送消息" }))
 
     await waitFor(() => {
       expect(client.createBranch).toHaveBeenCalledTimes(1)
       expect(composer).toHaveValue(branchUser.content)
+      expect(within(pane).queryByText(right.content)).not.toBeInTheDocument()
+      expect(
+        within(pane).getByRole("separator", { name: "由此处创建分支" }),
+      ).toBeVisible()
     })
 
     act(() => {
@@ -914,6 +936,48 @@ describe("ConversationWorkspace", () => {
       })
       expect(composer).toHaveValue("")
     })
+    expect(
+      within(pane).queryByRole("separator", { name: "由此处创建分支" }),
+    ).not.toBeInTheDocument()
+  })
+
+  it("clears branch intent when normal tree navigation selects another branch", async () => {
+    const user = userEvent.setup()
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(right.id)
+    render(<ConversationWorkspace />)
+
+    const pane = screen.getByTestId("conversation-pane")
+    const composer = screen.getByRole("textbox", { name: "消息输入框" })
+    await user.type(composer, "TREE_NAVIGATION_DRAFT_SENTINEL")
+    const assistantArticle = within(pane)
+      .getByText(assistant.content)
+      .closest("article")
+    expect(assistantArticle).not.toBeNull()
+    await user.click(
+      within(assistantArticle!).getByRole("button", {
+        name: "从此处创建分支",
+      }),
+    )
+    expect(within(pane).queryByText(right.content)).not.toBeInTheDocument()
+    expect(
+      within(pane).getByRole("separator", { name: "由此处创建分支" }),
+    ).toBeVisible()
+
+    act(() => {
+      useConversationStore.getState().selectNode(left.id)
+    })
+
+    await waitFor(() => {
+      expect(within(pane).getByText(left.content)).toBeVisible()
+    })
+    expect(within(pane).getByText(assistant.content)).toBeVisible()
+    expect(
+      within(pane).queryByRole("separator", { name: "由此处创建分支" }),
+    ).not.toBeInTheDocument()
+    expect(composer).toHaveValue("TREE_NAVIGATION_DRAFT_SENTINEL")
   })
 
   it("clears branch intent when switching conversations without clearing the Composer draft", async () => {
@@ -978,11 +1042,18 @@ describe("ConversationWorkspace", () => {
       }),
     )
     expect(screen.getByRole("button", { name: "发送消息" })).toBeEnabled()
+    expect(within(pane).queryByText(right.content)).not.toBeInTheDocument()
+    expect(
+      within(pane).getByRole("separator", { name: "由此处创建分支" }),
+    ).toBeVisible()
 
     await user.click(
       screen.getByRole("button", { name: /^Branch switch history/ }),
     )
     await within(pane).findByText(otherRoot.content)
+    expect(
+      within(pane).queryByRole("separator", { name: "由此处创建分支" }),
+    ).not.toBeInTheDocument()
     await user.click(screen.getByRole("button", { name: /^Branch proof/ }))
     await within(pane).findByText(right.content)
 
@@ -1090,11 +1161,30 @@ describe("ConversationWorkspace", () => {
     await within(await screen.findByTestId("conversation-pane")).findByText(
       right.content,
     )
+    const loadedPane = screen.getByTestId("conversation-pane")
+    const assistantArticle = within(loadedPane)
+      .getByText(assistant.content)
+      .closest("article")
+    expect(assistantArticle).not.toBeNull()
+    await user.click(
+      within(assistantArticle!).getByRole("button", {
+        name: "从此处创建分支",
+      }),
+    )
+    expect(
+      within(loadedPane).queryByText(right.content),
+    ).not.toBeInTheDocument()
+    expect(
+      within(loadedPane).getByRole("separator", { name: "由此处创建分支" }),
+    ).toBeVisible()
     const before = useConversationStore.getState()
 
     await user.click(screen.getByRole("button", { name: "新建会话" }))
 
     expect(screen.getByTestId("blank-conversation-pane")).toBeVisible()
+    expect(
+      screen.queryByRole("separator", { name: "由此处创建分支" }),
+    ).not.toBeInTheDocument()
     expect(screen.getByRole("textbox", { name: "消息输入框" })).toBeEnabled()
     expect(screen.queryByLabelText("Title")).not.toBeInTheDocument()
     const creating = useConversationStore.getState()
@@ -1109,6 +1199,14 @@ describe("ConversationWorkspace", () => {
       expect(screen.getByTestId("conversation-pane")).toBeVisible()
       expect(useConversationStore.getState().isCreatingConversation).toBe(false)
     })
+    const restoredPane = screen.getByTestId("conversation-pane")
+    expect(within(restoredPane).getByText(right.content)).toBeVisible()
+    expect(
+      within(restoredPane).queryByRole("separator", {
+        name: "由此处创建分支",
+      }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "发送消息" })).toBeDisabled()
   })
 
   it("derives a scalar-safe title while preserving the complete first prompt", async () => {
