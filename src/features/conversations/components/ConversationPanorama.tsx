@@ -111,7 +111,7 @@ function PanoramaNodeCard({ data }: NodeProps<PanoramaFlowNode>) {
       {data.childCount > 0 && (
         <button
           type="button"
-          className="absolute -right-3 top-1/2 z-10 flex size-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm outline-none transition-colors motion-reduce:transition-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-3.5"
+          className="absolute -right-3 top-1/2 z-10 flex size-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm outline-none transition-[transform,color,background-color] duration-100 ease-[var(--ease-out)] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring active:scale-90 motion-reduce:active:scale-95 [&_svg]:size-3.5"
           aria-label={t(
             isCollapsed
               ? "conversation.panorama.expandBranch"
