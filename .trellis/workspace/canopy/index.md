@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 40
+- **Total Sessions**: 41
 - **Last Active**: 2026-08-25
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~917 | Active |
+| `journal-1.md` | ~939 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 41 | 2026-08-25 | 移除侧栏会话树 | `9798b35`, `e81b15c` | `main` |
 | 40 | 2026-08-25 | Show pending branch origin marker | `f5c555f` | `main` |
 | 39 | 2026-08-25 | Focus branch creation in Composer | `ee3056f` | `main` |
 | 38 | 2026-08-24 | Add Dark Mode Support and Appearance Settings Category | `9307240` | `feat/dark-mode` |

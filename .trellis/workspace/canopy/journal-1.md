@@ -915,3 +915,25 @@ Truncated the rendered conversation path at a pending branch origin, added a loc
 ### Status
 
 [OK] **Completed**
+
+
+## Session 41: 移除侧栏会话树
+
+**Date**: 2026-08-25
+**Task**: 移除侧栏会话树
+**Branch**: `main`
+
+### Summary
+
+移除会话工作区侧栏 OutlineTree，保留历史与操作入口，统一由思维导图查看会话树；同步中英文侧栏文案、组件测试和前端 selector 规范。前端 334 项测试、TypeScript、Lint、构建及 Rust command_boundary 4 项测试通过。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9798b35` | (see git log) |
+| `e81b15c` | (see git log) |
+
+### Status
+
+[OK] **Completed**
