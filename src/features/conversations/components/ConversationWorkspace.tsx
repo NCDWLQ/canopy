@@ -586,7 +586,8 @@ export function ConversationWorkspace({
                 >
                   {store.history.summaries.map((summary) => {
                     const isCurrent =
-                      !isBlankConversation && store.conversationId === summary.id
+                      !isBlankConversation &&
+                      store.conversationId === summary.id
                     const isGenerating = activeRunIds.has(summary.id)
                     return (
                       <li key={summary.id}>
@@ -678,7 +679,9 @@ export function ConversationWorkspace({
                                 </DropdownMenuItem>
                               ) : (
                                 <DropdownMenuItem
-                                  onSelect={() => setPendingArchiveId(summary.id)}
+                                  onSelect={() =>
+                                    setPendingArchiveId(summary.id)
+                                  }
                                 >
                                   <Archive />
                                   {t("conversation.workspace.archive")}
@@ -696,7 +699,7 @@ export function ConversationWorkspace({
                           </DropdownMenu>
                         </div>
                       </li>
-                    );
+                    )
                   })}
                 </ul>
               )}
