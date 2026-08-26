@@ -1,5 +1,5 @@
 import * as React from "react"
-import { SendHorizontal, Square } from "lucide-react"
+import { ArrowUp, Square } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useTranslation } from "@/lib/i18n"
 
@@ -108,18 +108,18 @@ export const Composer = React.forwardRef<ComposerHandle, ComposerProps>(
           {action.kind === "cancel" ? (
             <Button
               size="icon"
-              className="size-8 shrink-0 rounded-full transition-transform active:scale-95"
+              className="size-8 shrink-0 rounded-full"
               type="button"
               title={t("conversation.composer.cancelGeneration")}
               aria-label={t("conversation.composer.cancelGeneration")}
               onClick={action.onCancel}
             >
-              <Square className="size-4" aria-hidden="true" />
+              <Square className="size-3.5 fill-current" aria-hidden="true" />
             </Button>
           ) : (
             <Button
               size="icon"
-              className="size-8 shrink-0 rounded-full transition-transform active:scale-95"
+              className="size-8 shrink-0 rounded-full"
               disabled={
                 inputDisabled ||
                 isSubmitting ||
@@ -130,7 +130,7 @@ export const Composer = React.forwardRef<ComposerHandle, ComposerProps>(
               title={t("conversation.composer.send")}
               aria-label={t("conversation.composer.send")}
             >
-              <SendHorizontal className="size-4" aria-hidden="true" />
+              <ArrowUp className="size-4" aria-hidden="true" />
             </Button>
           )}
         </div>
