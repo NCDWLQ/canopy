@@ -1629,6 +1629,7 @@ describe("ConversationWorkspace", () => {
     expect(providerClient.cancelGeneration).toHaveBeenCalledWith(generationId)
     expect(providerClient.cancelGeneration).toHaveBeenCalledTimes(1)
     expect(menuTrigger).toBeEnabled()
+    expect(menuTrigger).toHaveAttribute("title", "对话操作：Branch proof")
   })
 
   it("archives a non-current history row by ID from the confirm dialog without disturbing the loaded conversation", async () => {
