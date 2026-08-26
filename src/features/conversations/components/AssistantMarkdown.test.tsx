@@ -172,20 +172,59 @@ describe("AssistantMarkdown", () => {
     }
   })
 
-  it("does not create raw HTML or image elements", () => {
+  it("renders allowlisted remote Markdown images with no-referrer", () => {
+    render(
+      <AssistantMarkdown
+        content={`![说明](https://example.com/a.png)
+
+![明文图](http://example.com/b.png)`}
+      />,
+    )
+
+    const httpsImage = screen.getByRole("img", { name: "说明" })
+    expect(httpsImage).toHaveAttribute("src", "https://example.com/a.png")
+    expect(httpsImage).toHaveAttribute("referrerpolicy", "no-referrer")
+
+    const httpImage = screen.getByRole("img", { name: "明文图" })
+    expect(httpImage).toHaveAttribute("src", "http://example.com/b.png")
+    expect(httpImage).toHaveAttribute("referrerpolicy", "no-referrer")
+  })
+
+  it("renders allowlisted remote images while streaming", () => {
+    render(
+      <AssistantMarkdown
+        content={"![流式图](https://example.com/stream.png)"}
+        isStreaming
+      />,
+    )
+
+    const image = screen.getByRole("img", { name: "流式图" })
+    expect(image).toHaveAttribute("src", "https://example.com/stream.png")
+    expect(image).toHaveAttribute("referrerpolicy", "no-referrer")
+  })
+
+  it("blocks unsafe image schemes and raw HTML without creating loadable img", () => {
     const { container } = render(
       <AssistantMarkdown
         content={`<script>globalThis.compromised = true</script>
 
 <button onclick="globalThis.compromised = true">原始按钮</button>
 
-![跟踪像素](https://example.com/tracker.png)`}
+<img src="https://example.com/raw.png" alt="原始图片" />
+
+![数据图](data:image/png;base64,aaaa)
+![文件图](file:///tmp/a.png)
+![脚本图](javascript:alert(1))
+![相对图](./relative.png)`}
       />,
     )
 
     expect(container.querySelector("script")).toBeNull()
     expect(container.querySelector("button[onclick]")).toBeNull()
     expect(container.querySelector("img")).toBeNull()
-    expect(screen.getByText("跟踪像素")).toBeVisible()
+    expect(screen.getByText("数据图")).toBeVisible()
+    expect(screen.getByText("文件图")).toBeVisible()
+    expect(screen.getByText("脚本图")).toBeVisible()
+    expect(screen.getByText("相对图")).toBeVisible()
   })
 })

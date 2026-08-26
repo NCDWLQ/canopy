@@ -41,7 +41,11 @@ const SAFE_REHYPE_PLUGINS = [
     HARDEN_PLUGIN,
     {
       allowedLinkPrefixes: ["*"],
-      allowedImagePrefixes: [],
+      // rehype-harden 1.1.8: scheme-only prefixes like "http://" are Invalid URL
+      // and also require defaultOrigin; "*" is the open http(s) allowlist. Wildcard
+      // can rewrite relative paths — SafeImage still rejects non-absolute http(s).
+      allowedImagePrefixes: ["*"],
+      allowDataImages: false,
       allowedProtocols: ["http:", "https:", "mailto:"],
       linkBlockPolicy: "text-only",
       imageBlockPolicy: "text-only",
@@ -74,7 +78,17 @@ type MarkdownAnchorProps =
   | ComponentProps<"a">
   | (Record<string, unknown> & { children?: ReactNode; href?: unknown })
 type MarkdownImageProps =
-  ComponentProps<"img"> | (Record<string, unknown> & { alt?: unknown })
+  | ComponentProps<"img">
+  | (Record<string, unknown> & { alt?: unknown; src?: unknown })
+
+function isAllowedImageSrc(src: string): boolean {
+  try {
+    const parsedUrl = new URL(src)
+    return parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:"
+  } catch {
+    return false
+  }
+}
 
 function SafeLink(props: MarkdownAnchorProps) {
   const children = props.children
@@ -106,9 +120,22 @@ function SafeLink(props: MarkdownAnchorProps) {
   )
 }
 
-function ImageAltText(props: MarkdownImageProps) {
+function SafeImage(props: MarkdownImageProps) {
   const alt = typeof props.alt === "string" ? props.alt : undefined
-  return alt ? <span>{alt}</span> : null
+  const src = typeof props.src === "string" ? props.src : undefined
+
+  if (src === undefined || !isAllowedImageSrc(src)) {
+    return alt ? <span>{alt}</span> : null
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt ?? ""}
+      className="max-w-full h-auto"
+      referrerPolicy="no-referrer"
+    />
+  )
 }
 
 type MarkdownTableProps =
@@ -138,7 +165,7 @@ function LeanTable(props: MarkdownTableProps) {
 
 const MARKDOWN_COMPONENTS = {
   a: SafeLink,
-  img: ImageAltText,
+  img: SafeImage,
   table: LeanTable,
 } satisfies Components
 

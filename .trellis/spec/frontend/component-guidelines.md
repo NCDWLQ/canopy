@@ -485,8 +485,13 @@ The wrapper must:
 - omit raw-HTML parsing and never use `dangerouslySetInnerHTML`;
 - keep sanitization and URL hardening enabled, with an absolute-URL transform
   restricted to `http:`, `https:`, and `mailto:`;
-- render blocked links as readable non-links and images as alt text without an
-  `img` element or network request;
+- render blocked links as readable non-links; allow Markdown images only for
+  absolute `http:` / `https:` URLs (harden `allowedImagePrefixes: ["*"]` plus
+  a defensive `SafeImage` that rejects non-absolute src; no `allowDataImages`),
+  with `referrerPolicy="no-referrer"` and message-width constraints (`max-w-full`);
+  block `data:` / `file:` / relative / other schemes as alt text without a
+  loadable `img`; keep Tauri CSP `img-src` aligned so remote allowlisted images
+  can load (`http:` / `https:` plus existing shell asset sources);
 - add `target="_blank"` plus `rel="noopener noreferrer"` to allowed links;
 - enable code copy but disable it while streaming, and omit code download and
   table export controls;
@@ -502,9 +507,11 @@ that pin. Asset names or Shiki grammars containing `mermaid` do not prove that
 the Mermaid runtime is installed; check the lockfile/package graph.
 
 Required tests assert GFM semantics, incomplete streamed emphasis/link/code,
-code-copy disabled state, safe and unsafe URL protocols, raw-HTML/image
-blocking, Chinese accessible controls, all three non-assistant roles remaining
-plain text, and transient-to-durable rendering without duplicate content.
+code-copy disabled state, safe and unsafe URL protocols, allowlisted remote
+images (`src`/`alt`/`referrerPolicy="no-referrer"`), blocked unsafe image
+schemes and raw HTML, Chinese accessible controls, all three non-assistant
+roles remaining plain text, and transient-to-durable rendering without
+duplicate content.
 
 ### Design Decision: Workspace-Global Settings Entry
 
