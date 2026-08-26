@@ -21,6 +21,7 @@ import {
   type PanoramaFlowNode,
 } from "../panoramaLayout"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useTranslation } from "@/lib/i18n"
 import { useTheme } from "@/lib/theme"
@@ -109,9 +110,11 @@ function PanoramaNodeCard({ data }: NodeProps<PanoramaFlowNode>) {
         {label}
       </p>
       {data.childCount > 0 && (
-        <button
+        <Button
           type="button"
-          className="absolute -right-3 top-1/2 z-10 flex size-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm outline-none transition-[transform,color,background-color] duration-100 ease-[var(--ease-out)] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring active:scale-90 motion-reduce:active:scale-95 [&_svg]:size-3.5"
+          variant="outline"
+          size="icon-xs"
+          className="absolute -right-3 top-1/2 z-10 -translate-y-1/2 rounded-full text-muted-foreground shadow-sm hover:text-foreground"
           aria-label={t(
             isCollapsed
               ? "conversation.panorama.expandBranch"
@@ -128,11 +131,11 @@ function PanoramaNodeCard({ data }: NodeProps<PanoramaFlowNode>) {
           }}
         >
           {isCollapsed ? (
-            <Plus aria-hidden="true" />
+            <Plus className="size-3.5" aria-hidden="true" />
           ) : (
-            <Minus aria-hidden="true" />
+            <Minus className="size-3.5" aria-hidden="true" />
           )}
-        </button>
+        </Button>
       )}
     </div>
   )
