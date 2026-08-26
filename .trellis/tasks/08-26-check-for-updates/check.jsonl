@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/hook-guidelines.md","reason":"Check the request lifecycle, duplicate-click protection, retry behavior, and absence of raw invoke logic in the UI boundary."}
+{"file":".trellis/spec/frontend/i18n-guidelines.md","reason":"Check both locale dictionaries, typed keys, localized error states, and no hard-coded user-visible copy."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Check loading/error/retry behavior, malformed external data handling, focused tests, and frontend quality gates."}
+{"file":".trellis/spec/backend/app-capabilities.md","reason":"Check the CSP change is narrowly scoped and no unnecessary updater or OS permissions were introduced."}
+{"file":".trellis/tasks/08-26-check-for-updates/research/update-check-design.md","reason":"Check implementation remains within the manual GitHub-release lookup scope and does not drift into signed in-app updates."}

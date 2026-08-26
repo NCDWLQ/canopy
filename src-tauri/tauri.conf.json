@@ -23,7 +23,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; font-src 'self' data:; img-src 'self' asset: http://asset.localhost data:; object-src 'none'; style-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost https://api.github.com; font-src 'self' data:; img-src 'self' asset: http://asset.localhost data:; object-src 'none'; style-src 'self' 'unsafe-inline'"
     }
   },
   "plugins": {

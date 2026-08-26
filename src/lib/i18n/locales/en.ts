@@ -229,6 +229,22 @@ export const en = {
   "settings.general.languageZhCn": "简体中文",
   "settings.general.languageEn": "English",
   "settings.general.updateFailed": "Language setting was not saved",
+  "settings.general.version": "Current version",
+  "settings.general.versionDescription": ({ version }: { version: string }) =>
+    version,
+  "settings.general.versionUnavailable": "Unavailable",
+  "settings.general.updateCheck": "Check for updates",
+  "settings.general.updateCheckingStatus": ({ version }: { version: string }) =>
+    `${version} · Checking for updates…`,
+  "settings.general.updateCheckResult": "Update check result",
+  "settings.general.updateUpToDate": ({ version }: { version: string }) =>
+    `You're up to date (${version})`,
+  "settings.general.updateAvailable": ({ version }: { version: string }) =>
+    `Version ${version} is available`,
+  "settings.general.openReleasePage": "Open release page",
+  "settings.general.updateCheckFailed": ({ version }: { version: string }) =>
+    `${version} · Couldn't check for updates. Try again.`,
+  "settings.general.retryUpdateCheck": "Retry",
 
   // AppearanceSettingsPanel.tsx
   "settings.appearance.title": "Appearance",

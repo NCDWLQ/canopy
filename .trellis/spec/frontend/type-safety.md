@@ -50,6 +50,113 @@ payloads. Schemas must validate:
 Malformed or unknown error payloads normalize to a safe, non-retryable
 `internal` error. Components never parse error messages for control flow.
 
+## Scenario: Public Release Update-Check Boundary
+
+### 1. Scope / Trigger
+
+Use this contract when a frontend feature reads a public release API to show
+whether the installed desktop version is current. The owning files are
+`src/lib/updates/`, `src/features/settings/hooks/useUpdateCheck.ts`, and the
+General settings UI. This is a read-only external API boundary; it does not
+add a Tauri updater command, download, install, or restart flow.
+
+### 2. Signatures
+
+```ts
+type UpdateCheckClient = {
+  getCurrentVersion(): Promise<string>
+  check(): Promise<
+    | { kind: "up-to-date"; currentVersion: string }
+    | {
+        kind: "available"
+        currentVersion: string
+        latestVersion: string
+      }
+  >
+  openReleasePage(): Promise<void>
+}
+
+parseStableVersion(value: unknown): string | null
+decodeLatestRelease(value: unknown): string | null
+createUpdateClient(dependencies?: UpdateClientDependencies): UpdateCheckClient
+```
+
+### 3. Contracts
+
+- `check()` reads the local version through `@tauri-apps/api/app` and sends a
+  `GET` request to
+  `https://api.github.com/repos/NCDWLQ/canopy/releases/latest` with the
+  `Accept: application/vnd.github+json` header.
+- A release payload must contain `tag_name`, `draft: false`, and
+  `prerelease: false`. Only `v?major.minor.patch` stable tags are accepted;
+  the result exposes normalized versions without the leading `v`.
+- `openReleasePage()` opens the fixed
+  `https://github.com/NCDWLQ/canopy/releases/latest` URL through the existing
+  opener capability. Never pass a provider-returned URL directly to the
+  opener.
+- The client returns only the discriminated result union. Network failures,
+  non-2xx responses, invalid JSON, malformed releases, and invalid local
+  versions become `UpdateCheckError`; raw response bodies and provider error
+  messages never cross into components.
+- The hook owns `idle`, `loading`, result, and `error` states, suppresses
+  duplicate checks while one is active, and exposes retry by reusing `check()`.
+
+### 4. Validation & Error Matrix
+
+| Condition | Frontend result |
+|---|---|
+| Stable local version and valid stable release | normalized `up-to-date` or `available` result |
+| Draft or pre-release release | safe `UpdateCheckError`; no update is shown |
+| Missing/invalid `tag_name`, malformed payload, or invalid local version | safe `UpdateCheckError`; no guessed version |
+| Network rejection, invalid JSON, or non-2xx response | safe `UpdateCheckError`; UI shows localized retry copy |
+| Release version is equal to or older than local version | `up-to-date`; never offer a downgrade |
+| Release-page opener rejects | keep the fixed URL boundary; do not expose the native error text |
+
+### 5. Good / Base / Bad Cases
+
+- **Good**: decode `{ tag_name: "v0.4.0", draft: false, prerelease: false }`,
+  compare it with `0.3.1`, and render an available result with a button for the
+  fixed release page.
+- **Base**: a valid `0.3.1` release produces `up-to-date`, while the UI keeps
+  the manual check action available after completion.
+- **Bad**: trust `html_url`, accept `latest` or `0.4.0-rc.1`, show a GitHub
+  response body, or start a second request from a duplicate click.
+
+### 6. Tests Required
+
+- Pure decoder tests must cover `v` normalization, strict numeric segments,
+  pre-release rejection, draft/pre-release flags, missing fields, and invalid
+  payload types.
+- Client tests must assert the exact API URL and header, successful equal/newer
+  result mapping, no request for an invalid local version, network/non-2xx/JSON
+  failures, and the fixed release-page URL.
+- Hook/component tests must assert current-version rendering, loading/disabled
+  behavior, duplicate-click suppression, localized up-to-date/available/error
+  states, retry, and release-page callback invocation without raw error text.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```tsx
+const response = await fetch("https://api.github.com/...")
+const release = await response.json()
+window.open(release.html_url)
+```
+
+The component owns transport, trusts an unknown payload, and opens an
+unvalidated provider URL.
+
+#### Correct
+
+```tsx
+const { state, check, openReleasePage } = useUpdateCheck()
+// render only the typed state; invoke the fixed release-page action on click
+```
+
+The update client validates the external contract once, the hook owns request
+state, and the component receives only typed, localized-safe outcomes.
+
 ## Scenario: Typed Conversation IPC Boundary
 
 ### 1. Scope / Trigger
