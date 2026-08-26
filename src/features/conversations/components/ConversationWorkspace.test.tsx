@@ -1682,9 +1682,7 @@ describe("ConversationWorkspace", () => {
     expect(selectButton.contains(menuTrigger)).toBe(false)
     expect(menuTrigger.contains(selectButton)).toBe(false)
     // Hover/focus reveal without layout shift. Vertical centering uses
-    // inset-y-0 + my-auto: a -translate-y-1/2 here would be overridden by
-    // Button's active:translate-y-px (both set the `translate` property in
-    // Tailwind v4), making the icon jump ~half its height on press.
+    // inset-y-0 + my-auto for clean alignment within the row height.
     // The open-state selector keeps the trigger visible while its portaled
     // menu is open — group-hover ends once the pointer leaves the row.
     expect(menuTrigger).toHaveClass(
