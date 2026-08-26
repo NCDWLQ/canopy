@@ -33,8 +33,7 @@ import { useTheme } from "@/lib/theme"
 
 import "@xyflow/react/dist/style.css"
 
-// The canvas is a visual branch overview; the OutlineTree remains the
-// keyboard-accessible navigation surface for the same tree.
+// The canvas is a visual branch overview of the conversation tree.
 function RoleIcon({ role }: { role: TreeNodeView["role"] }) {
   switch (role) {
     case "user":

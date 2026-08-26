@@ -1,4 +1,3 @@
-export * from "./OutlineTree"
 export * from "./ConversationPanorama"
 export * from "./MessageNode"
 export * from "./ConversationPane"
