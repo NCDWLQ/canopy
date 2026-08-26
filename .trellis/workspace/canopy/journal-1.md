@@ -1063,3 +1063,24 @@ Allowed http(s) Markdown images in assistant messages with SafeImage, no-referre
 ### Status
 
 [OK] **Completed**
+
+
+## Session 48: Manual check for updates
+
+**Date**: 2026-08-26
+**Task**: Manual check for updates
+**Branch**: `main`
+
+### Summary
+
+Shipped settings-based manual update check via GitHub Releases API: version display, four result states, opener to releases/latest, CSP connect-src for api.github.com; PRD ACs met; task left in_progress until this cleanup archive.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b7286bd` | (see git log) |
+
+### Status
+
+[OK] **Completed**
