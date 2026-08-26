@@ -1,0 +1,4 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "AssistantMarkdown security and rendering contract to update"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend quality bar while editing components/tests"}
+{"file": ".trellis/tasks/08-26-assistant-markdown-images/research/image-allowlist-csp.md", "reason": "Harden API and CSP constraints for remote images"}
