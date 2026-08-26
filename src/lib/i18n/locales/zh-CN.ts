@@ -224,6 +224,22 @@ export const zhCN = {
   "settings.general.languageZhCn": "简体中文",
   "settings.general.languageEn": "English",
   "settings.general.updateFailed": "语言设置未保存",
+  "settings.general.version": "当前版本",
+  "settings.general.versionDescription": ({ version }: { version: string }) =>
+    version,
+  "settings.general.versionUnavailable": "不可用",
+  "settings.general.updateCheck": "检查更新",
+  "settings.general.updateCheckingStatus": ({ version }: { version: string }) =>
+    `${version} · 正在检查更新…`,
+  "settings.general.updateCheckResult": "更新检查结果",
+  "settings.general.updateUpToDate": ({ version }: { version: string }) =>
+    `已是最新版本（${version}）`,
+  "settings.general.updateAvailable": ({ version }: { version: string }) =>
+    `发现新版本 ${version}`,
+  "settings.general.openReleasePage": "打开发布页面",
+  "settings.general.updateCheckFailed": ({ version }: { version: string }) =>
+    `${version} · 检查更新失败，请重试`,
+  "settings.general.retryUpdateCheck": "重试",
 
   // AppearanceSettingsPanel.tsx
   "settings.appearance.title": "外观",

@@ -2,6 +2,14 @@ import { act, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
+const updateClient = vi.hoisted(() => ({
+  getCurrentVersion: vi.fn().mockResolvedValue("0.3.1"),
+  check: vi.fn(),
+  openReleasePage: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock("@/lib/updates/client", () => ({ updateClient }))
+
 import { GeneralSettingsPanel } from "./GeneralSettingsPanel"
 import { useProviderStore } from "@/features/providers/store"
 import type { ProviderView } from "@/features/providers/types"
@@ -52,6 +60,11 @@ describe("GeneralSettingsPanel", () => {
     Element.prototype.releasePointerCapture = () => {}
     Element.prototype.scrollIntoView = () => {}
     useLocaleStore.getState().setLocale("zh-CN")
+    updateClient.getCurrentVersion.mockReset()
+    updateClient.getCurrentVersion.mockResolvedValue("0.3.1")
+    updateClient.check.mockReset()
+    updateClient.openReleasePage.mockReset()
+    updateClient.openReleasePage.mockResolvedValue(undefined)
     useProviderStore.setState({
       phase: "ready",
       providers: [provider],
@@ -62,7 +75,7 @@ describe("GeneralSettingsPanel", () => {
     })
   })
 
-  it("shows the current persisted language preference", () => {
+  it("shows the current persisted language preference", async () => {
     useProviderStore.setState({ language: "en" })
     render(
       <GeneralSettingsPanel
@@ -71,9 +84,86 @@ describe("GeneralSettingsPanel", () => {
       />,
     )
 
+    await screen.findByText("v0.3.1")
     expect(screen.getByRole("combobox", { name: "语言" })).toHaveTextContent(
       "English",
     )
+  })
+
+  it("shows the current app version and manual check states", async () => {
+    const user = userEvent.setup()
+    let resolveCheck: ((value: unknown) => void) | undefined
+    updateClient.check.mockReturnValue(
+      new Promise((resolve) => {
+        resolveCheck = resolve
+      }),
+    )
+    render(
+      <GeneralSettingsPanel
+        client={client() as ProviderClient}
+        readOnly={false}
+      />,
+    )
+
+    expect(await screen.findByText("v0.3.1")).toBeVisible()
+    const checkButton = screen.getByRole("button", { name: "检查更新" })
+    await user.click(checkButton)
+    expect(checkButton).toBeDisabled()
+    expect(
+      screen.getByRole("status", { name: "更新检查结果" }),
+    ).toHaveTextContent("v0.3.1 · 正在检查更新…")
+    await user.click(checkButton)
+    expect(updateClient.check).toHaveBeenCalledTimes(1)
+
+    act(() => {
+      resolveCheck?.({ kind: "up-to-date", currentVersion: "0.3.1" })
+    })
+    expect(
+      await screen.findByRole("status", { name: "更新检查结果" }),
+    ).toHaveTextContent("已是最新版本（v0.3.1）")
+  })
+
+  it("shows an available version and opens the fixed release page action", async () => {
+    const user = userEvent.setup()
+    updateClient.check.mockResolvedValue({
+      kind: "available",
+      currentVersion: "0.3.1",
+      latestVersion: "0.4.0",
+    })
+    render(
+      <GeneralSettingsPanel client={client() as ProviderClient} readOnly />,
+    )
+
+    await user.click(screen.getByRole("button", { name: "检查更新" }))
+    expect(
+      await screen.findByRole("status", { name: "更新检查结果" }),
+    ).toHaveTextContent("发现新版本 v0.4.0")
+    await user.click(screen.getByRole("button", { name: "打开发布页面" }))
+    expect(updateClient.openReleasePage).toHaveBeenCalledTimes(1)
+  })
+
+  it("keeps the failure copy local and lets the user retry", async () => {
+    const user = userEvent.setup()
+    updateClient.check
+      .mockRejectedValueOnce(new Error("raw GitHub response"))
+      .mockResolvedValueOnce({ kind: "up-to-date", currentVersion: "0.3.1" })
+    render(
+      <GeneralSettingsPanel
+        client={client() as ProviderClient}
+        readOnly={false}
+      />,
+    )
+
+    await user.click(screen.getByRole("button", { name: "检查更新" }))
+    const failureStatus = await screen.findByRole("status", {
+      name: "更新检查结果",
+    })
+    expect(failureStatus).toHaveTextContent("v0.3.1 · 检查更新失败，请重试")
+    expect(failureStatus).not.toHaveTextContent("raw GitHub response")
+    await user.click(screen.getByRole("button", { name: "重试" }))
+    expect(
+      await screen.findByRole("status", { name: "更新检查结果" }),
+    ).toHaveTextContent("已是最新版本（v0.3.1）")
   })
 
   it("persists an explicit language selection and switches the UI locale", async () => {
@@ -169,15 +259,16 @@ describe("GeneralSettingsPanel", () => {
     expect(useLocaleStore.getState().locale).toBe("zh-CN")
   })
 
-  it("disables the language control while read-only", () => {
+  it("disables the language control while read-only", async () => {
     render(
       <GeneralSettingsPanel client={client() as ProviderClient} readOnly />,
     )
 
+    await screen.findByText("v0.3.1")
     expect(screen.getByRole("combobox", { name: "语言" })).toBeDisabled()
   })
 
-  it("reloads nothing on its own; switching locale retranslates labels", () => {
+  it("reloads nothing on its own; switching locale retranslates labels", async () => {
     const bridge = client()
     render(
       <GeneralSettingsPanel
@@ -186,6 +277,7 @@ describe("GeneralSettingsPanel", () => {
       />,
     )
 
+    await screen.findByText("v0.3.1")
     expect(bridge.listProviders).not.toHaveBeenCalled()
     act(() => {
       useLocaleStore.getState().setLocale("en")

@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/hook-guidelines.md","reason":"Keep the update request lifecycle in an owned feature boundary with explicit async, stale, and loading behavior."}
+{"file":".trellis/spec/frontend/i18n-guidelines.md","reason":"Add typed bilingual version, update-state, retry, and accessibility copy with zh-CN as the source dictionary."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Follow typed boundary, fail-closed validation, accessible behavioral tests, and frontend validation requirements."}
+{"file":".trellis/spec/backend/app-capabilities.md","reason":"Preserve narrow Tauri capability/CSP permissions and reuse opener without broadening OS access."}
+{"file":".trellis/tasks/08-26-check-for-updates/research/update-check-design.md","reason":"Decision record for GitHub Releases API versus Tauri updater and the approved manual-check boundary."}
