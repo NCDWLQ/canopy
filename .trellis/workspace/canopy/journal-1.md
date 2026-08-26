@@ -1042,3 +1042,24 @@ Installed @fontsource-variable/geist-mono, configured cross-platform CJK font fa
 ### Status
 
 [OK] **Completed**
+
+
+## Session 47: Assistant markdown remote images
+
+**Date**: 2026-08-26
+**Task**: Assistant markdown remote images
+**Branch**: `main`
+
+### Summary
+
+Allowed http(s) Markdown images in assistant messages with SafeImage, no-referrer, and Tauri CSP img-src; blocked unsafe schemes; updated tests and component guidelines.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4b31ca3` | (see git log) |
+
+### Status
+
+[OK] **Completed**
