@@ -151,7 +151,7 @@ export const Composer = React.forwardRef<ComposerHandle, ComposerProps>(
               </TooltipTrigger>
               <TooltipContent>
                 <span>{t("conversation.composer.send")}</span>
-                <Kbd>↵</Kbd>
+                <Kbd>Enter</Kbd>
               </TooltipContent>
             </Tooltip>
           )}
