@@ -68,6 +68,7 @@ export const zhCN = {
   "conversation.workspace.archiveConfirmAction": "归档",
   "conversation.workspace.conversationMenu": ({ title }: { title: string }) =>
     `对话操作：${title}`,
+  "conversation.workspace.moreActions": "更多操作",
   "conversation.workspace.rename": "重命名",
   "conversation.workspace.unarchive": "取消归档",
   "conversation.workspace.renameDialogTitle": "重命名对话",

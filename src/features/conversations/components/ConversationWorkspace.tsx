@@ -636,29 +636,30 @@ export function ConversationWorkspace({
                             )}
                           </button>
                           <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="absolute inset-y-0 right-1 my-auto size-7 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 data-[state=open]:opacity-100 hover:text-foreground"
-                                aria-label={t(
-                                  "conversation.workspace.conversationMenu",
-                                  { title: summary.title },
-                                )}
-                                title={t(
-                                  "conversation.workspace.conversationMenu",
-                                  {
-                                    title: summary.title,
-                                  },
-                                )}
-                              >
-                                <MoreHorizontal
-                                  className="size-3.5"
-                                  aria-hidden="true"
-                                />
-                              </Button>
-                            </DropdownMenuTrigger>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="absolute inset-y-0 right-1 my-auto size-7 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 data-[state=open]:opacity-100 hover:text-foreground"
+                                    aria-label={t(
+                                      "conversation.workspace.conversationMenu",
+                                      { title: summary.title },
+                                    )}
+                                  >
+                                    <MoreHorizontal
+                                      className="size-3.5"
+                                      aria-hidden="true"
+                                    />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {t("conversation.workspace.moreActions")}
+                              </TooltipContent>
+                            </Tooltip>
                             <DropdownMenuContent
                               align="end"
                               className="w-auto min-w-40"

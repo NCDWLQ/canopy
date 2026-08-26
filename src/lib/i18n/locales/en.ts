@@ -68,6 +68,7 @@ export const en = {
   "conversation.workspace.archiveConfirmAction": "Archive",
   "conversation.workspace.conversationMenu": ({ title }: { title: string }) =>
     `Conversation actions: ${title}`,
+  "conversation.workspace.moreActions": "More actions",
   "conversation.workspace.rename": "Rename",
   "conversation.workspace.unarchive": "Unarchive",
   "conversation.workspace.renameDialogTitle": "Rename conversation",
