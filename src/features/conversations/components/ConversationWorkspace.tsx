@@ -646,12 +646,6 @@ export function ConversationWorkspace({
                                   "conversation.workspace.conversationMenu",
                                   { title: summary.title },
                                 )}
-                                title={t(
-                                  "conversation.workspace.conversationMenu",
-                                  {
-                                    title: summary.title,
-                                  },
-                                )}
                               >
                                 <MoreHorizontal
                                   className="size-3.5"
