@@ -160,7 +160,6 @@ describe("MessageNode", () => {
     const branchBtn = screen.getByRole("button", { name: "从此处创建分支" })
     const copyBtn = screen.getByRole("button", { name: "复制" })
     expect(regenBtn).toBeVisible()
-    expect(regenBtn).toHaveAttribute("title", "重新生成")
     expect(regenBtn).toHaveAttribute("aria-label", "重新生成")
     expect(regenBtn).toHaveAttribute("data-variant", "ghost")
     expect(regenBtn).toHaveAttribute("data-size", "icon")
@@ -303,7 +302,6 @@ describe("MessageNode", () => {
 
     const exportBtn = screen.getByRole("button", { name: "导出对话至该消息" })
     expect(exportBtn).toBeVisible()
-    expect(exportBtn).toHaveAttribute("title", "导出对话至该消息")
     expect(exportBtn).toHaveAttribute("data-variant", "ghost")
     expect(exportBtn).toHaveAttribute("data-size", "icon")
     expect(exportBtn).toHaveClass(

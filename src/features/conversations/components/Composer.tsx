@@ -1,6 +1,12 @@
 import * as React from "react"
 import { ArrowUp, Square } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Kbd } from "@/components/ui/kbd"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { useTranslation } from "@/lib/i18n"
 
 export type ComposerAction =
@@ -106,32 +112,48 @@ export const Composer = React.forwardRef<ComposerHandle, ComposerProps>(
             className="max-h-[200px] w-full resize-none border-none bg-transparent px-3 py-1.5 text-sm leading-5 text-foreground outline-none placeholder:text-muted-foreground/70 disabled:opacity-50"
           />
           {action.kind === "cancel" ? (
-            <Button
-              size="icon"
-              className="size-8 shrink-0 rounded-full"
-              type="button"
-              title={t("conversation.composer.cancelGeneration")}
-              aria-label={t("conversation.composer.cancelGeneration")}
-              onClick={action.onCancel}
-            >
-              <Square className="size-3.5 fill-current" aria-hidden="true" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="icon"
+                  className="size-8 shrink-0 rounded-full"
+                  type="button"
+                  aria-label={t("conversation.composer.cancelGeneration")}
+                  onClick={action.onCancel}
+                >
+                  <Square
+                    className="size-3.5 fill-current"
+                    aria-hidden="true"
+                  />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {t("conversation.composer.cancelGeneration")}
+              </TooltipContent>
+            </Tooltip>
           ) : (
-            <Button
-              size="icon"
-              className="size-8 shrink-0 rounded-full"
-              disabled={
-                inputDisabled ||
-                isSubmitting ||
-                action.disabled ||
-                !content.trim()
-              }
-              type="submit"
-              title={t("conversation.composer.send")}
-              aria-label={t("conversation.composer.send")}
-            >
-              <ArrowUp className="size-4" aria-hidden="true" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="icon"
+                  className="size-8 shrink-0 rounded-full"
+                  disabled={
+                    inputDisabled ||
+                    isSubmitting ||
+                    action.disabled ||
+                    !content.trim()
+                  }
+                  type="submit"
+                  aria-label={t("conversation.composer.send")}
+                >
+                  <ArrowUp className="size-4" aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <span>{t("conversation.composer.send")}</span>
+                <Kbd>↵</Kbd>
+              </TooltipContent>
+            </Tooltip>
           )}
         </div>
       </form>

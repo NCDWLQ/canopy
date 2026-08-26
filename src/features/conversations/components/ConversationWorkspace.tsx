@@ -56,7 +56,6 @@ import {
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import {
@@ -539,44 +538,40 @@ export function ConversationWorkspace({
           <div className="flex h-12 shrink-0 items-center justify-between gap-2 px-3 text-sm font-semibold">
             <span className="font-bold tracking-tight">Canopy</span>
             <div className="flex items-center gap-1">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="size-8"
-                      aria-label={t("search.openButton")}
-                      title={t("search.openButton")}
-                      disabled={store.history.summaries.length === 0}
-                      onClick={() => setIsSearchOpen(true)}
-                    >
-                      <Search className="size-4" aria-hidden="true" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>{t("search.openButton")}</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="size-8"
-                      aria-label={t("conversation.workspace.newConversation")}
-                      title={t("conversation.workspace.newConversation")}
-                      disabled={store.status === "loading"}
-                      onClick={store.enterConversationCreation}
-                    >
-                      <SquarePen className="size-4" aria-hidden="true" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {t("conversation.workspace.newConversation")}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-8"
+                    aria-label={t("search.openButton")}
+                    disabled={store.history.summaries.length === 0}
+                    onClick={() => setIsSearchOpen(true)}
+                  >
+                    <Search className="size-4" aria-hidden="true" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t("search.openButton")}</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-8"
+                    aria-label={t("conversation.workspace.newConversation")}
+                    disabled={store.status === "loading"}
+                    onClick={store.enterConversationCreation}
+                  >
+                    <SquarePen className="size-4" aria-hidden="true" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {t("conversation.workspace.newConversation")}
+                </TooltipContent>
+              </Tooltip>
             </div>
           </div>
           <div
@@ -778,52 +773,53 @@ export function ConversationWorkspace({
       <div className="relative flex min-w-0 flex-1 flex-col bg-background">
         <header className="z-10 flex h-12 shrink-0 items-center justify-between border-b bg-background px-4">
           <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8"
-              onClick={() => setIsSidebarOpen((isOpen) => !isOpen)}
-              title={
-                isSidebarOpen
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8"
+                  onClick={() => setIsSidebarOpen((isOpen) => !isOpen)}
+                  aria-label={
+                    isSidebarOpen
+                      ? t("conversation.workspace.collapseSidebar")
+                      : t("conversation.workspace.expandSidebar")
+                  }
+                  aria-expanded={isSidebarOpen}
+                  aria-controls="conversation-tree-sidebar"
+                >
+                  {isSidebarOpen ? (
+                    <PanelLeftClose aria-hidden="true" />
+                  ) : (
+                    <PanelLeftOpen aria-hidden="true" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {isSidebarOpen
                   ? t("conversation.workspace.collapseSidebar")
-                  : t("conversation.workspace.expandSidebar")
-              }
-              aria-label={
-                isSidebarOpen
-                  ? t("conversation.workspace.collapseSidebar")
-                  : t("conversation.workspace.expandSidebar")
-              }
-              aria-expanded={isSidebarOpen}
-              aria-controls="conversation-tree-sidebar"
-            >
-              {isSidebarOpen ? (
-                <PanelLeftClose aria-hidden="true" />
-              ) : (
-                <PanelLeftOpen aria-hidden="true" />
-              )}
-            </Button>
+                  : t("conversation.workspace.expandSidebar")}
+              </TooltipContent>
+            </Tooltip>
             {!isSidebarOpen && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="size-8"
-                      aria-label={t("conversation.workspace.newConversation")}
-                      title={t("conversation.workspace.newConversation")}
-                      disabled={store.status === "loading"}
-                      onClick={store.enterConversationCreation}
-                    >
-                      <SquarePen className="size-4" aria-hidden="true" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {t("conversation.workspace.newConversation")}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-8"
+                    aria-label={t("conversation.workspace.newConversation")}
+                    disabled={store.status === "loading"}
+                    onClick={store.enterConversationCreation}
+                  >
+                    <SquarePen className="size-4" aria-hidden="true" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {t("conversation.workspace.newConversation")}
+                </TooltipContent>
+              </Tooltip>
             )}
             {!isBlankConversation && store.isArchived && (
               <Badge variant="secondary">
@@ -859,28 +855,25 @@ export function ConversationWorkspace({
             )}
           </div>
           {!isBlankConversation && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="size-8"
-                    aria-label={t("conversation.panorama.toggleView")}
-                    title={t("conversation.panorama.toggleView")}
-                    aria-pressed={isPanoramaOpen}
-                    disabled={store.status === "loading"}
-                    onClick={() => setIsPanoramaOpen((isOpen) => !isOpen)}
-                  >
-                    <Waypoints className="size-4" aria-hidden="true" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {t("conversation.panorama.toggleView")}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-8"
+                  aria-label={t("conversation.panorama.toggleView")}
+                  aria-pressed={isPanoramaOpen}
+                  disabled={store.status === "loading"}
+                  onClick={() => setIsPanoramaOpen((isOpen) => !isOpen)}
+                >
+                  <Waypoints className="size-4" aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {t("conversation.panorama.toggleView")}
+              </TooltipContent>
+            </Tooltip>
           )}
         </header>
 

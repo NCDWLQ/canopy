@@ -159,7 +159,6 @@ describe("ConversationPane", () => {
 
     const regenerateBtn = screen.getByRole("button", { name: "重新生成" })
     expect(regenerateBtn).toBeVisible()
-    expect(regenerateBtn).toHaveAttribute("title", "重新生成")
     expect(regenerateBtn).toHaveAttribute("aria-label", "重新生成")
     expect(regenerateBtn).toHaveAttribute("data-variant", "ghost")
     expect(regenerateBtn).toHaveAttribute("data-size", "icon")
@@ -198,7 +197,6 @@ describe("ConversationPane", () => {
     expect(screen.getByText("回复失败")).toBeVisible()
     const regenerateBtn = screen.getByRole("button", { name: "重新生成" })
     expect(regenerateBtn).toBeVisible()
-    expect(regenerateBtn).toHaveAttribute("title", "重新生成")
     expect(regenerateBtn).toHaveAttribute("aria-label", "重新生成")
     expect(regenerateBtn).toHaveAttribute("data-variant", "ghost")
     expect(regenerateBtn).toHaveAttribute("data-size", "icon")
@@ -239,7 +237,6 @@ describe("ConversationPane", () => {
     expect(buttons).toHaveLength(1)
     const regenBtn = buttons[0]!
     expect(regenBtn).toBeVisible()
-    expect(regenBtn).toHaveAttribute("title", "重新生成")
 
     const finalAssistantArticle = screen
       .getByText(assistant2.content)

@@ -2603,7 +2603,6 @@ describe("ConversationWorkspace", () => {
       name: "重新生成",
     })
     expect(regenBtn).toBeVisible()
-    expect(regenBtn).toHaveAttribute("title", "重新生成")
     expect(regenBtn).toHaveAttribute("aria-label", "重新生成")
     expect(regenBtn).toHaveAttribute("data-variant", "ghost")
     expect(regenBtn).toHaveAttribute("data-size", "icon")

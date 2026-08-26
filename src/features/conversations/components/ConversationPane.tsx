@@ -10,6 +10,11 @@ import {
 } from "./MessageNode"
 import { Button } from "@/components/ui/button"
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { AlertCircle, GitBranch, RefreshCw } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import { commandErrorMessage, useTranslation } from "@/lib/i18n"
@@ -76,30 +81,38 @@ function TransientGenerationMessage({
         ? t("conversation.pane.generationFailed")
         : t("conversation.pane.persistFailed")
     action = (
-      <Button
-        variant="ghost"
-        size="icon"
-        className="size-7 text-muted-foreground hover:text-foreground"
-        title={t("conversation.pane.regenerate")}
-        aria-label={t("conversation.pane.regenerate")}
-        onClick={onRegenerate}
-      >
-        <RefreshCw className="size-3.5" aria-hidden="true" />
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7 text-muted-foreground hover:text-foreground"
+            aria-label={t("conversation.pane.regenerate")}
+            onClick={onRegenerate}
+          >
+            <RefreshCw className="size-3.5" aria-hidden="true" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{t("conversation.pane.regenerate")}</TooltipContent>
+      </Tooltip>
     )
   } else if (generation.phase === "cancelled") {
     status = t("conversation.pane.replyStopped")
     action = (
-      <Button
-        variant="ghost"
-        size="icon"
-        className="size-7 text-muted-foreground hover:text-foreground"
-        title={t("conversation.pane.regenerate")}
-        aria-label={t("conversation.pane.regenerate")}
-        onClick={onRegenerate}
-      >
-        <RefreshCw className="size-3.5" aria-hidden="true" />
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7 text-muted-foreground hover:text-foreground"
+            aria-label={t("conversation.pane.regenerate")}
+            onClick={onRegenerate}
+          >
+            <RefreshCw className="size-3.5" aria-hidden="true" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{t("conversation.pane.regenerate")}</TooltipContent>
+      </Tooltip>
     )
   }
 

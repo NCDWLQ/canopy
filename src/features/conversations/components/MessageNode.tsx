@@ -22,6 +22,11 @@ import {
 import { HighlightedText } from "./HighlightedText"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { useTranslation } from "@/lib/i18n"
 
 export type UserGenerationAction =
@@ -251,84 +256,112 @@ export function MessageNode({
         hasActions ? (
           <>
             {regenerationAction !== undefined && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7 text-muted-foreground hover:text-foreground"
-                title={t("conversation.message.regenerate")}
-                aria-label={t("conversation.message.regenerate")}
-                onClick={() =>
-                  regenerationAction.onSelect(
-                    regenerationAction.assistantNodeId,
-                  )
-                }
-              >
-                <RefreshCw className="size-3.5" aria-hidden="true" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7 text-muted-foreground hover:text-foreground"
+                    aria-label={t("conversation.message.regenerate")}
+                    onClick={() =>
+                      regenerationAction.onSelect(
+                        regenerationAction.assistantNodeId,
+                      )
+                    }
+                  >
+                    <RefreshCw className="size-3.5" aria-hidden="true" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {t("conversation.message.regenerate")}
+                </TooltipContent>
+              </Tooltip>
             )}
             {canEdit && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7 text-muted-foreground hover:text-foreground"
-                title={t("conversation.message.editAsBranch")}
-                aria-label={t("conversation.message.editAsBranch")}
-                onClick={() => {
-                  setEditContent(message.content)
-                  setIsEditing(true)
-                }}
-              >
-                <Edit2 className="size-3.5" aria-hidden="true" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7 text-muted-foreground hover:text-foreground"
+                    aria-label={t("conversation.message.editAsBranch")}
+                    onClick={() => {
+                      setEditContent(message.content)
+                      setIsEditing(true)
+                    }}
+                  >
+                    <Edit2 className="size-3.5" aria-hidden="true" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {t("conversation.message.editAsBranch")}
+                </TooltipContent>
+              </Tooltip>
             )}
             {canBranch && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7 text-muted-foreground hover:text-foreground"
-                title={t("conversation.message.branchFromHere")}
-                aria-label={t("conversation.message.branchFromHere")}
-                onClick={() => onCreateBranch(message.id)}
-              >
-                <GitBranch className="size-3.5" aria-hidden="true" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7 text-muted-foreground hover:text-foreground"
+                    aria-label={t("conversation.message.branchFromHere")}
+                    onClick={() => onCreateBranch(message.id)}
+                  >
+                    <GitBranch className="size-3.5" aria-hidden="true" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {t("conversation.message.branchFromHere")}
+                </TooltipContent>
+              </Tooltip>
             )}
             {canCopy && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7 text-muted-foreground hover:text-foreground"
-                title={
-                  isCopied
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7 text-muted-foreground hover:text-foreground"
+                    aria-label={
+                      isCopied
+                        ? t("conversation.message.copied")
+                        : t("conversation.message.copy")
+                    }
+                    onClick={handleCopy}
+                  >
+                    {isCopied ? (
+                      <Check className="size-3.5" aria-hidden="true" />
+                    ) : (
+                      <Copy className="size-3.5" aria-hidden="true" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {isCopied
                     ? t("conversation.message.copied")
-                    : t("conversation.message.copy")
-                }
-                aria-label={
-                  isCopied
-                    ? t("conversation.message.copied")
-                    : t("conversation.message.copy")
-                }
-                onClick={handleCopy}
-              >
-                {isCopied ? (
-                  <Check className="size-3.5" aria-hidden="true" />
-                ) : (
-                  <Copy className="size-3.5" aria-hidden="true" />
-                )}
-              </Button>
+                    : t("conversation.message.copy")}
+                </TooltipContent>
+              </Tooltip>
             )}
             {canExport && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7 text-muted-foreground hover:text-foreground"
-                title={t("conversation.message.export")}
-                aria-label={t("conversation.message.export")}
-                disabled={exportDisabled}
-                onClick={() => onExportMessage?.(message.id)}
-              >
-                <ExternalLink className="size-3.5" aria-hidden="true" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7 text-muted-foreground hover:text-foreground"
+                    aria-label={t("conversation.message.export")}
+                    disabled={exportDisabled}
+                    onClick={() => onExportMessage?.(message.id)}
+                  >
+                    <ExternalLink className="size-3.5" aria-hidden="true" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {t("conversation.message.export")}
+                </TooltipContent>
+              </Tooltip>
             )}
           </>
         ) : undefined

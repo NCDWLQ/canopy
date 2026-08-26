@@ -2,6 +2,7 @@ import * as React from "react"
 
 import { ConversationWorkspace } from "@/features/conversations/components"
 import { Toaster } from "@/components/ui/toaster"
+import { TooltipProvider } from "@/components/ui/tooltip"
 import { useTranslation } from "@/lib/i18n"
 import { useTheme, useThemeStore } from "@/lib/theme"
 
@@ -47,9 +48,11 @@ export default function App() {
   }, [theme])
 
   return (
-    <main className="h-dvh overflow-hidden bg-background text-foreground">
-      <ConversationWorkspace />
-      <Toaster />
-    </main>
+    <TooltipProvider>
+      <main className="h-dvh overflow-hidden bg-background text-foreground">
+        <ConversationWorkspace />
+        <Toaster />
+      </main>
+    </TooltipProvider>
   )
 }
