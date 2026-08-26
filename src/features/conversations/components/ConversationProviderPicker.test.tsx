@@ -80,7 +80,7 @@ describe("ConversationProviderPicker", () => {
     expect(defaultModel).toHaveAttribute("aria-selected", "true")
     expect(defaultModel).toHaveTextContent("默认")
     expect(screen.getByRole("option", { name: "gpt-alt" })).toBeVisible()
-    await user.click(screen.getByRole("button", { name: "管理服务提供商…" }))
+    await user.click(screen.getByRole("button", { name: "管理模型提供商" }))
     expect(onManageProviders).toHaveBeenCalledOnce()
   })
 

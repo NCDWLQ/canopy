@@ -386,18 +386,27 @@ describe("ConversationWorkspace", () => {
     expect(within(sidebar).getByRole("button", { name: "设置" })).toBeVisible()
   })
 
-  it("opens SettingsDialog from the provider picker manage action", async () => {
+  it("opens SettingsDialog from the provider picker manage action directly to the providers panel", async () => {
     const user = userEvent.setup()
     render(<ConversationWorkspace />)
     await user.click(
       await screen.findByRole("button", { name: "选择模型与推理强度" }),
     )
-    await user.click(screen.getByRole("button", { name: "管理服务提供商…" }))
+    await user.click(screen.getByRole("button", { name: "管理模型提供商" }))
     expect(screen.getByRole("dialog")).toHaveAccessibleName("设置")
-    await user.click(screen.getByRole("button", { name: "模型提供商" }))
+    expect(
+      screen.getByRole("button", { name: "模型提供商", current: "page" }),
+    ).toBeVisible()
     expect(screen.getByRole("heading", { name: "全部提供商" })).toBeVisible()
     await user.click(screen.getByRole("button", { name: "关闭" }))
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+
+    const sidebar = screen.getByRole("complementary", { name: "对话侧栏" })
+    await user.click(within(sidebar).getByRole("button", { name: "设置" }))
+    expect(screen.getByRole("dialog")).toHaveAccessibleName("设置")
+    expect(
+      screen.getByRole("button", { name: "通用", current: "page" }),
+    ).toBeVisible()
   })
 
   it("renders new conversation button in main header when sidebar is collapsed and triggers conversation creation", async () => {

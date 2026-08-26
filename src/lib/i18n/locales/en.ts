@@ -210,7 +210,7 @@ export const en = {
   "conversation.providerPicker.effortLow": "Low",
   "conversation.providerPicker.effortMedium": "Medium",
   "conversation.providerPicker.effortHigh": "High",
-  "conversation.providerPicker.manageProviders": "Manage providers…",
+  "conversation.providerPicker.manageProviders": "Manage model providers",
 
   // SettingsDialog.tsx
   "settings.dialog.description": "Workspace settings",

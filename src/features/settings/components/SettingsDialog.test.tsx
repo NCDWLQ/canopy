@@ -215,4 +215,43 @@ describe("SettingsDialog", () => {
     expect(screen.getByRole("heading", { name: "全部提供商" })).toBeVisible()
     expect(screen.queryByLabelText("API 密钥")).not.toBeInTheDocument()
   })
+
+  it("opens directly to the specified initialCategory panel", async () => {
+    const user = userEvent.setup()
+    render(
+      <SettingsDialog
+        client={client() as ProviderClient}
+        readOnly={false}
+        initialCategory="providers"
+      />,
+    )
+    await user.click(screen.getByRole("button", { name: "设置" }))
+    expect(
+      screen.getByRole("button", { name: "模型提供商", current: "page" }),
+    ).toBeVisible()
+    expect(screen.getByRole("heading", { name: "全部提供商" })).toBeVisible()
+    expect(
+      screen.queryByRole("combobox", { name: "语言" }),
+    ).not.toBeInTheDocument()
+  })
+
+  it("opens directly to initialCategory in controlled mode", () => {
+    const onOpenChange = vi.fn()
+    render(
+      <SettingsDialog
+        client={client() as ProviderClient}
+        readOnly={false}
+        open
+        onOpenChange={onOpenChange}
+        initialCategory="conversation"
+      />,
+    )
+    expect(
+      screen.getByRole("button", { name: "对话", current: "page" }),
+    ).toBeVisible()
+    expect(screen.getByRole("switch", { name: "自动生成标题" })).toBeVisible()
+    expect(
+      screen.queryByRole("combobox", { name: "语言" }),
+    ).not.toBeInTheDocument()
+  })
 })

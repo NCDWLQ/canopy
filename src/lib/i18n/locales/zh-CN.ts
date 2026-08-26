@@ -206,7 +206,7 @@ export const zhCN = {
   "conversation.providerPicker.effortLow": "低",
   "conversation.providerPicker.effortMedium": "中",
   "conversation.providerPicker.effortHigh": "高",
-  "conversation.providerPicker.manageProviders": "管理服务提供商…",
+  "conversation.providerPicker.manageProviders": "管理模型提供商",
 
   // SettingsDialog.tsx
   "settings.dialog.description": "工作区设置",

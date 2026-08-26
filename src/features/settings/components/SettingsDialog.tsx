@@ -20,6 +20,7 @@ import { useTranslation } from "@/lib/i18n"
 type SettingsDialogBaseProps = {
   client: ProviderClient
   readOnly: boolean
+  initialCategory?: SettingsCategory
 }
 
 export type SettingsDialogProps = SettingsDialogBaseProps &
@@ -28,22 +29,28 @@ export type SettingsDialogProps = SettingsDialogBaseProps &
     | { open: boolean; onOpenChange: (open: boolean) => void }
   )
 
-type SettingsCategory = "general" | "appearance" | "providers" | "conversation"
+export type SettingsCategory =
+  "general" | "appearance" | "providers" | "conversation"
 
 export function SettingsDialog(props: SettingsDialogProps) {
-  const { client, readOnly } = props
+  const { client, readOnly, initialCategory = "general" } = props
   const { t } = useTranslation()
   const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false)
-  const [category, setCategory] = React.useState<SettingsCategory>("general")
+  const [category, setCategory] =
+    React.useState<SettingsCategory>(initialCategory)
   const [providerSessionKey, setProviderSessionKey] = React.useState(0)
 
   const isControlled = props.open !== undefined
   const open = isControlled ? props.open : uncontrolledOpen
   const [prevOpen, setPrevOpen] = React.useState(open)
-  if (open !== prevOpen) {
+  const [prevInitialCategory, setPrevInitialCategory] =
+    React.useState(initialCategory)
+
+  if (open !== prevOpen || (open && initialCategory !== prevInitialCategory)) {
     setPrevOpen(open)
+    setPrevInitialCategory(initialCategory)
     if (open) {
-      setCategory("general")
+      setCategory(initialCategory)
       setProviderSessionKey((current) => current + 1)
     }
   }

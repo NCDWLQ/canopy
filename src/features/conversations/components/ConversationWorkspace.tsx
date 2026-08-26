@@ -59,7 +59,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { SettingsDialog } from "@/features/settings/components"
+import {
+  SettingsDialog,
+  type SettingsCategory,
+} from "@/features/settings/components"
 import { ConversationProviderPicker } from "./ConversationProviderPicker"
 import { useProviderStore } from "@/features/providers/store"
 import {
@@ -190,6 +193,8 @@ export function ConversationWorkspace({
   })
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true)
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(false)
+  const [settingsCategory, setSettingsCategory] =
+    React.useState<SettingsCategory>("general")
   const [isSearchOpen, setIsSearchOpen] = React.useState(false)
   const [isPanoramaOpen, setIsPanoramaOpen] = React.useState(false)
   const [pendingArchiveId, setPendingArchiveId] = React.useState<string | null>(
@@ -327,7 +332,10 @@ export function ConversationWorkspace({
     }
     return {
       kind: "configure-provider",
-      onSelect: () => setIsSettingsOpen(true),
+      onSelect: () => {
+        setSettingsCategory("providers")
+        setIsSettingsOpen(true)
+      },
     }
   })()
 
@@ -737,7 +745,13 @@ export function ConversationWorkspace({
               client={providerClient}
               readOnly={!isBlankConversation && store.isArchived}
               open={isSettingsOpen}
-              onOpenChange={setIsSettingsOpen}
+              onOpenChange={(nextOpen) => {
+                setIsSettingsOpen(nextOpen)
+                if (!nextOpen) {
+                  setSettingsCategory("general")
+                }
+              }}
+              initialCategory={settingsCategory}
             />
             <SearchDialog
               key={isSearchOpen ? "search-open" : "search-closed"}
@@ -837,7 +851,10 @@ export function ConversationWorkspace({
                     : store.reasoningEffort
                 }
                 readOnly={!isBlankConversation && store.isArchived}
-                onManageProviders={() => setIsSettingsOpen(true)}
+                onManageProviders={() => {
+                  setSettingsCategory("providers")
+                  setIsSettingsOpen(true)
+                }}
               />
             )}
           </div>
