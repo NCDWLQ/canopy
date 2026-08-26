@@ -22,6 +22,11 @@ import {
 } from "../panoramaLayout"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { useTranslation } from "@/lib/i18n"
 import { useTheme } from "@/lib/theme"
@@ -110,32 +115,45 @@ function PanoramaNodeCard({ data }: NodeProps<PanoramaFlowNode>) {
         {label}
       </p>
       {data.childCount > 0 && (
-        <Button
-          type="button"
-          variant="outline"
-          size="icon-xs"
-          className="absolute -right-3 top-1/2 z-10 -translate-y-1/2 rounded-full text-muted-foreground shadow-sm hover:text-foreground"
-          aria-label={t(
-            isCollapsed
-              ? "conversation.panorama.expandBranch"
-              : "conversation.panorama.collapseBranch",
-            { label },
-          )}
-          aria-expanded={!isCollapsed}
-          onClick={(event) => {
-            event.stopPropagation()
-            data.onToggleBranch(data.nodeId)
-          }}
-          onDoubleClick={(event) => {
-            event.stopPropagation()
-          }}
-        >
-          {isCollapsed ? (
-            <Plus className="size-3.5" aria-hidden="true" />
-          ) : (
-            <Minus className="size-3.5" aria-hidden="true" />
-          )}
-        </Button>
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-xs"
+              className="absolute -right-3 top-1/2 z-10 -translate-y-1/2 rounded-full text-muted-foreground shadow-sm hover:text-foreground"
+              aria-label={t(
+                isCollapsed
+                  ? "conversation.panorama.expandBranch"
+                  : "conversation.panorama.collapseBranch",
+                { label },
+              )}
+              aria-expanded={!isCollapsed}
+              onClick={(event) => {
+                event.stopPropagation()
+                data.onToggleBranch(data.nodeId)
+              }}
+              onDoubleClick={(event) => {
+                event.stopPropagation()
+              }}
+            >
+              {isCollapsed ? (
+                <Plus className="size-3.5" aria-hidden="true" />
+              ) : (
+                <Minus className="size-3.5" aria-hidden="true" />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {isCollapsed
+              ? data.collapsedDescendantCount > 0
+                ? t("conversation.panorama.expandBranchTooltipCount", {
+                    count: data.collapsedDescendantCount,
+                  })
+                : t("conversation.panorama.expandBranchTooltip")
+              : t("conversation.panorama.collapseBranchTooltip")}
+          </TooltipContent>
+        </Tooltip>
       )}
     </div>
   )

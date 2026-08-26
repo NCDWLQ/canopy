@@ -237,6 +237,30 @@ describe("ConversationPanorama", () => {
     expect(screen.getByText("LEFT")).toBeVisible()
   })
 
+  it("renders tooltip triggers with short text for branch toggles", () => {
+    render(
+      <ConversationPanorama
+        rootNodeId="root"
+        nodesById={nodesById}
+        activePathIds={activePathIds}
+        onSelect={vi.fn()}
+        onOpenInConversation={vi.fn()}
+      />,
+    )
+
+    const collapseButton = screen.getByRole("button", {
+      name: "收起 A 的分支",
+    })
+    expect(collapseButton).toHaveAttribute("data-slot", "tooltip-trigger")
+
+    fireEvent.click(collapseButton)
+
+    const expandButton = screen.getByRole("button", {
+      name: "展开 A 的分支",
+    })
+    expect(expandButton).toHaveAttribute("data-slot", "tooltip-trigger")
+  })
+
   it("does not offer a collapse control on childless nodes", () => {
     render(
       <ConversationPanorama

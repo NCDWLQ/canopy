@@ -154,6 +154,13 @@ export const zhCN = {
     `收起 ${label} 的分支`,
   "conversation.panorama.expandBranch": ({ label }: { label: string }) =>
     `展开 ${label} 的分支`,
+  "conversation.panorama.collapseBranchTooltip": "收起分支",
+  "conversation.panorama.expandBranchTooltip": "展开分支",
+  "conversation.panorama.expandBranchTooltipCount": ({
+    count,
+  }: {
+    count: number
+  }) => `展开分支（${count} 条）`,
   "conversation.panorama.hiddenCount": ({ count }: { count: number }) =>
     `${count} 条已折叠`,
 

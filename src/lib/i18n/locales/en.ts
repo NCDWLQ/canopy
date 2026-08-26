@@ -154,6 +154,13 @@ export const en = {
     `Collapse branches of ${label}`,
   "conversation.panorama.expandBranch": ({ label }: { label: string }) =>
     `Expand branches of ${label}`,
+  "conversation.panorama.collapseBranchTooltip": "Collapse branch",
+  "conversation.panorama.expandBranchTooltip": "Expand branch",
+  "conversation.panorama.expandBranchTooltipCount": ({
+    count,
+  }: {
+    count: number
+  }) => `Expand branch (${count} message${count === 1 ? "" : "s"})`,
   "conversation.panorama.hiddenCount": ({ count }: { count: number }) =>
     `${count} collapsed`,
 
