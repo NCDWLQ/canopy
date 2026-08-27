@@ -208,10 +208,6 @@ mod tests {
                 "search_conversations",
                 json!({ "request": { "query": "content" } }),
             ),
-            (
-                "write_export_file",
-                json!({ "request": { "path": "/tmp/canopy-export.md", "content": "# Content" } }),
-            ),
             ("list_providers", json!({ "request": {} })),
             (
                 "save_provider",
@@ -266,7 +262,7 @@ mod tests {
                 }),
             ),
         ];
-        assert_eq!(database_backed.len(), 25);
+        assert_eq!(database_backed.len(), 24);
 
         for (command, body) in database_backed {
             let response = invoke(&webview, command, body).unwrap_err();
@@ -304,6 +300,34 @@ mod tests {
             database_unavailable(),
             "an unknown command must not look like a registered database-backed handler"
         );
+    }
+
+    #[test]
+    fn write_export_file_succeeds_without_managed_database() {
+        let (_app, webview) = mock_production_app();
+        let path = std::env::temp_dir().join(format!(
+            "canopy-export-registry-{}.md",
+            uuid::Uuid::new_v4()
+        ));
+        let path_str = path.to_string_lossy().into_owned();
+        let content = "# Content";
+
+        let response = invoke(
+            &webview,
+            "write_export_file",
+            json!({ "request": { "path": path_str, "content": content } }),
+        )
+        .expect("export must succeed without a managed SQLite pool");
+        let InvokeResponseBody::Json(body) = response else {
+            panic!("export response must be JSON");
+        };
+        assert_eq!(
+            serde_json::from_str::<Value>(&body).unwrap(),
+            json!({ "bytes_written": content.len() as u64 })
+        );
+        let stored = std::fs::read_to_string(&path).expect("exported file is readable");
+        assert_eq!(stored, content);
+        std::fs::remove_file(&path).expect("exported file is removed");
     }
 
     #[test]
