@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 52
+- **Total Sessions**: 53
 - **Last Active**: 2026-08-27
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1183 | Active |
+| `journal-1.md` | ~1209 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 53 | 2026-08-27 | Backend residuals tree complete | `b4b28bc`, `c87f8de`, `d8a955b`, `5a57d5b`, `ae53834`, `80531e0` | `fix/backend-residuals` |
 | 52 | 2026-08-27 | Decouple export from managed database | `ae53834`, `80531e0` | `fix/backend-residuals` |
 | 51 | 2026-08-27 | Provider delete binding integrity | `d8a955b`, `5a57d5b` | `fix/backend-residuals` |
 | 50 | 2026-08-27 | v0.4.0 released DB upgrade harness | `b4b28bc`, `c87f8de` | `fix/backend-residuals` |

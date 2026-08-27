@@ -1181,3 +1181,29 @@ Removed write_export_file managed-DB preflight; export succeeds with empty DbIns
 ### Status
 
 [OK] **Completed**
+
+
+## Session 53: Backend residuals tree complete
+
+**Date**: 2026-08-27
+**Task**: Backend residuals tree complete
+**Branch**: `fix/backend-residuals`
+
+### Summary
+
+Closed the backend residuals parent: harness, provider-binding migration 0007, and export DB decoupling all landed on fix/backend-residuals; final integration gates passed; parent archived.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b4b28bc` | (see git log) |
+| `c87f8de` | (see git log) |
+| `d8a955b` | (see git log) |
+| `5a57d5b` | (see git log) |
+| `ae53834` | (see git log) |
+| `80531e0` | (see git log) |
+
+### Status
+
+[OK] **Completed**
