@@ -1,0 +1,12 @@
+{"file":".trellis/spec/backend/index.md","reason":"Backend guideline index and ownership map for all implementation phases."}
+{"file":".trellis/spec/backend/directory-structure.md","reason":"Current domain-first module and command/service/repository boundary rules."}
+{"file":".trellis/spec/backend/app-capabilities.md","reason":"Tauri plugin composition, minimal capability and Rust-only native IO constraints."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"SQLite ownership, managed-pool, migration and transaction invariants that must remain unchanged."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Stable CommandError mapping, redaction and cross-layer error contracts."}
+{"file":".trellis/spec/backend/provider-guidelines.md","reason":"Provider credentials, protocol, generation, cancellation, snapshot and auto-title invariants."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Required Rust verification and integration-test strategy."}
+{"file":".trellis/spec/backend/logging-guidelines.md","reason":"Redaction and diagnostic logging rules for provider/generation errors."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Required review of data flow across Tauri, application, domain, provider and SQLite layers."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Prevents duplicate adapters, validators and compatibility implementations during staged moves."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Frozen Tauri command, runtime validation, generation Channel and title-event contracts that backend moves must preserve."}
+{"file":".trellis/tasks/08-27-backend-module-refactor/research/codebase-audit.md","reason":"Vetted evidence, test baseline, migration hashes and rejected/deferred findings for this refactor."}
