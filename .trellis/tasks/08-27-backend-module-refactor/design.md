@@ -43,7 +43,7 @@ src-tauri/src/
 │   ├── domain.rs                # language/theme/title preference types
 │   ├── repository.rs            # typed app_settings SQL; no arbitrary public keys
 │   ├── service.rs               # preference use cases
-│   └── commands.rs              # existing setting command adapters
+│   └── commands.rs              # set_language / set_theme / set_auto_generate_title
 ├── llm/
 │   ├── mod.rs
 │   ├── domain.rs                # Protocol, endpoint, prompt/message and effort transport types
@@ -62,7 +62,7 @@ src-tauri/src/
 │   ├── credentials.rs           # keyring port and native adapter
 │   ├── service.rs               # profile, activation and reconcile use cases
 │   ├── dto.rs
-│   └── commands.rs              # provider/profile/model-list adapters + list compatibility façade
+│   └── commands.rs              # provider/profile/model-list adapters, set_title_model_binding, list compatibility façade
 ├── conversations/
 │   ├── mod.rs
 │   ├── domain.rs
@@ -127,6 +127,10 @@ Do not put these in a shared `utils`/`common` crate. Duplicate isomorphic enums 
 | `set_conversation_provider` orchestration | `generation::service` | One transaction: validate provider/model through provider service APIs, then write conversation binding fields. Removes `EXISTS FROM providers` from `ConversationRepository` without a check-then-act race. |
 | `set_conversation_provider` Tauri handler | `generation::commands` | Frozen command name and `{ request }` wrapper. Register from `generation`, not from `conversations`. Conversations must not import `providers` to “keep the command local.” |
 | Conversation binding SQL (no provider table) | `conversations::repository` | Updates `provider_id` / `model` / `reasoning_effort` columns only. No `FROM providers` / `JOIN providers`. |
+| `set_language` / `set_theme` / `set_auto_generate_title` | `settings::commands` | Frozen names and DTOs. `settings` must not import `providers`. |
+| `set_title_model_binding` orchestration | `providers::service` | Validates provider/model via `validate_model` and profile lookup, then stores through `SettingsRepository`. Cannot live in `settings` (forbidden `settings → providers`). |
+| `set_title_model_binding` Tauri handler | `providers::commands` | Same frozen command name. |
+| `LanguagePreference` / `ThemePreference` / `TitleModelBinding` | `settings::domain` | Stored `app_settings` representations stay byte-compatible. |
 
 `conversations` may keep a persistence-only setter that accepts already-validated binding values. It must not call `validate_model` or query the providers table.
 
@@ -139,6 +143,7 @@ Do not put these in a shared `utils`/`common` crate. Duplicate isomorphic enums 
 | `providers::{generation,titles,title_prompt,openai_compatible,anthropic,model_list}` re-exports | Temporary | Delete after registration and tests switch. |
 | `providers` generic `get_setting` / `set_setting` | Temporary | Delete after `SettingsRepository` owns typed keys. |
 | `IdentityTimeSource` re-export from conversation commands | Temporary | Delete after `infra::identity` is the only owner. |
+| `providers` re-export of `LanguagePreference` / `ThemePreference` / `TitleModelBinding` | Temporary | Delete after callers import `settings`. |
 
 Temporary shims exist only to keep the crate compiling between add/switch/remove steps. Permanent façades exist because the wire contract is frozen. Phase 6 must not delete a permanent façade to “look cleaner.”
 
@@ -146,6 +151,7 @@ Temporary shims exist only to keep the crate compiling between add/switch/remove
 
 - `infra::database::DatabaseError`: managed database missing/unavailable only; it does not import a product error.
 - `conversations::PersistenceError`: conversation row/domain integrity and conversation SQL failures.
+- `settings::SettingsError`: typed `app_settings` SQL and corrupt stored values. Corrupt values keep the historical `ProviderError::Protocol` wire mapping (`provider_unavailable`, `服务提供商当前不可用。`, retryable).
 - `providers::ProviderError`: profile validation, profile absence, keyring/reconcile and provider storage failures.
 - `llm::LlmError`: authentication, rate limit, remote availability, network, protocol and cancellation.
 - `generation::GenerationError`: runtime state plus transparent composition of conversation/provider/LLM failures; it retains the existing generation-vs-persistence failure-stage mapping.
@@ -229,7 +235,7 @@ The path/content validation and 16 MiB bounded write move to `exports::service`.
 ## 9. Migration Strategy
 
 1. **Contract harness**: make production command registration the sole registry tested by mock IPC; fill generation/title characterization gaps.
-2. **Platform boundaries**: introduce database error and identity/time ownership, switch callers, retain root re-exports until stable.
+2. **Infra boundaries**: introduce database error and identity/time ownership, switch callers, retain root re-exports until stable.
 3. **Settings**: move typed preferences and app_settings SQL; preserve setting keys, response aggregation and transactional cleanup.
 4. **LLM transport**: move protocol/endpoint/client/adapters/model discovery; map conversation paths to transport-neutral prompt types at the generation boundary.
 5. **Generation**: move runtime, reply orchestration, binding orchestration, DTOs, title workflow and prompt; preserve temporary re-exports under old provider paths until registration/tests switch.

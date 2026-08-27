@@ -57,4 +57,5 @@
 ## Planning Decision
 
 - 2026-08-27：用户批准严格行为保持范围；任何需要改变本 PRD 兼容约束的发现都必须停止实施并返回规划阶段。
+- 2026-08-27：将基础设施模块从 `platform` 重命名为 `infra`，避免与 OS/桌面 platform 混淆。目标七模块为 `infra`、`settings`、`llm`、`providers`、`conversations`、`generation`、`exports`。
 

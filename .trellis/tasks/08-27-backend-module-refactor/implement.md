@@ -104,7 +104,7 @@ Expected: no matches. Then run the per-phase Rust gate and migration checksum.
 
 1. Move `LanguagePreference`, `ThemePreference`, `TitleModelBinding` and typed setting keys/serialization into `settings`.
 2. Move `app_settings` SQL to `SettingsRepository`. Expose typed methods only; do not expose arbitrary user-controlled keys.
-3. Move language/theme/auto-title/title-binding reads and writes to `SettingsService`/settings command adapters while registering the same command names and DTOs.
+3. Move language/theme/auto-title reads and writes to `SettingsService` and `settings::commands` (`set_language`, `set_theme`, `set_auto_generate_title`). Keep `set_title_model_binding` on `providers::commands`/`ProviderService`: it must validate provider/model before writing through `SettingsRepository`, and `settings` must not import `providers`.
 4. Keep `active_provider_id` semantics in `ProviderService`, backed by `SettingsRepository`. Provider save/delete must still clear invalid active/title bindings within its serialized credential operation and the same relevant transaction.
 5. Keep `list_providers` as a compatibility façade returning the exact aggregate DTO in the same field/null semantics. It may compose provider and settings services internally.
 6. Keep existing app_settings keys and stored representations byte-compatible; do not add a migration.
