@@ -13,16 +13,25 @@ use crate::{
         database::managed_sqlite_pool,
         identity::{IdentityTimeSource, SystemIdentityTimeSource},
     },
+    settings::{SettingsService, TitleModelBinding},
 };
 
 use super::model_list::{list_models, ModelSummary};
 use super::{
     generation::{prepare_generation, GenerationOutcome, GenerationStage},
-    ApiKeyAction, GenerationRuntime, LanguagePreference, NativeCredentialStore, Protocol,
-    ProviderError, ProviderInput, ProviderService, RedactedProvider, ThemePreference,
-    TitleModelBinding,
+    ApiKeyAction, GenerationRuntime, NativeCredentialStore, Protocol, ProviderError, ProviderInput,
+    ProviderService, RedactedProvider,
 };
 
+pub use crate::settings::commands::{
+    SetAutoGenerateTitleRequest, SetAutoGenerateTitleResult, SetLanguageRequest, SetLanguageResult,
+    SetThemeRequest, SetThemeResult,
+};
+
+/// Frozen IPC catalog, including settings-owned command names so the shared
+/// provider fixture remains byte-compatible. The language/theme/auto-title
+/// handlers live in `settings::commands`; `list_providers` stays here as the
+/// permanent aggregate façade.
 pub const PROVIDER_COMMAND_NAMES: &[&str] = &[
     "list_providers",
     "save_provider",
@@ -192,18 +201,6 @@ impl From<TitleModelBindingDto> for TitleModelBinding {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct SetAutoGenerateTitleRequest {
-    pub enabled: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct SetAutoGenerateTitleResult {
-    pub enabled: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct SetTitleModelBindingRequest {
     pub binding: Option<TitleModelBindingDto>,
 }
@@ -212,30 +209,6 @@ pub struct SetTitleModelBindingRequest {
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct SetTitleModelBindingResult {
     pub binding: Option<TitleModelBindingDto>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct SetLanguageRequest {
-    pub language: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct SetLanguageResult {
-    pub language: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct SetThemeRequest {
-    pub theme: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct SetThemeResult {
-    pub theme: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -346,19 +319,20 @@ pub async fn list_providers(
     let pool = managed_sqlite_pool(instances.inner())
         .await
         .map_err(CommandError::from)?;
+    let settings = SettingsService::new(pool.clone());
     let service = production_service(pool);
     let (providers, active_provider_id) =
         service.list_providers().await.map_err(CommandError::from)?;
-    let auto_generate_title = service
+    let auto_generate_title = settings
         .get_auto_generate_title()
         .await
         .map_err(CommandError::from)?;
-    let title_model_binding = service
+    let title_model_binding = settings
         .get_title_model_binding()
         .await
         .map_err(CommandError::from)?;
-    let language = service.get_language().await.map_err(CommandError::from)?;
-    let theme = service.get_theme().await.map_err(CommandError::from)?;
+    let language = settings.get_language().await.map_err(CommandError::from)?;
+    let theme = settings.get_theme().await.map_err(CommandError::from)?;
     Ok(ListProvidersResult {
         providers: providers.into_iter().map(ProviderDto::from).collect(),
         active_provider_id,
@@ -367,21 +341,6 @@ pub async fn list_providers(
         language: language.as_setting_text().to_owned(),
         theme: theme.as_setting_text().to_owned(),
     })
-}
-
-#[tauri::command]
-pub async fn set_auto_generate_title(
-    request: SetAutoGenerateTitleRequest,
-    instances: State<'_, DbInstances>,
-) -> Result<SetAutoGenerateTitleResult, CommandError> {
-    let pool = managed_sqlite_pool(instances.inner())
-        .await
-        .map_err(CommandError::from)?;
-    production_service(pool)
-        .set_auto_generate_title(request.enabled)
-        .await
-        .map(|enabled| SetAutoGenerateTitleResult { enabled })
-        .map_err(CommandError::from)
 }
 
 #[tauri::command]
@@ -400,44 +359,6 @@ pub async fn set_title_model_binding(
         .await
         .map(|binding| SetTitleModelBindingResult {
             binding: binding.map(Into::into),
-        })
-        .map_err(CommandError::from)
-}
-
-#[tauri::command]
-pub async fn set_language(
-    request: SetLanguageRequest,
-    instances: State<'_, DbInstances>,
-) -> Result<SetLanguageResult, CommandError> {
-    let language = LanguagePreference::parse(&request.language)
-        .ok_or_else(|| CommandError::invalid_input("language", "invalid_language"))?;
-    let pool = managed_sqlite_pool(instances.inner())
-        .await
-        .map_err(CommandError::from)?;
-    production_service(pool)
-        .set_language(language)
-        .await
-        .map(|language| SetLanguageResult {
-            language: language.as_setting_text().to_owned(),
-        })
-        .map_err(CommandError::from)
-}
-
-#[tauri::command]
-pub async fn set_theme(
-    request: SetThemeRequest,
-    instances: State<'_, DbInstances>,
-) -> Result<SetThemeResult, CommandError> {
-    let theme = ThemePreference::parse(&request.theme)
-        .ok_or_else(|| CommandError::invalid_input("theme", "invalid_theme"))?;
-    let pool = managed_sqlite_pool(instances.inner())
-        .await
-        .map_err(CommandError::from)?;
-    production_service(pool)
-        .set_theme(theme)
-        .await
-        .map(|theme| SetThemeResult {
-            theme: theme.as_setting_text().to_owned(),
         })
         .map_err(CommandError::from)
 }

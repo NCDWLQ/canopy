@@ -5,12 +5,6 @@ use super::{
     ProviderError,
 };
 
-pub(crate) const ACTIVE_PROVIDER_SETTING_KEY: &str = "active_provider_id";
-pub(crate) const AUTO_GENERATE_TITLE_SETTING_KEY: &str = "auto_generate_title";
-pub(crate) const TITLE_MODEL_BINDING_SETTING_KEY: &str = "title_model_binding";
-pub(crate) const LANGUAGE_SETTING_KEY: &str = "language";
-pub(crate) const THEME_SETTING_KEY: &str = "theme";
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CredentialOperationKind {
     Save,
@@ -169,59 +163,6 @@ impl ProviderRepository {
     ) -> Result<(), ProviderError> {
         sqlx::query("DELETE FROM provider_credential_operations WHERE id = ?1")
             .bind(id)
-            .execute(connection)
-            .await?;
-        Ok(())
-    }
-
-    pub(crate) async fn get_setting(
-        connection: &mut SqliteConnection,
-        key: &str,
-    ) -> Result<Option<String>, ProviderError> {
-        let row = sqlx::query("SELECT value FROM app_settings WHERE key = ?1")
-            .bind(key)
-            .fetch_optional(connection)
-            .await?;
-        row.map(|row| row.try_get("value"))
-            .transpose()
-            .map_err(Into::into)
-    }
-
-    pub(crate) async fn set_setting(
-        connection: &mut SqliteConnection,
-        key: &str,
-        value: &str,
-    ) -> Result<(), ProviderError> {
-        sqlx::query(
-            "INSERT INTO app_settings (key, value) VALUES (?1, ?2) \
-             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-        )
-        .bind(key)
-        .bind(value)
-        .execute(connection)
-        .await?;
-        Ok(())
-    }
-
-    pub(crate) async fn delete_setting_value(
-        connection: &mut SqliteConnection,
-        key: &str,
-        value: &str,
-    ) -> Result<(), ProviderError> {
-        sqlx::query("DELETE FROM app_settings WHERE key = ?1 AND value = ?2")
-            .bind(key)
-            .bind(value)
-            .execute(connection)
-            .await?;
-        Ok(())
-    }
-
-    pub(crate) async fn delete_setting(
-        connection: &mut SqliteConnection,
-        key: &str,
-    ) -> Result<(), ProviderError> {
-        sqlx::query("DELETE FROM app_settings WHERE key = ?1")
-            .bind(key)
             .execute(connection)
             .await?;
         Ok(())

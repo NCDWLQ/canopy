@@ -8,11 +8,11 @@ use tokio_util::sync::CancellationToken;
 use crate::conversations::{
     commands::validate_title, AutoTitleContext, ConversationPersistenceService,
 };
+use crate::settings::{SettingsService, TitleModelBinding};
 
 use super::{
     anthropic, openai_compatible::OpenAiCompatibleClient, title_prompt::build_title_prompt,
-    title_prompt::TitlePrompt, Protocol, Provider, ProviderService, TitleModelBinding,
-    ValidatedEndpoint,
+    title_prompt::TitlePrompt, Protocol, Provider, ProviderService, ValidatedEndpoint,
 };
 
 pub(crate) const TITLE_UPDATED_EVENT: &str = "conversation://title-updated";
@@ -100,11 +100,8 @@ where
     Fut: Future<Output = Result<String, ()>>,
     E: FnOnce(TitleUpdatedPayload) -> Result<(), ()>,
 {
-    if !provider_service
-        .get_auto_generate_title()
-        .await
-        .map_err(|_| ())?
-    {
+    let settings = SettingsService::new(pool.clone());
+    if !settings.get_auto_generate_title().await.map_err(|_| ())? {
         return Ok(());
     }
 
@@ -116,10 +113,7 @@ where
     else {
         return Ok(());
     };
-    let configured_binding = provider_service
-        .get_title_model_binding()
-        .await
-        .map_err(|_| ())?;
+    let configured_binding = settings.get_title_model_binding().await.map_err(|_| ())?;
     let (provider, model) =
         resolve_provider_and_model(&provider_service, &context, configured_binding).await?;
     let (_, secret) = provider_service
@@ -233,6 +227,7 @@ mod tests {
         conversations::{ConversationPersistenceService, NewConversation, NewNode, Role},
         database::MIGRATION_CATALOG,
         providers::{CredentialStore, ProviderError, ProviderService, TitleModelBinding},
+        settings::SettingsService,
     };
 
     use super::{
@@ -446,7 +441,8 @@ mod tests {
             .unwrap();
             let persistence = seed_first_reply(&pool).await;
             let service = provider_service(pool.clone());
-            service.set_auto_generate_title(false).await.unwrap();
+            let settings = SettingsService::new(pool.clone());
+            settings.set_auto_generate_title(false).await.unwrap();
             run_auto_title_with(
                 pool.clone(),
                 service.clone(),
@@ -460,7 +456,7 @@ mod tests {
             .unwrap();
             assert_eq!(stored_title(&pool).await, "占位标题");
 
-            service.set_auto_generate_title(true).await.unwrap();
+            settings.set_auto_generate_title(true).await.unwrap();
             persistence
                 .append_completed_assistant(NewNode {
                     id: "assistant-2".to_owned(),
@@ -502,6 +498,7 @@ mod tests {
             .unwrap();
             let persistence = seed_first_reply(&pool).await;
             let service = provider_service(pool.clone());
+            let settings = SettingsService::new(pool.clone());
 
             service
                 .set_title_model_binding(Some(TitleModelBinding {
@@ -518,7 +515,7 @@ mod tests {
             let (provider, model) = resolve_provider_and_model(
                 &service,
                 &context,
-                service.get_title_model_binding().await.unwrap(),
+                settings.get_title_model_binding().await.unwrap(),
             )
             .await
             .unwrap();

@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::conversations::PersistenceError;
+use crate::{conversations::PersistenceError, settings::SettingsError};
 
 #[derive(Debug, Error)]
 pub enum ProviderError {
@@ -53,5 +53,14 @@ pub enum ProviderError {
 impl ProviderError {
     pub fn invalid_input(field: &'static str, reason: &'static str) -> Self {
         Self::InvalidInput { field, reason }
+    }
+}
+
+impl From<SettingsError> for ProviderError {
+    fn from(error: SettingsError) -> Self {
+        match error {
+            SettingsError::CorruptValue => Self::Protocol,
+            SettingsError::Storage(error) => Self::Storage(error),
+        }
     }
 }

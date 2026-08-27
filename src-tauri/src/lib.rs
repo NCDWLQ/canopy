@@ -3,6 +3,7 @@ pub mod database;
 pub mod error;
 pub mod infra;
 pub mod providers;
+pub mod settings;
 
 use infra::database::{plugin_migrations, DATABASE_URL};
 
@@ -28,10 +29,10 @@ pub(crate) fn register_commands<R: tauri::Runtime>(
         providers::commands::save_provider,
         providers::commands::delete_provider,
         providers::commands::set_active_provider,
-        providers::commands::set_auto_generate_title,
+        settings::commands::set_auto_generate_title,
         providers::commands::set_title_model_binding,
-        providers::commands::set_language,
-        providers::commands::set_theme,
+        settings::commands::set_language,
+        settings::commands::set_theme,
         providers::commands::reveal_provider_api_key,
         providers::commands::generate_from_active_path,
         providers::commands::cancel_generation,

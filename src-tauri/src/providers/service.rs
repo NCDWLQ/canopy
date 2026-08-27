@@ -6,16 +6,13 @@ use sqlx::SqlitePool;
 
 use super::{
     domain::{
-        validate_model, validate_models, validate_name, ApiKeyAction, LanguagePreference, Provider,
-        ProviderInput, RedactedProvider, ThemePreference, TitleModelBinding, ValidatedEndpoint,
+        validate_model, validate_models, validate_name, ApiKeyAction, Provider, ProviderInput,
+        RedactedProvider, ValidatedEndpoint,
     },
-    repository::{
-        CredentialOperation, CredentialOperationKind, ProviderRepository,
-        ACTIVE_PROVIDER_SETTING_KEY, AUTO_GENERATE_TITLE_SETTING_KEY, LANGUAGE_SETTING_KEY,
-        THEME_SETTING_KEY, TITLE_MODEL_BINDING_SETTING_KEY,
-    },
+    repository::{CredentialOperation, CredentialOperationKind, ProviderRepository},
     CredentialStore, ProviderError,
 };
+use crate::settings::{SettingsRepository, TitleModelBinding};
 
 #[derive(Clone)]
 pub struct ProviderService {
@@ -54,8 +51,7 @@ impl ProviderService {
         self.reconcile_inner().await?;
         let mut transaction = self.pool.begin().await?;
         let providers = ProviderRepository::list_providers(&mut transaction).await?;
-        let active =
-            ProviderRepository::get_setting(&mut transaction, ACTIVE_PROVIDER_SETTING_KEY).await?;
+        let active = SettingsRepository::get_active_provider_id(&mut transaction).await?;
         transaction.commit().await?;
         Ok((
             providers
@@ -67,89 +63,6 @@ impl ProviderService {
                 .collect(),
             active,
         ))
-    }
-
-    pub async fn get_auto_generate_title(&self) -> Result<bool, ProviderError> {
-        let _guard = self.operation_lock.lock().await;
-        let mut transaction = self.pool.begin().await?;
-        let enabled = read_auto_generate_title(&mut transaction).await?;
-        transaction.commit().await?;
-        Ok(enabled)
-    }
-
-    pub async fn set_auto_generate_title(&self, enabled: bool) -> Result<bool, ProviderError> {
-        let _guard = self.operation_lock.lock().await;
-        let mut transaction = self.pool.begin().await?;
-        ProviderRepository::set_setting(
-            &mut transaction,
-            AUTO_GENERATE_TITLE_SETTING_KEY,
-            if enabled { "true" } else { "false" },
-        )
-        .await?;
-        transaction.commit().await?;
-        Ok(enabled)
-    }
-
-    pub async fn get_title_model_binding(
-        &self,
-    ) -> Result<Option<TitleModelBinding>, ProviderError> {
-        let _guard = self.operation_lock.lock().await;
-        let mut transaction = self.pool.begin().await?;
-        let binding = read_title_model_binding(&mut transaction).await?;
-        transaction.commit().await?;
-        Ok(binding)
-    }
-
-    /// Reads the persisted UI language preference. An absent key means
-    /// `System` (follow the OS locale), matching the auto-title default.
-    pub async fn get_language(&self) -> Result<LanguagePreference, ProviderError> {
-        let _guard = self.operation_lock.lock().await;
-        let mut transaction = self.pool.begin().await?;
-        let language = read_language(&mut transaction).await?;
-        transaction.commit().await?;
-        Ok(language)
-    }
-
-    pub async fn set_language(
-        &self,
-        language: LanguagePreference,
-    ) -> Result<LanguagePreference, ProviderError> {
-        let _guard = self.operation_lock.lock().await;
-        let mut transaction = self.pool.begin().await?;
-        ProviderRepository::set_setting(
-            &mut transaction,
-            LANGUAGE_SETTING_KEY,
-            language.as_setting_text(),
-        )
-        .await?;
-        transaction.commit().await?;
-        Ok(language)
-    }
-
-    /// Reads the persisted UI theme preference. An absent key means
-    /// `System` (follow the OS/system color scheme), matching the default.
-    pub async fn get_theme(&self) -> Result<ThemePreference, ProviderError> {
-        let _guard = self.operation_lock.lock().await;
-        let mut transaction = self.pool.begin().await?;
-        let theme = read_theme(&mut transaction).await?;
-        transaction.commit().await?;
-        Ok(theme)
-    }
-
-    pub async fn set_theme(
-        &self,
-        theme: ThemePreference,
-    ) -> Result<ThemePreference, ProviderError> {
-        let _guard = self.operation_lock.lock().await;
-        let mut transaction = self.pool.begin().await?;
-        ProviderRepository::set_setting(
-            &mut transaction,
-            THEME_SETTING_KEY,
-            theme.as_setting_text(),
-        )
-        .await?;
-        transaction.commit().await?;
-        Ok(theme)
     }
 
     pub async fn set_title_model_binding(
@@ -173,22 +86,11 @@ impl ProviderService {
                     provider_id: binding.provider_id.clone(),
                     model,
                 };
-                let value =
-                    serde_json::to_string(&normalized).map_err(|_| ProviderError::Protocol)?;
-                ProviderRepository::set_setting(
-                    &mut transaction,
-                    TITLE_MODEL_BINDING_SETTING_KEY,
-                    &value,
-                )
-                .await?;
+                SettingsRepository::set_title_model_binding(&mut transaction, &normalized).await?;
                 Some(normalized)
             }
             None => {
-                ProviderRepository::delete_setting(
-                    &mut transaction,
-                    TITLE_MODEL_BINDING_SETTING_KEY,
-                )
-                .await?;
+                SettingsRepository::delete_title_model_binding(&mut transaction).await?;
                 None
             }
         };
@@ -251,7 +153,7 @@ impl ProviderService {
                     updated_at: now_millis,
                 };
                 ProviderRepository::upsert_provider(&mut transaction, &provider).await?;
-                clear_invalid_title_binding_for_provider(
+                SettingsRepository::clear_invalid_title_binding_for_provider(
                     &mut transaction,
                     provider_id,
                     &provider.models,
@@ -281,7 +183,7 @@ impl ProviderService {
                     updated_at: now_millis,
                 };
                 ProviderRepository::upsert_provider(&mut transaction, &staged).await?;
-                clear_invalid_title_binding_for_provider(
+                SettingsRepository::clear_invalid_title_binding_for_provider(
                     &mut transaction,
                     provider_id,
                     &staged.models,
@@ -322,7 +224,7 @@ impl ProviderService {
                         updated_at: now_millis,
                     };
                     ProviderRepository::upsert_provider(&mut transaction, &provider).await?;
-                    clear_invalid_title_binding_for_provider(
+                    SettingsRepository::clear_invalid_title_binding_for_provider(
                         &mut transaction,
                         provider_id,
                         &provider.models,
@@ -344,7 +246,7 @@ impl ProviderService {
                         updated_at: now_millis,
                     };
                     ProviderRepository::upsert_provider(&mut transaction, &staged).await?;
-                    clear_invalid_title_binding_for_provider(
+                    SettingsRepository::clear_invalid_title_binding_for_provider(
                         &mut transaction,
                         provider_id,
                         &staged.models,
@@ -391,13 +293,9 @@ impl ProviderService {
         if existing.credential_ref.is_none() {
             let deleted =
                 ProviderRepository::delete_provider(&mut transaction, provider_id).await?;
-            ProviderRepository::delete_setting_value(
-                &mut transaction,
-                ACTIVE_PROVIDER_SETTING_KEY,
-                provider_id,
-            )
-            .await?;
-            clear_title_binding_for_provider(&mut transaction, provider_id).await?;
+            SettingsRepository::clear_active_provider_id_if(&mut transaction, provider_id).await?;
+            SettingsRepository::clear_title_binding_for_provider(&mut transaction, provider_id)
+                .await?;
             transaction.commit().await?;
             return Ok(deleted);
         }
@@ -428,8 +326,7 @@ impl ProviderService {
         let provider = ProviderRepository::get_by_id(&mut transaction, provider_id)
             .await?
             .ok_or(ProviderError::ProfileNotFound)?;
-        ProviderRepository::set_setting(&mut transaction, ACTIVE_PROVIDER_SETTING_KEY, provider_id)
-            .await?;
+        SettingsRepository::set_active_provider_id(&mut transaction, provider_id).await?;
         transaction.commit().await?;
         Ok(provider.id)
     }
@@ -459,7 +356,7 @@ impl ProviderService {
         let _guard = self.operation_lock.lock().await;
         self.reconcile_inner().await?;
         let mut transaction = self.pool.begin().await?;
-        let active = ProviderRepository::get_setting(&mut transaction, ACTIVE_PROVIDER_SETTING_KEY)
+        let active = SettingsRepository::get_active_provider_id(&mut transaction)
             .await?
             .ok_or(ProviderError::ProfileNotFound)?;
         let provider = ProviderRepository::get_by_id(&mut transaction, &active)
@@ -479,7 +376,7 @@ impl ProviderService {
         let _guard = self.operation_lock.lock().await;
         self.reconcile_inner().await?;
         let mut transaction = self.pool.begin().await?;
-        let active = ProviderRepository::get_setting(&mut transaction, ACTIVE_PROVIDER_SETTING_KEY)
+        let active = SettingsRepository::get_active_provider_id(&mut transaction)
             .await?
             .ok_or(ProviderError::ProfileNotFound)?;
         let provider = ProviderRepository::get_by_id(&mut transaction, &active)
@@ -573,13 +470,13 @@ impl ProviderService {
         // intent before the row; the foreign key is immediate, not deferred.
         ProviderRepository::delete_operation(&mut transaction, &operation.id).await?;
         ProviderRepository::delete_provider(&mut transaction, &operation.provider_id).await?;
-        ProviderRepository::delete_setting_value(
+        SettingsRepository::clear_active_provider_id_if(&mut transaction, &operation.provider_id)
+            .await?;
+        SettingsRepository::clear_title_binding_for_provider(
             &mut transaction,
-            ACTIVE_PROVIDER_SETTING_KEY,
             &operation.provider_id,
         )
         .await?;
-        clear_title_binding_for_provider(&mut transaction, &operation.provider_id).await?;
         transaction.commit().await?;
         Ok(())
     }
@@ -637,80 +534,4 @@ fn redact_provider(provider: Provider, has_api_key: bool) -> RedactedProvider {
         created_at: provider.created_at,
         updated_at: provider.updated_at,
     }
-}
-
-async fn read_auto_generate_title(
-    connection: &mut sqlx::SqliteConnection,
-) -> Result<bool, ProviderError> {
-    match ProviderRepository::get_setting(connection, AUTO_GENERATE_TITLE_SETTING_KEY)
-        .await?
-        .as_deref()
-    {
-        None | Some("true") => Ok(true),
-        Some("false") => Ok(false),
-        Some(_) => Err(ProviderError::Protocol),
-    }
-}
-
-async fn read_title_model_binding(
-    connection: &mut sqlx::SqliteConnection,
-) -> Result<Option<TitleModelBinding>, ProviderError> {
-    ProviderRepository::get_setting(connection, TITLE_MODEL_BINDING_SETTING_KEY)
-        .await?
-        .map(|value| serde_json::from_str(&value).map_err(|_| ProviderError::Protocol))
-        .transpose()
-}
-
-async fn read_language(
-    connection: &mut sqlx::SqliteConnection,
-) -> Result<LanguagePreference, ProviderError> {
-    match ProviderRepository::get_setting(connection, LANGUAGE_SETTING_KEY)
-        .await?
-        .as_deref()
-    {
-        None => Ok(LanguagePreference::System),
-        Some(value) => LanguagePreference::from_setting_text(value),
-    }
-}
-
-async fn read_theme(
-    connection: &mut sqlx::SqliteConnection,
-) -> Result<ThemePreference, ProviderError> {
-    match ProviderRepository::get_setting(connection, THEME_SETTING_KEY)
-        .await?
-        .as_deref()
-    {
-        None => Ok(ThemePreference::System),
-        Some(value) => ThemePreference::from_setting_text(value),
-    }
-}
-
-async fn clear_title_binding_for_provider(
-    connection: &mut sqlx::SqliteConnection,
-    provider_id: &str,
-) -> Result<(), ProviderError> {
-    if read_title_model_binding(connection)
-        .await?
-        .is_some_and(|binding| binding.provider_id == provider_id)
-    {
-        ProviderRepository::delete_setting(connection, TITLE_MODEL_BINDING_SETTING_KEY).await?;
-    }
-    Ok(())
-}
-
-async fn clear_invalid_title_binding_for_provider(
-    connection: &mut sqlx::SqliteConnection,
-    provider_id: &str,
-    models: &[String],
-) -> Result<(), ProviderError> {
-    if read_title_model_binding(connection)
-        .await?
-        .is_some_and(|binding| {
-            binding.provider_id == provider_id
-                && !models.iter().any(|model| model == &binding.model)
-        })
-    {
-        ProviderRepository::delete_setting(connection, TITLE_MODEL_BINDING_SETTING_KEY).await?;
-    }
-    Ok(())
 }

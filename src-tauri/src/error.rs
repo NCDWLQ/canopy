@@ -3,6 +3,7 @@ use serde_json::{json, Value};
 
 use crate::{
     conversations::PersistenceError, infra::database::DatabaseError, providers::ProviderError,
+    settings::SettingsError,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -130,6 +131,12 @@ impl From<ProviderError> for CommandError {
     }
 }
 
+impl From<SettingsError> for CommandError {
+    fn from(error: SettingsError) -> Self {
+        Self::from(ProviderError::from(error))
+    }
+}
+
 impl From<DatabaseError> for CommandError {
     fn from(error: DatabaseError) -> Self {
         match error {
@@ -203,7 +210,10 @@ mod tests {
     use serde_json::json;
 
     use super::{CommandError, CommandErrorCode};
-    use crate::{conversations::PersistenceError, infra::database::DatabaseError};
+    use crate::{
+        conversations::PersistenceError, infra::database::DatabaseError, providers::ProviderError,
+        settings::SettingsError,
+    };
 
     #[test]
     fn persistence_errors_map_to_safe_closed_codes() {
@@ -231,6 +241,17 @@ mod tests {
         let corrupt = CommandError::from(PersistenceError::InvalidStoredData { field: "role" });
         assert_eq!(corrupt.code, CommandErrorCode::TreeIntegrity);
         assert_eq!(corrupt.message, "对话树包含无效的存储数据。");
+    }
+
+    #[test]
+    fn corrupt_settings_map_like_provider_protocol_failures() {
+        let from_settings = CommandError::from(SettingsError::CorruptValue);
+        let from_provider = CommandError::from(ProviderError::Protocol);
+        assert_eq!(from_settings, from_provider);
+        assert_eq!(from_settings.code, CommandErrorCode::ProviderUnavailable);
+        assert_eq!(from_settings.message, "服务提供商当前不可用。");
+        assert!(from_settings.retryable);
+        assert_eq!(from_settings.details, None);
     }
 
     #[test]
