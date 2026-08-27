@@ -22,7 +22,7 @@ src-tauri/
 │   ├── main.rs               # desktop process entry point only
 │   ├── error.rs              # CommandError IPC mapping only
 │   ├── infra/
-│   │   ├── database.rs       # DATABASE_URL, migration catalog, managed pool
+│   │   ├── database.rs       # DATABASE_URL, catalog, register_sql_plugin, pool
 │   │   └── identity.rs       # IdentityTimeSource / SystemIdentityTimeSource
 │   ├── settings/
 │   │   ├── domain.rs         # language / theme / title-binding types
@@ -65,9 +65,11 @@ src-tauri/
 │       ├── service.rs        # validation and bounded filesystem write
 │       └── commands.rs       # write_export_file + managed-DB preflight
 ├── tests/
+│   ├── fixtures/             # released canopy-v0.4.0.db + provenance README
 │   ├── support/mod.rs
 │   ├── command_boundary.rs
 │   ├── tree_persistence.rs
+│   ├── released_database_upgrade.rs
 │   └── ...                   # provider, generation, HTTP, migration suites
 ├── Cargo.toml
 └── tauri.conf.json

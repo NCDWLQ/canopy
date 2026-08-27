@@ -14,7 +14,8 @@ The production data flow has one owner at each boundary:
 
 ```text
 Tauri SQL plugin configuration (preload + migrations)
-  -> infra::database (DATABASE_URL, MIGRATION_CATALOG, managed_sqlite_pool)
+  -> infra::database (DATABASE_URL, MIGRATION_CATALOG,
+     register_sql_plugin, managed_sqlite_pool)
   -> plugin-managed DbInstances / DbPool::Sqlite
   -> Rust application service (transactions and domain invariants)
   -> Rust repository (parameterized sqlx queries and row mapping)
@@ -23,7 +24,10 @@ Tauri SQL plugin configuration (preload + migrations)
 
 `infra` has no product-module dependency. Conversation, provider, settings,
 generation, and export code resolve the pool through `infra::database`; they
-do not own the catalog or open a second production connection.
+do not own the catalog or open a second production connection. Production
+`app_builder` and released-database upgrade tests must both call
+`infra::database::register_sql_plugin` so `DATABASE_URL` and
+`plugin_migrations()` cannot drift.
 
 SQL ownership by table family:
 
@@ -72,14 +76,17 @@ sqlx = { version = "0.8.6", default-features = false, features = ["sqlite"] }
 ```rust
 const DATABASE_URL: &str = "sqlite:canopy.db";
 
-tauri_plugin_sql::Builder::default()
-    .add_migrations(DATABASE_URL, migrations)
-    .build()
+infra::database::register_sql_plugin(builder)
+// internally:
+// tauri_plugin_sql::Builder::default()
+//     .add_migrations(DATABASE_URL, plugin_migrations())
+//     .build()
 ```
 
 These versions describe the first validated lockfile, not an instruction to
 upgrade independently. Change the plugin, direct dependency, and lockfile as
-one reviewed compatibility update.
+one reviewed compatibility update. Do not re-inline SQL plugin registration in
+`lib.rs` or tests; extend `register_sql_plugin` instead.
 
 ### 3. Contracts
 
@@ -560,10 +567,103 @@ request construction consumes only this validated ordered result.
   foreign key, stop and revise the design before implementation. Do not weaken
   root ownership or cross-conversation constraints to make migration tooling
   pass.
+- Released migration SQL bytes are checksummed by SQLx. After a schema is
+  published (currently `v0.4.0` = migrations `0001`–`0006`), do not edit those
+  files for wording, comments, or formatting: any byte change breaks fixture
+  ledger verification. Fix product defects with a new forward migration.
+
+### Scenario: Released-database upgrade harness
+
+#### 1. Scope / Trigger
+
+Use this contract when adding or changing forward migrations after `v0.4.0`,
+or when changing SQL plugin registration / preload wiring. Fresh in-memory
+`sqlx::raw_sql` loops prove catalog application only; they do **not** prove
+released-file upgrade through the Tauri SQL plugin lifecycle.
+
+#### 2. Signatures
+
+```text
+src-tauri/tests/fixtures/canopy-v0.4.0.db
+src-tauri/tests/fixtures/README.md          # provenance + SHA-256 + ledger
+src-tauri/tests/released_database_upgrade.rs
+infra::database::register_sql_plugin(Builder) -> Builder
+```
+
+#### 3. Contracts
+
+- Fixture schema and `_sqlx_migrations` ledger must match tag `v0.4.0`
+  (`cc8cc83`) migrations `0001`–`0006`, including SHA-384 checksums recorded
+  in the fixture README.
+- Tests copy the fixture into a unique workspace-local app-config directory
+  (via a unique mock Tauri identifier and isolated `XDG_CONFIG_HOME`); never
+  open the versioned fixture for write.
+- The upgrade path must call `register_sql_plugin` with production
+  `plugins.sql.preload = ["sqlite:canopy.db"]`. Replaying `MIGRATION_CATALOG`
+  with `sqlx::raw_sql` does not satisfy this gate.
+- After setup, assert migration ledger completeness, representative seed rows,
+  `PRAGMA foreign_key_check` empty, tree triggers still reject illegal writes,
+  then drop the app/pool and rebuild once against the same temp file to prove
+  idempotence. Cleanup must remove only the unique test directory on success
+  and failure (Drop-based guard).
+- Fixture contents are non-sensitive only: no API keys, keyring secrets, real
+  user prompts, or host paths. Credential references use obvious placeholders.
+- The fixture may retain a known stale conversation binding baseline
+  (`provider_id IS NULL AND model IS NOT NULL`) for later cleanup migrations;
+  the harness itself does not repair it.
+
+#### 4. Validation & Error Matrix
+
+| Condition | Required result |
+|---|---|
+| Fixture SHA-256 ≠ README constant | Fail the harness before upgrade |
+| Ledger versions 1–6 missing / wrong SHA-384 | Fail the harness |
+| Registration uses a duplicated/raw_sql path | Reject the change; share `register_sql_plugin` |
+| Upgrade or second start mutates already-applied rows unexpectedly | Fail idempotence assertion |
+| Test leaves `XDG_CONFIG_HOME` pointing at a real user config root | Reject; isolate under `src-tauri/target/` |
+
+#### 5. Good / Base / Bad Cases
+
+- **Good**: copy fixture → plugin setup applies current catalog → ledger and
+  seeds hold → restart is a no-op beyond already-applied versions.
+- **Base**: when the catalog is still exactly `0001`–`0006`, upgrade is a
+  ledger-compatible no-op that still exercises plugin preload.
+- **Bad**: editing `0005` comments to “fix wording” and breaking the released
+  checksum, or treating mock empty `DbInstances` as upgrade coverage.
+
+#### 6. Tests Required
+
+- `cargo test --manifest-path src-tauri/Cargo.toml --test released_database_upgrade`
+- Keep fresh-catalog suites (`tree_persistence`, `multi_provider_migration`)
+  green alongside the released path.
+- When regenerating the fixture (`generate_v040_fixture`, ignored + env gate),
+  refresh README SHA-256 and ledger checksums in the same change.
+
+#### 7. Wrong vs Correct
+
+##### Wrong
+
+```rust
+for migration in MIGRATION_CATALOG {
+    sqlx::raw_sql(migration.sql).execute(&pool).await?;
+}
+```
+
+##### Correct
+
+```rust
+let app = register_sql_plugin(tauri::Builder::default())
+    .build(/* mock context with plugins.sql.preload */)?;
+let pool = managed_sqlite_pool(app.state::<DbInstances>().inner()).await?;
+```
 
 ## Common Mistakes
 
 - Creating a Rust `SqlitePool` alongside the plugin-managed pool.
+- Treating `sqlx::raw_sql(MIGRATION_CATALOG)` as released-database upgrade
+  coverage, or registering the SQL plugin twice with divergent migration lists.
+- Editing published migration SQL bytes (including comments) after a release
+  tag instead of adding a forward migration.
 - Granting SQL plugin permissions to the webview or issuing SQL from TypeScript.
 - Declaring `metadata jsonb`; SQLite stores validated canonical JSON as `TEXT`.
 - Omitting `conversation_id` from the parent foreign key or path query, allowing
