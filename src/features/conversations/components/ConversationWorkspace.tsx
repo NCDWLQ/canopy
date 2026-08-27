@@ -254,7 +254,10 @@ export function ConversationWorkspace({
 
   const projectionError =
     pathProjection.kind === "error" ? pathProjection.error : null
-  const visiblePath = pathProjection.kind === "ready" ? pathProjection.path : []
+  const visiblePath = React.useMemo(
+    () => (pathProjection.kind === "ready" ? pathProjection.path : []),
+    [pathProjection],
+  )
   const isProjectionValid = pathProjection.kind !== "error"
   const activePathIds = React.useMemo(
     () => visiblePath.map((message) => message.id),
