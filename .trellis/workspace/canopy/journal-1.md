@@ -1115,3 +1115,25 @@ Shipped settings-based manual update check via GitHub Releases API: version disp
 ### Status
 
 [OK] **Completed**
+
+
+## Session 50: v0.4.0 released DB upgrade harness
+
+**Date**: 2026-08-27
+**Task**: v0.4.0 released DB upgrade harness
+**Branch**: `fix/backend-residuals`
+
+### Summary
+
+Planned backend residuals tree; implemented shared register_sql_plugin, v0.4.0 fixture, and real Tauri SQL plugin upgrade harness; recorded harness contracts in backend specs; archived the harness child task.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b4b28bc` | (see git log) |
+| `c87f8de` | (see git log) |
+
+### Status
+
+[OK] **Completed**
