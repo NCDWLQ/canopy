@@ -223,7 +223,8 @@ function ConversationPanoramaView({
       const { width: paneWidth, height: paneHeight } = storeApi.getState()
       if (paneWidth <= 0 || paneHeight <= 0) return
 
-      const cardWidth = node.measured?.width ?? node.width ?? PANORAMA_CARD_WIDTH
+      const cardWidth =
+        node.measured?.width ?? node.width ?? PANORAMA_CARD_WIDTH
       const cardHeight =
         node.measured?.height ?? node.height ?? PANORAMA_CARD_HEIGHT
       const { x: viewportX, y: viewportY, zoom } = getViewport()
