@@ -1,18 +1,18 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::State;
 use tauri_plugin_sql::DbInstances;
-use uuid::Uuid;
 
 use super::{
     Conversation, ConversationPersistenceService, ConversationSearchResult, ConversationSummary,
     ConversationTree, NewConversation, NewNode, Node, ReasoningEffort, Role, SearchHit,
     ValidatedPath,
 };
+use crate::error::CommandError;
+use crate::platform::database::managed_sqlite_pool;
 use crate::providers::domain::validate_model;
-use crate::{database::managed_sqlite_pool, error::CommandError};
+
+pub use crate::platform::identity::{IdentityTimeSource, SystemIdentityTimeSource};
 
 const MAX_TITLE_CHARS: usize = 200;
 const MAX_CONTENT_BYTES: usize = 1024 * 1024;
@@ -258,28 +258,6 @@ pub struct ActivePathDto {
     pub conversation_id: String,
     pub active_node_id: String,
     pub nodes: Vec<NodeDto>,
-}
-
-pub trait IdentityTimeSource: Clone + Send + Sync + 'static {
-    fn new_id(&self) -> String;
-    fn now_millis(&self) -> i64;
-}
-
-#[derive(Debug, Clone, Copy, Default)]
-pub struct SystemIdentityTimeSource;
-
-impl IdentityTimeSource for SystemIdentityTimeSource {
-    fn new_id(&self) -> String {
-        Uuid::new_v4().to_string()
-    }
-
-    fn now_millis(&self) -> i64 {
-        let milliseconds = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis();
-        i64::try_from(milliseconds).unwrap_or(i64::MAX)
-    }
 }
 
 #[derive(Debug, Clone)]

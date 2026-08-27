@@ -7,6 +7,7 @@ use canopy_lib::{
         ConversationPersistenceService, NewConversation, NewNode, PersistenceError, Role,
     },
     database::{managed_sqlite_pool, DATABASE_URL, MIGRATION_CATALOG},
+    platform::database::DatabaseError,
 };
 use serde_json::json;
 use sqlx::{
@@ -240,7 +241,7 @@ fn ordered_migrations_create_the_expected_schema_and_managed_pool_is_reused() {
         let missing = DbInstances::default();
         assert!(matches!(
             managed_sqlite_pool(&missing).await,
-            Err(PersistenceError::DatabaseUnavailable)
+            Err(DatabaseError::Unavailable)
         ));
 
         let instances = DbInstances::default();

@@ -7,9 +7,12 @@ use tauri_plugin_sql::DbInstances;
 use uuid::Uuid;
 
 use crate::{
-    conversations::commands::{IdentityTimeSource, NodeDto, SystemIdentityTimeSource},
-    database::managed_sqlite_pool,
+    conversations::commands::NodeDto,
     error::CommandError,
+    platform::{
+        database::managed_sqlite_pool,
+        identity::{IdentityTimeSource, SystemIdentityTimeSource},
+    },
 };
 
 use super::model_list::{list_models, ModelSummary};

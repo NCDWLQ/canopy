@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use crate::{conversations::PersistenceError, providers::ProviderError};
+use crate::{
+    conversations::PersistenceError, platform::database::DatabaseError, providers::ProviderError,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -128,6 +130,19 @@ impl From<ProviderError> for CommandError {
     }
 }
 
+impl From<DatabaseError> for CommandError {
+    fn from(error: DatabaseError) -> Self {
+        match error {
+            DatabaseError::Unavailable => Self {
+                code: CommandErrorCode::DatabaseUnavailable,
+                message: "对话数据库当前不可用。".to_owned(),
+                retryable: true,
+                details: None,
+            },
+        }
+    }
+}
+
 impl From<PersistenceError> for CommandError {
     fn from(error: PersistenceError) -> Self {
         match error {
@@ -188,7 +203,7 @@ mod tests {
     use serde_json::json;
 
     use super::{CommandError, CommandErrorCode};
-    use crate::conversations::PersistenceError;
+    use crate::{conversations::PersistenceError, platform::database::DatabaseError};
 
     #[test]
     fn persistence_errors_map_to_safe_closed_codes() {
@@ -202,6 +217,16 @@ mod tests {
         assert_eq!(unavailable.code, CommandErrorCode::DatabaseUnavailable);
         assert_eq!(unavailable.message, "对话数据库当前不可用。");
         assert!(unavailable.retryable);
+        assert_eq!(unavailable.details, None);
+
+        let platform_unavailable = CommandError::from(DatabaseError::Unavailable);
+        assert_eq!(
+            platform_unavailable.code,
+            CommandErrorCode::DatabaseUnavailable
+        );
+        assert_eq!(platform_unavailable.message, "对话数据库当前不可用。");
+        assert!(platform_unavailable.retryable);
+        assert_eq!(platform_unavailable.details, None);
 
         let corrupt = CommandError::from(PersistenceError::InvalidStoredData { field: "role" });
         assert_eq!(corrupt.code, CommandErrorCode::TreeIntegrity);

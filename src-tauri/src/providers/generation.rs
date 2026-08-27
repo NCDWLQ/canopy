@@ -9,9 +9,9 @@ use sqlx::SqlitePool;
 use tokio_util::sync::CancellationToken;
 
 use crate::conversations::{
-    commands::{IdentityTimeSource, SystemIdentityTimeSource},
     ConversationPersistenceService, NewNode, Node, ReasoningEffort, Role, ValidatedPath,
 };
+use crate::platform::identity::{IdentityTimeSource, SystemIdentityTimeSource};
 
 use super::{
     anthropic,
