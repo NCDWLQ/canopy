@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Check that the harness exercises the production plugin path and preserves migration invariants."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Check fixture provenance, released upgrade, idempotence and full Rust gates."}
+{"file":".trellis/spec/backend/logging-guidelines.md","reason":"Ensure fixture and test diagnostics contain no credentials or user content."}
+{"file":".trellis/tasks/08-27-released-db-upgrade-harness/research/plugin-lifecycle.md","reason":"Verify implementation against the locally inspected plugin lifecycle."}
