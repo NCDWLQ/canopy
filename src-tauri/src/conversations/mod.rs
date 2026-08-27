@@ -1,5 +1,6 @@
 pub mod commands;
 mod domain;
+pub mod dto;
 mod error;
 mod repository;
 mod service;

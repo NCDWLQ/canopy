@@ -2,8 +2,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::{
-    conversations::PersistenceError, generation::GenerationError, infra::database::DatabaseError,
-    llm::LlmError, providers::ProviderError, settings::SettingsError,
+    conversations::PersistenceError, exports::ExportError, generation::GenerationError,
+    infra::database::DatabaseError, llm::LlmError, providers::ProviderError,
+    settings::SettingsError,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -162,6 +163,15 @@ impl From<SettingsError> for CommandError {
     }
 }
 
+impl From<ExportError> for CommandError {
+    fn from(error: ExportError) -> Self {
+        match error {
+            ExportError::InvalidInput { field, reason } => Self::invalid_input(field, reason),
+            ExportError::WriteFailed => Self::export_file_write(),
+        }
+    }
+}
+
 impl From<DatabaseError> for CommandError {
     fn from(error: DatabaseError) -> Self {
         match error {
@@ -236,8 +246,8 @@ mod tests {
 
     use super::{CommandError, CommandErrorCode};
     use crate::{
-        conversations::PersistenceError, infra::database::DatabaseError, llm::LlmError,
-        settings::SettingsError,
+        conversations::PersistenceError, exports::ExportError, infra::database::DatabaseError,
+        llm::LlmError, settings::SettingsError,
     };
 
     #[test]
@@ -322,6 +332,22 @@ mod tests {
             CommandError::from(LlmError::invalid_input("base_endpoint", "https_required")),
             CommandError::invalid_input("base_endpoint", "https_required")
         );
+    }
+
+    #[test]
+    fn export_errors_map_to_existing_command_envelopes() {
+        let invalid = CommandError::from(ExportError::InvalidInput {
+            field: "content",
+            reason: "too_large",
+        });
+        assert_eq!(invalid, CommandError::invalid_input("content", "too_large"));
+
+        let write_failed = CommandError::from(ExportError::WriteFailed);
+        assert_eq!(write_failed, CommandError::export_file_write());
+        assert_eq!(write_failed.code, CommandErrorCode::ExportFileWrite);
+        assert_eq!(write_failed.message, "写入导出文件失败。");
+        assert!(!write_failed.retryable);
+        assert_eq!(write_failed.details, None);
     }
 
     #[test]

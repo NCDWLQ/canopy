@@ -5,7 +5,7 @@ use tauri_plugin_sql::DbInstances;
 use uuid::Uuid;
 
 use crate::{
-    conversations::commands::{ConversationProviderBindingResult, SetConversationProviderRequest},
+    conversations::dto::{ConversationProviderBindingResult, SetConversationProviderRequest},
     error::CommandError,
     infra::database::managed_sqlite_pool,
     llm::LlmError,
@@ -19,7 +19,7 @@ use super::{
 
 pub use super::dto::{
     CancelGenerationRequest, CancelGenerationResult, GenerateFromActivePathRequest,
-    GenerationEventDto, GenerationFailureStage, GenerationTerminalDto, NodeDto, RoleDto,
+    GenerationEventDto, GenerationFailureStage, GenerationTerminalDto,
 };
 
 /// Frozen IPC names owned by generation. `generate_from_active_path` and

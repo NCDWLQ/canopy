@@ -1,6 +1,7 @@
 pub mod conversations;
 pub mod database;
 pub mod error;
+pub mod exports;
 pub mod generation;
 pub mod infra;
 pub mod llm;
@@ -26,7 +27,7 @@ pub(crate) fn register_commands<R: tauri::Runtime>(
         conversations::commands::unarchive_conversation,
         generation::commands::set_conversation_provider,
         conversations::commands::search_conversations,
-        conversations::commands::write_export_file,
+        exports::commands::write_export_file,
         providers::commands::list_providers,
         providers::commands::save_provider,
         providers::commands::delete_provider,

@@ -1,65 +1,8 @@
-//! Generation Channel, terminal, and binding wire types.
-//!
-//! `NodeDto` here is a wire-identical conversion from `conversations::Node`.
-//! Phase 5 will own conversation/node DTOs in `conversations::dto`; until
-//! then this is the only generation conversion site so protocol adapters
-//! never import conversation types.
+//! Generation Channel and terminal wire types.
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
-use crate::{
-    conversations::{Node, Role},
-    error::CommandError,
-};
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub enum RoleDto {
-    System,
-    User,
-    Assistant,
-    Tool,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct NodeDto {
-    pub id: String,
-    pub parent_id: Option<String>,
-    pub conversation_id: String,
-    pub role: RoleDto,
-    pub content: String,
-    pub model: Option<String>,
-    pub created_at: i64,
-    pub metadata: Value,
-}
-
-impl From<Role> for RoleDto {
-    fn from(role: Role) -> Self {
-        match role {
-            Role::System => Self::System,
-            Role::User => Self::User,
-            Role::Assistant => Self::Assistant,
-            Role::Tool => Self::Tool,
-        }
-    }
-}
-
-impl From<Node> for NodeDto {
-    fn from(node: Node) -> Self {
-        Self {
-            id: node.id,
-            parent_id: node.parent_id,
-            conversation_id: node.conversation_id,
-            role: node.role.into(),
-            content: node.content,
-            model: node.model,
-            created_at: node.created_at,
-            metadata: node.metadata,
-        }
-    }
-}
+use crate::{conversations::dto::NodeDto, error::CommandError};
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
