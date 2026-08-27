@@ -173,7 +173,7 @@ describe("MessageNode", () => {
     expect(regenBtn.className).toBe(editBtn.className)
     expect(regenBtn.className).toBe(branchBtn.className)
     expect(regenBtn.className).toBe(copyBtn.className)
-    expect(regenBtn.parentElement).toHaveClass(
+    expect(regenBtn.parentElement).not.toHaveClass(
       "opacity-0",
       "group-hover:opacity-100",
       "group-focus-within:opacity-100",
