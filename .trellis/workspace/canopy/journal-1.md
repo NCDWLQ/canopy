@@ -1084,3 +1084,34 @@ Shipped settings-based manual update check via GitHub Releases API: version disp
 ### Status
 
 [OK] **Completed**
+
+
+## Session 49: 后端模块边界重构
+
+**Date**: 2026-08-27
+**Task**: 后端模块边界重构
+**Branch**: `main`
+
+### Summary
+
+完成后端模块边界重构：platform→infra、settings/llm/generation/conversations 边界隔离，冻结契约与 SQL owner 文档，PR #22 已合并。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `de3416e` | (see git log) |
+| `a9e2f81` | (see git log) |
+| `9f1b87b` | (see git log) |
+| `657d0f9` | (see git log) |
+| `af8d791` | (see git log) |
+| `ed4e129` | (see git log) |
+| `2f83cfc` | (see git log) |
+| `1076658` | (see git log) |
+| `82234d4` | (see git log) |
+| `c6a8b57` | (see git log) |
+| `39e4d9f` | (see git log) |
+
+### Status
+
+[OK] **Completed**
