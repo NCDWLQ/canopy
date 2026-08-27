@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/app-capabilities.md","reason":"Check export succeeds without SQL while retaining minimal file permissions."}
+{"file":".trellis/spec/backend/directory-structure.md","reason":"Check exports no longer depends on infra/database."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Check all non-database export errors remain stable."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Check command registration, contract fixtures and full gates."}

@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Production migration catalog, managed pool and forward-only released-schema contracts."}
+{"file":".trellis/spec/backend/directory-structure.md","reason":"Infra ownership and production builder assembly boundaries."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Released-schema fixture and migration regression expectations."}
+{"file":".trellis/tasks/08-27-released-db-upgrade-harness/research/plugin-lifecycle.md","reason":"Verified tauri-plugin-sql setup, preload, ledger and test isolation behavior."}

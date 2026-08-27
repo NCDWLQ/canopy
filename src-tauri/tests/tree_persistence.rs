@@ -154,7 +154,8 @@ fn ordered_migrations_create_the_expected_schema_and_managed_pool_is_reused() {
                 (3, "conversation_archive"),
                 (4, "provider_profile"),
                 (5, "multi_provider"),
-                (6, "provider_models")
+                (6, "provider_models"),
+                (7, "conversation_provider_binding_integrity"),
             ]
         );
 
@@ -219,6 +220,7 @@ fn ordered_migrations_create_the_expected_schema_and_managed_pool_is_reused() {
                 "nodes_reject_designated_root_archived_on_insert",
                 "nodes_reject_designated_root_parent",
                 "nodes_reject_insert_into_archived_conversation",
+                "provider_delete_clears_conversation_binding",
             ]
         );
 

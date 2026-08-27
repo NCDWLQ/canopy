@@ -160,7 +160,7 @@ Example contract-preserving localization:
 ```rust
 CommandError {
     code: CommandErrorCode::DatabaseUnavailable,
-    message: "会话数据库当前不可用。".to_owned(),
+    message: "对话数据库当前不可用。".to_owned(),
     retryable: true,
     details: None,
 }

@@ -16,13 +16,14 @@ src-tauri/
 │   ├── 0003_conversation_archive.sql
 │   ├── 0004_provider_profile.sql
 │   ├── 0005_multi_provider.sql
-│   └── 0006_provider_models.sql
+│   ├── 0006_provider_models.sql
+│   └── 0007_conversation_provider_binding_integrity.sql
 ├── src/
 │   ├── lib.rs                # Tauri builder, production command registry
 │   ├── main.rs               # desktop process entry point only
 │   ├── error.rs              # CommandError IPC mapping only
 │   ├── infra/
-│   │   ├── database.rs       # DATABASE_URL, migration catalog, managed pool
+│   │   ├── database.rs       # DATABASE_URL, catalog, register_sql_plugin, pool
 │   │   └── identity.rs       # IdentityTimeSource / SystemIdentityTimeSource
 │   ├── settings/
 │   │   ├── domain.rs         # language / theme / title-binding types
@@ -63,11 +64,13 @@ src-tauri/
 │   └── exports/
 │       ├── dto.rs
 │       ├── service.rs        # validation and bounded filesystem write
-│       └── commands.rs       # write_export_file + managed-DB preflight
+│       └── commands.rs       # write_export_file
 ├── tests/
+│   ├── fixtures/             # released canopy-v0.4.0.db + provenance README
 │   ├── support/mod.rs
 │   ├── command_boundary.rs
 │   ├── tree_persistence.rs
+│   ├── released_database_upgrade.rs
 │   └── ...                   # provider, generation, HTTP, migration suites
 ├── Cargo.toml
 └── tauri.conf.json
@@ -91,7 +94,7 @@ lib / Tauri composition
   ├─> llm ───────────> (reqwest/tokio only)
   ├─> providers ─────> settings + llm + infra
   ├─> generation ────> conversations + providers + settings + llm + infra
-  └─> exports ───────> infra (DB preflight) + filesystem
+  └─> exports ───────> filesystem
 
 error (IPC mapping) ─> errors from every command-facing module
 ```

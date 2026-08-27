@@ -1,4 +1,5 @@
 use sqlx::SqlitePool;
+use tauri::{Builder, Runtime};
 use tauri_plugin_sql::{DbInstances, DbPool, Migration, MigrationKind};
 use thiserror::Error;
 
@@ -48,6 +49,11 @@ pub const MIGRATION_CATALOG: &[ApplicationMigration] = &[
         description: "provider_models",
         sql: include_str!("../../migrations/0006_provider_models.sql"),
     },
+    ApplicationMigration {
+        version: 7,
+        description: "conversation_provider_binding_integrity",
+        sql: include_str!("../../migrations/0007_conversation_provider_binding_integrity.sql"),
+    },
 ];
 
 pub fn plugin_migrations() -> Vec<Migration> {
@@ -60,6 +66,17 @@ pub fn plugin_migrations() -> Vec<Migration> {
             kind: MigrationKind::Up,
         })
         .collect()
+}
+
+/// Registers the production Tauri SQL plugin with [`DATABASE_URL`] and
+/// [`plugin_migrations`]. Production `app_builder` and released-database
+/// upgrade tests must share this wiring so registration cannot drift.
+pub fn register_sql_plugin<R: Runtime>(builder: Builder<R>) -> Builder<R> {
+    builder.plugin(
+        tauri_plugin_sql::Builder::default()
+            .add_migrations(DATABASE_URL, plugin_migrations())
+            .build(),
+    )
 }
 
 pub async fn managed_sqlite_pool(instances: &DbInstances) -> Result<SqlitePool, DatabaseError> {

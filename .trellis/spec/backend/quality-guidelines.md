@@ -93,8 +93,14 @@ At minimum, prove:
   forward-only, and preserves all node bytes;
 - branch/edit inserts a sibling and leaves the original node and all existing
   descendants byte-for-byte unchanged;
-- a released-schema fixture upgrades forward once one exists; until the first
-  release, a clean database can apply the initial migration from scratch.
+- a released-schema fixture upgrades forward through the production Tauri SQL
+  plugin path (`register_sql_plugin` + preload). The checked-in fixture is
+  `src-tauri/tests/fixtures/canopy-v0.4.0.db`; coverage lives in
+  `released_database_upgrade`. Fresh in-memory `raw_sql` catalog loops remain
+  required for repository suites but do not replace that gate. Forward
+  migration `0007` must clear the fixture stale binding baseline and prove
+  provider-delete clears `(provider_id, model)` together while preserving
+  `reasoning_effort`.
 
 ### Root-to-active regression (release gate)
 
@@ -140,6 +146,11 @@ component agents do not independently redefine shared DTOs.
 - [ ] Stable typed errors cross IPC and logs/serialized payloads contain no
       credentials, prompts, raw provider bodies, or database paths.
 - [ ] Real-migration tests cover constraints, rollback, and recursive queries.
+- [ ] Released `v0.4.0` fixture upgrade uses shared `register_sql_plugin`,
+      asserts fixture SHA / ledger checksums for versions 1–6, applies
+      forward migrations such as `0007`, and proves idempotent restart.
+- [ ] Provider delete clears conversation `(provider_id, model)` together and
+      leaves `reasoning_effort` unchanged.
 - [ ] The sibling-absence assertion reaches the final provider payload.
 - [ ] Shared DTO fixtures match the frontend bridge before integration is
       declared complete.

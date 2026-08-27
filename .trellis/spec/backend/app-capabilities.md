@@ -22,8 +22,8 @@
 - Actual file IO is performed by a Rust `#[tauri::command]` (example:
   `write_export_file` in `src-tauri/src/exports/commands.rs`), invoked
   from the frontend through the normal `call()` IPC pipeline. The handler
-  retains a managed-database preflight so a missing pool still maps to
-  `database_unavailable`.
+  validates path/content and writes bytes; it does not require a managed
+  SQLite pool.
 - Presentation (i18n labels, filename sanitization, content assembly from
   already-loaded store data) stays in the frontend; Rust owns bytes and IO.
 

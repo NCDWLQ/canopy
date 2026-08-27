@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 48
-- **Last Active**: 2026-08-26
+- **Total Sessions**: 53
+- **Last Active**: 2026-08-27
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1086 | Active |
+| `journal-1.md` | ~1209 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,11 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 53 | 2026-08-27 | Backend residuals tree complete | `b4b28bc`, `c87f8de`, `d8a955b`, `5a57d5b`, `ae53834`, `80531e0` | `fix/backend-residuals` |
+| 52 | 2026-08-27 | Decouple export from managed database | `ae53834`, `80531e0` | `fix/backend-residuals` |
+| 51 | 2026-08-27 | Provider delete binding integrity | `d8a955b`, `5a57d5b` | `fix/backend-residuals` |
+| 50 | 2026-08-27 | v0.4.0 released DB upgrade harness | `b4b28bc`, `c87f8de` | `fix/backend-residuals` |
+| 49 | 2026-08-27 | 后端模块边界重构 | `de3416e`, `a9e2f81`, `9f1b87b`, `657d0f9`, `af8d791`, `ed4e129`, `2f83cfc`, `1076658`, `82234d4`, `c6a8b57`, `39e4d9f` | `main` |
 | 48 | 2026-08-26 | Manual check for updates | `b7286bd` | `main` |
 | 47 | 2026-08-26 | Assistant markdown remote images | `4b31ca3` | `main` |
 | 46 | 2026-08-25 | Optimize font stack with Geist Mono and CJK fallbacks | `45ef153` | `main` |

@@ -1,0 +1,5 @@
+{"file":".trellis/spec/backend/app-capabilities.md","reason":"Rust-owned file IO, Tauri permission and current DB-preflight contract."}
+{"file":".trellis/spec/backend/directory-structure.md","reason":"Exports ownership and dependency direction."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Preserve validation and IO error envelopes while removing database_unavailable."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Production command registry and desktop validation gates."}
+{"file":".trellis/tasks/archive/2026-08/08-27-backend-module-refactor/research/codebase-audit.md","reason":"Original evidence and compatibility rationale for the frozen export preflight."}

@@ -1,0 +1,5 @@
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Forward-only migration, trigger and conversation persistence invariants."}
+{"file":".trellis/spec/backend/provider-guidelines.md","reason":"Provider deletion, credential reconcile and binding behavior that must remain stable."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Released fixture, fresh migration and integration test requirements."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Trace provider deletion through service, SQLite, conversation DTO and generation fallback."}
+{"file":".trellis/tasks/08-27-cleanup-stale-provider-binding/research/binding-invariant.md","reason":"Verified schema defect, deletion paths and selected trigger ownership."}

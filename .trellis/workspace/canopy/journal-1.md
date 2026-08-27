@@ -1084,3 +1084,126 @@ Shipped settings-based manual update check via GitHub Releases API: version disp
 ### Status
 
 [OK] **Completed**
+
+
+## Session 49: 后端模块边界重构
+
+**Date**: 2026-08-27
+**Task**: 后端模块边界重构
+**Branch**: `main`
+
+### Summary
+
+完成后端模块边界重构：platform→infra、settings/llm/generation/conversations 边界隔离，冻结契约与 SQL owner 文档，PR #22 已合并。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `de3416e` | (see git log) |
+| `a9e2f81` | (see git log) |
+| `9f1b87b` | (see git log) |
+| `657d0f9` | (see git log) |
+| `af8d791` | (see git log) |
+| `ed4e129` | (see git log) |
+| `2f83cfc` | (see git log) |
+| `1076658` | (see git log) |
+| `82234d4` | (see git log) |
+| `c6a8b57` | (see git log) |
+| `39e4d9f` | (see git log) |
+
+### Status
+
+[OK] **Completed**
+
+
+## Session 50: v0.4.0 released DB upgrade harness
+
+**Date**: 2026-08-27
+**Task**: v0.4.0 released DB upgrade harness
+**Branch**: `fix/backend-residuals`
+
+### Summary
+
+Planned backend residuals tree; implemented shared register_sql_plugin, v0.4.0 fixture, and real Tauri SQL plugin upgrade harness; recorded harness contracts in backend specs; archived the harness child task.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b4b28bc` | (see git log) |
+| `c87f8de` | (see git log) |
+
+### Status
+
+[OK] **Completed**
+
+
+## Session 51: Provider delete binding integrity
+
+**Date**: 2026-08-27
+**Task**: Provider delete binding integrity
+**Branch**: `fix/backend-residuals`
+
+### Summary
+
+Implemented migration 0007 to clear orphan conversation models and BEFORE DELETE trigger for paired provider_id/model clears; updated regressions and backend specs; archived cleanup-stale-provider-binding.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d8a955b` | (see git log) |
+| `5a57d5b` | (see git log) |
+
+### Status
+
+[OK] **Completed**
+
+
+## Session 52: Decouple export from managed database
+
+**Date**: 2026-08-27
+**Task**: Decouple export from managed database
+**Branch**: `fix/backend-residuals`
+
+### Summary
+
+Removed write_export_file managed-DB preflight; export succeeds with empty DbInstances; updated backend specs; archived decouple-export-database.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ae53834` | (see git log) |
+| `80531e0` | (see git log) |
+
+### Status
+
+[OK] **Completed**
+
+
+## Session 53: Backend residuals tree complete
+
+**Date**: 2026-08-27
+**Task**: Backend residuals tree complete
+**Branch**: `fix/backend-residuals`
+
+### Summary
+
+Closed the backend residuals parent: harness, provider-binding migration 0007, and export DB decoupling all landed on fix/backend-residuals; final integration gates passed; parent archived.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b4b28bc` | (see git log) |
+| `c87f8de` | (see git log) |
+| `d8a955b` | (see git log) |
+| `5a57d5b` | (see git log) |
+| `ae53834` | (see git log) |
+| `80531e0` | (see git log) |
+
+### Status
+
+[OK] **Completed**

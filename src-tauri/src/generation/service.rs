@@ -272,9 +272,8 @@ pub(crate) async fn prepare_generation(
         Some(provider_id) => profile_service.load_by_id_with_secret(provider_id).await?,
         None => profile_service.load_active_with_secret().await?,
     };
-    // A provider deletion nulls `conversations.provider_id` (FK SET NULL) but
-    // leaves the bound model column behind. The leftover value belongs to the
-    // deleted provider, so it must be ignored while the binding is empty.
+    // Migration 7 clears `model` with `provider_id` on provider delete. Ignore
+    // any residual model while the binding is empty (defensive for pre-7 rows).
     let model = match conversation.provider_id.as_deref() {
         Some(_) => conversation.model.unwrap_or_else(|| provider.model.clone()),
         None => provider.model.clone(),
@@ -523,7 +522,7 @@ mod tests {
     }
 
     #[test]
-    fn prepare_generation_ignores_a_stale_model_left_by_provider_deletion() {
+    fn prepare_generation_falls_back_when_bound_provider_is_deleted() {
         test_runtime().block_on(async {
             let (pool, persistence) = seeded_persistence().await;
             insert_provider(&pool, "active", Protocol::OpenAiCompatible, "active-model").await;
@@ -543,12 +542,19 @@ mod tests {
                 )
                 .await
                 .unwrap();
-            // Deleting the bound provider nulls provider_id but leaves the
-            // stale `model` column in place (FK SET NULL does not touch it).
+            // Deleting the bound provider clears provider_id and model together
+            // (migration 7 trigger). Prepare falls back to the active provider.
             sqlx::query("DELETE FROM providers WHERE id = 'bound'")
                 .execute(&pool)
                 .await
                 .unwrap();
+            let binding: (Option<String>, Option<String>) = sqlx::query_as(
+                "SELECT provider_id, model FROM conversations WHERE id = 'conversation'",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+            assert_eq!(binding, (None, None));
             let service = ProviderService::new(pool.clone(), Arc::new(NativeCredentialStore));
             let prepared = prepare_generation(
                 pool,
