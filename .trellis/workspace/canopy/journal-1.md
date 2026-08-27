@@ -1159,3 +1159,25 @@ Implemented migration 0007 to clear orphan conversation models and BEFORE DELETE
 ### Status
 
 [OK] **Completed**
+
+
+## Session 52: Decouple export from managed database
+
+**Date**: 2026-08-27
+**Task**: Decouple export from managed database
+**Branch**: `fix/backend-residuals`
+
+### Summary
+
+Removed write_export_file managed-DB preflight; export succeeds with empty DbInstances; updated backend specs; archived decouple-export-database.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ae53834` | (see git log) |
+| `80531e0` | (see git log) |
+
+### Status
+
+[OK] **Completed**
