@@ -63,14 +63,14 @@ export function MessageBubble({
         data-node-id={nodeId}
         aria-label={messageAria}
         className={cn(
-          "group flex flex-col items-start my-4 w-full text-foreground",
+          "flex flex-col items-start my-4 w-full text-foreground",
           className,
         )}
       >
         <div className="w-full text-sm">{children}</div>
         {footer && <div className="w-full">{footer}</div>}
         {actions && (
-          <div className="mt-2 flex items-center gap-1 text-muted-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+          <div className="mt-2 flex items-center gap-1 text-muted-foreground">
             {actions}
           </div>
         )}

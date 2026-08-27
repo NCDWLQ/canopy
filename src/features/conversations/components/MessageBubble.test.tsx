@@ -39,7 +39,7 @@ describe("MessageBubble", () => {
     expect(article).not.toHaveClass("border", "bg-card")
   })
 
-  it("renders actions inside hover/focus container", () => {
+  it("renders user actions inside hover/focus container", () => {
     render(
       <MessageBubble
         role="user"
@@ -52,5 +52,20 @@ describe("MessageBubble", () => {
     const actionContainer = screen.getByTestId("action-btn").parentElement
     expect(actionContainer).toHaveClass("opacity-0")
     expect(actionContainer).toHaveClass("group-hover:opacity-100")
+  })
+
+  it("renders assistant actions always visible", () => {
+    render(
+      <MessageBubble
+        role="assistant"
+        actions={<button data-testid="action-btn">操作</button>}
+      >
+        内容
+      </MessageBubble>,
+    )
+
+    const actionContainer = screen.getByTestId("action-btn").parentElement
+    expect(actionContainer).not.toHaveClass("opacity-0")
+    expect(actionContainer).not.toHaveClass("group-hover:opacity-100")
   })
 })
