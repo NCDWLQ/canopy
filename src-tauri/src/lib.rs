@@ -7,7 +7,7 @@ pub mod llm;
 pub mod providers;
 pub mod settings;
 
-use infra::database::{plugin_migrations, DATABASE_URL};
+use infra::database::register_sql_plugin;
 
 pub(crate) fn register_commands<R: tauri::Runtime>(
     builder: tauri::Builder<R>,
@@ -43,26 +43,23 @@ pub(crate) fn register_commands<R: tauri::Runtime>(
 }
 
 fn app_builder() -> tauri::Builder<tauri::Wry> {
-    register_commands(tauri::Builder::default())
-        .manage(generation::GenerationRuntime::default())
-        .plugin(
-            tauri_plugin_sql::Builder::default()
-                .add_migrations(DATABASE_URL, plugin_migrations())
-                .build(),
-        )
-        .plugin(tauri_plugin_window_state::Builder::default().build())
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_opener::init())
-        .setup(|app| {
-            if cfg!(debug_assertions) {
-                app.handle().plugin(
-                    tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
-                        .build(),
-                )?;
-            }
-            Ok(())
-        })
+    register_sql_plugin(
+        register_commands(tauri::Builder::default())
+            .manage(generation::GenerationRuntime::default()),
+    )
+    .plugin(tauri_plugin_window_state::Builder::default().build())
+    .plugin(tauri_plugin_dialog::init())
+    .plugin(tauri_plugin_opener::init())
+    .setup(|app| {
+        if cfg!(debug_assertions) {
+            app.handle().plugin(
+                tauri_plugin_log::Builder::default()
+                    .level(log::LevelFilter::Info)
+                    .build(),
+            )?;
+        }
+        Ok(())
+    })
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
