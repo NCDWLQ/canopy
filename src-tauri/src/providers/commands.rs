@@ -567,6 +567,55 @@ pub async fn list_provider_models(
     })
 }
 
+/// Sends `started` before `run` begins. Content events are emitted by `run`
+/// through the same Channel; the terminal is the return value and is never
+/// sent as a Channel event. `Err` means the started event was not delivered.
+async fn run_after_started<S, R, Fut>(
+    generation_id: String,
+    conversation_id: String,
+    active_node_id: String,
+    model: String,
+    send: S,
+    run: R,
+) -> Result<GenerationTerminalDto, GenerationTerminalDto>
+where
+    S: Fn(GenerationEventDto) -> Result<(), ProviderError>,
+    R: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = GenerationOutcome>,
+{
+    let started = GenerationEventDto::Started {
+        generation_id: generation_id.clone(),
+        conversation_id,
+        active_node_id,
+        model,
+    };
+    if send(started).is_err() {
+        return Err(GenerationTerminalDto::Cancelled { generation_id });
+    }
+    Ok(map_generation_outcome(generation_id, run().await))
+}
+
+fn map_generation_outcome(
+    generation_id: String,
+    outcome: GenerationOutcome,
+) -> GenerationTerminalDto {
+    match outcome {
+        GenerationOutcome::Completed(node) => GenerationTerminalDto::Completed {
+            generation_id,
+            node: node.into(),
+        },
+        GenerationOutcome::Failed { stage, error } => GenerationTerminalDto::Failed {
+            generation_id,
+            stage: match stage {
+                GenerationStage::Generation => GenerationFailureStage::Generation,
+                GenerationStage::Persistence => GenerationFailureStage::Persistence,
+            },
+            error: CommandError::from(error),
+        },
+        GenerationOutcome::Cancelled => GenerationTerminalDto::Cancelled { generation_id },
+    }
+}
+
 #[tauri::command]
 pub async fn generate_from_active_path<R: tauri::Runtime>(
     request: GenerateFromActivePathRequest,
@@ -593,65 +642,63 @@ pub async fn generate_from_active_path<R: tauri::Runtime>(
     .await
     .map_err(CommandError::from)?;
 
-    let started = GenerationEventDto::Started {
-        generation_id: generation_id.clone(),
-        conversation_id: prepared.conversation_id().to_owned(),
-        active_node_id: prepared.active_node_id().to_owned(),
-        model: prepared.model().to_owned(),
-    };
-    if on_event.send(started).is_err() {
-        let _ = runtime.inner().cancel(&generation_id);
-        return Ok(GenerationTerminalDto::Cancelled { generation_id });
-    }
-
+    let event_channel = on_event.clone();
     let delta_channel = on_event.clone();
-    let delta_generation_id = generation_id.clone();
     let thinking_channel = on_event.clone();
+    let delta_generation_id = generation_id.clone();
     let thinking_generation_id = generation_id.clone();
-    let run_result = prepared
-        .run(
-            move |content| {
-                delta_channel
-                    .send(GenerationEventDto::Delta {
-                        generation_id: delta_generation_id.clone(),
-                        content: content.to_owned(),
-                    })
-                    .map_err(|_| ProviderError::Cancelled)
-            },
-            move |content| {
-                thinking_channel
-                    .send(GenerationEventDto::ThinkingDelta {
-                        generation_id: thinking_generation_id.clone(),
-                        content: content.to_owned(),
-                    })
-                    .map_err(|_| ProviderError::Cancelled)
-            },
-        )
-        .await;
-
-    Ok(match run_result.outcome {
-        GenerationOutcome::Completed(node) => {
-            super::titles::spawn_auto_title(
-                pool,
-                profile_service,
-                app,
-                node.conversation_id.clone(),
-            );
-            GenerationTerminalDto::Completed {
-                generation_id,
-                node: node.into(),
-            }
-        }
-        GenerationOutcome::Failed { stage, error } => GenerationTerminalDto::Failed {
-            generation_id,
-            stage: match stage {
-                GenerationStage::Generation => GenerationFailureStage::Generation,
-                GenerationStage::Persistence => GenerationFailureStage::Persistence,
-            },
-            error: CommandError::from(error),
+    match run_after_started(
+        generation_id.clone(),
+        prepared.conversation_id().to_owned(),
+        prepared.active_node_id().to_owned(),
+        prepared.model().to_owned(),
+        move |event| {
+            event_channel
+                .send(event)
+                .map_err(|_| ProviderError::Cancelled)
         },
-        GenerationOutcome::Cancelled => GenerationTerminalDto::Cancelled { generation_id },
-    })
+        || async move {
+            prepared
+                .run(
+                    move |content| {
+                        delta_channel
+                            .send(GenerationEventDto::Delta {
+                                generation_id: delta_generation_id.clone(),
+                                content: content.to_owned(),
+                            })
+                            .map_err(|_| ProviderError::Cancelled)
+                    },
+                    move |content| {
+                        thinking_channel
+                            .send(GenerationEventDto::ThinkingDelta {
+                                generation_id: thinking_generation_id.clone(),
+                                content: content.to_owned(),
+                            })
+                            .map_err(|_| ProviderError::Cancelled)
+                    },
+                )
+                .await
+                .outcome
+        },
+    )
+    .await
+    {
+        Err(cancelled) => {
+            let _ = runtime.inner().cancel(&generation_id);
+            Ok(cancelled)
+        }
+        Ok(terminal) => {
+            if let GenerationTerminalDto::Completed { node, .. } = &terminal {
+                super::titles::spawn_auto_title(
+                    pool,
+                    profile_service,
+                    app,
+                    node.conversation_id.clone(),
+                );
+            }
+            Ok(terminal)
+        }
+    }
 }
 
 #[tauri::command]
@@ -704,7 +751,47 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::validate_uuid_v4;
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    };
+
+    use serde_json::json;
+
+    use crate::{
+        conversations::{PersistenceError, Role},
+        providers::{
+            generation::{GenerationOutcome, GenerationStage},
+            ProviderError,
+        },
+    };
+
+    use super::{
+        map_generation_outcome, run_after_started, validate_uuid_v4, GenerationEventDto,
+        GenerationFailureStage, GenerationTerminalDto,
+    };
+
+    const GENERATION_A: &str = "11111111-1111-4111-8111-111111111111";
+
+    fn test_runtime() -> tokio::runtime::Runtime {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .unwrap()
+    }
+
+    fn assistant_node() -> crate::conversations::Node {
+        crate::conversations::Node {
+            id: "assistant".to_owned(),
+            parent_id: Some("user".to_owned()),
+            conversation_id: "conversation".to_owned(),
+            role: Role::Assistant,
+            content: "answer".to_owned(),
+            model: Some("model".to_owned()),
+            created_at: 1,
+            metadata: json!({}),
+        }
+    }
 
     #[test]
     fn generation_ids_require_canonical_uuid_v4() {
@@ -718,5 +805,130 @@ mod tests {
         ] {
             assert!(validate_uuid_v4("generation_id", invalid).is_err());
         }
+    }
+
+    #[test]
+    fn generation_channel_sends_started_before_content_and_returns_unique_terminal() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let send = {
+            let events = events.clone();
+            move |event: GenerationEventDto| {
+                events.lock().unwrap().push(event);
+                Ok(())
+            }
+        };
+        let events_for_run = events.clone();
+        let terminal = test_runtime().block_on(async {
+            run_after_started(
+                GENERATION_A.to_owned(),
+                "conversation".to_owned(),
+                "user".to_owned(),
+                "model".to_owned(),
+                send,
+                || {
+                    let events_for_run = events_for_run.clone();
+                    async move {
+                        events_for_run
+                            .lock()
+                            .unwrap()
+                            .push(GenerationEventDto::ThinkingDelta {
+                                generation_id: GENERATION_A.to_owned(),
+                                content: "think".to_owned(),
+                            });
+                        events_for_run
+                            .lock()
+                            .unwrap()
+                            .push(GenerationEventDto::Delta {
+                                generation_id: GENERATION_A.to_owned(),
+                                content: "answer".to_owned(),
+                            });
+                        GenerationOutcome::Completed(assistant_node())
+                    }
+                },
+            )
+            .await
+            .expect("started send succeeds")
+        });
+        let recorded = events.lock().unwrap().clone();
+        assert!(matches!(
+            recorded.as_slice(),
+            [
+                GenerationEventDto::Started { .. },
+                GenerationEventDto::ThinkingDelta { .. },
+                GenerationEventDto::Delta { .. }
+            ]
+        ));
+        assert!(matches!(
+            terminal,
+            GenerationTerminalDto::Completed { generation_id, .. }
+                if generation_id == GENERATION_A
+        ));
+    }
+
+    #[test]
+    fn generation_channel_failure_before_run_returns_cancelled_without_running() {
+        let ran = Arc::new(AtomicBool::new(false));
+        let ran_for_run = ran.clone();
+        let terminal = test_runtime().block_on(async {
+            run_after_started(
+                GENERATION_A.to_owned(),
+                "conversation".to_owned(),
+                "user".to_owned(),
+                "model".to_owned(),
+                |_| Err(ProviderError::Cancelled),
+                || {
+                    ran_for_run.store(true, Ordering::SeqCst);
+                    async { panic!("run must not start after started send fails") }
+                },
+            )
+            .await
+            .expect_err("started failure is cancelled")
+        });
+        assert!(!ran.load(Ordering::SeqCst));
+        assert!(matches!(
+            terminal,
+            GenerationTerminalDto::Cancelled { generation_id }
+                if generation_id == GENERATION_A
+        ));
+    }
+
+    #[test]
+    fn generation_terminal_is_unique_and_retains_failure_stage() {
+        let completed = map_generation_outcome(
+            GENERATION_A.to_owned(),
+            GenerationOutcome::Completed(assistant_node()),
+        );
+        let cancelled =
+            map_generation_outcome(GENERATION_A.to_owned(), GenerationOutcome::Cancelled);
+        let generation_failed = map_generation_outcome(
+            GENERATION_A.to_owned(),
+            GenerationOutcome::Failed {
+                stage: GenerationStage::Generation,
+                error: ProviderError::Unavailable,
+            },
+        );
+        let persistence_failed = map_generation_outcome(
+            GENERATION_A.to_owned(),
+            GenerationOutcome::Failed {
+                stage: GenerationStage::Persistence,
+                error: PersistenceError::DatabaseUnavailable.into(),
+            },
+        );
+        assert!(matches!(completed, GenerationTerminalDto::Completed { .. }));
+        assert!(matches!(cancelled, GenerationTerminalDto::Cancelled { .. }));
+        assert!(matches!(
+            generation_failed,
+            GenerationTerminalDto::Failed {
+                stage: GenerationFailureStage::Generation,
+                ..
+            }
+        ));
+        assert!(matches!(
+            persistence_failed,
+            GenerationTerminalDto::Failed {
+                stage: GenerationFailureStage::Persistence,
+                ..
+            }
+        ));
     }
 }

@@ -796,6 +796,34 @@ mod tests {
     }
 
     #[test]
+    fn provider_failure_is_typed_as_generation_stage_and_persists_nothing() {
+        test_runtime().block_on(async {
+            let (pool, persistence) = seeded_persistence().await;
+            let runtime = GenerationRuntime::default();
+            let lease = runtime
+                .reserve("conversation".to_owned(), GENERATION_A.to_owned())
+                .unwrap();
+            assert!(matches!(
+                finish_generation(
+                    &persistence,
+                    &lease,
+                    Err(super::ProviderError::Unavailable),
+                    pending(),
+                )
+                .await,
+                GenerationOutcome::Failed {
+                    stage: super::GenerationStage::Generation,
+                    ..
+                }
+            ));
+            assert_eq!(assistant_count(&pool).await, 0);
+            assert_eq!(runtime.active_count(), 1);
+            drop(lease);
+            assert_eq!(runtime.active_count(), 0);
+        });
+    }
+
+    #[test]
     fn persistence_failure_is_typed_and_releases_the_slot() {
         test_runtime().block_on(async {
             let (pool, persistence) = seeded_persistence().await;
