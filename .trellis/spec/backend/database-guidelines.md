@@ -571,6 +571,53 @@ request construction consumes only this validated ordered result.
   published (currently `v0.4.0` = migrations `0001`–`0006`), do not edit those
   files for wording, comments, or formatting: any byte change breaks fixture
   ledger verification. Fix product defects with a new forward migration.
+- Migration `0007_conversation_provider_binding_integrity.sql` repairs
+  released rows where `provider_id IS NULL AND model IS NOT NULL`, then installs
+  `provider_delete_clears_conversation_binding` so every provider delete clears
+  `provider_id` and `model` together. `reasoning_effort` is independent and
+  must not be cleared by that trigger.
+
+### Scenario: Conversation provider binding integrity (migration 0007)
+
+#### 1. Scope / Trigger
+
+Use this contract when changing conversation `(provider_id, model)` binding
+cleanup, provider-delete SQL, or migration `0007`.
+
+#### 2. Signatures
+
+```sql
+-- 0007_conversation_provider_binding_integrity.sql
+UPDATE conversations SET model = NULL
+WHERE provider_id IS NULL AND model IS NOT NULL;
+
+CREATE TRIGGER provider_delete_clears_conversation_binding
+BEFORE DELETE ON providers
+FOR EACH ROW
+BEGIN
+  UPDATE conversations
+  SET provider_id = NULL, model = NULL
+  WHERE provider_id = OLD.id;
+END;
+```
+
+#### 3. Contracts
+
+- Repair released rows that had `provider_id IS NULL AND model IS NOT NULL`.
+- Every production provider delete path (immediate no-credential delete,
+  credential reconcile delete, and direct SQL delete) clears both binding
+  columns; `reasoning_effort`, title, archive state, and nodes are untouched.
+- Do not weaken this to a one-shot `UPDATE` without the delete trigger.
+- Supported set/clear conversation binding commands remain paired at the
+  service layer; DTO `binding_model` may stay as a defensive read mapping.
+
+#### 4. Validation & Error Matrix
+
+| Condition | Required result |
+|---|---|
+| Upgrade from v0.4.0 fixture stale row | `model` becomes NULL; other conversation fields unchanged |
+| `DELETE FROM providers` with bound conversations | `(provider_id, model) = (NULL, NULL)`; effort preserved |
+| Restart after migration 7 | Ledger complete; repaired rows not rewritten again |
 
 ### Scenario: Released-database upgrade harness
 
@@ -601,16 +648,17 @@ infra::database::register_sql_plugin(Builder) -> Builder
 - The upgrade path must call `register_sql_plugin` with production
   `plugins.sql.preload = ["sqlite:canopy.db"]`. Replaying `MIGRATION_CATALOG`
   with `sqlx::raw_sql` does not satisfy this gate.
-- After setup, assert migration ledger completeness, representative seed rows,
-  `PRAGMA foreign_key_check` empty, tree triggers still reject illegal writes,
-  then drop the app/pool and rebuild once against the same temp file to prove
-  idempotence. Cleanup must remove only the unique test directory on success
-  and failure (Drop-based guard).
+- After setup, assert migration ledger completeness (including forward
+  versions beyond 6), representative seed rows, `PRAGMA foreign_key_check`
+  empty, tree triggers still reject illegal writes, migration 7 clears the
+  fixture stale binding baseline, then drop the app/pool and rebuild once
+  against the same temp file to prove idempotence. Cleanup must remove only
+  the unique test directory on success and failure (Drop-based guard).
 - Fixture contents are non-sensitive only: no API keys, keyring secrets, real
   user prompts, or host paths. Credential references use obvious placeholders.
-- The fixture may retain a known stale conversation binding baseline
-  (`provider_id IS NULL AND model IS NOT NULL`) for later cleanup migrations;
-  the harness itself does not repair it.
+- The fixture retains a known stale conversation binding baseline
+  (`provider_id IS NULL AND model IS NOT NULL`); migration `0007` repairs it
+  on upgrade. Do not rewrite the versioned fixture bytes for that cleanup.
 
 #### 4. Validation & Error Matrix
 
@@ -624,10 +672,12 @@ infra::database::register_sql_plugin(Builder) -> Builder
 
 #### 5. Good / Base / Bad Cases
 
-- **Good**: copy fixture → plugin setup applies current catalog → ledger and
-  seeds hold → restart is a no-op beyond already-applied versions.
-- **Base**: when the catalog is still exactly `0001`–`0006`, upgrade is a
-  ledger-compatible no-op that still exercises plugin preload.
+- **Good**: copy fixture → plugin setup applies current catalog (including
+  `0007+`) → ledger and repaired seeds hold → restart is a no-op beyond
+  already-applied versions.
+- **Base**: released ledger rows for versions 1–6 keep their documented
+  SHA-384 checksums after upgrade; later catalog versions appear as new
+  ledger entries.
 - **Bad**: editing `0005` comments to “fix wording” and breaking the released
   checksum, or treating mock empty `DbInstances` as upgrade coverage.
 

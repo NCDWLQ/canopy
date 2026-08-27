@@ -16,7 +16,8 @@ src-tauri/
 │   ├── 0003_conversation_archive.sql
 │   ├── 0004_provider_profile.sql
 │   ├── 0005_multi_provider.sql
-│   └── 0006_provider_models.sql
+│   ├── 0006_provider_models.sql
+│   └── 0007_conversation_provider_binding_integrity.sql
 ├── src/
 │   ├── lib.rs                # Tauri builder, production command registry
 │   ├── main.rs               # desktop process entry point only

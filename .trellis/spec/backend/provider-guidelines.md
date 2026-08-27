@@ -20,7 +20,8 @@ Ownership is split:
   `set_conversation_provider`, auto-title
 - `src-tauri/src/settings/` — typed auto-title / language / theme keys
 - `conversations::service` — validated path load and assistant persist
-- migrations `0004_provider_profile.sql` through `0006_provider_models.sql`
+- migrations `0004_provider_profile.sql` through
+  `0007_conversation_provider_binding_integrity.sql`
 
 ### 2. Signatures
 
@@ -208,9 +209,11 @@ late cancellation.
   reads this list offline and never fetches; only the settings dialog fetches
   (manual button, draft source) to let the user add entries.
 - Conversations carry `(provider_id, model)` as one binding plus an
-  independent `reasoning_effort` column. FK is `ON DELETE SET NULL`; when the
-  binding is NULL the leftover `model` value must be ignored (it belonged to
-  the deleted provider) — see `prepare_generation`.
+  independent `reasoning_effort` column. FK is `ON DELETE SET NULL`. Migration
+  `0007` adds `provider_delete_clears_conversation_binding` so a provider row
+  delete clears both binding columns together before the FK action; when the
+  binding is NULL, generation follows the global active provider. `reasoning_effort`
+  is never cleared by provider deletion.
 - Generation snapshots everything at prepare time (provider, model, effort,
   endpoint, secret, protocol client). Config edits, binding switches, and
   even deleting the in-flight provider never affect a running generation;
