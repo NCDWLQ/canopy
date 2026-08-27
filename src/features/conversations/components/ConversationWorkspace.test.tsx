@@ -2855,6 +2855,17 @@ describe("ConversationWorkspace", () => {
 
     expect(useConversationStore.getState().activeNodeId).toBe(assistant.id)
     expect(useConversationStore.getState().reveal).toBeNull()
+
+    const selectedCard = within(panorama)
+      .getByText("ASSISTANT_SENTINEL")
+      .closest("[data-node-id]")
+    const leafCard = within(panorama)
+      .getByText("RIGHT_BRANCH_SENTINEL")
+      .closest("[data-node-id]")
+    expect(selectedCard).toHaveAttribute("aria-current", "true")
+    expect(selectedCard).toHaveAttribute("data-on-active-path", "true")
+    expect(leafCard).toHaveAttribute("data-on-active-path", "true")
+    expect(leafCard).not.toHaveAttribute("aria-current")
   })
 
   it("opens the conversation pane on the double-clicked Panorama node", async () => {

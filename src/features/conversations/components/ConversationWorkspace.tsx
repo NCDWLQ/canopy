@@ -26,6 +26,8 @@ import { useConversationTitleUpdates } from "../hooks/useConversationTitleUpdate
 import { useWorkspaceGenerationController } from "../hooks/useWorkspaceGenerationController"
 import {
   isRunActive,
+  newestLeafDescendant,
+  pathIdsToNode,
   selectActivePath,
   selectActiveRunIds,
   type ConversationTreeState,
@@ -254,6 +256,21 @@ export function ConversationWorkspace({
     pathProjection.kind === "error" ? pathProjection.error : null
   const visiblePath = pathProjection.kind === "ready" ? pathProjection.path : []
   const isProjectionValid = pathProjection.kind !== "error"
+  const activePathIds = React.useMemo(
+    () => visiblePath.map((message) => message.id),
+    [visiblePath],
+  )
+  // Selection truncates at the clicked card; path chrome still follows the
+  // newest leaf under that card so connectors stay lit through the branch.
+  const highlightedPathIds = React.useMemo(() => {
+    const selectedId = store.activeNodeId
+    if (selectedId === null) return activePathIds
+    const leafId =
+      newestLeafDescendant(store.nodesById, store.fullNodes, selectedId) ??
+      selectedId
+    if (leafId === selectedId) return activePathIds
+    return pathIdsToNode(store.nodesById, leafId) ?? activePathIds
+  }, [store.activeNodeId, store.nodesById, store.fullNodes, activePathIds])
   const isBlankConversation =
     store.isCreatingConversation ||
     (store.conversationId === null && store.history.status === "empty")
@@ -945,7 +962,8 @@ export function ConversationWorkspace({
               <ConversationPanorama
                 rootNodeId={store.rootNodeId}
                 nodesById={store.nodesById}
-                activePathIds={visiblePath.map((message) => message.id)}
+                activePathIds={activePathIds}
+                highlightedPathIds={highlightedPathIds}
                 onSelect={selectNode}
                 onOpenInConversation={(nodeId) => {
                   // Open the branch through the node (newest leaf + reveal) so

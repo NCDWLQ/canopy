@@ -66,8 +66,14 @@ export type PanoramaFlowEdge = Edge
 export type PanoramaLayoutInput = {
   rootNodeId: string
   nodesById: Readonly<Record<string, TreeNodeView>>
-  /** Ordered root -> active node IDs, owned by the store's path selector. */
+  /** Ordered root -> selected node IDs; the last id owns `isActiveNode`. */
   activePathIds: readonly string[]
+  /**
+   * Ordered root -> branch leaf IDs for connector / path chrome. Defaults to
+   * `activePathIds`. When the user selects a mid-branch node the selection
+   * stays there while this path continues to the newest leaf.
+   */
+  highlightedPathIds?: readonly string[]
   collapsedIds: ReadonlySet<string>
 }
 
@@ -179,6 +185,7 @@ export function projectPanoramaLayout({
   rootNodeId,
   nodesById,
   activePathIds,
+  highlightedPathIds = activePathIds,
   collapsedIds,
 }: PanoramaLayoutInput): PanoramaLayout | null {
   const root = nodesById[rootNodeId]
@@ -191,7 +198,7 @@ export function projectPanoramaLayout({
   if (visibleIds === null) return null
 
   const activeNodeId = activePathIds.at(-1) ?? null
-  const activePathSet = new Set(activePathIds)
+  const highlightedPathSet = new Set(highlightedPathIds)
 
   // Left-to-right orientation: depth (d.y) maps to x, breadth (d.x) to y.
   const rootDatum = tree<HierarchyDatum>()
@@ -212,7 +219,7 @@ export function projectPanoramaLayout({
     const node = nodesById[nodeId]
     if (node === undefined) return null
 
-    const isOnActivePath = activePathSet.has(nodeId)
+    const isOnActivePath = highlightedPathSet.has(nodeId)
     const isCollapsed = collapsedIds.has(nodeId)
     nodes.push({
       id: nodeId,
@@ -242,7 +249,8 @@ export function projectPanoramaLayout({
 
     const parentId = node.parentId
     if (parentId !== undefined && visibleIds.has(parentId)) {
-      const edgeOnActivePath = isOnActivePath && activePathSet.has(parentId)
+      const edgeOnActivePath =
+        isOnActivePath && highlightedPathSet.has(parentId)
       edges.push({
         id: `${parentId}__${nodeId}`,
         source: parentId,

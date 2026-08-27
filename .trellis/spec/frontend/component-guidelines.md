@@ -635,13 +635,16 @@ WebGL dependency on WebKitGTK.
   workspace maps its path to `activePathIds`. Never re-derive the active
   path in the canvas.
 - Clicking a canvas node selects that node exactly via `selectNode` (path
-  truncates at the click). Double-click opens the conversation through
-  `selectBranchAtNode(nodeId)`, which targets the subtree's newest leaf
-  (`newestLeafDescendant`, same semantics as `revealSearchHit`) and sets a
-  queryless `reveal` so the message pane scrolls to the clicked node
-  without highlighting. The canvas does not fitView on click; it only
-  nudges the viewport when the clicked card is clipped by the pane edge
-  (pan only, zoom unchanged).
+  truncates at the click). The workspace still passes a separate
+  `highlightedPathIds` (root → newest leaf under the selection via
+  `newestLeafDescendant` + `pathIdsToNode`) so connector chrome stays lit
+  through the branch while `isActiveNode` remains on the clicked card.
+  Double-click opens the conversation through `selectBranchAtNode(nodeId)`,
+  which targets the subtree's newest leaf (`newestLeafDescendant`, same
+  semantics as `revealSearchHit`) and sets a queryless `reveal` so the
+  message pane scrolls to the clicked node without highlighting. The canvas
+  does not fitView on click; it only nudges the viewport when the clicked
+  card is clipped by the pane edge (pan only, zoom unchanged).
 - Layout lives in the pure module `features/conversations/panoramaLayout.ts`
   (defensive validation mirroring `projectVisibleRows`: null on missing
   nodes, parent mismatch, or cycle; component renders the

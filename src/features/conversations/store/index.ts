@@ -445,6 +445,25 @@ export function newestLeafDescendant(
   return newest?.id ?? nodeId
 }
 
+/** Root -> node chain via parent links; null on missing nodes or a cycle. */
+export function pathIdsToNode(
+  nodesById: Readonly<Record<string, TreeNodeView>>,
+  nodeId: string,
+): string[] | null {
+  if (!Object.hasOwn(nodesById, nodeId)) return null
+  const chain: string[] = []
+  const visited = new Set<string>()
+  let current: string | undefined = nodeId
+  while (current !== undefined) {
+    if (visited.has(current) || !Object.hasOwn(nodesById, current)) return null
+    visited.add(current)
+    chain.push(current)
+    current = nodesById[current]?.parentId
+  }
+  chain.reverse()
+  return chain
+}
+
 function loadedTreeState(
   tree: ConversationTreeView,
   generationRuns: Readonly<Record<string, GenerationRun>>,

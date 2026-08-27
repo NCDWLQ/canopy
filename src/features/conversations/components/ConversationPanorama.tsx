@@ -169,8 +169,13 @@ const NODE_VIEW_PADDING = 48
 export type ConversationPanoramaProps = {
   rootNodeId: string
   nodesById: Readonly<Record<string, TreeNodeView>>
-  /** Ordered root -> active node IDs from the store's path selector. */
+  /** Ordered root -> selected node IDs from the store's path selector. */
   activePathIds: readonly string[]
+  /**
+   * Ordered root -> newest-leaf IDs for path chrome. Defaults to
+   * `activePathIds` when omitted.
+   */
+  highlightedPathIds?: readonly string[]
   onSelect: (nodeId: string) => void
   /** Leave the canvas and open the conversation pane on this message. */
   onOpenInConversation: (nodeId: string) => void
@@ -190,6 +195,7 @@ function ConversationPanoramaView({
   rootNodeId,
   nodesById,
   activePathIds,
+  highlightedPathIds,
   onSelect,
   onOpenInConversation,
 }: ConversationPanoramaProps) {
@@ -290,9 +296,10 @@ function ConversationPanoramaView({
         rootNodeId,
         nodesById,
         activePathIds,
+        highlightedPathIds,
         collapsedIds,
       }),
-    [rootNodeId, nodesById, activePathIds, collapsedIds],
+    [rootNodeId, nodesById, activePathIds, highlightedPathIds, collapsedIds],
   )
 
   // Keep node object identity stable across parent re-renders so React Flow

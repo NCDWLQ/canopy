@@ -128,6 +128,33 @@ describe("projectPanoramaLayout", () => {
     })
   })
 
+  it("keeps selection on a mid-branch node while highlighting through its newest leaf", () => {
+    const layout = projectPanoramaLayout({
+      rootNodeId: "root",
+      nodesById,
+      activePathIds: ["root", "assistant-a"],
+      highlightedPathIds: ["root", "assistant-a", "user-right"],
+      collapsedIds: new Set(),
+    })!
+
+    expect(nodeById(layout, "assistant-a")?.data).toMatchObject({
+      isActiveNode: true,
+      isOnActivePath: true,
+    })
+    expect(nodeById(layout, "user-right")?.data).toMatchObject({
+      isActiveNode: false,
+      isOnActivePath: true,
+    })
+    expect(nodeById(layout, "user-left")?.data.isOnActivePath).toBe(false)
+
+    const highlightedEdge = layout.edges.find(
+      (edge) => edge.source === "assistant-a" && edge.target === "user-right",
+    )
+    expect(highlightedEdge?.style).toMatchObject({
+      stroke: "var(--foreground)",
+    })
+  })
+
   it("hides descendants of collapsed nodes and reports their count", () => {
     const layout = projectPanoramaLayout({
       rootNodeId: "root",
