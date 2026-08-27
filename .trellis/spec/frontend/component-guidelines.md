@@ -634,16 +634,14 @@ WebGL dependency on WebKitGTK.
   root-to-active chain stays owned by the store's `selectActivePath`; the
   workspace maps its path to `activePathIds`. Never re-derive the active
   path in the canvas.
-- Clicking a canvas node means activating the whole branch through it:
-  the workspace wires `onSelect` to the store action
+- Clicking a canvas node selects that node exactly via `selectNode` (path
+  truncates at the click). Double-click opens the conversation through
   `selectBranchAtNode(nodeId)`, which targets the subtree's newest leaf
   (`newestLeafDescendant`, same semantics as `revealSearchHit`) and sets a
   queryless `reveal` so the message pane scrolls to the clicked node
-  without highlighting. Plain `selectNode` truncates the path at the
-  clicked node and is wrong for the Panorama. The canvas then fits the
-  updated path via `useReactFlow().fitView` (queued by React Flow until
-  the next node adopt; camera效果 only verifiable in a real browser, not
-  jsdom).
+  without highlighting. The canvas does not fitView on click; it only
+  nudges the viewport when the clicked card is clipped by the pane edge
+  (pan only, zoom unchanged).
 - Layout lives in the pure module `features/conversations/panoramaLayout.ts`
   (defensive validation mirroring `projectVisibleRows`: null on missing
   nodes, parent mismatch, or cycle; component renders the

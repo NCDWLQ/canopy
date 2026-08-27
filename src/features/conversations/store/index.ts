@@ -1193,11 +1193,11 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
       set({ activeNodeId: nodeId, reveal: null })
     },
 
-    // Panorama selection: activating a node means activating the whole
-    // branch through it. The active path targets the newest leaf of the
-    // node's subtree (matching revealSearchHit semantics), and a queryless
-    // reveal scrolls the conversation pane to the clicked message without
-    // highlighting anything.
+    // Used when opening a conversation from Panorama (double-click) and by
+    // search reveal: the active path targets the newest leaf of the node's
+    // subtree, and a queryless reveal scrolls the conversation pane to the
+    // clicked message without highlighting. Single-click selection on the
+    // canvas uses `selectNode` instead so the clicked card stays active.
     selectBranchAtNode: (nodeId) => {
       const state = get()
       if (state.conversationId === null) return

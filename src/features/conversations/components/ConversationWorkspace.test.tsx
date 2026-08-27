@@ -2830,6 +2830,33 @@ describe("ConversationWorkspace", () => {
     unmount7()
   })
 
+  it("selects the clicked Panorama node instead of its newest leaf", async () => {
+    class DOMMatrixReadOnlyStub {
+      readonly m22 = 1
+    }
+    vi.stubGlobal("DOMMatrixReadOnly", DOMMatrixReadOnlyStub)
+
+    client.listConversations.mockResolvedValueOnce([
+      { ...tree.conversation, updatedAt: right.createdAt },
+    ])
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+
+    render(<ConversationWorkspace />)
+    await screen.findByTestId("conversation-pane")
+    expect(useConversationStore.getState().activeNodeId).toBe(right.id)
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "切换对话全景视图" }),
+    )
+    const panorama = screen.getByRole("region", { name: "对话全景" })
+    fireEvent.click(within(panorama).getByText("ASSISTANT_SENTINEL"))
+
+    expect(useConversationStore.getState().activeNodeId).toBe(assistant.id)
+    expect(useConversationStore.getState().reveal).toBeNull()
+  })
+
   it("opens the conversation pane on the double-clicked Panorama node", async () => {
     const scrollIntoView = vi.fn()
     Element.prototype.scrollIntoView = scrollIntoView

@@ -182,6 +182,7 @@ export function ConversationWorkspace({
   const initializeHistory = useConversationStore(
     (state) => state.initializeHistory,
   )
+  const selectNode = useConversationStore((state) => state.selectNode)
   const selectBranchAtNode = useConversationStore(
     (state) => state.selectBranchAtNode,
   )
@@ -945,8 +946,10 @@ export function ConversationWorkspace({
                 rootNodeId={store.rootNodeId}
                 nodesById={store.nodesById}
                 activePathIds={visiblePath.map((message) => message.id)}
-                onSelect={selectBranchAtNode}
+                onSelect={selectNode}
                 onOpenInConversation={(nodeId) => {
+                  // Open the branch through the node (newest leaf + reveal) so
+                  // the conversation pane lands on the double-clicked message.
                   selectBranchAtNode(nodeId)
                   setIsPanoramaOpen(false)
                 }}

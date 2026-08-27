@@ -8,6 +8,7 @@ import {
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
+  useStoreApi,
   type NodeProps,
   type NodeTypes,
 } from "@xyflow/react"
@@ -162,6 +163,9 @@ const NODE_TYPES: NodeTypes = { panoramaCard: PanoramaNodeCard }
 
 const EMPTY_COLLAPSED_IDS: ReadonlySet<string> = new Set()
 
+/** Screen-space inset before a click triggers a viewport nudge. */
+const NODE_VIEW_PADDING = 48
+
 export type ConversationPanoramaProps = {
   rootNodeId: string
   nodesById: Readonly<Record<string, TreeNodeView>>
@@ -191,7 +195,8 @@ function ConversationPanoramaView({
 }: ConversationPanoramaProps) {
   const { t } = useTranslation()
   const { resolvedTheme } = useTheme()
-  const { fitView } = useReactFlow()
+  const { getNode, getViewport, setViewport } = useReactFlow()
+  const storeApi = useStoreApi()
   // Collapse state is scoped to a conversation: when the root changes the
   // previous set is discarded instead of being reset through an effect.
   const [collapseState, setCollapseState] = React.useState<{
@@ -203,28 +208,58 @@ function ConversationPanoramaView({
       ? collapseState.collapsedIds
       : EMPTY_COLLAPSED_IDS
 
-  // Selecting a node should bring the whole root -> node path into view.
-  // The store owns path derivation, so the click only arms the flag and the
-  // fit runs once the updated activePathIds prop arrives.
-  const fitAfterSelectRef = React.useRef(false)
-  React.useEffect(() => {
-    if (!fitAfterSelectRef.current) return
-    fitAfterSelectRef.current = false
-    const reducedMotion =
-      window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false
-    void fitView({
-      nodes: activePathIds.map((id) => ({ id })),
-      padding: 0.2,
-      maxZoom: 0.9,
-      duration: reducedMotion ? 0 : 400,
-    })
-  }, [activePathIds, fitView])
+  // Click should not reframe the canvas. Only nudge when the clicked card is
+  // clipped by the viewport — pan just enough to clear the padding, keep zoom.
+  const ensureNodeVisible = React.useCallback(
+    (nodeId: string) => {
+      const node = getNode(nodeId)
+      if (node === undefined) return
+      const { width: paneWidth, height: paneHeight } = storeApi.getState()
+      if (paneWidth <= 0 || paneHeight <= 0) return
+
+      const cardWidth = node.measured?.width ?? node.width ?? PANORAMA_CARD_WIDTH
+      const cardHeight =
+        node.measured?.height ?? node.height ?? PANORAMA_CARD_HEIGHT
+      const { x: viewportX, y: viewportY, zoom } = getViewport()
+      const screenLeft = node.position.x * zoom + viewportX
+      const screenTop = node.position.y * zoom + viewportY
+      const screenRight = screenLeft + cardWidth * zoom
+      const screenBottom = screenTop + cardHeight * zoom
+
+      let deltaX = 0
+      let deltaY = 0
+      if (screenLeft < NODE_VIEW_PADDING) {
+        deltaX = NODE_VIEW_PADDING - screenLeft
+      } else if (screenRight > paneWidth - NODE_VIEW_PADDING) {
+        deltaX = paneWidth - NODE_VIEW_PADDING - screenRight
+      }
+      if (screenTop < NODE_VIEW_PADDING) {
+        deltaY = NODE_VIEW_PADDING - screenTop
+      } else if (screenBottom > paneHeight - NODE_VIEW_PADDING) {
+        deltaY = paneHeight - NODE_VIEW_PADDING - screenBottom
+      }
+      if (deltaX === 0 && deltaY === 0) return
+
+      const reducedMotion =
+        window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ??
+        false
+      void setViewport(
+        {
+          x: viewportX + deltaX,
+          y: viewportY + deltaY,
+          zoom,
+        },
+        { duration: reducedMotion ? 0 : 280 },
+      )
+    },
+    [getNode, getViewport, setViewport, storeApi],
+  )
 
   const handleNodeClick: NonNullable<
     React.ComponentProps<typeof ReactFlow>["onNodeClick"]
   > = (_, node) => {
-    fitAfterSelectRef.current = true
     onSelect(node.id)
+    ensureNodeVisible(node.id)
   }
 
   const handleNodeDoubleClick: NonNullable<

@@ -174,9 +174,10 @@ describe("ConversationPanorama", () => {
       />,
     )
 
-    fireEvent.click(screen.getByText("LEFT"))
+    // Non-leaf card: selection must report this id, not a descendant leaf.
+    fireEvent.click(screen.getByText("A"))
 
-    expect(onSelect).toHaveBeenCalledWith("user-left")
+    expect(onSelect).toHaveBeenCalledWith("assistant-a")
   })
 
   it("emits the double-clicked node id through onOpenInConversation", () => {
