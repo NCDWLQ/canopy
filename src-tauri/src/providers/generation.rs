@@ -12,17 +12,73 @@ use crate::conversations::{
     ConversationPersistenceService, NewNode, Node, ReasoningEffort, Role, ValidatedPath,
 };
 use crate::infra::identity::{IdentityTimeSource, SystemIdentityTimeSource};
-
-use super::{
-    anthropic,
-    openai_compatible::{self, GeneratedContent, OpenAiCompatibleClient, StreamingRequest},
-    Protocol, ProviderError, ProviderService, ValidatedEndpoint,
+use crate::llm::{
+    adapters::anthropic, ChatPrompt, GeneratedContent, LlmError, MessageRole,
+    OpenAiCompatibleClient, PromptMessage, Protocol, StreamingRequest, ValidatedEndpoint,
 };
+
+use super::{domain::validate_model, ProviderError, ProviderService};
 
 struct GenerationEntry {
     generation_id: String,
     cancellation: CancellationToken,
     phase: GenerationPhase,
+}
+
+/// Maps a validated conversation path into a transport-neutral LLM prompt.
+/// Path-shape errors keep the historical `active_node_id` CommandError reasons.
+pub fn chat_prompt_from_path(
+    path: &ValidatedPath,
+    model: &str,
+    reasoning_effort: Option<ReasoningEffort>,
+) -> Result<ChatPrompt, ProviderError> {
+    let model = validate_model(model)?;
+    let nodes = path.as_slice();
+    if nodes.last().map(|node| node.role) != Some(Role::User) {
+        return Err(ProviderError::invalid_input(
+            "active_node_id",
+            "terminal_role_must_be_user",
+        ));
+    }
+    let messages = nodes
+        .iter()
+        .map(|node| {
+            let role = match node.role {
+                Role::System => MessageRole::System,
+                Role::User => MessageRole::User,
+                Role::Assistant => MessageRole::Assistant,
+                Role::Tool => {
+                    return Err(ProviderError::invalid_input(
+                        "active_node_id",
+                        "tool_role_unsupported",
+                    ))
+                }
+            };
+            if node.content.trim().is_empty() {
+                return Err(ProviderError::invalid_input(
+                    "active_node_id",
+                    "blank_content",
+                ));
+            }
+            Ok(PromptMessage {
+                role,
+                content: node.content.clone(),
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(ChatPrompt {
+        model,
+        messages,
+        reasoning_effort: reasoning_effort.map(to_llm_effort),
+    })
+}
+
+fn to_llm_effort(effort: ReasoningEffort) -> crate::llm::ReasoningEffort {
+    match effort {
+        ReasoningEffort::Low => crate::llm::ReasoningEffort::Low,
+        ReasoningEffort::Medium => crate::llm::ReasoningEffort::Medium,
+        ReasoningEffort::High => crate::llm::ReasoningEffort::High,
+    }
 }
 
 enum GenerationPhase {
@@ -169,10 +225,9 @@ pub(crate) struct PreparedGeneration {
     active_node_id: String,
     model: String,
     endpoint: ValidatedEndpoint,
-    path: ValidatedPath,
+    prompt: ChatPrompt,
     secret: Option<SecretString>,
     protocol: Protocol,
-    reasoning_effort: Option<ReasoningEffort>,
     client: OpenAiCompatibleClient,
     persistence: ConversationPersistenceService,
     lease: GenerationLease,
@@ -193,17 +248,15 @@ impl PreparedGeneration {
 
     pub(crate) async fn run<F, T>(self, on_delta: F, on_thinking: T) -> GenerationRunResult
     where
-        F: FnMut(&str) -> Result<(), ProviderError>,
-        T: FnMut(&str) -> Result<(), ProviderError>,
+        F: FnMut(&str) -> Result<(), LlmError>,
+        T: FnMut(&str) -> Result<(), LlmError>,
     {
         let cancellation = self.lease.cancellation().clone();
         let request = StreamingRequest {
             endpoint: &self.endpoint,
-            path: &self.path,
-            model: &self.model,
+            prompt: &self.prompt,
             secret: self.secret.as_ref(),
             cancellation: &cancellation,
-            reasoning_effort: self.reasoning_effort,
         };
         let streamed = match self.protocol {
             Protocol::OpenAiCompatible => {
@@ -262,7 +315,7 @@ pub(crate) enum GenerationStage {
 async fn finish_generation(
     persistence: &ConversationPersistenceService,
     lease: &GenerationLease,
-    streamed: Result<GeneratedContent, ProviderError>,
+    streamed: Result<GeneratedContent, LlmError>,
     pending: PendingAssistant,
 ) -> GenerationOutcome {
     match streamed {
@@ -297,10 +350,10 @@ async fn finish_generation(
                 error,
             },
         },
-        Err(ProviderError::Cancelled) => GenerationOutcome::Cancelled,
+        Err(LlmError::Cancelled) => GenerationOutcome::Cancelled,
         Err(error) => GenerationOutcome::Failed {
             stage: GenerationStage::Generation,
-            error,
+            error: error.into(),
         },
     }
 }
@@ -329,14 +382,7 @@ pub(crate) async fn prepare_generation(
         None => provider.model.clone(),
     };
     let endpoint = ValidatedEndpoint::parse(&provider.base_endpoint, provider.protocol)?;
-    match provider.protocol {
-        Protocol::OpenAiCompatible => {
-            openai_compatible::build_request(&path, &model, conversation.reasoning_effort)?;
-        }
-        Protocol::Anthropic => {
-            anthropic::build_request(&path, &model, conversation.reasoning_effort)?;
-        }
-    }
+    let prompt = chat_prompt_from_path(&path, &model, conversation.reasoning_effort)?;
     let client = OpenAiCompatibleClient::new()?;
     let lease = runtime.reserve(conversation_id.clone(), generation_id)?;
 
@@ -345,10 +391,9 @@ pub(crate) async fn prepare_generation(
         active_node_id,
         model,
         endpoint,
-        path,
+        prompt,
         secret,
         protocol: provider.protocol,
-        reasoning_effort: conversation.reasoning_effort,
         client,
         persistence,
         lease,
@@ -364,15 +409,17 @@ mod tests {
 
     use crate::{
         conversations::{
-            ConversationPersistenceService, NewConversation, NewNode, ReasoningEffort, Role,
+            ConversationPersistenceService, NewConversation, NewNode, Node, ReasoningEffort, Role,
+            ValidatedPath,
         },
         database::MIGRATION_CATALOG,
-        providers::{NativeCredentialStore, Protocol, ProviderService},
+        llm::LlmError,
+        providers::{NativeCredentialStore, Protocol, ProviderError, ProviderService},
     };
 
     use super::{
-        finish_generation, prepare_generation, GeneratedContent, GenerationOutcome,
-        GenerationRuntime, PendingAssistant,
+        chat_prompt_from_path, finish_generation, prepare_generation, GeneratedContent,
+        GenerationOutcome, GenerationRuntime, PendingAssistant,
     };
 
     const GENERATION_A: &str = "11111111-1111-4111-8111-111111111111";
@@ -588,7 +635,10 @@ mod tests {
             .unwrap();
             assert_eq!(prepared.protocol, Protocol::Anthropic);
             assert_eq!(prepared.model, "bound-override");
-            assert_eq!(prepared.reasoning_effort, Some(ReasoningEffort::High));
+            assert_eq!(
+                prepared.prompt.reasoning_effort,
+                Some(crate::llm::ReasoningEffort::High)
+            );
             drop(prepared);
 
             persistence
@@ -607,7 +657,10 @@ mod tests {
             .unwrap();
             assert_eq!(prepared.protocol, Protocol::OpenAiCompatible);
             assert_eq!(prepared.model, "active-model");
-            assert_eq!(prepared.reasoning_effort, Some(ReasoningEffort::Low));
+            assert_eq!(
+                prepared.prompt.reasoning_effort,
+                Some(crate::llm::ReasoningEffort::Low)
+            );
         });
     }
 
@@ -704,7 +757,7 @@ mod tests {
 
             assert_eq!(prepared.protocol, Protocol::OpenAiCompatible);
             assert_eq!(prepared.model, "active-model");
-            assert_eq!(prepared.reasoning_effort, None);
+            assert_eq!(prepared.prompt.reasoning_effort, None);
         });
     }
 
@@ -781,13 +834,7 @@ mod tests {
                 .reserve("conversation".to_owned(), GENERATION_B.to_owned())
                 .unwrap();
             assert!(matches!(
-                finish_generation(
-                    &persistence,
-                    &lease,
-                    Err(super::ProviderError::Cancelled),
-                    pending(),
-                )
-                .await,
+                finish_generation(&persistence, &lease, Err(LlmError::Cancelled), pending(),).await,
                 GenerationOutcome::Cancelled
             ));
             assert_eq!(assistant_count(&pool).await, 0);
@@ -804,13 +851,8 @@ mod tests {
                 .reserve("conversation".to_owned(), GENERATION_A.to_owned())
                 .unwrap();
             assert!(matches!(
-                finish_generation(
-                    &persistence,
-                    &lease,
-                    Err(super::ProviderError::Unavailable),
-                    pending(),
-                )
-                .await,
+                finish_generation(&persistence, &lease, Err(LlmError::Unavailable), pending(),)
+                    .await,
                 GenerationOutcome::Failed {
                     stage: super::GenerationStage::Generation,
                     ..
@@ -847,5 +889,70 @@ mod tests {
             drop(lease);
             assert_eq!(runtime.active_count(), 0);
         });
+    }
+
+    fn path_node(id: &str, parent_id: Option<&str>, role: Role, content: &str) -> Node {
+        Node {
+            id: id.to_owned(),
+            parent_id: parent_id.map(str::to_owned),
+            conversation_id: "conversation".to_owned(),
+            role,
+            content: content.to_owned(),
+            model: None,
+            created_at: 1,
+            metadata: json!({}),
+        }
+    }
+
+    #[test]
+    fn chat_prompt_from_path_rejects_tool_and_non_user_terminals() {
+        let tool_path = ValidatedPath::new(vec![path_node("tool", None, Role::Tool, "tool")]);
+        assert!(matches!(
+            chat_prompt_from_path(&tool_path, "model", None),
+            Err(ProviderError::InvalidInput {
+                field: "active_node_id",
+                reason: "terminal_role_must_be_user"
+            })
+        ));
+        let assistant_path = ValidatedPath::new(vec![path_node(
+            "assistant",
+            None,
+            Role::Assistant,
+            "answer",
+        )]);
+        assert!(matches!(
+            chat_prompt_from_path(&assistant_path, "model", None),
+            Err(ProviderError::InvalidInput {
+                field: "active_node_id",
+                reason: "terminal_role_must_be_user"
+            })
+        ));
+        let blank_path = ValidatedPath::new(vec![path_node("user", None, Role::User, "  \n\t ")]);
+        assert!(matches!(
+            chat_prompt_from_path(&blank_path, "model", None),
+            Err(ProviderError::InvalidInput {
+                field: "active_node_id",
+                reason: "blank_content"
+            })
+        ));
+        let user_path = ValidatedPath::new(vec![path_node("user", None, Role::User, "question")]);
+        assert!(matches!(
+            chat_prompt_from_path(&user_path, &"m".repeat(201), None),
+            Err(ProviderError::InvalidInput {
+                field: "model",
+                reason: "too_long"
+            })
+        ));
+        let tool_then_user = ValidatedPath::new(vec![
+            path_node("tool", None, Role::Tool, "tool content"),
+            path_node("user", Some("tool"), Role::User, "question"),
+        ]);
+        assert!(matches!(
+            chat_prompt_from_path(&tool_then_user, "model", None),
+            Err(ProviderError::InvalidInput {
+                field: "active_node_id",
+                reason: "tool_role_unsupported"
+            })
+        ));
     }
 }

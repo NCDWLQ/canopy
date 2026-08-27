@@ -1,11 +1,8 @@
-pub mod anthropic;
 pub mod commands;
 pub mod credentials;
 pub mod domain;
 pub mod error;
 pub mod generation;
-pub mod model_list;
-pub mod openai_compatible;
 mod repository;
 pub mod service;
 mod title_prompt;
@@ -17,7 +14,9 @@ pub use domain::{
     MIGRATED_PROVIDER_ID, MIGRATED_PROVIDER_NAME,
 };
 pub use error::ProviderError;
-pub use generation::GenerationRuntime;
+pub use generation::{chat_prompt_from_path, GenerationRuntime};
 pub use service::ProviderService;
 
+pub use crate::llm::adapters::{anthropic, openai_compatible};
+pub use crate::llm::model_list;
 pub use crate::settings::{LanguagePreference, ThemePreference, TitleModelBinding};

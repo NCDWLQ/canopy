@@ -2,6 +2,7 @@ pub mod conversations;
 pub mod database;
 pub mod error;
 pub mod infra;
+pub mod llm;
 pub mod providers;
 pub mod settings;
 

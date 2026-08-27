@@ -2,8 +2,8 @@ use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 
 use super::{
-    openai_compatible::{map_status, map_transport_error, OpenAiCompatibleClient},
-    Protocol, ProviderError, ValidatedEndpoint,
+    client::{map_status, map_transport_error, OpenAiCompatibleClient},
+    LlmError, Protocol, ValidatedEndpoint,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -32,7 +32,7 @@ pub async fn list_models(
     protocol: Protocol,
     endpoint: &ValidatedEndpoint,
     secret: Option<&SecretString>,
-) -> Result<Vec<ModelSummary>, ProviderError> {
+) -> Result<Vec<ModelSummary>, LlmError> {
     let client = OpenAiCompatibleClient::new()?;
     let url = endpoint.models_url().clone();
     let mut request = client.http_client().get(url);
@@ -72,12 +72,10 @@ pub async fn list_models(
     Err(map_status(response.status(), response.headers()))
 }
 
-async fn parse_model_response(
-    response: reqwest::Response,
-) -> Result<Vec<ModelSummary>, ProviderError> {
-    let response: Response = response.json().await.map_err(|_| ProviderError::Protocol)?;
+async fn parse_model_response(response: reqwest::Response) -> Result<Vec<ModelSummary>, LlmError> {
+    let response: Response = response.json().await.map_err(|_| LlmError::Protocol)?;
     if response.data.len() > 500 || response.data.iter().any(|model| model.id.trim().is_empty()) {
-        return Err(ProviderError::Protocol);
+        return Err(LlmError::Protocol);
     }
     let mut models: Vec<_> = response
         .data

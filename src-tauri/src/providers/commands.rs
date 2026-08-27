@@ -13,14 +13,17 @@ use crate::{
         database::managed_sqlite_pool,
         identity::{IdentityTimeSource, SystemIdentityTimeSource},
     },
+    llm::{
+        model_list::{list_models, ModelSummary},
+        LlmError, Protocol,
+    },
     settings::{SettingsService, TitleModelBinding},
 };
 
-use super::model_list::{list_models, ModelSummary};
 use super::{
     generation::{prepare_generation, GenerationOutcome, GenerationStage},
-    ApiKeyAction, GenerationRuntime, NativeCredentialStore, Protocol, ProviderError, ProviderInput,
-    ProviderService, RedactedProvider,
+    ApiKeyAction, GenerationRuntime, NativeCredentialStore, ProviderInput, ProviderService,
+    RedactedProvider,
 };
 
 pub use crate::settings::commands::{
@@ -503,7 +506,7 @@ async fn run_after_started<S, R, Fut>(
     run: R,
 ) -> Result<GenerationTerminalDto, GenerationTerminalDto>
 where
-    S: Fn(GenerationEventDto) -> Result<(), ProviderError>,
+    S: Fn(GenerationEventDto) -> Result<(), LlmError>,
     R: FnOnce() -> Fut,
     Fut: std::future::Future<Output = GenerationOutcome>,
 {
@@ -576,11 +579,7 @@ pub async fn generate_from_active_path<R: tauri::Runtime>(
         prepared.conversation_id().to_owned(),
         prepared.active_node_id().to_owned(),
         prepared.model().to_owned(),
-        move |event| {
-            event_channel
-                .send(event)
-                .map_err(|_| ProviderError::Cancelled)
-        },
+        move |event| event_channel.send(event).map_err(|_| LlmError::Cancelled),
         || async move {
             prepared
                 .run(
@@ -590,7 +589,7 @@ pub async fn generate_from_active_path<R: tauri::Runtime>(
                                 generation_id: delta_generation_id.clone(),
                                 content: content.to_owned(),
                             })
-                            .map_err(|_| ProviderError::Cancelled)
+                            .map_err(|_| LlmError::Cancelled)
                     },
                     move |content| {
                         thinking_channel
@@ -598,7 +597,7 @@ pub async fn generate_from_active_path<R: tauri::Runtime>(
                                 generation_id: thinking_generation_id.clone(),
                                 content: content.to_owned(),
                             })
-                            .map_err(|_| ProviderError::Cancelled)
+                            .map_err(|_| LlmError::Cancelled)
                     },
                 )
                 .await
@@ -684,10 +683,8 @@ mod tests {
 
     use crate::{
         conversations::{PersistenceError, Role},
-        providers::{
-            generation::{GenerationOutcome, GenerationStage},
-            ProviderError,
-        },
+        llm::LlmError,
+        providers::generation::{GenerationOutcome, GenerationStage},
     };
 
     use super::{
@@ -799,7 +796,7 @@ mod tests {
                 "conversation".to_owned(),
                 "user".to_owned(),
                 "model".to_owned(),
-                |_| Err(ProviderError::Cancelled),
+                |_| Err(LlmError::Cancelled),
                 || {
                     ran_for_run.store(true, Ordering::SeqCst);
                     async { panic!("run must not start after started send fails") }
@@ -828,7 +825,7 @@ mod tests {
             GENERATION_A.to_owned(),
             GenerationOutcome::Failed {
                 stage: GenerationStage::Generation,
-                error: ProviderError::Unavailable,
+                error: LlmError::Unavailable.into(),
             },
         );
         let persistence_failed = map_generation_outcome(

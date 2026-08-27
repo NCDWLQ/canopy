@@ -1,13 +1,10 @@
 const INPUT_CHAR_LIMIT: usize = 2_000;
 
+use crate::llm::TitlePrompt;
+
 /// Separated-role title prompt: instructions live in the system message,
 /// untrusted conversation excerpts live in the user message (see design.md
 /// §1). Both protocol clients consume the same pair.
-pub(crate) struct TitlePrompt {
-    pub system: String,
-    pub user: String,
-}
-
 const TITLE_SYSTEM_INSTRUCTION: &str = r#"Generate a short conversation title for a history list.
 
 Capture the user's main topic, question, or intent.

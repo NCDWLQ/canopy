@@ -8,12 +8,12 @@ use tokio_util::sync::CancellationToken;
 use crate::conversations::{
     commands::validate_title, AutoTitleContext, ConversationPersistenceService,
 };
+use crate::llm::{
+    adapters::anthropic, OpenAiCompatibleClient, Protocol, TitlePrompt, ValidatedEndpoint,
+};
 use crate::settings::{SettingsService, TitleModelBinding};
 
-use super::{
-    anthropic, openai_compatible::OpenAiCompatibleClient, title_prompt::build_title_prompt,
-    title_prompt::TitlePrompt, Protocol, Provider, ProviderService, ValidatedEndpoint,
-};
+use super::{domain::validate_model, title_prompt::build_title_prompt, Provider, ProviderService};
 
 pub(crate) const TITLE_UPDATED_EVENT: &str = "conversation://title-updated";
 
@@ -69,6 +69,7 @@ async fn generate_title_from_provider(
     let cancellation = CancellationToken::new();
     match provider.protocol {
         Protocol::OpenAiCompatible => {
+            let model = validate_model(&model).map_err(|_| ())?;
             client
                 .stream_title(&endpoint, &model, secret.as_ref(), &cancellation, &prompt)
                 .await

@@ -5,18 +5,25 @@ use canopy_lib::{
         ConversationPersistenceService, NewConversation, NewNode, ReasoningEffort, Role,
         ValidatedPath,
     },
-    providers::{
-        anthropic,
-        model_list::list_models,
-        openai_compatible::{OpenAiCompatibleClient, StreamingRequest},
-        Protocol, ProviderError, ValidatedEndpoint,
+    llm::{
+        adapters::anthropic, model_list::list_models, LlmError, OpenAiCompatibleClient, Protocol,
+        StreamingRequest, ValidatedEndpoint,
     },
+    providers::chat_prompt_from_path,
 };
 use secrecy::SecretString;
 use serde_json::json;
 use tokio_util::sync::CancellationToken;
 
 use support::{migrated_pool, run_async, sse, sse_event, SequenceResponse, TestServer};
+
+fn chat_prompt(
+    path: &ValidatedPath,
+    model: &str,
+    effort: Option<ReasoningEffort>,
+) -> canopy_lib::llm::ChatPrompt {
+    chat_prompt_from_path(path, model, effort).unwrap()
+}
 
 fn node(id: &str, parent_id: Option<&str>, role: Role, content: &str, created_at: i64) -> NewNode {
     NewNode {
@@ -118,11 +125,9 @@ fn anthropic_stream_routes_blocks_and_sends_native_headers_and_body() {
             &client,
             StreamingRequest {
                 endpoint: &endpoint,
-                path: &path,
-                model: "claude-fixture",
+                prompt: &chat_prompt(&path, "claude-fixture", None),
                 secret: Some(&SecretString::from("ANTHROPIC_TEST_KEY")),
                 cancellation: &CancellationToken::new(),
-                reasoning_effort: None,
             },
             |delta| {
                 deltas.push(delta.to_owned());
@@ -183,11 +188,9 @@ fn anthropic_stream_maps_effort_to_the_budget_ladder() {
                 &client,
                 StreamingRequest {
                     endpoint: &endpoint,
-                    path: &path,
-                    model: "claude-fixture",
+                    prompt: &chat_prompt(&path, "claude-fixture", effort),
                     secret: None,
                     cancellation: &CancellationToken::new(),
-                    reasoning_effort: effort,
                 },
                 |_| Ok(()),
                 |_| Ok(()),
@@ -229,11 +232,9 @@ fn anthropic_stream_accepts_max_tokens_stop_reason_and_closes_without_done() {
             &client,
             StreamingRequest {
                 endpoint: &endpoint,
-                path: &path,
-                model: "claude-fixture",
+                prompt: &chat_prompt(&path, "claude-fixture", None),
                 secret: None,
                 cancellation: &CancellationToken::new(),
-                reasoning_effort: None,
             },
             |_| Ok(()),
             |_| Ok(()),
@@ -334,18 +335,16 @@ fn anthropic_stream_failures_fail_closed_as_protocol_errors() {
                 &client,
                 StreamingRequest {
                     endpoint: &endpoint,
-                    path: &path,
-                    model: "claude-fixture",
+                    prompt: &chat_prompt(&path, "claude-fixture", None),
                     secret: None,
                     cancellation: &CancellationToken::new(),
-                    reasoning_effort: None,
                 },
                 |_| Ok(()),
                 |_| Ok(()),
             )
             .await;
             assert!(
-                matches!(result, Err(ProviderError::Protocol)),
+                matches!(result, Err(LlmError::Protocol)),
                 "expected a protocol error"
             );
             server.finish();
@@ -378,11 +377,9 @@ fn openai_stream_captures_reasoning_content_and_reasoning_thinking() {
             .stream_with_thinking(
                 StreamingRequest {
                     endpoint: &endpoint,
-                    path: &path,
-                    model: "fixture-model",
+                    prompt: &chat_prompt(&path, "fixture-model", Some(ReasoningEffort::Low)),
                     secret: None,
                     cancellation: &CancellationToken::new(),
-                    reasoning_effort: Some(ReasoningEffort::Low),
                 },
                 |_| Ok(()),
                 |delta| {
@@ -430,11 +427,9 @@ fn openai_stream_prefers_reasoning_content_and_skips_empty_thinking() {
             .stream_with_thinking(
                 StreamingRequest {
                     endpoint: &endpoint,
-                    path: &path,
-                    model: "fixture-model",
+                    prompt: &chat_prompt(&path, "fixture-model", None),
                     secret: None,
                     cancellation: &CancellationToken::new(),
-                    reasoning_effort: None,
                 },
                 |_| Ok(()),
                 |delta| {
@@ -472,11 +467,9 @@ fn openai_stream_without_thinking_fields_stays_a_plain_content_stream() {
             .stream_with_thinking(
                 StreamingRequest {
                     endpoint: &endpoint,
-                    path: &path,
-                    model: "fixture-model",
+                    prompt: &chat_prompt(&path, "fixture-model", None),
                     secret: None,
                     cancellation: &CancellationToken::new(),
-                    reasoning_effort: None,
                 },
                 |_| Ok(()),
                 |_| Ok(()),
@@ -579,7 +572,7 @@ fn model_lists_are_sorted_bounded_and_parsed_per_protocol() {
                 ValidatedEndpoint::parse(&server.endpoint, Protocol::OpenAiCompatible).unwrap();
             let result = list_models(Protocol::OpenAiCompatible, &endpoint, None).await;
             assert!(
-                matches!(result, Err(ProviderError::Protocol)),
+                matches!(result, Err(LlmError::Protocol)),
                 "malformed body must fail closed"
             );
             server.finish();
@@ -601,7 +594,7 @@ fn model_lists_are_sorted_bounded_and_parsed_per_protocol() {
         let endpoint =
             ValidatedEndpoint::parse(&server.endpoint, Protocol::OpenAiCompatible).unwrap();
         let result = list_models(Protocol::OpenAiCompatible, &endpoint, None).await;
-        assert!(matches!(result, Err(ProviderError::Protocol)));
+        assert!(matches!(result, Err(LlmError::Protocol)));
         server.finish();
     });
 }
@@ -660,7 +653,7 @@ fn anthropic_model_list_falls_back_to_the_openai_surface_on_404() {
             Some(&SecretString::from("DUAL_SURFACE_KEY")),
         )
         .await;
-        assert!(matches!(result, Err(ProviderError::Protocol)));
+        assert!(matches!(result, Err(LlmError::Protocol)));
         assert_eq!(server.finish_all().len(), 2);
 
         // Non-404 failures (e.g. 401) never trigger the fallback probe.
@@ -677,7 +670,7 @@ fn anthropic_model_list_falls_back_to_the_openai_surface_on_404() {
             Some(&SecretString::from("DUAL_SURFACE_KEY")),
         )
         .await;
-        assert!(matches!(result, Err(ProviderError::Authentication)));
+        assert!(matches!(result, Err(LlmError::Authentication)));
         server.finish();
     });
 }

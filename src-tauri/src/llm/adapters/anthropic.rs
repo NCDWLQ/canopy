@@ -7,16 +7,10 @@ use secrecy::ExposeSecret;
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::conversations::{ReasoningEffort, Role, ValidatedPath};
-
-use super::{
-    domain::validate_model,
-    openai_compatible::{
-        map_status, map_transport_error, GeneratedContent, OpenAiCompatibleClient,
-        StreamingRequest, MAX_RESPONSE_BYTES,
-    },
-    title_prompt::TitlePrompt,
-    ProviderError,
+use crate::llm::{
+    client::{map_status, map_transport_error, OpenAiCompatibleClient, MAX_RESPONSE_BYTES},
+    ChatPrompt, GeneratedContent, LlmError, MessageRole, ReasoningEffort, StreamingRequest,
+    TitlePrompt, ValidatedEndpoint,
 };
 
 const ANTHROPIC_VERSION: &str = "2023-06-01";
@@ -56,54 +50,32 @@ fn budget(effort: Option<ReasoningEffort>) -> u32 {
     }
 }
 
-pub fn build_request(
-    path: &ValidatedPath,
-    model: &str,
-    effort: Option<ReasoningEffort>,
-) -> Result<Value, ProviderError> {
-    if path.as_slice().last().map(|node| node.role) != Some(Role::User) {
-        return Err(ProviderError::invalid_input(
-            "active_node_id",
-            "terminal_role_must_be_user",
-        ));
-    }
+pub fn build_request(prompt: &ChatPrompt) -> Result<Value, LlmError> {
     let mut system = Vec::new();
     let mut messages = Vec::new();
-    for node in path.as_slice() {
-        if node.content.trim().is_empty() {
-            return Err(ProviderError::invalid_input(
-                "active_node_id",
-                "blank_content",
-            ));
-        }
-        match node.role {
-            Role::System => system.push(node.content.clone()),
-            Role::User => messages.push(Message {
+    for message in &prompt.messages {
+        match message.role {
+            MessageRole::System => system.push(message.content.clone()),
+            MessageRole::User => messages.push(Message {
                 role: "user",
-                content: node.content.clone(),
+                content: message.content.clone(),
             }),
-            Role::Assistant => messages.push(Message {
+            MessageRole::Assistant => messages.push(Message {
                 role: "assistant",
-                content: node.content.clone(),
+                content: message.content.clone(),
             }),
-            Role::Tool => {
-                return Err(ProviderError::invalid_input(
-                    "active_node_id",
-                    "tool_role_unsupported",
-                ))
-            }
         }
     }
     // Effort ladder (design §4.2): the untiered default keeps the original
     // fixed 8192 ceiling; an explicit tier raises the ceiling to
     // budget + 4096 so the answer always has a body allowance.
-    let budget_tokens = budget(effort);
-    let max_tokens = match effort {
+    let budget_tokens = budget(prompt.reasoning_effort);
+    let max_tokens = match prompt.reasoning_effort {
         None => 8192,
         Some(_) => budget_tokens + 4096,
     };
     serde_json::to_value(Request {
-        model: validate_model(model)?,
+        model: prompt.model.clone(),
         system: (!system.is_empty()).then(|| system.join("\n\n")),
         messages,
         max_tokens,
@@ -113,10 +85,10 @@ pub fn build_request(
         }),
         stream: true,
     })
-    .map_err(|_| ProviderError::Protocol)
+    .map_err(|_| LlmError::Protocol)
 }
 
-fn build_title_request(model: &str, prompt: &TitlePrompt) -> Result<Value, ProviderError> {
+fn build_title_request(model: &str, prompt: &TitlePrompt) -> Result<Value, LlmError> {
     serde_json::to_value(Request {
         model: model.trim().to_owned(),
         system: Some(prompt.system.clone()),
@@ -135,7 +107,7 @@ fn build_title_request(model: &str, prompt: &TitlePrompt) -> Result<Value, Provi
         }),
         stream: true,
     })
-    .map_err(|_| ProviderError::Protocol)
+    .map_err(|_| LlmError::Protocol)
 }
 
 pub async fn stream<F, T>(
@@ -143,12 +115,12 @@ pub async fn stream<F, T>(
     request: StreamingRequest<'_>,
     on_delta: F,
     on_thinking: T,
-) -> Result<GeneratedContent, ProviderError>
+) -> Result<GeneratedContent, LlmError>
 where
-    F: FnMut(&str) -> Result<(), ProviderError>,
-    T: FnMut(&str) -> Result<(), ProviderError>,
+    F: FnMut(&str) -> Result<(), LlmError>,
+    T: FnMut(&str) -> Result<(), LlmError>,
 {
-    let body = build_request(request.path, request.model, request.reasoning_effort)?;
+    let body = build_request(request.prompt)?;
     stream_body(
         client,
         request.endpoint,
@@ -163,12 +135,12 @@ where
 
 pub(crate) async fn stream_title(
     client: &OpenAiCompatibleClient,
-    endpoint: &super::ValidatedEndpoint,
+    endpoint: &ValidatedEndpoint,
     model: &str,
     secret: Option<&secrecy::SecretString>,
     cancellation: &tokio_util::sync::CancellationToken,
     prompt: &TitlePrompt,
-) -> Result<String, ProviderError> {
+) -> Result<String, LlmError> {
     stream_body(
         client,
         endpoint,
@@ -184,16 +156,16 @@ pub(crate) async fn stream_title(
 
 async fn stream_body<F, T>(
     client: &OpenAiCompatibleClient,
-    endpoint: &super::ValidatedEndpoint,
+    endpoint: &ValidatedEndpoint,
     secret: Option<&secrecy::SecretString>,
     cancellation: &tokio_util::sync::CancellationToken,
     body: Value,
     mut on_delta: F,
     mut on_thinking: T,
-) -> Result<GeneratedContent, ProviderError>
+) -> Result<GeneratedContent, LlmError>
 where
-    F: FnMut(&str) -> Result<(), ProviderError>,
-    T: FnMut(&str) -> Result<(), ProviderError>,
+    F: FnMut(&str) -> Result<(), LlmError>,
+    T: FnMut(&str) -> Result<(), LlmError>,
 {
     let mut http_request = client
         .http_client()
@@ -209,7 +181,7 @@ where
     )
     .await
     {
-        Either::Left(_) => return Err(ProviderError::Cancelled),
+        Either::Left(_) => return Err(LlmError::Cancelled),
         Either::Right((response, _)) => response.map_err(map_transport_error)?,
     };
     if !response.status().is_success() {
@@ -224,38 +196,37 @@ where
     let mut stopped = false;
     while let Some(event) =
         match select(cancellation.cancelled().boxed(), events.next().boxed()).await {
-            Either::Left(_) => return Err(ProviderError::Cancelled),
+            Either::Left(_) => return Err(LlmError::Cancelled),
             Either::Right((event, _)) => event,
         }
     {
-        let event = event.map_err(|_| ProviderError::Protocol)?;
-        let value: Value =
-            serde_json::from_str(&event.data).map_err(|_| ProviderError::Protocol)?;
+        let event = event.map_err(|_| LlmError::Protocol)?;
+        let value: Value = serde_json::from_str(&event.data).map_err(|_| LlmError::Protocol)?;
         match event.event.as_str() {
             "content_block_start" => {
-                let index = value["index"].as_u64().ok_or(ProviderError::Protocol)?;
+                let index = value["index"].as_u64().ok_or(LlmError::Protocol)?;
                 let kind = value["content_block"]["type"]
                     .as_str()
-                    .ok_or(ProviderError::Protocol)?;
+                    .ok_or(LlmError::Protocol)?;
                 blocks.insert(index, kind.to_owned());
             }
             "content_block_delta" => {
-                let index = value["index"].as_u64().ok_or(ProviderError::Protocol)?;
-                let kind = blocks.get(&index).ok_or(ProviderError::Protocol)?;
+                let index = value["index"].as_u64().ok_or(LlmError::Protocol)?;
+                let kind = blocks.get(&index).ok_or(LlmError::Protocol)?;
                 let delta = &value["delta"];
                 if kind == "text" && delta["type"] == "text_delta" {
-                    let text = delta["text"].as_str().ok_or(ProviderError::Protocol)?;
+                    let text = delta["text"].as_str().ok_or(LlmError::Protocol)?;
                     if content.len().saturating_add(text.len()) > MAX_RESPONSE_BYTES {
-                        return Err(ProviderError::Protocol);
+                        return Err(LlmError::Protocol);
                     }
                     if !text.is_empty() {
                         on_delta(text)?;
                         content.push_str(text);
                     }
                 } else if kind == "thinking" && delta["type"] == "thinking_delta" {
-                    let text = delta["thinking"].as_str().ok_or(ProviderError::Protocol)?;
+                    let text = delta["thinking"].as_str().ok_or(LlmError::Protocol)?;
                     if thinking.len().saturating_add(text.len()) > MAX_RESPONSE_BYTES {
-                        return Err(ProviderError::Protocol);
+                        return Err(LlmError::Protocol);
                     }
                     if !text.is_empty() {
                         on_thinking(text)?;
@@ -269,19 +240,19 @@ where
                     Some("end_turn" | "max_tokens")
                 );
                 if !stop_reason {
-                    return Err(ProviderError::Protocol);
+                    return Err(LlmError::Protocol);
                 }
             }
             "message_stop" => {
                 stopped = true;
                 break;
             }
-            "error" => return Err(ProviderError::Protocol),
+            "error" => return Err(LlmError::Protocol),
             _ => {}
         }
     }
     if !stopped || !stop_reason || content.trim().is_empty() {
-        return Err(ProviderError::Protocol);
+        return Err(LlmError::Protocol);
     }
     Ok(GeneratedContent {
         content,
@@ -293,51 +264,34 @@ where
 mod tests {
     use serde_json::json;
 
-    use crate::conversations::{NewNode, Node, ReasoningEffort, Role, ValidatedPath};
+    use crate::llm::{ChatPrompt, MessageRole, PromptMessage, ReasoningEffort, TitlePrompt};
 
     use super::{build_request, build_title_request};
 
-    fn node(id: &str, parent_id: Option<&str>, role: Role, content: &str) -> Node {
-        let node = NewNode {
-            id: id.to_owned(),
-            parent_id: parent_id.map(str::to_owned),
-            conversation_id: "conversation".to_owned(),
+    fn message(role: MessageRole, content: &str) -> PromptMessage {
+        PromptMessage {
             role,
             content: content.to_owned(),
-            model: None,
-            created_at: 1,
-            metadata: json!({}),
-        };
-        Node {
-            id: node.id,
-            parent_id: node.parent_id,
-            conversation_id: node.conversation_id,
-            role: node.role,
-            content: node.content,
-            model: node.model,
-            created_at: node.created_at,
-            metadata: node.metadata,
         }
     }
 
-    fn path() -> ValidatedPath {
-        ValidatedPath::new(vec![
-            node("system-a", None, Role::System, "first policy"),
-            node("user", Some("system-a"), Role::User, "question"),
-            node("assistant", Some("user"), Role::Assistant, "interim answer"),
-            node("system-b", Some("assistant"), Role::System, "second policy"),
-            node(
-                "follow-up",
-                Some("system-b"),
-                Role::User,
-                "SELECTED_SENTINEL",
-            ),
-        ])
+    fn prompt(effort: Option<ReasoningEffort>) -> ChatPrompt {
+        ChatPrompt {
+            model: "fixture-model".to_owned(),
+            messages: vec![
+                message(MessageRole::System, "first policy"),
+                message(MessageRole::User, "question"),
+                message(MessageRole::Assistant, "interim answer"),
+                message(MessageRole::System, "second policy"),
+                message(MessageRole::User, "SELECTED_SENTINEL"),
+            ],
+            reasoning_effort: effort,
+        }
     }
 
     #[test]
     fn request_extracts_system_joins_it_and_maps_ordered_roles() {
-        let request = build_request(&path(), "fixture-model", None).unwrap();
+        let request = build_request(&prompt(None)).unwrap();
         assert_eq!(
             request,
             json!({
@@ -357,10 +311,10 @@ mod tests {
 
     #[test]
     fn title_request_disables_thinking_and_limits_output() {
-        let prompt = crate::providers::title_prompt::build_title_prompt(
-            "USER_EXCERPT_SENTINEL",
-            "ASSISTANT_EXCERPT_SENTINEL",
-        );
+        let prompt = TitlePrompt {
+            system: "Generate a short conversation title for a history list.".to_owned(),
+            user: "<conversation>\n<user>\nUSER_EXCERPT_SENTINEL\n</user>\n<assistant>\nASSISTANT_EXCERPT_SENTINEL\n</assistant>\n</conversation>".to_owned(),
+        };
         let request = build_title_request("fixture-model", &prompt).unwrap();
         assert_eq!(request["max_tokens"], 256);
         assert_eq!(request["thinking"]["type"], "disabled");
@@ -383,7 +337,7 @@ mod tests {
             (Some(ReasoningEffort::Medium), 4096, 8192),
             (Some(ReasoningEffort::High), 16384, 20480),
         ] {
-            let request = build_request(&path(), "fixture-model", effort).unwrap();
+            let request = build_request(&prompt(effort)).unwrap();
             assert_eq!(request["thinking"]["budget_tokens"], budget_tokens);
             assert_eq!(request["thinking"]["type"], "enabled");
             assert_eq!(request["max_tokens"], max_tokens);
@@ -392,21 +346,12 @@ mod tests {
 
     #[test]
     fn systemless_paths_omit_the_system_field() {
-        let path = ValidatedPath::new(vec![node("user", None, Role::User, "question")]);
-        let request = build_request(&path, "fixture-model", None).unwrap();
+        let prompt = ChatPrompt {
+            model: "fixture-model".to_owned(),
+            messages: vec![message(MessageRole::User, "question")],
+            reasoning_effort: None,
+        };
+        let request = build_request(&prompt).unwrap();
         assert!(request.get("system").is_none());
-    }
-
-    #[test]
-    fn tool_blank_and_non_user_terminal_paths_are_rejected() {
-        let tool_path = ValidatedPath::new(vec![node("tool", None, Role::Tool, "tool content")]);
-        assert!(build_request(&tool_path, "model", None).is_err());
-
-        let blank_path = ValidatedPath::new(vec![node("user", None, Role::User, "  \n\t ")]);
-        assert!(build_request(&blank_path, "model", None).is_err());
-
-        let assistant_terminal =
-            ValidatedPath::new(vec![node("assistant", None, Role::Assistant, "answer")]);
-        assert!(build_request(&assistant_terminal, "model", None).is_err());
     }
 }

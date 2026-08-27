@@ -4,6 +4,7 @@ use super::{
     domain::{Protocol, Provider},
     ProviderError,
 };
+use crate::llm::LlmError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CredentialOperationKind {
@@ -75,7 +76,7 @@ impl ProviderRepository {
         .bind(provider.protocol.as_str())
         .bind(&provider.base_endpoint)
         .bind(&provider.model)
-        .bind(serde_json::to_string(&provider.models).map_err(|_| ProviderError::Protocol)?)
+        .bind(serde_json::to_string(&provider.models).map_err(|_| LlmError::Protocol)?)
         .bind(&provider.credential_ref)
         .bind(provider.created_at)
         .bind(provider.updated_at)
@@ -172,8 +173,7 @@ impl ProviderRepository {
 fn decode_provider(row: SqliteRow) -> Result<Provider, ProviderError> {
     let protocol: String = row.try_get("protocol")?;
     let models_json: String = row.try_get("models")?;
-    let models: Vec<String> =
-        serde_json::from_str(&models_json).map_err(|_| ProviderError::Protocol)?;
+    let models: Vec<String> = serde_json::from_str(&models_json).map_err(|_| LlmError::Protocol)?;
     Ok(Provider {
         id: row.try_get("id")?,
         name: row.try_get("name")?,
@@ -192,7 +192,7 @@ fn decode_operation(row: SqliteRow) -> Result<CredentialOperation, ProviderError
     let kind = match operation.as_str() {
         "save" => CredentialOperationKind::Save,
         "delete" => CredentialOperationKind::Delete,
-        _ => return Err(ProviderError::Protocol),
+        _ => return Err(LlmError::Protocol.into()),
     };
     Ok(CredentialOperation {
         id: row.try_get("id")?,
