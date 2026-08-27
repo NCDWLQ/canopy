@@ -25,6 +25,17 @@ Tauri SQL plugin configuration (preload + migrations)
 generation, and export code resolve the pool through `infra::database`; they
 do not own the catalog or open a second production connection.
 
+SQL ownership by table family:
+
+- `conversations` / `nodes` — `conversations::repository`. Binding columns
+  (`provider_id`, `model`, `reasoning_effort`) may be written after an
+  already-validated payload; this SQL must not `FROM providers` or
+  `JOIN providers`.
+- `providers` / `provider_credential_operations` — `providers::repository`.
+- typed `app_settings` keys — `settings::repository`.
+- `generation` does not own SQL. It composes provider validation and the
+  conversation persistence-only setter in one service transaction.
+
 - Register and preload one application database through the Tauri SQL plugin.
 - Resolve its `sqlx::SqlitePool` from the plugin's public `DbInstances` and
   `DbPool::Sqlite` state via `infra::database::managed_sqlite_pool`. Repository
@@ -462,7 +473,7 @@ workstream freezes these command names and DTOs in the shared IPC contract:
 | `load_conversation_tree` | `conversation_id` | Conversation plus deterministically ordered node DTOs |
 | `load_active_path` | `conversation_id`, `active_node_id` | Validated root-to-active DTO list, or a typed fail-closed error |
 | `archive_conversation` | `conversation_id` | Idempotent whole-conversation archive; all node bytes remain unchanged |
-| `generate_from_active_path` | `conversation_id`, `active_node_id`, provider/model selection | Provider output built only from `load_active_path`'s validated domain value |
+| `generate_from_active_path` | `conversation_id`, `active_node_id` | Snapshot provider/model/effort at prepare from the conversation binding; HTTP prompt built only from `load_active_path`'s validated domain value. The request DTO does not carry provider/model. |
 
 DTOs use string IDs, integer epoch-millisecond timestamps, explicit nullable
 fields, and parsed JSON metadata at IPC (the repository alone encodes canonical

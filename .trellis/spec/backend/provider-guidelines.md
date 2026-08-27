@@ -256,7 +256,7 @@ This path is a generation-module side effect. It must not use
 
 ```text
 list_providers({}) -> { providers, active_provider_id, auto_generate_title,
-                         title_model_binding }
+                        title_model_binding, language, theme }
 set_auto_generate_title({ enabled }) -> { enabled }
 set_title_model_binding({ binding: { provider_id, model } | null })
   -> { binding }
@@ -309,7 +309,7 @@ or absent = follow conversation).
 |---|---|
 | `auto_generate_title` missing or `"true"` | Treat as on |
 | `auto_generate_title` `"false"` | No title HTTP |
-| Unknown `auto_generate_title` value | `Protocol` |
+| Unknown `auto_generate_title` value | `SettingsError::CorruptValue`, mapped historically to `provider_unavailable` / `服务提供商当前不可用。` / retryable |
 | Assistant count ≠ 1, or no user node | No title HTTP |
 | Settings binding's provider/model gone | Fall through to conversation, then active |
 | HTTP / sanitize / persist / emit failure | Log; keep placeholder; no UI error |
