@@ -54,13 +54,8 @@ describe("provider Tauri contract", () => {
       save_provider: fixture.successes.provider,
       delete_provider: fixture.successes.delete,
       set_active_provider: fixture.successes.active,
-      set_auto_generate_title: { enabled: false },
-      set_title_model_binding: {
-        binding: {
-          provider_id: "provider-fixture",
-          model: "fixture-model",
-        },
-      },
+      set_auto_generate_title: fixture.successes.set_auto_generate_title,
+      set_title_model_binding: fixture.successes.set_title_model_binding,
       set_language: fixture.successes.set_language,
       set_theme: fixture.successes.set_theme,
       reveal_provider_api_key: fixture.successes.reveal_api_key,

@@ -1,15 +1,7 @@
 use sqlx::{sqlite::SqliteRow, Row, SqliteConnection};
 
-use super::{
-    domain::{Protocol, Provider},
-    ProviderError,
-};
-
-pub(crate) const ACTIVE_PROVIDER_SETTING_KEY: &str = "active_provider_id";
-pub(crate) const AUTO_GENERATE_TITLE_SETTING_KEY: &str = "auto_generate_title";
-pub(crate) const TITLE_MODEL_BINDING_SETTING_KEY: &str = "title_model_binding";
-pub(crate) const LANGUAGE_SETTING_KEY: &str = "language";
-pub(crate) const THEME_SETTING_KEY: &str = "theme";
+use super::{domain::Provider, ProviderError};
+use crate::llm::{LlmError, Protocol};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CredentialOperationKind {
@@ -61,6 +53,24 @@ impl ProviderRepository {
         row.map(decode_provider).transpose()
     }
 
+    /// Row presence only. Generation binding must not decode profile columns:
+    /// a corrupt `models` JSON would otherwise change a historical NotFound
+    /// vs success into a protocol failure, and SQL errors must stay sqlx so
+    /// the generation mapper keeps the conversation `database_unavailable`
+    /// envelope.
+    pub(crate) async fn exists(
+        connection: &mut SqliteConnection,
+        id: &str,
+    ) -> Result<bool, sqlx::Error> {
+        Ok(
+            sqlx::query_scalar::<_, i64>("SELECT EXISTS(SELECT 1 FROM providers WHERE id = ?1)")
+                .bind(id)
+                .fetch_one(connection)
+                .await?
+                != 0,
+        )
+    }
+
     pub(crate) async fn upsert_provider(
         connection: &mut SqliteConnection,
         provider: &Provider,
@@ -81,7 +91,7 @@ impl ProviderRepository {
         .bind(provider.protocol.as_str())
         .bind(&provider.base_endpoint)
         .bind(&provider.model)
-        .bind(serde_json::to_string(&provider.models).map_err(|_| ProviderError::Protocol)?)
+        .bind(serde_json::to_string(&provider.models).map_err(|_| LlmError::Protocol)?)
         .bind(&provider.credential_ref)
         .bind(provider.created_at)
         .bind(provider.updated_at)
@@ -173,66 +183,12 @@ impl ProviderRepository {
             .await?;
         Ok(())
     }
-
-    pub(crate) async fn get_setting(
-        connection: &mut SqliteConnection,
-        key: &str,
-    ) -> Result<Option<String>, ProviderError> {
-        let row = sqlx::query("SELECT value FROM app_settings WHERE key = ?1")
-            .bind(key)
-            .fetch_optional(connection)
-            .await?;
-        row.map(|row| row.try_get("value"))
-            .transpose()
-            .map_err(Into::into)
-    }
-
-    pub(crate) async fn set_setting(
-        connection: &mut SqliteConnection,
-        key: &str,
-        value: &str,
-    ) -> Result<(), ProviderError> {
-        sqlx::query(
-            "INSERT INTO app_settings (key, value) VALUES (?1, ?2) \
-             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-        )
-        .bind(key)
-        .bind(value)
-        .execute(connection)
-        .await?;
-        Ok(())
-    }
-
-    pub(crate) async fn delete_setting_value(
-        connection: &mut SqliteConnection,
-        key: &str,
-        value: &str,
-    ) -> Result<(), ProviderError> {
-        sqlx::query("DELETE FROM app_settings WHERE key = ?1 AND value = ?2")
-            .bind(key)
-            .bind(value)
-            .execute(connection)
-            .await?;
-        Ok(())
-    }
-
-    pub(crate) async fn delete_setting(
-        connection: &mut SqliteConnection,
-        key: &str,
-    ) -> Result<(), ProviderError> {
-        sqlx::query("DELETE FROM app_settings WHERE key = ?1")
-            .bind(key)
-            .execute(connection)
-            .await?;
-        Ok(())
-    }
 }
 
 fn decode_provider(row: SqliteRow) -> Result<Provider, ProviderError> {
     let protocol: String = row.try_get("protocol")?;
     let models_json: String = row.try_get("models")?;
-    let models: Vec<String> =
-        serde_json::from_str(&models_json).map_err(|_| ProviderError::Protocol)?;
+    let models: Vec<String> = serde_json::from_str(&models_json).map_err(|_| LlmError::Protocol)?;
     Ok(Provider {
         id: row.try_get("id")?,
         name: row.try_get("name")?,
@@ -251,7 +207,7 @@ fn decode_operation(row: SqliteRow) -> Result<CredentialOperation, ProviderError
     let kind = match operation.as_str() {
         "save" => CredentialOperationKind::Save,
         "delete" => CredentialOperationKind::Delete,
-        _ => return Err(ProviderError::Protocol),
+        _ => return Err(LlmError::Protocol.into()),
     };
     Ok(CredentialOperation {
         id: row.try_get("id")?,

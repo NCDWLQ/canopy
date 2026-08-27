@@ -285,12 +285,7 @@ impl ConversationPersistenceService {
         }
         let mut transaction = self.pool.begin().await?;
         Self::require_writable_conversation(&mut transaction, conversation_id).await?;
-        if let Some(provider_id) = provider_id.as_deref() {
-            if !ConversationRepository::provider_exists(&mut transaction, provider_id).await? {
-                return Err(PersistenceError::NotFound { entity: "provider" });
-            }
-        }
-        let conversation = ConversationRepository::set_provider_binding(
+        let conversation = Self::write_provider_binding(
             &mut transaction,
             conversation_id,
             provider_id.as_deref(),
@@ -300,6 +295,26 @@ impl ConversationPersistenceService {
         .await?;
         transaction.commit().await?;
         Ok(conversation)
+    }
+
+    /// Persistence-only write of binding columns. Caller validates provider
+    /// existence in the same transaction when the write is part of a
+    /// generation-owned binding command.
+    pub(crate) async fn write_provider_binding(
+        connection: &mut sqlx::SqliteConnection,
+        conversation_id: &str,
+        provider_id: Option<&str>,
+        model: Option<&str>,
+        reasoning_effort: Option<ReasoningEffort>,
+    ) -> Result<Conversation, PersistenceError> {
+        ConversationRepository::set_provider_binding(
+            connection,
+            conversation_id,
+            provider_id,
+            model,
+            reasoning_effort,
+        )
+        .await
     }
 
     pub async fn append_completed_assistant(
@@ -444,7 +459,7 @@ impl ConversationPersistenceService {
         Ok(())
     }
 
-    async fn require_writable_conversation(
+    pub(crate) async fn require_writable_conversation(
         connection: &mut sqlx::SqliteConnection,
         conversation_id: &str,
     ) -> Result<Conversation, PersistenceError> {

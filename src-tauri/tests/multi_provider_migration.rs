@@ -1,6 +1,6 @@
 mod support;
 
-use canopy_lib::database::MIGRATION_CATALOG;
+use canopy_lib::infra::database::MIGRATION_CATALOG;
 
 use support::{migrated_pool, migrated_pool_through, run_async};
 

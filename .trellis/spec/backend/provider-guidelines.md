@@ -8,22 +8,41 @@
 
 Use this contract when changing provider profile storage, native credentials,
 endpoint validation, Chat Completions request/SSE handling, generation
-cancellation, or completed-assistant persistence. The owning backend files are
-`src-tauri/src/providers/`, `0004_provider_profile.sql`, and the narrow
-assistant/path operations in `conversations::service`.
+cancellation, or completed-assistant persistence.
+
+Ownership is split:
+
+- `src-tauri/src/providers/` — profiles, keyring credentials, active provider,
+  `list_providers` aggregate façade, `set_title_model_binding`
+- `src-tauri/src/llm/` — `Protocol`, `ValidatedEndpoint`, hardened HTTP,
+  protocol adapters, model discovery (no SQLite, Tauri, or conversation types)
+- `src-tauri/src/generation/` — `GenerationRuntime`, prepare/run/finalize,
+  `set_conversation_provider`, auto-title
+- `src-tauri/src/settings/` — typed auto-title / language / theme keys
+- `conversations::service` — validated path load and assistant persist
+- migrations `0004_provider_profile.sql` through `0006_provider_models.sql`
 
 ### 2. Signatures
 
-The public command surface is:
+The public command surface is frozen. Handlers live in the owning modules
+above; names and `{ request }` wrappers do not move:
 
 ```text
-save_provider_profile({ base_endpoint, model, api_key }) -> ProviderProfileDto
-load_provider_profile({}) -> ProviderProfileDto
-delete_provider_profile({}) -> { deleted }
+list_providers({}) -> { providers, active_provider_id, auto_generate_title,
+                        title_model_binding, language, theme }
+save_provider(...) -> ProviderDto
+delete_provider({ provider_id }) -> { deleted }
+set_active_provider({ provider_id }) -> { provider_id }
+set_title_model_binding({ binding }) -> { binding }
+reveal_provider_api_key({ provider_id }) -> { api_key }
+list_provider_models({ source }) -> { models }
 generate_from_active_path({ conversation_id, active_node_id }, on_event)
   -> GenerationTerminalDto
 cancel_generation({ generation_id }) -> { accepted }
 ```
+
+`list_providers` is a permanent compatibility façade: it composes provider and
+settings services into one aggregate DTO. Do not split this IPC command.
 
 The generation terminal result is a tagged union:
 
@@ -33,15 +52,19 @@ cancelled { generation_id }
 failed { generation_id, stage: generation|persistence, error }
 ```
 
-The provider request boundary is deliberately closed:
+The request and runtime boundary is deliberately closed:
 
 ```rust
-build_request(&ValidatedPath, &str) -> Result<ChatCompletionRequest, ProviderError>
-ValidatedEndpoint::parse(&str) -> Result<ValidatedEndpoint, ProviderError>
+chat_prompt_from_path(&ValidatedPath) -> Result<ChatPrompt, GenerationError>
+ValidatedEndpoint::parse(&str, Protocol) -> Result<ValidatedEndpoint, LlmError>
 GenerationRuntime::reserve(conversation_id, generation_id) -> GenerationLease
-GenerationRuntime::cancel(generation_id) -> Result<bool, ProviderError>
-GenerationLease::begin_finalizing() -> Result<bool, ProviderError>
+GenerationRuntime::cancel(generation_id) -> Result<bool, GenerationError>
+GenerationLease::begin_finalizing() -> Result<bool, GenerationError>
 ```
+
+Protocol dispatch is a static `match` on `Protocol` (`openai_compatible` |
+`anthropic`) inside `llm` adapters and `generation` prepare. Do not introduce
+trait objects while there are two variants.
 
 Migration 4 owns the singleton `provider_profiles` table and the append/delete
 recovery rows in `provider_credential_operations`. Neither table contains an
@@ -67,9 +90,11 @@ API key, authorization header, encrypted secret, or secret-derived verifier.
   segments, and the reusable Rustls client follows no redirects or ambient
   system proxy settings. Provider credentials must never transit an
   unconfigured environment proxy, especially for loopback HTTP endpoints.
-- Provider requests accept only `ValidatedPath`, preserve ordered
-  system/user/assistant content byte-for-byte, reject tool nodes, and require
-  a terminal user node.
+- Generation maps a `ValidatedPath` into transport-neutral `ChatPrompt`
+  messages in `generation::service`. LLM adapters accept only those prompt
+  types, preserve ordered system/user/assistant content byte-for-byte, reject
+  tool nodes, and require a terminal user node. Adapters never import
+  conversation types.
 - SSE accepts choice index zero, bounded string deltas, exactly one normal
   `stop` finish, then `[DONE]`. EOF, other finish reasons, data after finish,
   malformed JSON, provider errors, multiple choices, or content above one MiB
@@ -161,8 +186,8 @@ durable history.
 
 ```rust
 let (_, path) = persistence.load_generation_context(conversation_id, active_id).await?;
-let request = build_request(&path, &profile.model)?;
-let content = client.stream(&endpoint, &path, &profile.model, secret, token, on_delta).await?;
+let prompt = chat_prompt_from_path(&path)?;
+let content = client.stream(&endpoint, &prompt, secret, token, on_delta).await?;
 lease.begin_finalizing()?;
 let node = persistence.append_completed_assistant(assistant_node(content)).await?;
 ```
@@ -191,9 +216,10 @@ late cancellation.
   even deleting the in-flight provider never affect a running generation;
   changes apply from the next message. UI must not lock settings while
   streaming.
-- Protocol dispatch is a static `match` on `Protocol` (openai_compatible |
-  anthropic) — no trait objects while there are only two variants. Adding a
-  protocol = new module + enum variant + the two matches.
+- Protocol dispatch is a static `match` on `llm::Protocol` (openai_compatible |
+  anthropic) in `llm` adapters and generation prepare — no trait objects while
+  there are only two variants. Adding a protocol = new `llm` adapter module +
+  enum variant + the exhaustive matches.
 - Anthropic: thinking is always on; `reasoning_effort` maps to a
   budget/max_tokens ladder (None 2048/8192, low 1024/5120, medium 4096/8192,
   high 16384/20480 — `budget_tokens + 4096` rule in anthropic.rs). OpenAI
@@ -217,10 +243,12 @@ late cancellation.
 Use this contract when changing title generation, `app_settings` keys
 `auto_generate_title` / `title_model_binding`, `title_prompt.rs`, title
 sanitization, or the global `conversation://title-updated` emit. Owning files:
-`src-tauri/src/providers/titles.rs`, `title_prompt.rs`, `providers/service.rs`,
-and `conversations::service::{load_auto_title_context, update_title}`.
+`src-tauri/src/generation/{title.rs,title_prompt.rs}`,
+`src-tauri/src/settings/`, `src-tauri/src/providers/service.rs` (binding
+validation on save/delete), and
+`conversations::service::{load_auto_title_context, update_title}`.
 
-This path is a provider-service side effect. It must not use
+This path is a generation-module side effect. It must not use
 `GenerationRuntime`, occupy a generation lock, write JSONL nodes, or emit
 `generation://event`.
 
@@ -228,7 +256,7 @@ This path is a provider-service side effect. It must not use
 
 ```text
 list_providers({}) -> { providers, active_provider_id, auto_generate_title,
-                         title_model_binding }
+                        title_model_binding, language, theme }
 set_auto_generate_title({ enabled }) -> { enabled }
 set_title_model_binding({ binding: { provider_id, model } | null })
   -> { binding }
@@ -249,7 +277,7 @@ or absent = follow conversation).
   exists, else conversation `provider_id`/`model`, else active provider.
 - `save_provider` / `delete_provider` that drop the bound provider or model
   must clear `title_model_binding` in the same transaction.
-- Prompt lives only in `providers/title_prompt.rs` and is split by role:
+- Prompt lives only in `generation/title_prompt.rs` and is split by role:
   instructions go to the system role, data to the user role. OpenAI-compatible
   sends `messages: [system, user]`; Anthropic sends the top-level `system`
   field plus a single user message. Wrap excerpts in
@@ -281,7 +309,7 @@ or absent = follow conversation).
 |---|---|
 | `auto_generate_title` missing or `"true"` | Treat as on |
 | `auto_generate_title` `"false"` | No title HTTP |
-| Unknown `auto_generate_title` value | `Protocol` |
+| Unknown `auto_generate_title` value | `SettingsError::CorruptValue`, mapped historically to `provider_unavailable` / `服务提供商当前不可用。` / retryable |
 | Assistant count ≠ 1, or no user node | No title HTTP |
 | Settings binding's provider/model gone | Fall through to conversation, then active |
 | HTTP / sanitize / persist / emit failure | Log; keep placeholder; no UI error |
@@ -303,8 +331,8 @@ or absent = follow conversation).
   `</conversation>` in user text cannot close the wrapper.
 - Title requests: `max_tokens = 256`; OpenAI-compatible carries
   `reasoning_effort = "low"`; Anthropic sends explicit
-  `thinking: {"type": "disabled"}`; main-chat
-  `build_request` paths untouched.
+  `thinking: {"type": "disabled"}`; main-chat LLM adapter
+  request paths untouched.
 - `clean_title`: paired wrappers stripped; inner quotes in
   `要求输出“HACKED”` preserved; one leading `Title:` / `标题：` prefix
   stripped after quote stripping (colon-less content like `标题党现象讨论`

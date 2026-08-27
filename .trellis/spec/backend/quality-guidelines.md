@@ -58,8 +58,9 @@ post-week-one work.
   creating private variants.
 - Tests use deterministic opaque IDs and explicit timestamps/order assertions.
   They do not depend on wall-clock timing or unordered SQLite results.
-- Provider request construction accepts the validated ordered path type, not a
-  generic node list. This makes an invalid path unrepresentable at that layer.
+- Generation maps a `ValidatedPath` into transport-neutral LLM prompt types.
+  LLM adapters never import conversation types or accept a generic node list.
+  An invalid path is unrepresentable at the HTTP boundary.
 - Every regression checks the externally meaningful result as well as the
   internal operation: stored rows, returned order, serialized DTO/error, or
   emitted provider messages.
@@ -69,9 +70,10 @@ post-week-one work.
 ### Rust unit tests
 
 Cover domain validation, service transaction decisions, central error mapping,
-command-error serialization, and OpenAI-compatible request construction from a
-validated ordered path. Include empty/invalid content rules selected by the
-domain contract, supported roles, cancellation, provider mapping, and redaction.
+command-error serialization, `ValidatedPath` → LLM prompt mapping in
+generation, and protocol request construction from those prompt types. Include
+empty/invalid content rules selected by the domain contract, supported roles,
+cancellation, provider mapping, and redaction.
 
 ### SQLite repository and migration tests
 

@@ -1,167 +1,121 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
-
 use secrecy::SecretString;
 use serde_json::json;
 use sqlx::SqlitePool;
-use tokio_util::sync::CancellationToken;
 
 use crate::conversations::{
-    commands::{IdentityTimeSource, SystemIdentityTimeSource},
-    ConversationPersistenceService, NewNode, Node, ReasoningEffort, Role, ValidatedPath,
+    Conversation, ConversationPersistenceService, NewNode, Node, ReasoningEffort, Role,
+    ValidatedPath,
 };
-
-use super::{
-    anthropic,
-    openai_compatible::{self, GeneratedContent, OpenAiCompatibleClient, StreamingRequest},
-    Protocol, ProviderError, ProviderService, ValidatedEndpoint,
+use crate::infra::identity::{IdentityTimeSource, SystemIdentityTimeSource};
+use crate::llm::{
+    adapters::anthropic, ChatPrompt, GeneratedContent, LlmError, MessageRole,
+    OpenAiCompatibleClient, PromptMessage, Protocol, StreamingRequest, ValidatedEndpoint,
 };
+use crate::providers::{domain::validate_model, ProviderError, ProviderService};
 
-struct GenerationEntry {
-    generation_id: String,
-    cancellation: CancellationToken,
-    phase: GenerationPhase,
-}
+use super::{GenerationError, GenerationLease, GenerationRuntime};
 
-enum GenerationPhase {
-    Running,
-    Finalizing,
-    Cancelling,
-}
-
-#[derive(Clone)]
-pub struct GenerationRuntime {
-    entries: Arc<Mutex<HashMap<String, GenerationEntry>>>,
-}
-
-impl Default for GenerationRuntime {
-    fn default() -> Self {
-        Self {
-            entries: Arc::new(Mutex::new(HashMap::new())),
+/// Maps a validated conversation path into a transport-neutral LLM prompt.
+/// Path-shape errors keep the historical `active_node_id` CommandError reasons.
+pub fn chat_prompt_from_path(
+    path: &ValidatedPath,
+    model: &str,
+    reasoning_effort: Option<ReasoningEffort>,
+) -> Result<ChatPrompt, GenerationError> {
+    let model = match validate_model(model) {
+        Ok(model) => model,
+        Err(ProviderError::InvalidInput { field, reason }) => {
+            return Err(GenerationError::invalid_input(field, reason));
         }
+        Err(error) => return Err(error.into()),
+    };
+    let nodes = path.as_slice();
+    if nodes.last().map(|node| node.role) != Some(Role::User) {
+        return Err(GenerationError::invalid_input(
+            "active_node_id",
+            "terminal_role_must_be_user",
+        ));
     }
-}
-
-impl GenerationRuntime {
-    pub fn reserve(
-        &self,
-        conversation_id: String,
-        generation_id: String,
-    ) -> Result<GenerationLease, ProviderError> {
-        let mut entries = self
-            .entries
-            .lock()
-            .map_err(|_| ProviderError::RuntimeInvariant)?;
-        if entries.contains_key(&conversation_id) {
-            return Err(ProviderError::GenerationAlreadyActive);
-        }
-        if entries
-            .values()
-            .any(|entry| entry.generation_id == generation_id)
-        {
-            return Err(ProviderError::RuntimeInvariant);
-        }
-
-        let cancellation = CancellationToken::new();
-        entries.insert(
-            conversation_id.clone(),
-            GenerationEntry {
-                generation_id: generation_id.clone(),
-                cancellation: cancellation.clone(),
-                phase: GenerationPhase::Running,
-            },
-        );
-        Ok(GenerationLease {
-            runtime: self.clone(),
-            conversation_id,
-            generation_id,
-            cancellation,
-        })
-    }
-
-    pub fn cancel(&self, generation_id: &str) -> Result<bool, ProviderError> {
-        let mut entries = self
-            .entries
-            .lock()
-            .map_err(|_| ProviderError::RuntimeInvariant)?;
-        let Some(entry) = entries
-            .values_mut()
-            .find(|entry| entry.generation_id == generation_id)
-        else {
-            return Ok(false);
-        };
-        if !matches!(entry.phase, GenerationPhase::Running) {
-            return Ok(false);
-        }
-        entry.phase = GenerationPhase::Cancelling;
-        entry.cancellation.cancel();
-        Ok(true)
-    }
-
-    pub fn begin_finalizing(&self, generation_id: &str) -> Result<bool, ProviderError> {
-        let mut entries = self
-            .entries
-            .lock()
-            .map_err(|_| ProviderError::RuntimeInvariant)?;
-        let Some(entry) = entries
-            .values_mut()
-            .find(|entry| entry.generation_id == generation_id)
-        else {
-            return Ok(false);
-        };
-        if !matches!(entry.phase, GenerationPhase::Running) || entry.cancellation.is_cancelled() {
-            return Ok(false);
-        }
-        entry.phase = GenerationPhase::Finalizing;
-        Ok(true)
-    }
-
-    #[cfg(test)]
-    fn active_count(&self) -> usize {
-        self.entries.lock().map_or(0, |entries| entries.len())
-    }
-
-    #[cfg(test)]
-    fn is_finalizing(&self, generation_id: &str) -> bool {
-        self.entries.lock().is_ok_and(|entries| {
-            entries.values().any(|entry| {
-                entry.generation_id == generation_id
-                    && matches!(entry.phase, GenerationPhase::Finalizing)
+    let messages = nodes
+        .iter()
+        .map(|node| {
+            let role = match node.role {
+                Role::System => MessageRole::System,
+                Role::User => MessageRole::User,
+                Role::Assistant => MessageRole::Assistant,
+                Role::Tool => {
+                    return Err(GenerationError::invalid_input(
+                        "active_node_id",
+                        "tool_role_unsupported",
+                    ))
+                }
+            };
+            if node.content.trim().is_empty() {
+                return Err(GenerationError::invalid_input(
+                    "active_node_id",
+                    "blank_content",
+                ));
+            }
+            Ok(PromptMessage {
+                role,
+                content: node.content.clone(),
             })
         })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(ChatPrompt {
+        model,
+        messages,
+        reasoning_effort: reasoning_effort.map(to_llm_effort),
+    })
+}
+
+fn to_llm_effort(effort: ReasoningEffort) -> crate::llm::ReasoningEffort {
+    match effort {
+        ReasoningEffort::Low => crate::llm::ReasoningEffort::Low,
+        ReasoningEffort::Medium => crate::llm::ReasoningEffort::Medium,
+        ReasoningEffort::High => crate::llm::ReasoningEffort::High,
     }
 }
 
-pub struct GenerationLease {
-    runtime: GenerationRuntime,
-    conversation_id: String,
-    generation_id: String,
-    cancellation: CancellationToken,
-}
-
-impl GenerationLease {
-    pub fn cancellation(&self) -> &CancellationToken {
-        &self.cancellation
+/// Validates the provider/model pair and writes conversation binding columns
+/// in one transaction so a concurrent provider delete cannot create a
+/// check-then-act race.
+pub async fn set_conversation_provider_binding(
+    pool: SqlitePool,
+    conversation_id: &str,
+    provider_id: Option<String>,
+    model: Option<String>,
+    reasoning_effort: Option<ReasoningEffort>,
+) -> Result<Conversation, GenerationError> {
+    if provider_id.is_some() != model.is_some() {
+        return Err(crate::conversations::PersistenceError::invalid_input(
+            "set_conversation_provider",
+        )
+        .into());
     }
-
-    fn begin_finalizing(&self) -> Result<bool, ProviderError> {
-        self.runtime.begin_finalizing(&self.generation_id)
-    }
-}
-
-impl Drop for GenerationLease {
-    fn drop(&mut self) {
-        if let Ok(mut entries) = self.runtime.entries.lock() {
-            if entries
-                .get(&self.conversation_id)
-                .is_some_and(|entry| entry.generation_id == self.generation_id)
-            {
-                entries.remove(&self.conversation_id);
-            }
+    let mut transaction = pool.begin().await?;
+    ConversationPersistenceService::require_writable_conversation(
+        &mut transaction,
+        conversation_id,
+    )
+    .await?;
+    if let Some(provider_id) = provider_id.as_deref() {
+        if !ProviderService::exists_on(&mut transaction, provider_id).await? {
+            return Err(
+                crate::conversations::PersistenceError::NotFound { entity: "provider" }.into(),
+            );
         }
     }
+    let conversation = ConversationPersistenceService::write_provider_binding(
+        &mut transaction,
+        conversation_id,
+        provider_id.as_deref(),
+        model.as_deref(),
+        reasoning_effort,
+    )
+    .await?;
+    transaction.commit().await?;
+    Ok(conversation)
 }
 
 pub(crate) struct PreparedGeneration {
@@ -169,10 +123,9 @@ pub(crate) struct PreparedGeneration {
     active_node_id: String,
     model: String,
     endpoint: ValidatedEndpoint,
-    path: ValidatedPath,
+    prompt: ChatPrompt,
     secret: Option<SecretString>,
     protocol: Protocol,
-    reasoning_effort: Option<ReasoningEffort>,
     client: OpenAiCompatibleClient,
     persistence: ConversationPersistenceService,
     lease: GenerationLease,
@@ -193,17 +146,15 @@ impl PreparedGeneration {
 
     pub(crate) async fn run<F, T>(self, on_delta: F, on_thinking: T) -> GenerationRunResult
     where
-        F: FnMut(&str) -> Result<(), ProviderError>,
-        T: FnMut(&str) -> Result<(), ProviderError>,
+        F: FnMut(&str) -> Result<(), LlmError>,
+        T: FnMut(&str) -> Result<(), LlmError>,
     {
         let cancellation = self.lease.cancellation().clone();
         let request = StreamingRequest {
             endpoint: &self.endpoint,
-            path: &self.path,
-            model: &self.model,
+            prompt: &self.prompt,
             secret: self.secret.as_ref(),
             cancellation: &cancellation,
-            reasoning_effort: self.reasoning_effort,
         };
         let streamed = match self.protocol {
             Protocol::OpenAiCompatible => {
@@ -243,7 +194,7 @@ pub(crate) enum GenerationOutcome {
     Completed(Node),
     Failed {
         stage: GenerationStage,
-        error: ProviderError,
+        error: GenerationError,
     },
     Cancelled,
 }
@@ -262,7 +213,7 @@ pub(crate) enum GenerationStage {
 async fn finish_generation(
     persistence: &ConversationPersistenceService,
     lease: &GenerationLease,
-    streamed: Result<GeneratedContent, ProviderError>,
+    streamed: Result<GeneratedContent, LlmError>,
     pending: PendingAssistant,
 ) -> GenerationOutcome {
     match streamed {
@@ -297,10 +248,10 @@ async fn finish_generation(
                 error,
             },
         },
-        Err(ProviderError::Cancelled) => GenerationOutcome::Cancelled,
+        Err(LlmError::Cancelled) => GenerationOutcome::Cancelled,
         Err(error) => GenerationOutcome::Failed {
             stage: GenerationStage::Generation,
-            error,
+            error: error.into(),
         },
     }
 }
@@ -312,7 +263,7 @@ pub(crate) async fn prepare_generation(
     conversation_id: String,
     active_node_id: String,
     generation_id: String,
-) -> Result<PreparedGeneration, ProviderError> {
+) -> Result<PreparedGeneration, GenerationError> {
     let persistence = ConversationPersistenceService::new(pool);
     let (conversation, path) = persistence
         .load_generation_context(&conversation_id, &active_node_id)
@@ -329,14 +280,7 @@ pub(crate) async fn prepare_generation(
         None => provider.model.clone(),
     };
     let endpoint = ValidatedEndpoint::parse(&provider.base_endpoint, provider.protocol)?;
-    match provider.protocol {
-        Protocol::OpenAiCompatible => {
-            openai_compatible::build_request(&path, &model, conversation.reasoning_effort)?;
-        }
-        Protocol::Anthropic => {
-            anthropic::build_request(&path, &model, conversation.reasoning_effort)?;
-        }
-    }
+    let prompt = chat_prompt_from_path(&path, &model, conversation.reasoning_effort)?;
     let client = OpenAiCompatibleClient::new()?;
     let lease = runtime.reserve(conversation_id.clone(), generation_id)?;
 
@@ -345,10 +289,9 @@ pub(crate) async fn prepare_generation(
         active_node_id,
         model,
         endpoint,
-        path,
+        prompt,
         secret,
         protocol: provider.protocol,
-        reasoning_effort: conversation.reasoning_effort,
         client,
         persistence,
         lease,
@@ -364,14 +307,18 @@ mod tests {
 
     use crate::{
         conversations::{
-            ConversationPersistenceService, NewConversation, NewNode, ReasoningEffort, Role,
+            ConversationPersistenceService, NewConversation, NewNode, Node, PersistenceError,
+            ReasoningEffort, Role, ValidatedPath,
         },
-        database::MIGRATION_CATALOG,
-        providers::{NativeCredentialStore, Protocol, ProviderService},
+        error::{CommandError, CommandErrorCode},
+        infra::database::MIGRATION_CATALOG,
+        llm::{LlmError, Protocol},
+        providers::{NativeCredentialStore, ProviderService},
     };
 
     use super::{
-        finish_generation, prepare_generation, GeneratedContent, GenerationOutcome,
+        chat_prompt_from_path, finish_generation, prepare_generation,
+        set_conversation_provider_binding, GeneratedContent, GenerationError, GenerationOutcome,
         GenerationRuntime, PendingAssistant,
     };
 
@@ -456,48 +403,6 @@ mod tests {
             .fetch_one(pool)
             .await
             .unwrap()
-    }
-
-    #[test]
-    fn runtime_is_per_conversation_and_cancel_is_exact_and_one_shot() {
-        let runtime = GenerationRuntime::default();
-        let first = runtime
-            .reserve("conversation-a".to_owned(), GENERATION_A.to_owned())
-            .unwrap();
-        let second = runtime
-            .reserve("conversation-b".to_owned(), GENERATION_B.to_owned())
-            .unwrap();
-        assert!(runtime
-            .reserve("conversation-a".to_owned(), GENERATION_B.to_owned())
-            .is_err());
-        assert!(runtime
-            .reserve("conversation-c".to_owned(), GENERATION_B.to_owned())
-            .is_err());
-        assert!(!runtime.cancel("unknown").unwrap());
-        assert!(runtime.cancel(GENERATION_A).unwrap());
-        assert!(!runtime.cancel(GENERATION_A).unwrap());
-        assert!(first.cancellation().is_cancelled());
-        assert!(!second.cancellation().is_cancelled());
-        drop(first);
-        drop(second);
-        assert_eq!(runtime.active_count(), 0);
-    }
-
-    #[test]
-    fn finalization_wins_cancel_race_and_holds_the_slot() {
-        let runtime = GenerationRuntime::default();
-        let lease = runtime
-            .reserve("conversation".to_owned(), GENERATION_A.to_owned())
-            .unwrap();
-        assert!(runtime.begin_finalizing(GENERATION_A).unwrap());
-        assert!(!runtime.cancel(GENERATION_A).unwrap());
-        assert!(runtime
-            .reserve("conversation".to_owned(), GENERATION_B.to_owned())
-            .is_err());
-        drop(lease);
-        assert!(runtime
-            .reserve("conversation".to_owned(), GENERATION_B.to_owned())
-            .is_ok());
     }
 
     #[test]
@@ -588,7 +493,10 @@ mod tests {
             .unwrap();
             assert_eq!(prepared.protocol, Protocol::Anthropic);
             assert_eq!(prepared.model, "bound-override");
-            assert_eq!(prepared.reasoning_effort, Some(ReasoningEffort::High));
+            assert_eq!(
+                prepared.prompt.reasoning_effort,
+                Some(crate::llm::ReasoningEffort::High)
+            );
             drop(prepared);
 
             persistence
@@ -607,7 +515,10 @@ mod tests {
             .unwrap();
             assert_eq!(prepared.protocol, Protocol::OpenAiCompatible);
             assert_eq!(prepared.model, "active-model");
-            assert_eq!(prepared.reasoning_effort, Some(ReasoningEffort::Low));
+            assert_eq!(
+                prepared.prompt.reasoning_effort,
+                Some(crate::llm::ReasoningEffort::Low)
+            );
         });
     }
 
@@ -704,7 +615,7 @@ mod tests {
 
             assert_eq!(prepared.protocol, Protocol::OpenAiCompatible);
             assert_eq!(prepared.model, "active-model");
-            assert_eq!(prepared.reasoning_effort, None);
+            assert_eq!(prepared.prompt.reasoning_effort, None);
         });
     }
 
@@ -781,17 +692,34 @@ mod tests {
                 .reserve("conversation".to_owned(), GENERATION_B.to_owned())
                 .unwrap();
             assert!(matches!(
-                finish_generation(
-                    &persistence,
-                    &lease,
-                    Err(super::ProviderError::Cancelled),
-                    pending(),
-                )
-                .await,
+                finish_generation(&persistence, &lease, Err(LlmError::Cancelled), pending(),).await,
                 GenerationOutcome::Cancelled
             ));
             assert_eq!(assistant_count(&pool).await, 0);
             drop(lease);
+        });
+    }
+
+    #[test]
+    fn provider_failure_is_typed_as_generation_stage_and_persists_nothing() {
+        test_runtime().block_on(async {
+            let (pool, persistence) = seeded_persistence().await;
+            let runtime = GenerationRuntime::default();
+            let lease = runtime
+                .reserve("conversation".to_owned(), GENERATION_A.to_owned())
+                .unwrap();
+            assert!(matches!(
+                finish_generation(&persistence, &lease, Err(LlmError::Unavailable), pending(),)
+                    .await,
+                GenerationOutcome::Failed {
+                    stage: super::GenerationStage::Generation,
+                    ..
+                }
+            ));
+            assert_eq!(assistant_count(&pool).await, 0);
+            assert_eq!(runtime.active_count(), 1);
+            drop(lease);
+            assert_eq!(runtime.active_count(), 0);
         });
     }
 
@@ -819,5 +747,135 @@ mod tests {
             drop(lease);
             assert_eq!(runtime.active_count(), 0);
         });
+    }
+
+    fn path_node(id: &str, parent_id: Option<&str>, role: Role, content: &str) -> Node {
+        Node {
+            id: id.to_owned(),
+            parent_id: parent_id.map(str::to_owned),
+            conversation_id: "conversation".to_owned(),
+            role,
+            content: content.to_owned(),
+            model: None,
+            created_at: 1,
+            metadata: json!({}),
+        }
+    }
+
+    #[test]
+    fn set_conversation_provider_binding_checks_provider_in_the_same_transaction() {
+        test_runtime().block_on(async {
+            let (pool, persistence) = seeded_persistence().await;
+
+            let missing = set_conversation_provider_binding(
+                pool.clone(),
+                "conversation",
+                Some("missing".to_owned()),
+                Some("model".to_owned()),
+                None,
+            )
+            .await
+            .unwrap_err();
+            assert!(matches!(
+                missing,
+                GenerationError::Persistence(PersistenceError::NotFound { entity: "provider" })
+            ));
+            let mapped = CommandError::from(missing);
+            assert_eq!(mapped.code, CommandErrorCode::NotFound);
+            assert_eq!(mapped.message, "未找到请求的资源。");
+            assert_eq!(mapped.details, Some(json!({ "entity": "provider" })));
+
+            insert_provider(&pool, "bound", Protocol::Anthropic, "bound-default").await;
+            let updated = set_conversation_provider_binding(
+                pool.clone(),
+                "conversation",
+                Some("bound".to_owned()),
+                Some("bound-override".to_owned()),
+                Some(ReasoningEffort::Medium),
+            )
+            .await
+            .unwrap();
+            assert_eq!(updated.provider_id.as_deref(), Some("bound"));
+            assert_eq!(updated.model.as_deref(), Some("bound-override"));
+            assert_eq!(updated.reasoning_effort, Some(ReasoningEffort::Medium));
+
+            let cleared =
+                set_conversation_provider_binding(pool.clone(), "conversation", None, None, None)
+                    .await
+                    .unwrap();
+            assert_eq!(cleared.provider_id, None);
+            assert_eq!(cleared.model, None);
+
+            persistence
+                .archive_conversation("conversation")
+                .await
+                .unwrap();
+            let archived = set_conversation_provider_binding(
+                pool,
+                "conversation",
+                Some("bound".to_owned()),
+                Some("bound-override".to_owned()),
+                None,
+            )
+            .await
+            .unwrap_err();
+            assert!(matches!(
+                archived,
+                GenerationError::Persistence(PersistenceError::InvalidInput { operation, .. })
+                    if operation == "archived_conversation_write"
+            ));
+        });
+    }
+
+    #[test]
+    fn chat_prompt_from_path_rejects_tool_and_non_user_terminals() {
+        let tool_path = ValidatedPath::new(vec![path_node("tool", None, Role::Tool, "tool")]);
+        assert!(matches!(
+            chat_prompt_from_path(&tool_path, "model", None),
+            Err(GenerationError::InvalidInput {
+                field: "active_node_id",
+                reason: "terminal_role_must_be_user"
+            })
+        ));
+        let assistant_path = ValidatedPath::new(vec![path_node(
+            "assistant",
+            None,
+            Role::Assistant,
+            "answer",
+        )]);
+        assert!(matches!(
+            chat_prompt_from_path(&assistant_path, "model", None),
+            Err(GenerationError::InvalidInput {
+                field: "active_node_id",
+                reason: "terminal_role_must_be_user"
+            })
+        ));
+        let blank_path = ValidatedPath::new(vec![path_node("user", None, Role::User, "  \n\t ")]);
+        assert!(matches!(
+            chat_prompt_from_path(&blank_path, "model", None),
+            Err(GenerationError::InvalidInput {
+                field: "active_node_id",
+                reason: "blank_content"
+            })
+        ));
+        let user_path = ValidatedPath::new(vec![path_node("user", None, Role::User, "question")]);
+        assert!(matches!(
+            chat_prompt_from_path(&user_path, &"m".repeat(201), None),
+            Err(GenerationError::InvalidInput {
+                field: "model",
+                reason: "too_long"
+            })
+        ));
+        let tool_then_user = ValidatedPath::new(vec![
+            path_node("tool", None, Role::Tool, "tool content"),
+            path_node("user", Some("tool"), Role::User, "question"),
+        ]);
+        assert!(matches!(
+            chat_prompt_from_path(&tool_then_user, "model", None),
+            Err(GenerationError::InvalidInput {
+                field: "active_node_id",
+                reason: "tool_role_unsupported"
+            })
+        ));
     }
 }

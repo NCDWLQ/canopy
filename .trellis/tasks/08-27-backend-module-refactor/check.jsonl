@@ -1,0 +1,12 @@
+{"file":".trellis/spec/backend/index.md","reason":"Backend spec compliance and final ownership review."}
+{"file":".trellis/spec/backend/directory-structure.md","reason":"Verify target module responsibilities and forbidden dependency patterns."}
+{"file":".trellis/spec/backend/app-capabilities.md","reason":"Verify Tauri composition and native capability boundaries remain minimal."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Verify schema neutrality, single managed pool and transaction behavior."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Verify exact safe IPC error compatibility and internal source ownership."}
+{"file":".trellis/spec/backend/provider-guidelines.md","reason":"Verify credentials, protocol, generation and title behavior did not drift."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Drive lint, test, build and cross-layer quality gates."}
+{"file":".trellis/spec/backend/logging-guidelines.md","reason":"Check secret/error redaction after error/module moves."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check every frozen command, event, DTO, settings key and persistence path end to end."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Detect lingering duplicate implementations or compatibility shims."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Verify backend refactoring preserved exact frontend-decoded command, event and error wire contracts."}
+{"file":".trellis/tasks/08-27-backend-module-refactor/research/codebase-audit.md","reason":"Check findings, baseline, migration hashes, deferred behavior and evidence against the final diff."}

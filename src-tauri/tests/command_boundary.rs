@@ -9,19 +9,21 @@ use std::{
 
 use canopy_lib::{
     conversations::{
-        commands::{
-            ActivePathDto, AppendNodeRequest, ArchiveConversationRequest,
-            ConversationCommandService, ConversationDto, ConversationSummaryDto,
-            ConversationTreeDto, CreateBranchRequest, CreateConversationRequest,
-            DeleteConversationRequest, DeleteConversationSuccess, EditNodeAsBranchRequest,
-            IdentityTimeSource, ListConversationsRequest, LoadActivePathRequest,
-            LoadConversationTreeRequest, NodeDto, RenameConversationRequest,
-            UnarchiveConversationRequest, WriteExportFileRequest, WriteExportFileResponse,
-            CONVERSATION_COMMAND_NAMES,
+        commands::{ConversationCommandService, CONVERSATION_COMMAND_NAMES},
+        dto::{
+            ActivePathDto, AppendNodeRequest, ArchiveConversationRequest, ConversationDto,
+            ConversationSearchResultDto, ConversationSummaryDto, ConversationTreeDto,
+            CreateBranchRequest, CreateConversationRequest, DeleteConversationRequest,
+            DeleteConversationSuccess, EditNodeAsBranchRequest, ListConversationsRequest,
+            LoadActivePathRequest, LoadConversationTreeRequest, NodeDto, RenameConversationRequest,
+            RoleDto, SearchConversationsRequest, SetConversationProviderRequest,
+            UnarchiveConversationRequest,
         },
         ConversationPersistenceService, NewConversation, NewNode, PersistenceError, Role,
     },
     error::{CommandError, CommandErrorCode},
+    exports::{WriteExportFileRequest, WriteExportFileResponse},
+    infra::identity::IdentityTimeSource,
 };
 use serde_json::{json, Value};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
@@ -112,14 +114,8 @@ fn shared_fixture_round_trips_rust_requests_dtos_errors_and_exact_command_names(
     assert_request!("rename_conversation", RenameConversationRequest);
     assert_request!("delete_conversation", DeleteConversationRequest);
     assert_request!("unarchive_conversation", UnarchiveConversationRequest);
-    assert_request!(
-        "set_conversation_provider",
-        canopy_lib::conversations::commands::SetConversationProviderRequest
-    );
-    assert_request!(
-        "search_conversations",
-        canopy_lib::conversations::commands::SearchConversationsRequest
-    );
+    assert_request!("set_conversation_provider", SetConversationProviderRequest);
+    assert_request!("search_conversations", SearchConversationsRequest);
     assert_request!("write_export_file", WriteExportFileRequest);
 
     let conversation: ConversationDto =
@@ -129,7 +125,7 @@ fn shared_fixture_round_trips_rust_requests_dtos_errors_and_exact_command_names(
         serde_json::to_value(conversation).expect("conversation DTO reserializes"),
         fixture["successes"]["conversation"]
     );
-    let search_results: Vec<canopy_lib::conversations::commands::ConversationSearchResultDto> =
+    let search_results: Vec<ConversationSearchResultDto> =
         serde_json::from_value(fixture["successes"]["search_results"].clone())
             .expect("search results decode");
     assert_eq!(
@@ -222,9 +218,9 @@ fn shared_fixture_round_trips_rust_requests_dtos_errors_and_exact_command_names(
         malformed_commands["load_active_path"].clone()
     )
     .is_err());
-    assert!(serde_json::from_value::<
-        Vec<canopy_lib::conversations::commands::ConversationSearchResultDto>,
-    >(malformed_commands["search_conversations"].clone())
+    assert!(serde_json::from_value::<Vec<ConversationSearchResultDto>>(
+        malformed_commands["search_conversations"].clone()
+    )
     .is_err());
     assert!(serde_json::from_value::<WriteExportFileResponse>(
         malformed_commands["write_export_file"].clone()
@@ -257,10 +253,7 @@ fn deterministic_command_service_assigns_identity_time_and_preserves_content() {
         assert!(!tree.conversation.is_archived);
         assert_eq!(tree.nodes.len(), 1);
         assert_eq!(tree.nodes[0].id, "root-created");
-        assert_eq!(
-            tree.nodes[0].role,
-            canopy_lib::conversations::commands::RoleDto::User
-        );
+        assert_eq!(tree.nodes[0].role, RoleDto::User);
         assert_eq!(tree.nodes[0].content, content);
         assert_eq!(tree.nodes[0].model, None);
         assert_eq!(tree.nodes[0].created_at, 1_770_000_000_123);

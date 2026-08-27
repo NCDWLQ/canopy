@@ -6,15 +6,18 @@ use canopy_lib::{
     conversations::{
         ConversationPersistenceService, NewConversation, NewNode, Role, ValidatedPath,
     },
-    providers::{
-        openai_compatible::OpenAiCompatibleClient, Protocol, ProviderError, ValidatedEndpoint,
-    },
+    generation::chat_prompt_from_path,
+    llm::{LlmError, OpenAiCompatibleClient, Protocol, ValidatedEndpoint},
 };
 use secrecy::SecretString;
 use serde_json::json;
 use tokio_util::sync::CancellationToken;
 
 use support::{migrated_pool, run_async, sse, TestServer};
+
+fn chat_prompt(path: &ValidatedPath, model: &str) -> canopy_lib::llm::ChatPrompt {
+    chat_prompt_from_path(path, model, None).unwrap()
+}
 
 fn node(id: &str, parent_id: Option<&str>, role: Role, content: &str, created_at: i64) -> NewNode {
     NewNode {
@@ -100,8 +103,7 @@ fn local_sse_stream_preserves_deltas_request_path_and_header_boundary() {
         let content = client
             .stream(
                 &endpoint,
-                &path,
-                "fixture-model",
+                &chat_prompt(&path, "fixture-model"),
                 Some(&SecretString::from("TEST_HEADER_VALUE")),
                 &cancellation,
                 |delta| {
@@ -140,19 +142,15 @@ fn status_truncation_and_precancel_map_without_persistence() {
         let path = sibling_path().await;
         let client = OpenAiCompatibleClient::new().unwrap();
         for (status, headers, expected) in [
-            ("401 Unauthorized", vec![], ProviderError::Authentication),
+            ("401 Unauthorized", vec![], LlmError::Authentication),
             (
                 "429 Too Many Requests",
                 vec![("Retry-After", "2")],
-                ProviderError::RateLimited {
+                LlmError::RateLimited {
                     retry_after_ms: Some(2000),
                 },
             ),
-            (
-                "503 Service Unavailable",
-                vec![],
-                ProviderError::Unavailable,
-            ),
+            ("503 Service Unavailable", vec![], LlmError::Unavailable),
         ] {
             let server = TestServer::spawn(status, &headers, vec![]);
             let endpoint =
@@ -160,8 +158,7 @@ fn status_truncation_and_precancel_map_without_persistence() {
             let error = client
                 .stream(
                     &endpoint,
-                    &path,
-                    "model",
+                    &chat_prompt(&path, "model"),
                     None,
                     &CancellationToken::new(),
                     |_| Ok(()),
@@ -172,7 +169,7 @@ fn status_truncation_and_precancel_map_without_persistence() {
                 std::mem::discriminant(&error),
                 std::mem::discriminant(&expected)
             );
-            if let ProviderError::RateLimited { retry_after_ms } = error {
+            if let LlmError::RateLimited { retry_after_ms } = error {
                 assert_eq!(retry_after_ms, Some(2000));
             }
             server.finish();
@@ -189,14 +186,13 @@ fn status_truncation_and_precancel_map_without_persistence() {
             client
                 .stream(
                     &endpoint,
-                    &path,
-                    "model",
+                    &chat_prompt(&path, "model"),
                     None,
                     &CancellationToken::new(),
                     |_| Ok(())
                 )
                 .await,
-            Err(ProviderError::Protocol)
+            Err(LlmError::Protocol)
         ));
         truncated.finish();
 
@@ -206,9 +202,15 @@ fn status_truncation_and_precancel_map_without_persistence() {
             ValidatedEndpoint::parse("http://127.0.0.1:9/v1", Protocol::OpenAiCompatible).unwrap();
         assert!(matches!(
             client
-                .stream(&unreachable, &path, "model", None, &cancelled, |_| Ok(()))
+                .stream(
+                    &unreachable,
+                    &chat_prompt(&path, "model"),
+                    None,
+                    &cancelled,
+                    |_| Ok(())
+                )
                 .await,
-            Err(ProviderError::Cancelled)
+            Err(LlmError::Cancelled)
         ));
     });
 }
@@ -227,14 +229,13 @@ fn redirects_are_not_followed_with_credentials() {
             .unwrap()
             .stream(
                 &endpoint,
-                &path,
-                "model",
+                &chat_prompt(&path, "model"),
                 Some(&SecretString::from("REDIRECT_TEST_VALUE")),
                 &CancellationToken::new(),
                 |_| Ok(()),
             )
             .await;
-        assert!(matches!(result, Err(ProviderError::Protocol)));
+        assert!(matches!(result, Err(LlmError::Protocol)));
         source.finish();
         thread::sleep(Duration::from_millis(20));
         assert!(target.accept().is_err());
@@ -273,14 +274,13 @@ fn malformed_non_normal_and_post_finish_streams_fail_closed() {
                 client
                     .stream(
                         &endpoint,
-                        &path,
-                        "model",
+                        &chat_prompt(&path, "model"),
                         None,
                         &CancellationToken::new(),
                         |_| Ok(())
                     )
                     .await,
-                Err(ProviderError::Protocol)
+                Err(LlmError::Protocol)
             ));
             server.finish();
         }
@@ -307,14 +307,13 @@ fn response_bound_midstream_cancellation_and_network_failure_are_typed() {
             client
                 .stream(
                     &endpoint,
-                    &path,
-                    "model",
+                    &chat_prompt(&path, "model"),
                     None,
                     &CancellationToken::new(),
                     |_| Ok(())
                 )
                 .await,
-            Err(ProviderError::Protocol)
+            Err(LlmError::Protocol)
         ));
         oversized.finish();
 
@@ -338,12 +337,18 @@ fn response_bound_midstream_cancellation_and_network_failure_are_typed() {
         let cancellation = CancellationToken::new();
         let cancellation_from_delta = cancellation.clone();
         let result = client
-            .stream(&endpoint, &path, "model", None, &cancellation, |_| {
-                cancellation_from_delta.cancel();
-                Ok(())
-            })
+            .stream(
+                &endpoint,
+                &chat_prompt(&path, "model"),
+                None,
+                &cancellation,
+                |_| {
+                    cancellation_from_delta.cancel();
+                    Ok(())
+                },
+            )
             .await;
-        assert!(matches!(result, Err(ProviderError::Cancelled)));
+        assert!(matches!(result, Err(LlmError::Cancelled)));
         cancelled_server.finish();
 
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -357,8 +362,7 @@ fn response_bound_midstream_cancellation_and_network_failure_are_typed() {
         let result = client
             .stream(
                 &endpoint,
-                &path,
-                "model",
+                &chat_prompt(&path, "model"),
                 None,
                 &CancellationToken::new(),
                 |_| Ok(()),
@@ -366,7 +370,7 @@ fn response_bound_midstream_cancellation_and_network_failure_are_typed() {
             .await;
         disconnect.join().unwrap();
         assert!(
-            matches!(result, Err(ProviderError::Network)),
+            matches!(result, Err(LlmError::Network)),
             "unexpected transport result: {result:?}"
         );
     });

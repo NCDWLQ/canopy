@@ -6,11 +6,15 @@ use std::{
 };
 
 use canopy_lib::conversations::{
-    commands::ConversationDto, ConversationPersistenceService, NewConversation, NewNode, Role,
+    dto::{ConversationDto, ReasoningEffortDto},
+    ConversationPersistenceService, NewConversation, NewNode, Role,
 };
+use canopy_lib::llm::Protocol;
 use canopy_lib::providers::{
-    ApiKeyAction, CredentialStore, LanguagePreference, Protocol, ProviderError, ProviderInput,
-    ProviderService, RedactedProvider, ThemePreference, TitleModelBinding,
+    ApiKeyAction, CredentialStore, ProviderError, ProviderInput, ProviderService, RedactedProvider,
+};
+use canopy_lib::settings::{
+    LanguagePreference, SettingsError, SettingsService, ThemePreference, TitleModelBinding,
 };
 use secrecy::{ExposeSecret, SecretString};
 use serde_json::json;
@@ -98,7 +102,7 @@ fn assert_duplicate_name(result: Result<RedactedProvider, ProviderError>) {
 fn language_preference_settings_round_trip_through_the_settings_kv() {
     run_async(async {
         let pool = migrated_pool().await;
-        let service = ProviderService::new(pool.clone(), Arc::new(FakeCredentialStore::default()));
+        let service = SettingsService::new(pool.clone());
 
         // A missing key means "system": the UI follows the OS locale.
         assert_eq!(
@@ -145,7 +149,10 @@ fn language_preference_settings_round_trip_through_the_settings_kv() {
             .execute(&pool)
             .await
             .unwrap();
-        assert!(service.get_language().await.is_err());
+        assert!(matches!(
+            service.get_language().await,
+            Err(SettingsError::CorruptValue)
+        ));
     });
 }
 
@@ -153,7 +160,7 @@ fn language_preference_settings_round_trip_through_the_settings_kv() {
 fn theme_preference_settings_round_trip_through_the_settings_kv() {
     run_async(async {
         let pool = migrated_pool().await;
-        let service = ProviderService::new(pool.clone(), Arc::new(FakeCredentialStore::default()));
+        let service = SettingsService::new(pool.clone());
 
         // A missing key means "system": the UI follows the OS color scheme.
         assert_eq!(service.get_theme().await.unwrap(), ThemePreference::System);
@@ -185,7 +192,10 @@ fn theme_preference_settings_round_trip_through_the_settings_kv() {
             .execute(&pool)
             .await
             .unwrap();
-        assert!(service.get_theme().await.is_err());
+        assert!(matches!(
+            service.get_theme().await,
+            Err(SettingsError::CorruptValue)
+        ));
     });
 }
 
@@ -193,12 +203,13 @@ fn theme_preference_settings_round_trip_through_the_settings_kv() {
 fn automatic_title_settings_default_and_validate_model_bindings() {
     run_async(async {
         let pool = migrated_pool().await;
+        let settings = SettingsService::new(pool.clone());
         let service = ProviderService::new(pool, Arc::new(FakeCredentialStore::default()));
 
-        assert!(service.get_auto_generate_title().await.unwrap());
-        assert_eq!(service.get_title_model_binding().await.unwrap(), None);
-        assert!(!service.set_auto_generate_title(false).await.unwrap());
-        assert!(!service.get_auto_generate_title().await.unwrap());
+        assert!(settings.get_auto_generate_title().await.unwrap());
+        assert_eq!(settings.get_title_model_binding().await.unwrap(), None);
+        assert!(!settings.set_auto_generate_title(false).await.unwrap());
+        assert!(!settings.get_auto_generate_title().await.unwrap());
 
         service
             .save(
@@ -222,7 +233,7 @@ fn automatic_title_settings_default_and_validate_model_bindings() {
             Some(binding.clone())
         );
         assert_eq!(
-            service.get_title_model_binding().await.unwrap(),
+            settings.get_title_model_binding().await.unwrap(),
             Some(binding)
         );
         assert!(service
@@ -247,7 +258,7 @@ fn automatic_title_settings_default_and_validate_model_bindings() {
             )
             .await
             .unwrap();
-        assert_eq!(service.get_title_model_binding().await.unwrap(), None);
+        assert_eq!(settings.get_title_model_binding().await.unwrap(), None);
 
         assert_eq!(service.set_title_model_binding(None).await.unwrap(), None);
     });
@@ -755,10 +766,7 @@ fn deleting_active_provider_clears_activation_and_unbinds_conversations() {
         assert_eq!(dto.provider_id, None);
         assert_eq!(dto.model, None);
         // Effort is independent of the binding and survives the deletion.
-        assert_eq!(
-            dto.reasoning_effort,
-            Some(canopy_lib::conversations::commands::ReasoningEffortDto::Low)
-        );
+        assert_eq!(dto.reasoning_effort, Some(ReasoningEffortDto::Low));
 
         service.set_active("provider-b").await.unwrap();
         assert_eq!(service.load_active().await.unwrap().id, "provider-b");

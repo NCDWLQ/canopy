@@ -113,6 +113,15 @@
     "cancel": {
       "accepted": true
     },
+    "set_auto_generate_title": {
+      "enabled": false
+    },
+    "set_title_model_binding": {
+      "binding": {
+        "provider_id": "provider-fixture",
+        "model": "fixture-model"
+      }
+    },
     "generation_completed": {
       "type": "completed",
       "generation_id": "11111111-1111-4111-8111-111111111111",

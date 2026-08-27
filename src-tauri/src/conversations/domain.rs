@@ -2,6 +2,27 @@ use std::fmt;
 
 use serde_json::Value;
 
+pub const MAX_TITLE_CHARS: usize = 200;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TitleParseError {
+    Blank,
+    TooLong,
+}
+
+/// Shared display-title policy used by rename commands and auto-title cleanup.
+/// Trims Unicode whitespace; rejects empty and >200-scalar values.
+pub fn parse_title(title: &str) -> Result<String, TitleParseError> {
+    let title = title.trim();
+    if title.is_empty() {
+        Err(TitleParseError::Blank)
+    } else if title.chars().count() > MAX_TITLE_CHARS {
+        Err(TitleParseError::TooLong)
+    } else {
+        Ok(title.to_owned())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Conversation {
     pub id: String,

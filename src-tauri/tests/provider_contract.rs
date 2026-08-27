@@ -1,10 +1,19 @@
-use canopy_lib::providers::commands::{
-    CancelGenerationRequest, CancelGenerationResult, DeleteProviderRequest, DeleteProviderResult,
-    GenerateFromActivePathRequest, GenerationEventDto, GenerationTerminalDto,
-    ListProviderModelsRequest, ListProvidersRequest, ListProvidersResult, ProviderDto,
-    RevealProviderApiKeyRequest, RevealProviderApiKeyResult, SaveProviderRequest,
-    SetActiveProviderRequest, SetActiveProviderResult, SetLanguageRequest, SetLanguageResult,
-    SetThemeRequest, SetThemeResult, PROVIDER_COMMAND_NAMES,
+use canopy_lib::{
+    generation::dto::{
+        CancelGenerationRequest, CancelGenerationResult, GenerateFromActivePathRequest,
+        GenerationEventDto, GenerationTerminalDto,
+    },
+    providers::commands::{
+        DeleteProviderRequest, DeleteProviderResult, ListProviderModelsRequest,
+        ListProvidersRequest, ListProvidersResult, ProviderDto, RevealProviderApiKeyRequest,
+        RevealProviderApiKeyResult, SaveProviderRequest, SetActiveProviderRequest,
+        SetActiveProviderResult, SetTitleModelBindingRequest, SetTitleModelBindingResult,
+        PROVIDER_COMMAND_NAMES,
+    },
+    settings::commands::{
+        SetAutoGenerateTitleRequest, SetAutoGenerateTitleResult, SetLanguageRequest,
+        SetLanguageResult, SetThemeRequest, SetThemeResult,
+    },
 };
 use serde_json::Value;
 
@@ -29,6 +38,8 @@ fn shared_provider_fixture_round_trips_rust_wire_types() {
     request!("save_provider", SaveProviderRequest);
     request!("delete_provider", DeleteProviderRequest);
     request!("set_active_provider", SetActiveProviderRequest);
+    request!("set_auto_generate_title", SetAutoGenerateTitleRequest);
+    request!("set_title_model_binding", SetTitleModelBindingRequest);
     request!("set_language", SetLanguageRequest);
     request!("set_theme", SetThemeRequest);
     request!("reveal_provider_api_key", RevealProviderApiKeyRequest);
@@ -84,6 +95,18 @@ fn shared_provider_fixture_round_trips_rust_wire_types() {
         serde_json::to_value(cancelled).unwrap(),
         fixture["successes"]["cancel"]
     );
+    let auto_title: SetAutoGenerateTitleResult =
+        serde_json::from_value(fixture["successes"]["set_auto_generate_title"].clone()).unwrap();
+    assert_eq!(
+        serde_json::to_value(auto_title).unwrap(),
+        fixture["successes"]["set_auto_generate_title"]
+    );
+    let title_binding: SetTitleModelBindingResult =
+        serde_json::from_value(fixture["successes"]["set_title_model_binding"].clone()).unwrap();
+    assert_eq!(
+        serde_json::to_value(title_binding).unwrap(),
+        fixture["successes"]["set_title_model_binding"]
+    );
 
     let completed = fixture["successes"]["generation_completed"].clone();
     let terminal: GenerationTerminalDto = serde_json::from_value(completed.clone()).unwrap();
@@ -96,7 +119,15 @@ fn shared_provider_fixture_round_trips_rust_wire_types() {
         let value = fixture["terminal_results"][name].clone();
         let terminal: GenerationTerminalDto = serde_json::from_value(value.clone()).unwrap();
         assert_eq!(serde_json::to_value(terminal).unwrap(), value);
+        assert!(
+            serde_json::from_value::<GenerationEventDto>(value).is_err(),
+            "terminal {name} must not decode as a Channel event"
+        );
     }
+    assert!(serde_json::from_value::<GenerationEventDto>(
+        fixture["successes"]["generation_completed"].clone()
+    )
+    .is_err());
     for malformed in fixture["malformed_events"].as_array().unwrap() {
         assert!(serde_json::from_value::<GenerationEventDto>(malformed.clone()).is_err());
     }

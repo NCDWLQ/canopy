@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::conversations::PersistenceError;
+use crate::{llm::LlmError, settings::SettingsError};
 
 #[derive(Debug, Error)]
 pub enum ProviderError {
@@ -19,39 +19,24 @@ pub enum ProviderError {
     #[error("native credential storage is unavailable")]
     CredentialUnavailable,
 
-    #[error("a generation is already active for this conversation")]
-    GenerationAlreadyActive,
-
-    #[error("provider rejected authentication")]
-    Authentication,
-
-    #[error("provider rate limit")]
-    RateLimited { retry_after_ms: Option<u64> },
-
-    #[error("provider is unavailable")]
-    Unavailable,
-
-    #[error("provider network failure")]
-    Network,
-
-    #[error("generation was cancelled")]
-    Cancelled,
-
-    #[error("provider runtime invariant failure")]
-    RuntimeInvariant,
-
-    #[error("provider protocol failure")]
-    Protocol,
-
-    #[error("persistence failure")]
-    Persistence(#[from] PersistenceError),
-
     #[error("provider storage failure")]
     Storage(#[from] sqlx::Error),
+
+    #[error(transparent)]
+    Llm(#[from] LlmError),
 }
 
 impl ProviderError {
     pub fn invalid_input(field: &'static str, reason: &'static str) -> Self {
         Self::InvalidInput { field, reason }
+    }
+}
+
+impl From<SettingsError> for ProviderError {
+    fn from(error: SettingsError) -> Self {
+        match error {
+            SettingsError::CorruptValue => Self::Llm(LlmError::Protocol),
+            SettingsError::Storage(error) => Self::Storage(error),
+        }
     }
 }

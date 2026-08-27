@@ -11,7 +11,7 @@ use std::{
     time::Duration,
 };
 
-use canopy_lib::database::MIGRATION_CATALOG;
+use canopy_lib::infra::database::MIGRATION_CATALOG;
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     SqlitePool,

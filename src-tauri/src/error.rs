@@ -1,7 +1,11 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use crate::{conversations::PersistenceError, providers::ProviderError};
+use crate::{
+    conversations::PersistenceError, exports::ExportError, generation::GenerationError,
+    infra::database::DatabaseError, llm::LlmError, providers::ProviderError,
+    settings::SettingsError,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -81,7 +85,7 @@ impl From<ProviderError> for CommandError {
                 retryable: false,
                 details: Some(json!({ "entity": "provider_profile" })),
             },
-            ProviderError::CredentialMissing | ProviderError::Authentication => Self {
+            ProviderError::CredentialMissing => Self {
                 code: CommandErrorCode::ProviderAuthentication,
                 message: "需要服务提供商身份验证。".to_owned(),
                 retryable: false,
@@ -93,30 +97,7 @@ impl From<ProviderError> for CommandError {
                 retryable: true,
                 details: None,
             },
-            ProviderError::GenerationAlreadyActive => {
-                Self::invalid_input("conversation_id", "generation_already_active")
-            }
-            ProviderError::RateLimited { retry_after_ms } => Self {
-                code: CommandErrorCode::RateLimited,
-                message: "已达到服务提供商的速率限制。".to_owned(),
-                retryable: true,
-                details: retry_after_ms.map(|value| json!({ "retry_after_ms": value })),
-            },
-            ProviderError::Unavailable | ProviderError::Protocol => Self {
-                code: CommandErrorCode::ProviderUnavailable,
-                message: "服务提供商当前不可用。".to_owned(),
-                retryable: true,
-                details: None,
-            },
-            ProviderError::Network => Self {
-                code: CommandErrorCode::NetworkFailure,
-                message: "服务提供商网络请求失败。".to_owned(),
-                retryable: true,
-                details: None,
-            },
-            ProviderError::Cancelled => Self::cancelled(),
-            ProviderError::RuntimeInvariant => Self::internal(),
-            ProviderError::Persistence(error) => Self::from(error),
+            ProviderError::Llm(error) => Self::from(error),
             ProviderError::Storage(error) if is_transient_storage_error(&error) => Self {
                 code: CommandErrorCode::DatabaseUnavailable,
                 message: "服务提供商数据库当前不可用。".to_owned(),
@@ -124,6 +105,82 @@ impl From<ProviderError> for CommandError {
                 details: None,
             },
             ProviderError::Storage(_) => Self::internal(),
+        }
+    }
+}
+
+impl From<LlmError> for CommandError {
+    fn from(error: LlmError) -> Self {
+        match error {
+            LlmError::InvalidInput { field, reason } => Self::invalid_input(field, reason),
+            LlmError::Authentication => Self {
+                code: CommandErrorCode::ProviderAuthentication,
+                message: "需要服务提供商身份验证。".to_owned(),
+                retryable: false,
+                details: None,
+            },
+            LlmError::RateLimited { retry_after_ms } => Self {
+                code: CommandErrorCode::RateLimited,
+                message: "已达到服务提供商的速率限制。".to_owned(),
+                retryable: true,
+                details: retry_after_ms.map(|value| json!({ "retry_after_ms": value })),
+            },
+            LlmError::Unavailable | LlmError::Protocol => Self {
+                code: CommandErrorCode::ProviderUnavailable,
+                message: "服务提供商当前不可用。".to_owned(),
+                retryable: true,
+                details: None,
+            },
+            LlmError::Network => Self {
+                code: CommandErrorCode::NetworkFailure,
+                message: "服务提供商网络请求失败。".to_owned(),
+                retryable: true,
+                details: None,
+            },
+            LlmError::Cancelled => Self::cancelled(),
+        }
+    }
+}
+
+impl From<GenerationError> for CommandError {
+    fn from(error: GenerationError) -> Self {
+        match error {
+            GenerationError::InvalidInput { field, reason } => Self::invalid_input(field, reason),
+            GenerationError::AlreadyActive => {
+                Self::invalid_input("conversation_id", "generation_already_active")
+            }
+            GenerationError::RuntimeInvariant => Self::internal(),
+            GenerationError::Persistence(error) => Self::from(error),
+            GenerationError::Provider(error) => Self::from(error),
+            GenerationError::Llm(error) => Self::from(error),
+        }
+    }
+}
+
+impl From<SettingsError> for CommandError {
+    fn from(error: SettingsError) -> Self {
+        Self::from(ProviderError::from(error))
+    }
+}
+
+impl From<ExportError> for CommandError {
+    fn from(error: ExportError) -> Self {
+        match error {
+            ExportError::InvalidInput { field, reason } => Self::invalid_input(field, reason),
+            ExportError::WriteFailed => Self::export_file_write(),
+        }
+    }
+}
+
+impl From<DatabaseError> for CommandError {
+    fn from(error: DatabaseError) -> Self {
+        match error {
+            DatabaseError::Unavailable => Self {
+                code: CommandErrorCode::DatabaseUnavailable,
+                message: "对话数据库当前不可用。".to_owned(),
+                retryable: true,
+                details: None,
+            },
         }
     }
 }
@@ -188,7 +245,10 @@ mod tests {
     use serde_json::json;
 
     use super::{CommandError, CommandErrorCode};
-    use crate::conversations::PersistenceError;
+    use crate::{
+        conversations::PersistenceError, exports::ExportError, infra::database::DatabaseError,
+        llm::LlmError, settings::SettingsError,
+    };
 
     #[test]
     fn persistence_errors_map_to_safe_closed_codes() {
@@ -202,10 +262,92 @@ mod tests {
         assert_eq!(unavailable.code, CommandErrorCode::DatabaseUnavailable);
         assert_eq!(unavailable.message, "对话数据库当前不可用。");
         assert!(unavailable.retryable);
+        assert_eq!(unavailable.details, None);
+
+        let infra_unavailable = CommandError::from(DatabaseError::Unavailable);
+        assert_eq!(
+            infra_unavailable.code,
+            CommandErrorCode::DatabaseUnavailable
+        );
+        assert_eq!(infra_unavailable.message, "对话数据库当前不可用。");
+        assert!(infra_unavailable.retryable);
+        assert_eq!(infra_unavailable.details, None);
 
         let corrupt = CommandError::from(PersistenceError::InvalidStoredData { field: "role" });
         assert_eq!(corrupt.code, CommandErrorCode::TreeIntegrity);
         assert_eq!(corrupt.message, "对话树包含无效的存储数据。");
+    }
+
+    #[test]
+    fn corrupt_settings_map_like_provider_protocol_failures() {
+        let from_settings = CommandError::from(SettingsError::CorruptValue);
+        let from_protocol = CommandError::from(LlmError::Protocol);
+        assert_eq!(from_settings, from_protocol);
+        assert_eq!(from_settings.code, CommandErrorCode::ProviderUnavailable);
+        assert_eq!(from_settings.message, "服务提供商当前不可用。");
+        assert!(from_settings.retryable);
+        assert_eq!(from_settings.details, None);
+    }
+
+    #[test]
+    fn llm_remote_errors_keep_historical_command_envelopes() {
+        let auth = CommandError::from(LlmError::Authentication);
+        assert_eq!(auth.code, CommandErrorCode::ProviderAuthentication);
+        assert_eq!(auth.message, "需要服务提供商身份验证。");
+        assert!(!auth.retryable);
+        assert_eq!(auth.details, None);
+
+        let rate = CommandError::from(LlmError::RateLimited {
+            retry_after_ms: Some(1500),
+        });
+        assert_eq!(rate.code, CommandErrorCode::RateLimited);
+        assert_eq!(rate.message, "已达到服务提供商的速率限制。");
+        assert!(rate.retryable);
+        assert_eq!(rate.details, Some(json!({ "retry_after_ms": 1500 })));
+
+        let rate_without_delay = CommandError::from(LlmError::RateLimited {
+            retry_after_ms: None,
+        });
+        assert_eq!(rate_without_delay.details, None);
+
+        let unavailable = CommandError::from(LlmError::Unavailable);
+        let protocol = CommandError::from(LlmError::Protocol);
+        assert_eq!(unavailable, protocol);
+        assert_eq!(unavailable.code, CommandErrorCode::ProviderUnavailable);
+        assert_eq!(unavailable.message, "服务提供商当前不可用。");
+        assert!(unavailable.retryable);
+        assert_eq!(unavailable.details, None);
+
+        let network = CommandError::from(LlmError::Network);
+        assert_eq!(network.code, CommandErrorCode::NetworkFailure);
+        assert_eq!(network.message, "服务提供商网络请求失败。");
+        assert!(network.retryable);
+        assert_eq!(network.details, None);
+
+        assert_eq!(
+            CommandError::from(LlmError::Cancelled),
+            CommandError::cancelled()
+        );
+        assert_eq!(
+            CommandError::from(LlmError::invalid_input("base_endpoint", "https_required")),
+            CommandError::invalid_input("base_endpoint", "https_required")
+        );
+    }
+
+    #[test]
+    fn export_errors_map_to_existing_command_envelopes() {
+        let invalid = CommandError::from(ExportError::InvalidInput {
+            field: "content",
+            reason: "too_large",
+        });
+        assert_eq!(invalid, CommandError::invalid_input("content", "too_large"));
+
+        let write_failed = CommandError::from(ExportError::WriteFailed);
+        assert_eq!(write_failed, CommandError::export_file_write());
+        assert_eq!(write_failed.code, CommandErrorCode::ExportFileWrite);
+        assert_eq!(write_failed.message, "写入导出文件失败。");
+        assert!(!write_failed.retryable);
+        assert_eq!(write_failed.details, None);
     }
 
     #[test]

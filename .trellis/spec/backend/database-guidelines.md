@@ -14,16 +14,33 @@ The production data flow has one owner at each boundary:
 
 ```text
 Tauri SQL plugin configuration (preload + migrations)
+  -> infra::database (DATABASE_URL, MIGRATION_CATALOG, managed_sqlite_pool)
   -> plugin-managed DbInstances / DbPool::Sqlite
   -> Rust application service (transactions and domain invariants)
   -> Rust repository (parameterized sqlx queries and row mapping)
   -> SQLite
 ```
 
+`infra` has no product-module dependency. Conversation, provider, settings,
+generation, and export code resolve the pool through `infra::database`; they
+do not own the catalog or open a second production connection.
+
+SQL ownership by table family:
+
+- `conversations` / `nodes` — `conversations::repository`. Binding columns
+  (`provider_id`, `model`, `reasoning_effort`) may be written after an
+  already-validated payload; this SQL must not `FROM providers` or
+  `JOIN providers`.
+- `providers` / `provider_credential_operations` — `providers::repository`.
+- typed `app_settings` keys — `settings::repository`.
+- `generation` does not own SQL. It composes provider validation and the
+  conversation persistence-only setter in one service transaction.
+
 - Register and preload one application database through the Tauri SQL plugin.
 - Resolve its `sqlx::SqlitePool` from the plugin's public `DbInstances` and
-  `DbPool::Sqlite` state. Repository adapters may borrow/clone that pool handle;
-  they must not call `SqlitePool::connect` or create a second production pool.
+  `DbPool::Sqlite` state via `infra::database::managed_sqlite_pool`. Repository
+  adapters may borrow/clone that pool handle; they must not call
+  `SqlitePool::connect` or create a second production pool.
 - Keep the direct `sqlx` dependency compatible with the version resolved by the
   pinned SQL plugin. Run `cargo tree` after dependency upgrades and reject an
   upgrade that resolves incompatible SQLite/sqlx stacks.
@@ -130,8 +147,9 @@ SQL plugin owns the production pool and migration lifecycle.
 ### 1. Scope / Trigger
 
 Use this contract when changing the conversation migration, repository SQL,
-managed-pool adapter, or persistence service. The implementation lives in
-`src-tauri/src/database.rs`, `src-tauri/src/conversations/`, and
+managed-pool adapter, or persistence service. The pool and catalog live in
+`src-tauri/src/infra/database.rs`. Conversation persistence lives in
+`src-tauri/src/conversations/`. Real-migration tests live in
 `src-tauri/tests/tree_persistence.rs`.
 
 ### 2. Signatures
@@ -139,7 +157,7 @@ managed-pool adapter, or persistence service. The implementation lives in
 The implemented persistence surface is:
 
 ```rust
-managed_sqlite_pool(&DbInstances) -> Result<SqlitePool, PersistenceError>
+infra::database::managed_sqlite_pool(&DbInstances) -> Result<SqlitePool, DatabaseError>
 
 ConversationPersistenceService::new(SqlitePool)
 create_conversation(NewConversation, NewNode) -> Result<ConversationTree, PersistenceError>
@@ -158,12 +176,13 @@ delete_conversation(&str) -> Result<(), PersistenceError>
 
 Persistence-service inputs accept explicit opaque IDs and epoch-millisecond
 timestamps. `conversations::commands::ConversationCommandService` owns
-production UUID/time generation and end-user input policy.
+end-user input policy and production UUID/time generation through
+`infra::identity`.
 
 ### 3. Contracts
 
-- `database::MIGRATION_CATALOG` is the single ordered definition catalog used
-  by plugin registration and real-migration tests.
+- `infra::database::MIGRATION_CATALOG` is the single ordered definition catalog
+  used by plugin registration and real-migration tests.
 - Production resolves `DATABASE_URL` from plugin-managed `DbInstances` and
   clones the `DbPool::Sqlite` handle. Only test support constructs a pool.
 - Repository functions receive `&mut SqliteConnection`, bind every value, and
@@ -181,7 +200,7 @@ production UUID/time generation and end-user input policy.
 
 | Condition | Required result |
 |---|---|
-| Managed database entry is missing | `PersistenceError::DatabaseUnavailable` |
+| Managed database entry is missing | `DatabaseError::Unavailable` → `database_unavailable` |
 | Requested conversation, node, or active node is missing | `PersistenceError::NotFound` |
 | A write targets an archived conversation or violates branch policy | `PersistenceError::InvalidInput` |
 | Root, adjacency, ownership, duplicate, or cycle validation fails | `PersistenceError::TreeIntegrity` |
@@ -454,7 +473,7 @@ workstream freezes these command names and DTOs in the shared IPC contract:
 | `load_conversation_tree` | `conversation_id` | Conversation plus deterministically ordered node DTOs |
 | `load_active_path` | `conversation_id`, `active_node_id` | Validated root-to-active DTO list, or a typed fail-closed error |
 | `archive_conversation` | `conversation_id` | Idempotent whole-conversation archive; all node bytes remain unchanged |
-| `generate_from_active_path` | `conversation_id`, `active_node_id`, provider/model selection | Provider output built only from `load_active_path`'s validated domain value |
+| `generate_from_active_path` | `conversation_id`, `active_node_id` | Snapshot provider/model/effort at prepare from the conversation binding; HTTP prompt built only from `load_active_path`'s validated domain value. The request DTO does not carry provider/model. |
 
 DTOs use string IDs, integer epoch-millisecond timestamps, explicit nullable
 fields, and parsed JSON metadata at IPC (the repository alone encodes canonical
