@@ -51,7 +51,7 @@ INSERT INTO provider_credential_operations_v2
 DROP TABLE provider_credential_operations;
 ALTER TABLE provider_credential_operations_v2 RENAME TO provider_credential_operations;
 
--- 会话绑定（provider/model 二者同置同清；provider 删除 → 绑定回退全局；effort 独立列不受绑定清除影响）
+-- 对话绑定（provider/model 二者同置同清；provider 删除 → 绑定回退全局；effort 独立列不受绑定清除影响）
 ALTER TABLE conversations ADD COLUMN provider_id TEXT REFERENCES providers(id) ON DELETE SET NULL;
 ALTER TABLE conversations ADD COLUMN model TEXT;
 ALTER TABLE conversations ADD COLUMN reasoning_effort TEXT
