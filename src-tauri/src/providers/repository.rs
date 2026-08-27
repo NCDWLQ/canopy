@@ -1,10 +1,7 @@
 use sqlx::{sqlite::SqliteRow, Row, SqliteConnection};
 
-use super::{
-    domain::{Protocol, Provider},
-    ProviderError,
-};
-use crate::llm::LlmError;
+use super::{domain::Provider, ProviderError};
+use crate::llm::{LlmError, Protocol};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CredentialOperationKind {

@@ -8,17 +8,15 @@ use super::{
 };
 use crate::error::CommandError;
 use crate::infra::database::managed_sqlite_pool;
+use crate::infra::identity::{IdentityTimeSource, SystemIdentityTimeSource};
 
-pub use crate::infra::identity::{IdentityTimeSource, SystemIdentityTimeSource};
-
-pub use super::dto::{
+use super::dto::{
     ActivePathDto, AppendNodeRequest, ArchiveConversationRequest, ConversationDto,
-    ConversationProviderBindingDto, ConversationProviderBindingResult, ConversationSearchResultDto,
-    ConversationSummaryDto, ConversationTreeDto, CreateBranchRequest, CreateConversationRequest,
-    DeleteConversationRequest, DeleteConversationSuccess, EditNodeAsBranchRequest,
-    ListConversationsRequest, LoadActivePathRequest, LoadConversationTreeRequest, NodeDto,
-    ReasoningEffortDto, RenameConversationRequest, RoleDto, SearchConversationsRequest,
-    SearchHitDto, SetConversationProviderRequest, UnarchiveConversationRequest,
+    ConversationSearchResultDto, ConversationSummaryDto, ConversationTreeDto, CreateBranchRequest,
+    CreateConversationRequest, DeleteConversationRequest, DeleteConversationSuccess,
+    EditNodeAsBranchRequest, ListConversationsRequest, LoadActivePathRequest,
+    LoadConversationTreeRequest, NodeDto, RenameConversationRequest, SearchConversationsRequest,
+    UnarchiveConversationRequest,
 };
 
 const MAX_CONTENT_BYTES: usize = 1024 * 1024;

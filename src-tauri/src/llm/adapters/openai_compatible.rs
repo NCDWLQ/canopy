@@ -7,12 +7,10 @@ use secrecy::ExposeSecret;
 use serde::{Deserialize, Serialize};
 
 use crate::llm::{
-    client::{map_status, map_transport_error, MAX_RESPONSE_BYTES},
+    client::{map_status, map_transport_error, OpenAiCompatibleClient, MAX_RESPONSE_BYTES},
     ChatPrompt, GeneratedContent, LlmError, ReasoningEffort, StreamingRequest, TitlePrompt,
     ValidatedEndpoint,
 };
-
-pub use crate::llm::client::OpenAiCompatibleClient;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ChatMessage {

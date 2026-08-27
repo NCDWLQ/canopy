@@ -1,5 +1,5 @@
 use canopy_lib::{
-    generation::commands::{
+    generation::dto::{
         CancelGenerationRequest, CancelGenerationResult, GenerateFromActivePathRequest,
         GenerationEventDto, GenerationTerminalDto,
     },
@@ -7,9 +7,12 @@ use canopy_lib::{
         DeleteProviderRequest, DeleteProviderResult, ListProviderModelsRequest,
         ListProvidersRequest, ListProvidersResult, ProviderDto, RevealProviderApiKeyRequest,
         RevealProviderApiKeyResult, SaveProviderRequest, SetActiveProviderRequest,
-        SetActiveProviderResult, SetAutoGenerateTitleRequest, SetAutoGenerateTitleResult,
-        SetLanguageRequest, SetLanguageResult, SetThemeRequest, SetThemeResult,
-        SetTitleModelBindingRequest, SetTitleModelBindingResult, PROVIDER_COMMAND_NAMES,
+        SetActiveProviderResult, SetTitleModelBindingRequest, SetTitleModelBindingResult,
+        PROVIDER_COMMAND_NAMES,
+    },
+    settings::commands::{
+        SetAutoGenerateTitleRequest, SetAutoGenerateTitleResult, SetLanguageRequest,
+        SetLanguageResult, SetThemeRequest, SetThemeResult,
     },
 };
 use serde_json::Value;

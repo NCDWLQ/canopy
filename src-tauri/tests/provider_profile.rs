@@ -6,13 +6,16 @@ use std::{
 };
 
 use canopy_lib::conversations::{
-    commands::ConversationDto, ConversationPersistenceService, NewConversation, NewNode, Role,
+    dto::{ConversationDto, ReasoningEffortDto},
+    ConversationPersistenceService, NewConversation, NewNode, Role,
 };
+use canopy_lib::llm::Protocol;
 use canopy_lib::providers::{
-    ApiKeyAction, CredentialStore, Protocol, ProviderError, ProviderInput, ProviderService,
-    RedactedProvider, TitleModelBinding,
+    ApiKeyAction, CredentialStore, ProviderError, ProviderInput, ProviderService, RedactedProvider,
 };
-use canopy_lib::settings::{LanguagePreference, SettingsError, SettingsService, ThemePreference};
+use canopy_lib::settings::{
+    LanguagePreference, SettingsError, SettingsService, ThemePreference, TitleModelBinding,
+};
 use secrecy::{ExposeSecret, SecretString};
 use serde_json::json;
 
@@ -763,10 +766,7 @@ fn deleting_active_provider_clears_activation_and_unbinds_conversations() {
         assert_eq!(dto.provider_id, None);
         assert_eq!(dto.model, None);
         // Effort is independent of the binding and survives the deletion.
-        assert_eq!(
-            dto.reasoning_effort,
-            Some(canopy_lib::conversations::commands::ReasoningEffortDto::Low)
-        );
+        assert_eq!(dto.reasoning_effort, Some(ReasoningEffortDto::Low));
 
         service.set_active("provider-b").await.unwrap();
         assert_eq!(service.load_active().await.unwrap().id, "provider-b");

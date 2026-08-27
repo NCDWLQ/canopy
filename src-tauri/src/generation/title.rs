@@ -225,10 +225,9 @@ mod tests {
 
     use crate::{
         conversations::{ConversationPersistenceService, NewConversation, NewNode, Role},
-        database::MIGRATION_CATALOG,
+        infra::database::MIGRATION_CATALOG,
         providers::{CredentialStore, ProviderError, ProviderService},
-        settings::SettingsService,
-        settings::TitleModelBinding,
+        settings::{SettingsService, TitleModelBinding},
     };
 
     use super::{

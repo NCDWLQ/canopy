@@ -6,8 +6,23 @@
 
 ## Overview
 
-This directory records the initial Rust/Tauri conventions established by the
-Canopy foundation and first-week architecture.
+This directory records the Rust/Tauri conventions for Canopy's local
+application core. Product code is organized by capability:
+
+| Module | Owns |
+|--------|------|
+| `infra` | `DATABASE_URL`, ordered migration catalog, managed SQLite pool, identity/time |
+| `settings` | typed `app_settings` (language, theme, auto-title, title-model binding) |
+| `llm` | protocol, endpoint validation, HTTP adapters, model discovery (no SQL/Tauri) |
+| `providers` | profiles, keyring credentials, active provider, `list_providers` façade, title-binding validation |
+| `conversations` | conversation tree, search, persistence; no provider table SQL |
+| `generation` | reply runtime, prepare/run/finalize, conversation-provider binding, auto-title |
+| `exports` | bounded Markdown file writes plus the frozen managed-DB preflight |
+| `error.rs` | `CommandError` IPC mapping only |
+
+Application workflows (`generation`) may compose domains. Domains do not
+import application adapters. `list_providers` remains a permanent aggregate
+IPC façade.
 
 ---
 
@@ -15,13 +30,13 @@ Canopy foundation and first-week architecture.
 
 | Guide | Description | Status |
 |-------|-------------|--------|
-| [Directory Structure](./directory-structure.md) | Rust/Tauri module organization and ownership | Initial |
+| [Directory Structure](./directory-structure.md) | Rust/Tauri module organization and ownership | Current |
 | [App Capabilities](./app-capabilities.md) | Tauri plugin wiring, minimal permissions, OS IO via Rust commands | Current |
-| [Database Guidelines](./database-guidelines.md) | SQLite schema, repositories, queries, migrations | Initial |
-| [Error Handling](./error-handling.md) | Cross-layer error types, redaction, UI handling | Initial |
-| [Quality Guidelines](./quality-guidelines.md) | Backend standards and testing strategy | Initial |
-| [Logging Guidelines](./logging-guidelines.md) | Diagnostic events, levels, and redaction | Initial |
-| [Provider Guidelines](./provider-guidelines.md) | Secure profile storage, OpenAI-compatible SSE, generation commits, and auto-title | Current |
+| [Database Guidelines](./database-guidelines.md) | SQLite schema, repositories, queries, migrations | Current |
+| [Error Handling](./error-handling.md) | Cross-layer error types, redaction, UI handling | Current |
+| [Quality Guidelines](./quality-guidelines.md) | Backend standards and testing strategy | Current |
+| [Logging Guidelines](./logging-guidelines.md) | Diagnostic events, levels, and redaction | Current |
+| [Provider Guidelines](./provider-guidelines.md) | Credentials, LLM protocol, generation commits, and auto-title | Current |
 
 ---
 

@@ -36,7 +36,8 @@
 
 Use this contract when changing `set_language`, the `list_providers` response
 `language` field, locale hydration, or `GeneralSettingsPanel`. Owning files:
-`src-tauri/src/providers/{domain,repository,service,commands}.rs`,
+`src-tauri/src/settings/{domain,repository,service,commands}.rs`,
+`src-tauri/src/providers/commands.rs` (`list_providers.language` façade field),
 `contract-fixtures/provider-ipc.json`, `src/lib/tauri/provider-{schemas,client}.ts`,
 `src/features/providers/store/index.ts`, `src/features/settings/components/`.
 
@@ -55,8 +56,9 @@ Rust mirrors it as `LanguagePreference { System, ZhCn, En }` with
 
 - Request `{ request: { language } }`; response `{ language: <stored value> }`.
 - `list_providers.language` defaults to `"system"` when the kv key is absent;
-  a dirty stored value fails closed (`ProviderError::Protocol`), mirroring the
-  auto-title settings precedent.
+  a dirty stored value fails closed (`SettingsError::CorruptValue`, mapped
+  historically to `provider_unavailable`), mirroring the auto-title settings
+  precedent.
 - Hydration happens inside the providers store when `list_providers` resolves:
   an explicit preference overrides the system-detected locale; `"system"` keeps
   it; a failed list leaves the detected locale (graceful degradation). No
@@ -71,7 +73,7 @@ Rust mirrors it as `LanguagePreference { System, ZhCn, En }` with
 |---|---|
 | `language` outside the closed enum (Rust) | `invalid_input` before DB access, details `{field:"language", reason:"invalid_language"}` |
 | Unknown enum value / missing / extra field (zod) | bridge schema rejection |
-| Dirty kv value on read | fail-closed `ProviderError::Protocol` |
+| Dirty kv value on read | fail-closed `SettingsError::CorruptValue` → historical `provider_unavailable` envelope |
 | `set_language` rejection in the panel | error alert + display reverts to stored value |
 
 ### 5. Good/Base/Bad Cases

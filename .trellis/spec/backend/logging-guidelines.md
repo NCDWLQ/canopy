@@ -68,8 +68,8 @@ metadata rather than the raw body.
 
 ## Ownership and Error Mapping
 
-- Repository and provider adapters preserve source errors; they do not each
-  choose a public error code.
+- Repository, provider, LLM, and generation adapters preserve source errors;
+  they do not each choose a public error code.
 - Services add operation context.
 - The central error mapper chooses the stable code and retryability.
 - The command boundary logs an operation once when needed and returns the safe

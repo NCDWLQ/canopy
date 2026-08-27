@@ -1,5 +1,4 @@
 pub mod conversations;
-pub mod database;
 pub mod error;
 pub mod exports;
 pub mod generation;

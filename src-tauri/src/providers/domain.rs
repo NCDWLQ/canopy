@@ -1,8 +1,7 @@
 use secrecy::SecretString;
 
 use super::ProviderError;
-
-pub use crate::llm::{Protocol, ValidatedEndpoint};
+use crate::llm::Protocol;
 
 /// Row id of the provider created by migration 0005 from the legacy singleton
 /// profile. Newly created providers use caller-generated opaque ids.

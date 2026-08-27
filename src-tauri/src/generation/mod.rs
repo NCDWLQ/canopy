@@ -1,5 +1,5 @@
 pub mod commands;
-mod dto;
+pub mod dto;
 mod error;
 mod runtime;
 mod service;

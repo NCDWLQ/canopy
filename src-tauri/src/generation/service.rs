@@ -310,10 +310,10 @@ mod tests {
             ConversationPersistenceService, NewConversation, NewNode, Node, PersistenceError,
             ReasoningEffort, Role, ValidatedPath,
         },
-        database::MIGRATION_CATALOG,
         error::{CommandError, CommandErrorCode},
-        llm::LlmError,
-        providers::{NativeCredentialStore, Protocol, ProviderService},
+        infra::database::MIGRATION_CATALOG,
+        llm::{LlmError, Protocol},
+        providers::{NativeCredentialStore, ProviderService},
     };
 
     use super::{

@@ -7,11 +7,12 @@ use sqlx::{SqliteConnection, SqlitePool};
 use super::{
     domain::{
         validate_model, validate_models, validate_name, ApiKeyAction, Provider, ProviderInput,
-        RedactedProvider, ValidatedEndpoint,
+        RedactedProvider,
     },
     repository::{CredentialOperation, CredentialOperationKind, ProviderRepository},
     CredentialStore, ProviderError,
 };
+use crate::llm::ValidatedEndpoint;
 use crate::settings::{SettingsRepository, TitleModelBinding};
 
 #[derive(Clone)]

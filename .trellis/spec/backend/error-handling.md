@@ -21,6 +21,20 @@ Rust retains the source chain for diagnostics. The Tauri boundary returns only
 safe, stable data. Components receive normalized frontend errors and must not
 parse Rust strings, `sqlx` errors, provider bodies, or unknown invoke payloads.
 
+Application and infrastructure errors stay in their owning modules. Only
+`error.rs` maps them onto the serializable `CommandError` envelope.
+
+| Internal type | Owner | Notes |
+|---|---|---|
+| `DatabaseError` | `infra::database` | Missing/unavailable managed pool only. No product dependency. |
+| `PersistenceError` | `conversations` | Tree/row integrity and conversation SQL. |
+| `SettingsError` | `settings` | Typed `app_settings` SQL. `CorruptValue` keeps the historical wire mapping `provider_unavailable` / `服务提供商当前不可用。` / retryable (via `ProviderError::Llm(LlmError::Protocol)` at the IPC boundary). |
+| `ProviderError` | `providers` | Profile validation, absence, keyring/reconcile, provider storage. |
+| `LlmError` | `llm` | Authentication, rate limit, remote availability, network, protocol, cancel. |
+| `GenerationError` | `generation` | Runtime state plus transparent composition of conversation/provider/LLM failures; retains `generation\|persistence` terminal stages. |
+| `ExportError` | `exports` | Path/content policy and bounded write failures. |
+| `CommandError` | `error.rs` | The only IPC error. Codes, Chinese `message` values, retryability, and details stay byte-compatible. |
+
 ## Error Types
 
 Application errors use a closed machine-readable taxonomy. The initial command

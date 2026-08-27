@@ -163,9 +163,13 @@ state, and the component receives only typed, localized-safe outcomes.
 
 Use this contract when adding or changing a conversation Tauri command, its
 request/response DTO, error envelope, shared fixture, or frontend projection.
-The owning files are `src-tauri/src/conversations/commands.rs`,
+The owning files are `src-tauri/src/conversations/{commands,dto}.rs`,
+`src-tauri/src/generation/commands.rs` (`set_conversation_provider`),
+`src-tauri/src/exports/commands.rs` (`write_export_file`),
 `src-tauri/src/error.rs`, `contract-fixtures/conversation-ipc.json`,
 `src/lib/tauri/`, and `src/features/conversations/types/`.
+Wire command names, `{ request }` wrappers, and TypeScript schemas stay
+unchanged; only Rust module ownership moved.
 
 ### 2. Signatures
 
@@ -298,7 +302,11 @@ const activePath = [
 
 Use this contract when changing `src/lib/tauri/provider-*`, provider projection
 types, `contract-fixtures/provider-ipc.json`, or UI actions that consume the
-provider client.
+provider client. Backend owners: `src-tauri/src/providers/` (profiles and
+`list_providers` façade), `src-tauri/src/generation/{commands,dto,runtime,service}.rs`
+(generate/cancel Channel and terminal), `src-tauri/src/settings/commands.rs`
+(language/theme/auto-title), `src-tauri/src/llm/` (protocol HTTP). TypeScript
+command names, Channel events, and Zod schemas stay unchanged.
 
 ### 2. Signatures
 
@@ -431,6 +439,8 @@ Use this contract when changing title settings IPC, `list_providers` title
 fields, or the global `conversation://title-updated` listen path. Owning
 files: `src/lib/tauri/provider-client.ts`, `provider-schemas.ts`,
 `title-events.ts`, and `src/features/conversations/hooks/useConversationTitleUpdates.ts`.
+Backend emit lives in `generation::title`; `set_auto_generate_title` lives in
+`settings::commands`; `set_title_model_binding` stays on `providers::commands`.
 
 The generation path stays Channel-only. Title updates are a separate global
 Tauri event. Settings round-trip through invoke, not localStorage.

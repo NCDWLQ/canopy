@@ -14,18 +14,13 @@ use crate::{
     },
     llm::{
         model_list::{list_models, ModelSummary},
-        Protocol,
+        Protocol, ValidatedEndpoint,
     },
     settings::{SettingsService, TitleModelBinding},
 };
 
 use super::{
     ApiKeyAction, NativeCredentialStore, ProviderInput, ProviderService, RedactedProvider,
-};
-
-pub use crate::settings::commands::{
-    SetAutoGenerateTitleRequest, SetAutoGenerateTitleResult, SetLanguageRequest, SetLanguageResult,
-    SetThemeRequest, SetThemeResult,
 };
 
 /// Frozen IPC catalog, including settings-owned and generation-owned command
@@ -399,9 +394,8 @@ pub async fn list_provider_models(
                 .load_by_id_with_secret(&provider_id)
                 .await
                 .map_err(CommandError::from)?;
-            let endpoint =
-                super::ValidatedEndpoint::parse(&provider.base_endpoint, provider.protocol)
-                    .map_err(CommandError::from)?;
+            let endpoint = ValidatedEndpoint::parse(&provider.base_endpoint, provider.protocol)
+                .map_err(CommandError::from)?;
             list_models(provider.protocol, &endpoint, secret.as_ref()).await
         }
         ModelListSourceRequest::Draft {
@@ -410,8 +404,8 @@ pub async fn list_provider_models(
             api_key,
         } => {
             let protocol = Protocol::from_db_text(&protocol).map_err(CommandError::from)?;
-            let endpoint = super::ValidatedEndpoint::parse(&base_endpoint, protocol)
-                .map_err(CommandError::from)?;
+            let endpoint =
+                ValidatedEndpoint::parse(&base_endpoint, protocol).map_err(CommandError::from)?;
             let secret = api_key
                 .filter(|key| !key.is_empty())
                 .map(SecretString::from);

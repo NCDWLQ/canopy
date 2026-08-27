@@ -17,7 +17,7 @@ use super::{
     GenerationRuntime, GenerationStage,
 };
 
-pub use super::dto::{
+use super::dto::{
     CancelGenerationRequest, CancelGenerationResult, GenerateFromActivePathRequest,
     GenerationEventDto, GenerationFailureStage, GenerationTerminalDto,
 };
