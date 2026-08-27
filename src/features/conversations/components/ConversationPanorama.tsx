@@ -260,18 +260,30 @@ function ConversationPanoramaView({
     [rootNodeId, nodesById, activePathIds, collapsedIds],
   )
 
-  if (layout === null) {
+  // Keep node object identity stable across parent re-renders so React Flow
+  // can reuse internals (measured bounds) via referential equality. Mapping
+  // a fresh array every render forced adoptUserNodes to rebuild nodes and
+  // wipe measured — which silently disables Controls fitView.
+  const nodes: PanoramaFlowNode[] | null = React.useMemo(() => {
+    if (layout === null) return null
+    return layout.nodes.map((node) => ({
+      ...node,
+      data: { ...node.data, onToggleBranch: handleToggleBranch },
+    }))
+  }, [layout, handleToggleBranch])
+
+  const fitViewOptions = React.useMemo(
+    () => ({ padding: 0.15, maxZoom: 0.9 }),
+    [],
+  )
+
+  if (layout === null || nodes === null) {
     return (
       <div className="p-6 text-sm text-destructive" role="alert">
         {t("errors.unsafeTreeProjection")}
       </div>
     )
   }
-
-  const nodes: PanoramaFlowNode[] = layout.nodes.map((node) => ({
-    ...node,
-    data: { ...node.data, onToggleBranch: handleToggleBranch },
-  }))
 
   return (
     <div
@@ -291,7 +303,7 @@ function ConversationPanoramaView({
         onNodeDoubleClick={handleNodeDoubleClick}
         zoomOnDoubleClick={false}
         fitView
-        fitViewOptions={{ padding: 0.15, maxZoom: 0.9 }}
+        fitViewOptions={fitViewOptions}
         minZoom={0.1}
         maxZoom={1.75}
         nodesDraggable={false}
@@ -299,7 +311,7 @@ function ConversationPanoramaView({
         elementsSelectable
       >
         <Background gap={28} />
-        <Controls showInteractive={false} />
+        <Controls showInteractive={false} fitViewOptions={fitViewOptions} />
         <MiniMap pannable zoomable />
       </ReactFlow>
     </div>

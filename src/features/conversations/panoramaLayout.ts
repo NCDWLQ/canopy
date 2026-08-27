@@ -9,10 +9,13 @@ import {
 import type { TreeNodeView } from "./types"
 
 // Card metrics shared by the layout and the card component. Cards render at
-// a fixed size and nodes declare it up front so React Flow never has to
-// measure before revealing them. d3 returns breadth/depth centers while
-// React Flow positions are top-left corners, so the projection subtracts
-// half the card size.
+// a fixed size and nodes declare both `width`/`height` and `measured` up
+// front: React Flow's fitView only considers `measured`, and adoptUserNodes
+// resets measured from the user node (it does not fall back to width/height).
+// Without a seeded measured, any re-adopt after the first ResizeObserver pass
+// leaves fitView with an empty node set — Controls "fit view" appears dead.
+// d3 returns breadth/depth centers while React Flow positions are top-left
+// corners, so the projection subtracts half the card size.
 export const PANORAMA_CARD_WIDTH = 224
 export const PANORAMA_CARD_HEIGHT = 80
 
@@ -220,6 +223,10 @@ export function projectPanoramaLayout({
       },
       width: PANORAMA_CARD_WIDTH,
       height: PANORAMA_CARD_HEIGHT,
+      measured: {
+        width: PANORAMA_CARD_WIDTH,
+        height: PANORAMA_CARD_HEIGHT,
+      },
       handles: PANORAMA_NODE_HANDLES,
       data: {
         nodeId,
