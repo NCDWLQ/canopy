@@ -1137,3 +1137,25 @@ Planned backend residuals tree; implemented shared register_sql_plugin, v0.4.0 f
 ### Status
 
 [OK] **Completed**
+
+
+## Session 51: Provider delete binding integrity
+
+**Date**: 2026-08-27
+**Task**: Provider delete binding integrity
+**Branch**: `fix/backend-residuals`
+
+### Summary
+
+Implemented migration 0007 to clear orphan conversation models and BEFORE DELETE trigger for paired provider_id/model clears; updated regressions and backend specs; archived cleanup-stale-provider-binding.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d8a955b` | (see git log) |
+| `5a57d5b` | (see git log) |
+
+### Status
+
+[OK] **Completed**
