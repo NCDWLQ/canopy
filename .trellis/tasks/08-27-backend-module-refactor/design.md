@@ -34,7 +34,7 @@ The root `error` module is allowed to know application/domain errors because it 
 src-tauri/src/
 ├── lib.rs                       # thin Tauri composition and run entry
 ├── error.rs                     # stable CommandError wire mapping only
-├── platform/
+├── infra/
 │   ├── mod.rs
 │   ├── database.rs              # DATABASE_URL, migration catalog, managed pool, DatabaseError
 │   └── identity.rs              # ID/time source and production implementation
@@ -93,12 +93,12 @@ Exact file splits may be combined when a target file would be trivial, but owner
 
 ```text
 lib / Tauri composition
-  ├─> conversations ─> platform
-  ├─> settings ──────> platform
+  ├─> conversations ─> infra
+  ├─> settings ──────> infra
   ├─> llm ───────────> (reqwest/tokio only)
-  ├─> providers ─────> settings + llm + platform
-  ├─> generation ────> conversations + providers + settings + llm + platform
-  └─> exports ───────> platform (temporary DB preflight) + filesystem
+  ├─> providers ─────> settings + llm + infra
+  ├─> generation ────> conversations + providers + settings + llm + infra
+  └─> exports ───────> infra (temporary DB preflight) + filesystem
 
 error (IPC mapping) ─> errors from every command-facing module
 ```
@@ -109,7 +109,7 @@ Forbidden final dependencies:
 - `conversations -> providers` in domain/repository/service code.
 - `settings -> providers|generation|conversations`.
 - `llm -> providers|generation|conversations|Tauri|sqlx`.
-- `platform ->` any product module.
+- `infra ->` any product module.
 - non-command code importing another module's `commands` file.
 
 ### Cross-cutting type and command ownership
@@ -135,16 +135,16 @@ Do not put these in a shared `utils`/`common` crate. Duplicate isomorphic enums 
 | Surface | Lifetime | Phase 6 action |
 |---|---|---|
 | `list_providers` aggregate response (providers + active + auto-title + title binding + language + theme) | **Permanent wire façade** | Keep. Internally compose `providers` + `settings`. Do not split the IPC command in this task. |
-| Root `database.rs` re-export | Temporary | Delete after callers use `platform::database`. |
+| Root `database.rs` re-export | Temporary | Delete after callers use `infra::database`. |
 | `providers::{generation,titles,title_prompt,openai_compatible,anthropic,model_list}` re-exports | Temporary | Delete after registration and tests switch. |
 | `providers` generic `get_setting` / `set_setting` | Temporary | Delete after `SettingsRepository` owns typed keys. |
-| `IdentityTimeSource` re-export from conversation commands | Temporary | Delete after `platform::identity` is the only owner. |
+| `IdentityTimeSource` re-export from conversation commands | Temporary | Delete after `infra::identity` is the only owner. |
 
 Temporary shims exist only to keep the crate compiling between add/switch/remove steps. Permanent façades exist because the wire contract is frozen. Phase 6 must not delete a permanent façade to “look cleaner.”
 
 ## 6. Error Boundaries
 
-- `platform::database::DatabaseError`: managed database missing/unavailable only; it does not import a product error.
+- `infra::database::DatabaseError`: managed database missing/unavailable only; it does not import a product error.
 - `conversations::PersistenceError`: conversation row/domain integrity and conversation SQL failures.
 - `providers::ProviderError`: profile validation, profile absence, keyring/reconcile and provider storage failures.
 - `llm::LlmError`: authentication, rate limit, remote availability, network, protocol and cancellation.

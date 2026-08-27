@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::{
     conversations::commands::NodeDto,
     error::CommandError,
-    platform::{
+    infra::{
         database::managed_sqlite_pool,
         identity::{IdentityTimeSource, SystemIdentityTimeSource},
     },

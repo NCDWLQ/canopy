@@ -21,7 +21,7 @@ use canopy_lib::{
         ConversationPersistenceService, NewConversation, NewNode, PersistenceError, Role,
     },
     error::{CommandError, CommandErrorCode},
-    platform::identity::IdentityTimeSource,
+    infra::identity::IdentityTimeSource,
 };
 use serde_json::{json, Value};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};

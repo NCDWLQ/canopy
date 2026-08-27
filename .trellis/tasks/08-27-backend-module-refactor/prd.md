@@ -17,7 +17,7 @@
 
 - R1. 重构必须严格保持全部 Tauri 命令名、请求包装、序列化字段、空值语义、成功响应、`CommandError` envelope、生成 Channel 事件和 `conversation://title-updated` 事件。
 - R2. 不修改 `src-tauri/migrations/0001`–`0006`，不新增迁移，不改变 `DATABASE_URL`、Tauri SQL preload、表/列/索引/触发器或 keyring credential reference。
-- R3. 目标边界必须至少区分 `platform`、`settings`、`llm`、`providers`、`conversations`、`generation` 与 `exports`；每个模块必须有唯一职责和明确依赖方向。
+- R3. 目标边界必须至少区分 `infra`、`settings`、`llm`、`providers`、`conversations`、`generation` 与 `exports`；每个模块必须有唯一职责和明确依赖方向。
 - R4. `providers` 只拥有 provider profile、active provider、凭据与相关配置用例；`settings` 拥有类型化 `app_settings` 存取及语言/主题/自动标题设置；`llm` 拥有无数据库、无 Tauri、无 conversation 依赖的协议与 HTTP 适配。
 - R5. `generation` 拥有回复生成运行时、prepare/run/finalize 编排、conversation-provider 绑定用例及自动标题；`conversations` 只拥有会话树、搜索、持久化与会话域契约；`exports` 拥有文件写出策略与命令。
 - R6. command 层只负责 DTO 校验、服务组合和错误映射；ID/时钟、共享 DTO、领域校验、HTTP、SQL 与文件策略不得继续以 command 文件作为跨模块共享实现。
@@ -37,9 +37,9 @@
 
 ## Acceptance Criteria
 
-- [ ] 最终源码存在并使用 `platform`、`settings`、`llm`、`providers`、`conversations`、`generation` 与 `exports` 边界，且职责符合 R3–R6。
+- [ ] 最终源码存在并使用 `infra`、`settings`、`llm`、`providers`、`conversations`、`generation` 与 `exports` 边界，且职责符合 R3–R6。
 - [ ] `src-tauri/src/providers/` 不再包含 generation runtime、回复生成、自动标题或 conversation 依赖；`src-tauri/src/conversations/` 不再导入 provider 内部校验或执行 provider 表查询。
-- [ ] `database`/`platform` 不再依赖 `conversations::PersistenceError`，各应用错误只在 Tauri command error 映射边界汇合。
+- [ ] `database`/`infra` 不再依赖 `conversations::PersistenceError`，各应用错误只在 Tauri command error 映射边界汇合。
 - [ ] 26 个现有命令名、生成事件 `started|delta|thinking_delta`、终态 `completed|cancelled|failed`、全局标题事件及前端 Zod schema 保持一致。
 - [ ] 六个既有 migration 文件的 SHA-256 与规划基线一致，且没有 `0007` 或其他新增 migration。
 - [ ] 生产命令注册只有一个权威装配入口，mock IPC 测试验证的是该生产入口，并覆盖全部命令。

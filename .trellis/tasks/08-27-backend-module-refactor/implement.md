@@ -58,36 +58,36 @@ If any in-scope source changed since `ab7349a`, compare it against the evidence 
 
 **Commit:** `test(backend): freeze command and generation contracts`
 
-## Phase 1 — Establish Platform and Error Direction
+## Phase 1 — Establish Infra and Error Direction
 
 **Goal:** infrastructure no longer depends on conversation command/domain code, and application services no longer import command-owned identity/time utilities.
 
 ### Files
 
-- Create `src-tauri/src/platform/mod.rs`
-- Create `src-tauri/src/platform/database.rs`
-- Create `src-tauri/src/platform/identity.rs`
+- Create `src-tauri/src/infra/mod.rs`
+- Create `src-tauri/src/infra/database.rs`
+- Create `src-tauri/src/infra/identity.rs`
 - Update `src-tauri/src/database.rs` as a temporary re-export, then remove it in Phase 6
 - Update `src-tauri/src/error.rs`, `src-tauri/src/lib.rs`
 - Update callers under `src-tauri/src/conversations/` and `src-tauri/src/providers/`
 
 ### Work
 
-1. Move `DATABASE_URL`, migration catalog/plugin conversion and managed-pool resolution into `platform::database` without modifying catalog contents or order.
+1. Move `DATABASE_URL`, migration catalog/plugin conversion and managed-pool resolution into `infra::database` without modifying catalog contents or order.
 2. Add a narrow `DatabaseError` for missing/unavailable managed pool. Map it to the existing `database_unavailable` `CommandError`; do not reuse `PersistenceError`.
-3. Move `IdentityTimeSource` and `SystemIdentityTimeSource` from conversation commands to `platform::identity`. Keep the exact UUID v4 and epoch-millisecond behavior.
+3. Move `IdentityTimeSource` and `SystemIdentityTimeSource` from conversation commands to `infra::identity`. Keep the exact UUID v4 and epoch-millisecond behavior.
 4. Switch all production/test imports. Preserve short-lived root re-exports so the tree compiles between steps.
-5. Confirm `platform` imports no product module and no non-command code imports `conversations::commands`.
+5. Confirm `infra` imports no product module and no non-command code imports `conversations::commands`.
 
 **Verify:**
 
 ```bash
-rg -n "crate::conversations::PersistenceError|conversations::commands::.*IdentityTimeSource" src-tauri/src/platform src-tauri/src/providers
+rg -n "crate::conversations::PersistenceError|conversations::commands::.*IdentityTimeSource" src-tauri/src/infra src-tauri/src/providers
 ```
 
 Expected: no matches. Then run the per-phase Rust gate and migration checksum.
 
-**Commit:** `refactor(backend): establish platform boundaries`
+**Commit:** `refactor(backend): establish infra boundaries`
 
 ## Phase 2 — Extract Typed Settings
 
@@ -235,7 +235,7 @@ Expected: no matches. Run conversation/search/tree/export tests, full Rust gate 
 - [ ] All verification commands exit 0.
 - [ ] No migration checksum changed and no migration was added.
 - [ ] Production TypeScript Tauri bridge/schema files have no behavior-changing diff.
-- [ ] `providers` and `conversations` have no reverse dependency; `llm` and `platform` have no product dependency.
+- [ ] `providers` and `conversations` have no reverse dependency; `llm` and `infra` have no product dependency.
 - [ ] No old implementation or **temporary** compatibility shim remains. The permanent `list_providers` aggregate façade remains.
 - [ ] Specs describe the final code, not the planned code.
 

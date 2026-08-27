@@ -11,7 +11,7 @@ use tokio_util::sync::CancellationToken;
 use crate::conversations::{
     ConversationPersistenceService, NewNode, Node, ReasoningEffort, Role, ValidatedPath,
 };
-use crate::platform::identity::{IdentityTimeSource, SystemIdentityTimeSource};
+use crate::infra::identity::{IdentityTimeSource, SystemIdentityTimeSource};
 
 use super::{
     anthropic,

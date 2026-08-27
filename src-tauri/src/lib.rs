@@ -1,10 +1,10 @@
 pub mod conversations;
 pub mod database;
 pub mod error;
-pub mod platform;
+pub mod infra;
 pub mod providers;
 
-use platform::database::{plugin_migrations, DATABASE_URL};
+use infra::database::{plugin_migrations, DATABASE_URL};
 
 pub(crate) fn register_commands<R: tauri::Runtime>(
     builder: tauri::Builder<R>,

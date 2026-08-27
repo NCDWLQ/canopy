@@ -7,7 +7,7 @@ use canopy_lib::{
         ConversationPersistenceService, NewConversation, NewNode, PersistenceError, Role,
     },
     database::{managed_sqlite_pool, DATABASE_URL, MIGRATION_CATALOG},
-    platform::database::DatabaseError,
+    infra::database::DatabaseError,
 };
 use serde_json::json;
 use sqlx::{

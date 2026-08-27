@@ -19,7 +19,7 @@
 - **Effort**: L.
 - **Risk**: HIGH because error mapping and generation are critical paths.
 - **Confidence**: HIGH.
-- **Recommendation**: extract platform database/identity boundaries, then move cross-domain orchestration into `generation` so core domains become acyclic.
+- **Recommendation**: extract infra database/identity boundaries, then move cross-domain orchestration into `generation` so core domains become acyclic.
 
 ### ARCH-02 — Promote generation to a top-level application module
 

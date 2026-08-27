@@ -9,10 +9,10 @@ use super::{
     ValidatedPath,
 };
 use crate::error::CommandError;
-use crate::platform::database::managed_sqlite_pool;
+use crate::infra::database::managed_sqlite_pool;
 use crate::providers::domain::validate_model;
 
-pub use crate::platform::identity::{IdentityTimeSource, SystemIdentityTimeSource};
+pub use crate::infra::identity::{IdentityTimeSource, SystemIdentityTimeSource};
 
 const MAX_TITLE_CHARS: usize = 200;
 const MAX_CONTENT_BYTES: usize = 1024 * 1024;

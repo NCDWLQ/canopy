@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::{
-    conversations::PersistenceError, platform::database::DatabaseError, providers::ProviderError,
+    conversations::PersistenceError, infra::database::DatabaseError, providers::ProviderError,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -203,7 +203,7 @@ mod tests {
     use serde_json::json;
 
     use super::{CommandError, CommandErrorCode};
-    use crate::{conversations::PersistenceError, platform::database::DatabaseError};
+    use crate::{conversations::PersistenceError, infra::database::DatabaseError};
 
     #[test]
     fn persistence_errors_map_to_safe_closed_codes() {
@@ -219,14 +219,14 @@ mod tests {
         assert!(unavailable.retryable);
         assert_eq!(unavailable.details, None);
 
-        let platform_unavailable = CommandError::from(DatabaseError::Unavailable);
+        let infra_unavailable = CommandError::from(DatabaseError::Unavailable);
         assert_eq!(
-            platform_unavailable.code,
+            infra_unavailable.code,
             CommandErrorCode::DatabaseUnavailable
         );
-        assert_eq!(platform_unavailable.message, "对话数据库当前不可用。");
-        assert!(platform_unavailable.retryable);
-        assert_eq!(platform_unavailable.details, None);
+        assert_eq!(infra_unavailable.message, "对话数据库当前不可用。");
+        assert!(infra_unavailable.retryable);
+        assert_eq!(infra_unavailable.details, None);
 
         let corrupt = CommandError::from(PersistenceError::InvalidStoredData { field: "role" });
         assert_eq!(corrupt.code, CommandErrorCode::TreeIntegrity);
