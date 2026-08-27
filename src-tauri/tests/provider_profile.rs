@@ -741,23 +741,14 @@ fn deleting_active_provider_clears_activation_and_unbinds_conversations() {
         .fetch_one(&pool)
         .await
         .unwrap();
-        assert_eq!(
-            binding,
-            (
-                None,
-                Some("primary-model".to_owned()),
-                Some("low".to_owned())
-            )
-        );
+        assert_eq!(binding, (None, None, Some("low".to_owned())));
         assert!(matches!(
             service.load_active().await,
             Err(ProviderError::ProfileNotFound)
         ));
 
-        // The IPC contract keeps the binding paired: the residual `model`
-        // column left by FK SET NULL must not surface as a binding value, or
-        // the frontend would render (and generation would resolve) a model
-        // from the deleted provider.
+        // Binding columns stay paired after delete; DTO mapping remains a
+        // defensive guard for any historical residual that predates migration 7.
         let tree = persistence
             .load_conversation_tree("conversation")
             .await
@@ -770,6 +761,94 @@ fn deleting_active_provider_clears_activation_and_unbinds_conversations() {
 
         service.set_active("provider-b").await.unwrap();
         assert_eq!(service.load_active().await.unwrap().id, "provider-b");
+    });
+}
+
+#[test]
+fn deleting_provider_without_credentials_clears_conversation_binding_pair() {
+    run_async(async {
+        let pool = migrated_pool().await;
+        let persistence = ConversationPersistenceService::new(pool.clone());
+        persistence
+            .create_conversation(
+                NewConversation {
+                    id: "conversation".to_owned(),
+                    title: "Uncredentialed delete".to_owned(),
+                    root_node_id: "root".to_owned(),
+                },
+                NewNode {
+                    id: "root".to_owned(),
+                    parent_id: None,
+                    conversation_id: "conversation".to_owned(),
+                    role: Role::User,
+                    content: "question".to_owned(),
+                    model: None,
+                    created_at: 1,
+                    metadata: json!({}),
+                },
+            )
+            .await
+            .unwrap();
+
+        let store = Arc::new(FakeCredentialStore::default());
+        let service = ProviderService::new(pool.clone(), store.clone());
+        service
+            .save(
+                "provider-a",
+                input("Primary", ApiKeyAction::Keep),
+                "operation-create-a".to_owned(),
+                "unused".to_owned(),
+                1,
+            )
+            .await
+            .unwrap();
+        service
+            .save(
+                "provider-b",
+                input(
+                    "Secondary",
+                    ApiKeyAction::Replace(SecretString::from("keep-me")),
+                ),
+                "operation-create-b".to_owned(),
+                "credential-b".to_owned(),
+                2,
+            )
+            .await
+            .unwrap();
+        sqlx::query(
+            "UPDATE conversations \
+             SET provider_id = 'provider-a', model = 'primary-model', reasoning_effort = 'high' \
+             WHERE id = 'conversation'",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        assert!(service
+            .delete("provider-a", "operation-delete-a".to_owned())
+            .await
+            .unwrap());
+
+        let binding: (Option<String>, Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT provider_id, model, reasoning_effort FROM conversations \
+             WHERE id = 'conversation'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(binding, (None, None, Some("high".to_owned())));
+        assert_eq!(
+            service
+                .list_providers()
+                .await
+                .unwrap()
+                .0
+                .iter()
+                .map(|provider| provider.id.as_str())
+                .collect::<Vec<_>>(),
+            ["provider-b"]
+        );
+        assert!(store.snapshot().contains_key("credential-b"));
     });
 }
 

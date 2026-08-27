@@ -315,9 +315,18 @@ async fn assert_released_baseline(pool: &SqlitePool) {
         ]
     );
 
-    // Known v0.4.0 stale binding baseline for a future 0007 cleanup regression.
-    let stale: (Option<String>, Option<String>, Option<String>) = sqlx::query_as(
-        "SELECT provider_id, model, reasoning_effort FROM conversations WHERE id = ?1",
+    // Migration 7 clears the v0.4.0 stale orphan model while preserving effort
+    // and other conversation fields. Fixture seed used STALE_MODEL as the orphan.
+    let stale: (
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        String,
+        String,
+        i64,
+    ) = sqlx::query_as(
+        "SELECT provider_id, model, reasoning_effort, title, root_node_id, is_archived \
+         FROM conversations WHERE id = ?1",
     )
     .bind(CONVERSATION_STALE_ID)
     .fetch_one(pool)
@@ -325,7 +334,24 @@ async fn assert_released_baseline(pool: &SqlitePool) {
     .expect("stale-binding conversation exists");
     assert_eq!(
         stale,
-        (None, Some(STALE_MODEL.to_owned()), Some("low".to_owned()))
+        (
+            None,
+            None,
+            Some("low".to_owned()),
+            "stale binding baseline".to_owned(),
+            ROOT_STALE_ID.to_owned(),
+            0,
+        )
+    );
+    let residual_orphan_models: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM conversations WHERE model = ?1")
+            .bind(STALE_MODEL)
+            .fetch_one(pool)
+            .await
+            .expect("orphan model scan runs");
+    assert_eq!(
+        residual_orphan_models, 0,
+        "migration 7 must clear every fixture row that still held {STALE_MODEL}"
     );
 
     let stale_root: (Option<String>, String) = sqlx::query_as(
@@ -366,6 +392,38 @@ async fn assert_released_baseline(pool: &SqlitePool) {
     );
 }
 
+async fn assert_provider_delete_clears_binding_pair(pool: &SqlitePool) {
+    sqlx::query("DELETE FROM providers WHERE id = ?1")
+        .bind(PROVIDER_ID)
+        .execute(pool)
+        .await
+        .expect("deleting the fixture provider succeeds");
+    let unbound: (
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        String,
+        String,
+    ) = sqlx::query_as(
+        "SELECT provider_id, model, reasoning_effort, title, root_node_id \
+         FROM conversations WHERE id = ?1",
+    )
+    .bind(CONVERSATION_BOUND_ID)
+    .fetch_one(pool)
+    .await
+    .expect("bound conversation remains after provider delete");
+    assert_eq!(
+        unbound,
+        (
+            None,
+            None,
+            Some("medium".to_owned()),
+            "Bound fixture tree".to_owned(),
+            ROOT_BOUND_ID.to_owned(),
+        )
+    );
+}
+
 fn install_fixture_copy(app_config_dir: &Path) {
     fs::create_dir_all(app_config_dir).expect("unique app-config directory is creatable");
     let destination = app_config_dir.join("canopy.db");
@@ -401,6 +459,7 @@ fn released_v040_fixture_upgrades_through_production_sql_plugin() {
                 "plugin must open the copied canopy.db under the unique identifier"
             );
             assert_released_baseline(&pool).await;
+            assert_provider_delete_clears_binding_pair(&pool).await;
             let checksums = ledger_checksums(&pool).await;
             close_managed_sqlite(instances).await;
             checksums
@@ -416,8 +475,32 @@ fn released_v040_fixture_upgrades_through_production_sql_plugin() {
             let pool = managed_sqlite_pool(instances)
                 .await
                 .expect("plugin-managed pool resolves on restart");
-            assert_released_baseline(&pool).await;
+            // Restart must not re-mutate already-repaired rows or the ledger.
+            // Provider was deleted in the first pass; re-check ledger + FK only.
             let checksums = ledger_checksums(&pool).await;
+            assert_ledger_matches_released_checksums(&checksums);
+            let fk_violations: Vec<(String, i64, String, i64)> =
+                sqlx::query_as("PRAGMA foreign_key_check")
+                    .fetch_all(&pool)
+                    .await
+                    .expect("foreign_key_check runs on restart");
+            assert!(fk_violations.is_empty());
+            let repaired: (Option<String>, Option<String>, Option<String>) = sqlx::query_as(
+                "SELECT provider_id, model, reasoning_effort FROM conversations WHERE id = ?1",
+            )
+            .bind(CONVERSATION_STALE_ID)
+            .fetch_one(&pool)
+            .await
+            .expect("repaired stale conversation survives restart");
+            assert_eq!(repaired, (None, None, Some("low".to_owned())));
+            let unbound: (Option<String>, Option<String>, Option<String>) = sqlx::query_as(
+                "SELECT provider_id, model, reasoning_effort FROM conversations WHERE id = ?1",
+            )
+            .bind(CONVERSATION_BOUND_ID)
+            .fetch_one(&pool)
+            .await
+            .expect("unbound conversation survives restart");
+            assert_eq!(unbound, (None, None, Some("medium".to_owned())));
             close_managed_sqlite(instances).await;
             checksums
         });

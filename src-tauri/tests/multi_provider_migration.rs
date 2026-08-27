@@ -164,6 +164,17 @@ fn migration_moves_the_default_profile_pending_operations_and_adds_binding_colum
             .execute(&pool)
             .await
             .unwrap();
+
+        // Migration 7 pairs provider_id/model clearing on provider delete.
+        let binding_integrity = MIGRATION_CATALOG
+            .iter()
+            .find(|migration| migration.version == 7)
+            .expect("conversation provider binding integrity migration is registered");
+        sqlx::raw_sql(binding_integrity.sql)
+            .execute(&pool)
+            .await
+            .expect("binding integrity migration applies");
+
         sqlx::query("DELETE FROM providers WHERE id = 'default'")
             .execute(&pool)
             .await
@@ -175,14 +186,104 @@ fn migration_moves_the_default_profile_pending_operations_and_adds_binding_colum
         .fetch_one(&pool)
         .await
         .unwrap();
+        assert_eq!(unbound, (None, None, Some("low".to_owned())));
+    });
+}
+
+#[test]
+fn binding_integrity_migration_clears_orphan_models_and_pairs_future_deletes() {
+    run_async(async {
+        let pool = migrated_pool_through(6).await;
+        sqlx::query(
+            "INSERT INTO providers (id, name, protocol, base_endpoint, model, models, \
+                    credential_ref, created_at, updated_at) \
+             VALUES ('bound-provider', 'Bound', 'openai_compatible', \
+                     'https://provider.example/v1', 'bound-model', json_array('bound-model'), \
+                     NULL, 1, 1)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        seed_conversation(&pool).await;
+        sqlx::query(
+            "UPDATE conversations SET provider_id = 'bound-provider', model = 'bound-model', \
+             reasoning_effort = 'medium' WHERE id = 'conversation-a'",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        // Simulate the released v0.4.0 stale baseline left by ON DELETE SET NULL.
+        {
+            let mut transaction = pool.begin().await.unwrap();
+            sqlx::query(
+                "INSERT INTO conversations (id, title, root_node_id, is_archived, provider_id, \
+                        model, reasoning_effort) \
+                 VALUES ('conversation-stale', 'Stale', 'root-stale', 0, NULL, 'orphan-model', \
+                         'high')",
+            )
+            .execute(&mut *transaction)
+            .await
+            .unwrap();
+            sqlx::query(
+                "INSERT INTO nodes (id, parent_id, conversation_id, role, content, created_at) \
+                 VALUES ('root-stale', NULL, 'conversation-stale', 'user', 'stale root', 2)",
+            )
+            .execute(&mut *transaction)
+            .await
+            .unwrap();
+            transaction.commit().await.unwrap();
+        }
+
+        let migration = MIGRATION_CATALOG
+            .iter()
+            .find(|migration| migration.version == 7)
+            .expect("conversation provider binding integrity migration is registered");
+        sqlx::raw_sql(migration.sql)
+            .execute(&pool)
+            .await
+            .expect("binding integrity migration applies");
+
+        let repaired: (Option<String>, Option<String>, Option<String>, String, i64) =
+            sqlx::query_as(
+                "SELECT provider_id, model, reasoning_effort, title, is_archived \
+                 FROM conversations WHERE id = 'conversation-stale'",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
         assert_eq!(
-            unbound,
+            repaired,
+            (None, None, Some("high".to_owned()), "Stale".to_owned(), 0)
+        );
+
+        let still_bound: (Option<String>, Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT provider_id, model, reasoning_effort FROM conversations \
+             WHERE id = 'conversation-a'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            still_bound,
             (
-                None,
-                Some("fixture-model".to_owned()),
-                Some("low".to_owned())
+                Some("bound-provider".to_owned()),
+                Some("bound-model".to_owned()),
+                Some("medium".to_owned())
             )
         );
+
+        sqlx::query("DELETE FROM providers WHERE id = 'bound-provider'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let cleared: (Option<String>, Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT provider_id, model, reasoning_effort FROM conversations \
+             WHERE id = 'conversation-a'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(cleared, (None, None, Some("medium".to_owned())));
     });
 }
 

@@ -49,6 +49,11 @@ pub const MIGRATION_CATALOG: &[ApplicationMigration] = &[
         description: "provider_models",
         sql: include_str!("../../migrations/0006_provider_models.sql"),
     },
+    ApplicationMigration {
+        version: 7,
+        description: "conversation_provider_binding_integrity",
+        sql: include_str!("../../migrations/0007_conversation_provider_binding_integrity.sql"),
+    },
 ];
 
 pub fn plugin_migrations() -> Vec<Migration> {
