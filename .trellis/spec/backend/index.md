@@ -17,7 +17,7 @@ application core. Product code is organized by capability:
 | `providers` | profiles, keyring credentials, active provider, `list_providers` façade, title-binding validation |
 | `conversations` | conversation tree, search, persistence; no provider table SQL |
 | `generation` | reply runtime, prepare/run/finalize, conversation-provider binding, auto-title |
-| `exports` | bounded Markdown file writes plus the frozen managed-DB preflight |
+| `exports` | bounded Markdown file writes (path/content validation + filesystem IO) |
 | `error.rs` | `CommandError` IPC mapping only |
 
 Application workflows (`generation`) may compose domains. Domains do not

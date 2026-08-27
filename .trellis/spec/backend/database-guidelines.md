@@ -23,9 +23,10 @@ Tauri SQL plugin configuration (preload + migrations)
 ```
 
 `infra` has no product-module dependency. Conversation, provider, settings,
-generation, and export code resolve the pool through `infra::database`; they
-do not own the catalog or open a second production connection. Production
-`app_builder` and released-database upgrade tests must both call
+and generation code resolve the pool through `infra::database`; they do not
+own the catalog or open a second production connection. Export writes are
+filesystem-only and never resolve the managed pool. Production `app_builder`
+and released-database upgrade tests must both call
 `infra::database::register_sql_plugin` so `DATABASE_URL` and
 `plugin_migrations()` cannot drift.
 

@@ -64,7 +64,7 @@ src-tauri/
 │   └── exports/
 │       ├── dto.rs
 │       ├── service.rs        # validation and bounded filesystem write
-│       └── commands.rs       # write_export_file + managed-DB preflight
+│       └── commands.rs       # write_export_file
 ├── tests/
 │   ├── fixtures/             # released canopy-v0.4.0.db + provenance README
 │   ├── support/mod.rs
@@ -94,7 +94,7 @@ lib / Tauri composition
   ├─> llm ───────────> (reqwest/tokio only)
   ├─> providers ─────> settings + llm + infra
   ├─> generation ────> conversations + providers + settings + llm + infra
-  └─> exports ───────> infra (DB preflight) + filesystem
+  └─> exports ───────> filesystem
 
 error (IPC mapping) ─> errors from every command-facing module
 ```
