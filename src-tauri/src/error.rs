@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::{
-    conversations::PersistenceError, infra::database::DatabaseError, llm::LlmError,
-    providers::ProviderError, settings::SettingsError,
+    conversations::PersistenceError, generation::GenerationError, infra::database::DatabaseError,
+    llm::LlmError, providers::ProviderError, settings::SettingsError,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -96,11 +96,6 @@ impl From<ProviderError> for CommandError {
                 retryable: true,
                 details: None,
             },
-            ProviderError::GenerationAlreadyActive => {
-                Self::invalid_input("conversation_id", "generation_already_active")
-            }
-            ProviderError::RuntimeInvariant => Self::internal(),
-            ProviderError::Persistence(error) => Self::from(error),
             ProviderError::Llm(error) => Self::from(error),
             ProviderError::Storage(error) if is_transient_storage_error(&error) => Self {
                 code: CommandErrorCode::DatabaseUnavailable,
@@ -142,6 +137,21 @@ impl From<LlmError> for CommandError {
                 details: None,
             },
             LlmError::Cancelled => Self::cancelled(),
+        }
+    }
+}
+
+impl From<GenerationError> for CommandError {
+    fn from(error: GenerationError) -> Self {
+        match error {
+            GenerationError::InvalidInput { field, reason } => Self::invalid_input(field, reason),
+            GenerationError::AlreadyActive => {
+                Self::invalid_input("conversation_id", "generation_already_active")
+            }
+            GenerationError::RuntimeInvariant => Self::internal(),
+            GenerationError::Persistence(error) => Self::from(error),
+            GenerationError::Provider(error) => Self::from(error),
+            GenerationError::Llm(error) => Self::from(error),
         }
     }
 }

@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::{conversations::PersistenceError, llm::LlmError, settings::SettingsError};
+use crate::{llm::LlmError, settings::SettingsError};
 
 #[derive(Debug, Error)]
 pub enum ProviderError {
@@ -18,15 +18,6 @@ pub enum ProviderError {
 
     #[error("native credential storage is unavailable")]
     CredentialUnavailable,
-
-    #[error("a generation is already active for this conversation")]
-    GenerationAlreadyActive,
-
-    #[error("provider runtime invariant failure")]
-    RuntimeInvariant,
-
-    #[error("persistence failure")]
-    Persistence(#[from] PersistenceError),
 
     #[error("provider storage failure")]
     Storage(#[from] sqlx::Error),

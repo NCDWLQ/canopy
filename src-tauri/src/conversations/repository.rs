@@ -435,19 +435,6 @@ impl ConversationRepository {
         Ok(results)
     }
 
-    pub(crate) async fn provider_exists(
-        connection: &mut SqliteConnection,
-        provider_id: &str,
-    ) -> Result<bool, PersistenceError> {
-        Ok(
-            sqlx::query_scalar::<_, i64>("SELECT EXISTS(SELECT 1 FROM providers WHERE id = ?1)")
-                .bind(provider_id)
-                .fetch_one(connection)
-                .await?
-                != 0,
-        )
-    }
-
     pub(crate) async fn set_provider_binding(
         connection: &mut SqliteConnection,
         conversation_id: &str,

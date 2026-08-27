@@ -5,15 +5,14 @@ use sqlx::SqlitePool;
 use tauri::{AppHandle, Emitter, Runtime};
 use tokio_util::sync::CancellationToken;
 
-use crate::conversations::{
-    commands::validate_title, AutoTitleContext, ConversationPersistenceService,
-};
+use crate::conversations::{parse_title, AutoTitleContext, ConversationPersistenceService};
 use crate::llm::{
     adapters::anthropic, OpenAiCompatibleClient, Protocol, TitlePrompt, ValidatedEndpoint,
 };
 use crate::settings::{SettingsService, TitleModelBinding};
 
-use super::{domain::validate_model, title_prompt::build_title_prompt, Provider, ProviderService};
+use super::title_prompt::build_title_prompt;
+use crate::providers::{domain::validate_model, Provider, ProviderService};
 
 pub(crate) const TITLE_UPDATED_EVENT: &str = "conversation://title-updated";
 
@@ -167,7 +166,7 @@ fn clean_title(raw: &str) -> Option<String> {
     let single_line = raw.split_whitespace().collect::<Vec<_>>().join(" ");
     let unquoted = strip_wrapping_quotes(&single_line);
     let unprefixed = strip_title_prefix(unquoted).trim();
-    validate_title(unprefixed).ok()
+    parse_title(unprefixed).ok()
 }
 
 /// Strips a single leading `Title:` / `标题:` / `标题：` prefix. Quotes are
@@ -227,8 +226,9 @@ mod tests {
     use crate::{
         conversations::{ConversationPersistenceService, NewConversation, NewNode, Role},
         database::MIGRATION_CATALOG,
-        providers::{CredentialStore, ProviderError, ProviderService, TitleModelBinding},
+        providers::{CredentialStore, ProviderError, ProviderService},
         settings::SettingsService,
+        settings::TitleModelBinding,
     };
 
     use super::{

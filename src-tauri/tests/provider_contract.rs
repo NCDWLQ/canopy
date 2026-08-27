@@ -1,12 +1,16 @@
-use canopy_lib::providers::commands::{
-    CancelGenerationRequest, CancelGenerationResult, DeleteProviderRequest, DeleteProviderResult,
-    GenerateFromActivePathRequest, GenerationEventDto, GenerationTerminalDto,
-    ListProviderModelsRequest, ListProvidersRequest, ListProvidersResult, ProviderDto,
-    RevealProviderApiKeyRequest, RevealProviderApiKeyResult, SaveProviderRequest,
-    SetActiveProviderRequest, SetActiveProviderResult, SetAutoGenerateTitleRequest,
-    SetAutoGenerateTitleResult, SetLanguageRequest, SetLanguageResult, SetThemeRequest,
-    SetThemeResult, SetTitleModelBindingRequest, SetTitleModelBindingResult,
-    PROVIDER_COMMAND_NAMES,
+use canopy_lib::{
+    generation::commands::{
+        CancelGenerationRequest, CancelGenerationResult, GenerateFromActivePathRequest,
+        GenerationEventDto, GenerationTerminalDto,
+    },
+    providers::commands::{
+        DeleteProviderRequest, DeleteProviderResult, ListProviderModelsRequest,
+        ListProvidersRequest, ListProvidersResult, ProviderDto, RevealProviderApiKeyRequest,
+        RevealProviderApiKeyResult, SaveProviderRequest, SetActiveProviderRequest,
+        SetActiveProviderResult, SetAutoGenerateTitleRequest, SetAutoGenerateTitleResult,
+        SetLanguageRequest, SetLanguageResult, SetThemeRequest, SetThemeResult,
+        SetTitleModelBindingRequest, SetTitleModelBindingResult, PROVIDER_COMMAND_NAMES,
+    },
 };
 use serde_json::Value;
 

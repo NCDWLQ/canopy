@@ -6,8 +6,8 @@ use canopy_lib::{
     conversations::{
         ConversationPersistenceService, NewConversation, NewNode, Role, ValidatedPath,
     },
+    generation::chat_prompt_from_path,
     llm::{LlmError, OpenAiCompatibleClient, Protocol, ValidatedEndpoint},
-    providers::chat_prompt_from_path,
 };
 use secrecy::SecretString;
 use serde_json::json;

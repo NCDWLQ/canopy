@@ -5,11 +5,11 @@ use canopy_lib::{
         ConversationPersistenceService, NewConversation, NewNode, ReasoningEffort, Role,
         ValidatedPath,
     },
+    generation::chat_prompt_from_path,
     llm::{
         adapters::anthropic, model_list::list_models, LlmError, OpenAiCompatibleClient, Protocol,
         StreamingRequest, ValidatedEndpoint,
     },
-    providers::chat_prompt_from_path,
 };
 use secrecy::SecretString;
 use serde_json::json;

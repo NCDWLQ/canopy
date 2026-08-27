@@ -2,7 +2,7 @@ use std::sync::{Arc, OnceLock};
 
 use futures_util::lock::Mutex;
 use secrecy::SecretString;
-use sqlx::SqlitePool;
+use sqlx::{SqliteConnection, SqlitePool};
 
 use super::{
     domain::{
@@ -340,6 +340,18 @@ impl ProviderService {
             .ok_or(ProviderError::ProfileNotFound)?;
         transaction.commit().await?;
         Ok(provider)
+    }
+
+    /// Looks up a provider id on an existing connection so generation can
+    /// validate a conversation binding in the same transaction as the write.
+    /// Returns `sqlx::Error` so transient failures keep the historical
+    /// persistence `CommandError` mapping rather than the provider-storage
+    /// envelope.
+    pub(crate) async fn exists_on(
+        connection: &mut SqliteConnection,
+        provider_id: &str,
+    ) -> Result<bool, sqlx::Error> {
+        ProviderRepository::exists(connection, provider_id).await
     }
 
     pub async fn load_by_id_with_secret(

@@ -4,17 +4,15 @@ use tauri::State;
 use tauri_plugin_sql::DbInstances;
 
 use super::{
-    Conversation, ConversationPersistenceService, ConversationSearchResult, ConversationSummary,
-    ConversationTree, NewConversation, NewNode, Node, ReasoningEffort, Role, SearchHit,
-    ValidatedPath,
+    parse_title, Conversation, ConversationPersistenceService, ConversationSearchResult,
+    ConversationSummary, ConversationTree, NewConversation, NewNode, Node, ReasoningEffort, Role,
+    SearchHit, TitleParseError, ValidatedPath, MAX_TITLE_CHARS,
 };
 use crate::error::CommandError;
 use crate::infra::database::managed_sqlite_pool;
-use crate::providers::domain::validate_model;
 
 pub use crate::infra::identity::{IdentityTimeSource, SystemIdentityTimeSource};
 
-const MAX_TITLE_CHARS: usize = 200;
 const MAX_CONTENT_BYTES: usize = 1024 * 1024;
 // Exports aggregate many nodes (plus headings), so the cap keeps generous
 // headroom above the 1 MiB per-node limit instead of reusing it.
@@ -32,7 +30,7 @@ pub const CONVERSATION_COMMAND_NAMES: &[&str] = &[
     "rename_conversation",
     "delete_conversation",
     "unarchive_conversation",
-    "set_conversation_provider",
+    "set_conversation_provider", // handler lives in generation::commands; name stays for the frozen conversation fixture
     "search_conversations",
     "write_export_file",
 ];
@@ -458,31 +456,6 @@ impl<S: IdentityTimeSource> ConversationCommandService<S> {
             .map_err(CommandError::from)
     }
 
-    pub async fn set_conversation_provider(
-        &self,
-        request: SetConversationProviderRequest,
-    ) -> Result<ConversationProviderBindingResult, CommandError> {
-        validate_id("conversation_id", &request.conversation_id)?;
-        let (provider_id, model) = match request.binding {
-            Some(binding) => {
-                validate_id("provider_id", &binding.provider_id)?;
-                let model = validate_model(&binding.model).map_err(CommandError::from)?;
-                (Some(binding.provider_id), Some(model))
-            }
-            None => (None, None),
-        };
-        self.persistence
-            .set_provider_binding(
-                &request.conversation_id,
-                provider_id,
-                model,
-                request.reasoning_effort.map(Into::into),
-            )
-            .await
-            .map(ConversationProviderBindingResult::from)
-            .map_err(CommandError::from)
-    }
-
     pub async fn search_conversations(
         &self,
         request: SearchConversationsRequest,
@@ -510,14 +483,10 @@ impl<S: IdentityTimeSource> ConversationCommandService<S> {
 }
 
 pub(crate) fn validate_title(title: &str) -> Result<String, CommandError> {
-    let title = title.trim();
-    if title.is_empty() {
-        return Err(CommandError::invalid_input("title", "blank"));
-    }
-    if title.chars().count() > MAX_TITLE_CHARS {
-        return Err(CommandError::invalid_input("title", "too_long"));
-    }
-    Ok(title.to_owned())
+    parse_title(title).map_err(|error| match error {
+        TitleParseError::Blank => CommandError::invalid_input("title", "blank"),
+        TitleParseError::TooLong => CommandError::invalid_input("title", "too_long"),
+    })
 }
 
 fn validate_content(content: &str) -> Result<(), CommandError> {
@@ -856,17 +825,6 @@ pub async fn unarchive_conversation(
     production_service(instances.inner())
         .await?
         .unarchive_conversation(request)
-        .await
-}
-
-#[tauri::command]
-pub async fn set_conversation_provider(
-    request: SetConversationProviderRequest,
-    instances: State<'_, DbInstances>,
-) -> Result<ConversationProviderBindingResult, CommandError> {
-    production_service(instances.inner())
-        .await?
-        .set_conversation_provider(request)
         .await
 }
 

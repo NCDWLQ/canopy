@@ -56,6 +56,24 @@ impl ProviderRepository {
         row.map(decode_provider).transpose()
     }
 
+    /// Row presence only. Generation binding must not decode profile columns:
+    /// a corrupt `models` JSON would otherwise change a historical NotFound
+    /// vs success into a protocol failure, and SQL errors must stay sqlx so
+    /// the generation mapper keeps the conversation `database_unavailable`
+    /// envelope.
+    pub(crate) async fn exists(
+        connection: &mut SqliteConnection,
+        id: &str,
+    ) -> Result<bool, sqlx::Error> {
+        Ok(
+            sqlx::query_scalar::<_, i64>("SELECT EXISTS(SELECT 1 FROM providers WHERE id = ?1)")
+                .bind(id)
+                .fetch_one(connection)
+                .await?
+                != 0,
+        )
+    }
+
     pub(crate) async fn upsert_provider(
         connection: &mut SqliteConnection,
         provider: &Provider,

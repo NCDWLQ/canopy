@@ -1,6 +1,7 @@
 pub mod conversations;
 pub mod database;
 pub mod error;
+pub mod generation;
 pub mod infra;
 pub mod llm;
 pub mod providers;
@@ -23,7 +24,7 @@ pub(crate) fn register_commands<R: tauri::Runtime>(
         conversations::commands::rename_conversation,
         conversations::commands::delete_conversation,
         conversations::commands::unarchive_conversation,
-        conversations::commands::set_conversation_provider,
+        generation::commands::set_conversation_provider,
         conversations::commands::search_conversations,
         conversations::commands::write_export_file,
         providers::commands::list_providers,
@@ -35,15 +36,15 @@ pub(crate) fn register_commands<R: tauri::Runtime>(
         settings::commands::set_language,
         settings::commands::set_theme,
         providers::commands::reveal_provider_api_key,
-        providers::commands::generate_from_active_path,
-        providers::commands::cancel_generation,
+        generation::commands::generate_from_active_path,
+        generation::commands::cancel_generation,
         providers::commands::list_provider_models,
     ])
 }
 
 fn app_builder() -> tauri::Builder<tauri::Wry> {
     register_commands(tauri::Builder::default())
-        .manage(providers::GenerationRuntime::default())
+        .manage(generation::GenerationRuntime::default())
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations(DATABASE_URL, plugin_migrations())
@@ -98,7 +99,7 @@ mod tests {
     ) {
         let app = register_commands(test::mock_builder())
             .manage(DbInstances::default())
-            .manage(crate::providers::GenerationRuntime::default())
+            .manage(crate::generation::GenerationRuntime::default())
             .build(test::mock_context(test::noop_assets()))
             .expect("mock application builds");
         let webview = WebviewWindowBuilder::new(&app, "main", Default::default())
