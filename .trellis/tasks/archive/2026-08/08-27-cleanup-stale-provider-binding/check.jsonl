@@ -1,0 +1,5 @@
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Check migration ordering, released compatibility and trigger integrity."}
+{"file":".trellis/spec/backend/provider-guidelines.md","reason":"Check both provider deletion paths, settings cleanup and keyring reconcile behavior."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Confirm migration/provider failures do not drift across IPC."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Drive focused and full regression gates."}
+{"file":".trellis/tasks/08-27-cleanup-stale-provider-binding/research/binding-invariant.md","reason":"Verify the final diff closes the documented defect without expanding scope."}
