@@ -82,7 +82,7 @@ function PanoramaNodeCard({ data }: NodeProps<PanoramaFlowNode>) {
       aria-current={data.isActiveNode ? "true" : undefined}
       aria-label={`${roleLabel}：${label}`}
       className={cn(
-        "relative flex flex-col gap-1.5 rounded-lg border px-3 py-2 text-left shadow-sm transition-colors motion-reduce:transition-none",
+        "group relative flex flex-col gap-1.5 rounded-lg border px-3 py-2 text-left shadow-sm transition-colors motion-reduce:transition-none",
         data.role === "user"
           ? "border-border bg-muted"
           : "border-border bg-card",
@@ -114,31 +114,6 @@ function PanoramaNodeCard({ data }: NodeProps<PanoramaFlowNode>) {
         <span className="text-[10px] font-medium uppercase tracking-wide">
           {roleLabel}
         </span>
-        {canBranch && (
-          <Tooltip delayDuration={300}>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                className="size-4 hover:text-foreground"
-                aria-label={t("conversation.message.branchFromHere")}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  data.onCreateBranch?.(data.nodeId)
-                }}
-                onDoubleClick={(event) => {
-                  event.stopPropagation()
-                }}
-              >
-                <GitBranch className="size-3" aria-hidden="true" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {t("conversation.message.branchFromHere")}
-            </TooltipContent>
-          </Tooltip>
-        )}
         {isCollapsed && data.collapsedDescendantCount > 0 && (
           <Badge
             variant="secondary"
@@ -193,6 +168,37 @@ function PanoramaNodeCard({ data }: NodeProps<PanoramaFlowNode>) {
               : t("conversation.panorama.collapseBranchTooltip")}
           </TooltipContent>
         </Tooltip>
+      )}
+      {/* Branch action as a hover-revealed bar floating below the card, like
+          the message bubble action row. The bar must not grow the node (fixed
+          card metrics drive the layout), so it stays absolutely positioned in
+          the row gap and shrinks to the button's own footprint. */}
+      {canBranch && (
+        <div className="absolute right-2 top-full z-10 mt-0.5 flex opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none">
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className="text-muted-foreground hover:text-foreground"
+                aria-label={t("conversation.message.branchFromHere")}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  data.onCreateBranch?.(data.nodeId)
+                }}
+                onDoubleClick={(event) => {
+                  event.stopPropagation()
+                }}
+              >
+                <GitBranch className="size-3.5" aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {t("conversation.message.branchFromHere")}
+            </TooltipContent>
+          </Tooltip>
+        </div>
       )}
     </div>
   )

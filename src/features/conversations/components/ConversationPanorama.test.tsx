@@ -307,10 +307,12 @@ describe("ConversationPanorama", () => {
       name: "从此处创建分支",
     })
     expect(branchButtons).toHaveLength(1)
-    expect(branchButtons[0]?.closest("[data-node-id]")).toHaveAttribute(
-      "data-node-id",
-      "assistant-a",
-    )
+    const branchCard = branchButtons[0]?.closest("[data-node-id]")
+    expect(branchCard).toHaveAttribute("data-node-id", "assistant-a")
+    // The action floats below the card as a hover-revealed bar, like the
+    // message bubble action row.
+    expect(branchCard).toHaveClass("group")
+    expect(branchButtons[0]?.parentElement).toHaveClass("top-full", "opacity-0")
   })
 
   it("emits the node id through onCreateBranch without selecting the card", () => {
