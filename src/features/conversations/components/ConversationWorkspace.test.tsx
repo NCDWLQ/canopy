@@ -2847,9 +2847,17 @@ describe("ConversationWorkspace", () => {
     await screen.findByTestId("conversation-pane")
     expect(useConversationStore.getState().activeNodeId).toBe(right.id)
 
-    await userEvent.click(
-      screen.getByRole("button", { name: "切换对话全景视图" }),
-    )
+    const toggleButton = screen.getByRole("button", {
+      name: "查看全景",
+    })
+    expect(toggleButton).toHaveAttribute("aria-pressed", "false")
+    expect(toggleButton).toHaveAttribute("data-variant", "ghost")
+
+    await userEvent.click(toggleButton)
+    expect(toggleButton).toHaveAttribute("aria-label", "返回对话")
+    expect(toggleButton).toHaveAttribute("aria-pressed", "true")
+    expect(toggleButton).toHaveAttribute("data-variant", "secondary")
+
     const panorama = screen.getByRole("region", { name: "对话全景" })
     fireEvent.click(within(panorama).getByText("ASSISTANT_SENTINEL"))
 
@@ -2866,6 +2874,15 @@ describe("ConversationWorkspace", () => {
     expect(selectedCard).toHaveAttribute("data-on-active-path", "true")
     expect(leafCard).toHaveAttribute("data-on-active-path", "true")
     expect(leafCard).not.toHaveAttribute("aria-current")
+
+    await userEvent.click(toggleButton)
+    expect(toggleButton).toHaveAttribute("aria-label", "查看全景")
+    expect(toggleButton).toHaveAttribute("aria-pressed", "false")
+    expect(toggleButton).toHaveAttribute("data-variant", "ghost")
+    expect(
+      screen.queryByRole("region", { name: "对话全景" }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByTestId("conversation-pane")).toBeInTheDocument()
   })
 
   it("opens the conversation pane on the double-clicked Panorama node", async () => {
@@ -2888,9 +2905,7 @@ describe("ConversationWorkspace", () => {
     expect(within(pane).getByText(right.content)).toBeVisible()
     expect(within(pane).queryByText(left.content)).not.toBeInTheDocument()
 
-    await userEvent.click(
-      screen.getByRole("button", { name: "切换对话全景视图" }),
-    )
+    await userEvent.click(screen.getByRole("button", { name: "查看全景" }))
     expect(screen.queryByTestId("conversation-pane")).not.toBeInTheDocument()
     const panorama = screen.getByRole("region", { name: "对话全景" })
     expect(panorama).toBeVisible()

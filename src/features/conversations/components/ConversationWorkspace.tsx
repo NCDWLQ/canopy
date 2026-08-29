@@ -2,6 +2,7 @@ import * as React from "react"
 import {
   Archive,
   ArchiveRestore,
+  MessageSquare,
   MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
@@ -874,19 +875,32 @@ export function ConversationWorkspace({
               <TooltipTrigger asChild>
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant={isPanoramaOpen ? "secondary" : "ghost"}
                   size="icon"
-                  className="size-8"
-                  aria-label={t("conversation.panorama.toggleView")}
+                  className={cn(
+                    "size-8",
+                    isPanoramaOpen && "bg-secondary text-secondary-foreground",
+                  )}
+                  aria-label={
+                    isPanoramaOpen
+                      ? t("conversation.panorama.closePanorama")
+                      : t("conversation.panorama.openPanorama")
+                  }
                   aria-pressed={isPanoramaOpen}
                   disabled={store.status === "loading"}
                   onClick={() => setIsPanoramaOpen((isOpen) => !isOpen)}
                 >
-                  <Waypoints className="size-4" aria-hidden="true" />
+                  {isPanoramaOpen ? (
+                    <MessageSquare className="size-4" aria-hidden="true" />
+                  ) : (
+                    <Waypoints className="size-4" aria-hidden="true" />
+                  )}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                {t("conversation.panorama.toggleView")}
+                {isPanoramaOpen
+                  ? t("conversation.panorama.closePanorama")
+                  : t("conversation.panorama.openPanorama")}
               </TooltipContent>
             </Tooltip>
           )}

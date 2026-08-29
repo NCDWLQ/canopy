@@ -148,7 +148,8 @@ export const zhCN = {
   "conversation.outline.emptyContent": "无内容",
 
   // ConversationPanorama.tsx + ConversationWorkspace.tsx
-  "conversation.panorama.toggleView": "切换对话全景视图",
+  "conversation.panorama.openPanorama": "查看全景",
+  "conversation.panorama.closePanorama": "返回对话",
   "conversation.panorama.canvas": "对话全景",
   "conversation.panorama.collapseBranch": ({ label }: { label: string }) =>
     `收起 ${label} 的分支`,
