@@ -1207,3 +1207,25 @@ Closed the backend residuals parent: harness, provider-binding migration 0007, a
 ### Status
 
 [OK] **Completed**
+
+
+## Session 54: Panorama branch-from-here action bar
+
+**Date**: 2026-08-29
+**Task**: Panorama branch-from-here action bar
+**Branch**: `feat/panorama-branch-button`
+
+### Summary
+
+Added the branch-from-here action to panorama node cards in worktree canopy-panorama-branch (feat/panorama-branch-button): PanoramaNodeData gained an onCreateBranch callback (null hides the affordance), the workspace reuses handleStartBranch (now useCallback, returns success) with selectNode + deferred composer focus after the canvas closes, and the action renders as a hover-revealed bar floating below branchable assistant cards. A context-menu variant and two geometry/tooltip fixes were tried and discarded by user decision; final form is the hover bar. Full check green (format/lint/typecheck/367 tests/build).
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c18d518` | (see git log) |
+| `424264a` | (see git log) |
+
+### Status
+
+[OK] **Completed**
