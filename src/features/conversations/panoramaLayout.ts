@@ -57,6 +57,8 @@ const PANORAMA_NODE_HANDLES: NodeHandle[] = [
 
 export type PanoramaNodeData = PanoramaCardData & {
   onToggleBranch: (nodeId: string) => void
+  /** Starts a branch composer on this card; null hides the affordance. */
+  onCreateBranch: ((nodeId: string) => void) | null
 }
 
 export type PanoramaCardNode = FlowNode<PanoramaCardData, "panoramaCard">

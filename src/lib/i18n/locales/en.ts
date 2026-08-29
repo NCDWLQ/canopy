@@ -148,7 +148,8 @@ export const en = {
   "conversation.outline.emptyContent": "Empty",
 
   // ConversationPanorama.tsx + ConversationWorkspace.tsx
-  "conversation.panorama.toggleView": "Toggle Conversation Panorama",
+  "conversation.panorama.openPanorama": "View Panorama",
+  "conversation.panorama.closePanorama": "Back to Conversation",
   "conversation.panorama.canvas": "Conversation Panorama",
   "conversation.panorama.collapseBranch": ({ label }: { label: string }) =>
     `Collapse branches of ${label}`,

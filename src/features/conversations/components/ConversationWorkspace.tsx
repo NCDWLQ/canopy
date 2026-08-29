@@ -2,6 +2,7 @@ import * as React from "react"
 import {
   Archive,
   ArchiveRestore,
+  MessageSquare,
   MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
@@ -427,7 +428,10 @@ export function ConversationWorkspace({
     return node?.role === "user" && parent?.role === "assistant"
   }
 
-  const handleStartBranch = (parentNodeId: string) => {
+  // Shared by the conversation pane's per-message action and the panorama
+  // card action. Returns whether the branch composer actually armed; the
+  // panorama caller closes the canvas only on success.
+  const handleStartBranch = React.useCallback((parentNodeId: string) => {
     const current = useConversationStore.getState()
     const parent = current.nodesById[parentNodeId]
     if (
@@ -440,14 +444,37 @@ export function ConversationWorkspace({
       parent?.role !== "assistant" ||
       parent.childIds.length === 0
     ) {
-      return
+      return false
     }
     setBranchComposerTarget({
       conversationId: current.conversationId,
       parentNodeId,
     })
     composerRef.current?.focus()
-  }
+    return true
+  }, [])
+
+  // Panorama cards sit above the Composer in the render tree: the focus call
+  // inside handleStartBranch no-ops while the canvas replaces the pane, so
+  // replay it after the switch back to the conversation view.
+  const focusComposerAfterPanoramaRef = React.useRef(false)
+  React.useEffect(() => {
+    if (isPanoramaOpen || !focusComposerAfterPanoramaRef.current) return
+    focusComposerAfterPanoramaRef.current = false
+    composerRef.current?.focus()
+  }, [isPanoramaOpen])
+
+  const handlePanoramaCreateBranch = React.useCallback(
+    (nodeId: string) => {
+      // Select first so the pane's active path runs through the branch
+      // origin (its store update also fires before the target is armed).
+      selectNode(nodeId)
+      if (!handleStartBranch(nodeId)) return
+      focusComposerAfterPanoramaRef.current = true
+      setIsPanoramaOpen(false)
+    },
+    [handleStartBranch, selectNode],
+  )
 
   const handleComposerSubmit = async (content: string) => {
     const target = activeBranchComposerTarget
@@ -874,19 +901,32 @@ export function ConversationWorkspace({
               <TooltipTrigger asChild>
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant={isPanoramaOpen ? "secondary" : "ghost"}
                   size="icon"
-                  className="size-8"
-                  aria-label={t("conversation.panorama.toggleView")}
+                  className={cn(
+                    "size-8",
+                    isPanoramaOpen && "bg-secondary text-secondary-foreground",
+                  )}
+                  aria-label={
+                    isPanoramaOpen
+                      ? t("conversation.panorama.closePanorama")
+                      : t("conversation.panorama.openPanorama")
+                  }
                   aria-pressed={isPanoramaOpen}
                   disabled={store.status === "loading"}
                   onClick={() => setIsPanoramaOpen((isOpen) => !isOpen)}
                 >
-                  <Waypoints className="size-4" aria-hidden="true" />
+                  {isPanoramaOpen ? (
+                    <MessageSquare className="size-4" aria-hidden="true" />
+                  ) : (
+                    <Waypoints className="size-4" aria-hidden="true" />
+                  )}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                {t("conversation.panorama.toggleView")}
+                {isPanoramaOpen
+                  ? t("conversation.panorama.closePanorama")
+                  : t("conversation.panorama.openPanorama")}
               </TooltipContent>
             </Tooltip>
           )}
@@ -974,6 +1014,7 @@ export function ConversationWorkspace({
                   selectBranchAtNode(nodeId)
                   setIsPanoramaOpen(false)
                 }}
+                onCreateBranch={canMutate ? handlePanoramaCreateBranch : null}
               />
             ) : projectionError !== null ? (
               <div className="p-6 text-sm text-destructive" role="alert">
