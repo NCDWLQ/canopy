@@ -70,7 +70,7 @@ function PanoramaNodeCard({ data }: NodeProps<PanoramaFlowNode>) {
       className={cn(
         "relative flex flex-col gap-1.5 rounded-lg border px-3 py-2 text-left shadow-sm transition-colors motion-reduce:transition-none",
         data.role === "user"
-          ? "border-primary/40 bg-primary/5"
+          ? "border-border bg-muted"
           : "border-border bg-card",
         data.isOnActivePath && "border-ring/60",
         data.isActiveNode && "border-ring ring-2 ring-ring/50",
