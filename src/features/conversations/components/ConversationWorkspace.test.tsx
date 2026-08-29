@@ -2885,6 +2885,75 @@ describe("ConversationWorkspace", () => {
     expect(screen.getByTestId("conversation-pane")).toBeInTheDocument()
   })
 
+  it("arms the branch composer from a Panorama card and closes the canvas", async () => {
+    class DOMMatrixReadOnlyStub {
+      readonly m22 = 1
+    }
+    vi.stubGlobal("DOMMatrixReadOnly", DOMMatrixReadOnlyStub)
+
+    const branchUser: ConversationNodeView = {
+      id: "panorama-branch-user",
+      parentId: assistant.id,
+      conversationId: root.conversationId,
+      role: "user",
+      content: "PANORAMA_BRANCH_SENTINEL",
+      createdAt: 5,
+      metadata: null,
+    }
+    client.listConversations.mockResolvedValueOnce([
+      { ...tree.conversation, updatedAt: right.createdAt },
+    ])
+    client.createBranch.mockResolvedValueOnce(branchUser)
+    providerClient.generateFromActivePath.mockResolvedValue({
+      type: "cancelled",
+      generationId: "panorama-branch-generation",
+    })
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+
+    render(<ConversationWorkspace />)
+    await screen.findByTestId("conversation-pane")
+
+    await userEvent.click(screen.getByRole("button", { name: "查看全景" }))
+    const panorama = screen.getByRole("region", { name: "对话全景" })
+    const branchButton = within(panorama).getByRole("button", {
+      name: "从此处创建分支",
+    })
+    expect(branchButton).toBeVisible()
+
+    fireEvent.click(branchButton)
+
+    expect(useConversationStore.getState().activeNodeId).toBe(assistant.id)
+    expect(
+      screen.queryByRole("region", { name: "对话全景" }),
+    ).not.toBeInTheDocument()
+    const pane = screen.getByTestId("conversation-pane")
+    const composer = screen.getByRole("textbox", { name: "消息输入框" })
+    expect(composer).toHaveFocus()
+    expect(composer).toHaveAttribute("placeholder", "输入分支消息…")
+    expect(within(pane).getByText(assistant.content)).toBeVisible()
+    expect(within(pane).queryByText(right.content)).not.toBeInTheDocument()
+    expect(
+      within(pane).getByRole("separator", { name: "由此处创建分支" }),
+    ).toBeInTheDocument()
+
+    await userEvent.type(composer, branchUser.content)
+    await userEvent.click(screen.getByRole("button", { name: "发送消息" }))
+
+    await waitFor(() => {
+      expect(client.createBranch).toHaveBeenCalledWith({
+        conversationId: root.conversationId,
+        parentNodeId: assistant.id,
+        content: branchUser.content,
+      })
+      expect(within(pane).getByText(branchUser.content)).toBeVisible()
+    })
+    expect(
+      within(pane).queryByRole("separator", { name: "由此处创建分支" }),
+    ).not.toBeInTheDocument()
+  })
+
   it("opens the conversation pane on the double-clicked Panorama node", async () => {
     const scrollIntoView = vi.fn()
     Element.prototype.scrollIntoView = scrollIntoView

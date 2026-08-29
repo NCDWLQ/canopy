@@ -12,7 +12,15 @@ import {
   type NodeProps,
   type NodeTypes,
 } from "@xyflow/react"
-import { Bot, Minus, Plus, Terminal, User, Wrench } from "lucide-react"
+import {
+  Bot,
+  GitBranch,
+  Minus,
+  Plus,
+  Terminal,
+  User,
+  Wrench,
+} from "lucide-react"
 
 import type { TreeNodeView } from "../types"
 import {
@@ -60,6 +68,12 @@ function PanoramaNodeCard({ data }: NodeProps<PanoramaFlowNode>) {
   const label = data.preview || t("conversation.outline.emptyContent")
   const roleLabel = t(ROLE_LABEL_KEYS[data.role])
   const isCollapsed = data.isCollapsed
+  // Same eligibility rule as the conversation pane's branch action: only an
+  // assistant reply that already has children can spawn a sibling branch.
+  const canBranch =
+    data.role === "assistant" &&
+    data.childCount > 0 &&
+    data.onCreateBranch !== null
 
   return (
     <div
@@ -100,6 +114,31 @@ function PanoramaNodeCard({ data }: NodeProps<PanoramaFlowNode>) {
         <span className="text-[10px] font-medium uppercase tracking-wide">
           {roleLabel}
         </span>
+        {canBranch && (
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className="size-4 hover:text-foreground"
+                aria-label={t("conversation.message.branchFromHere")}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  data.onCreateBranch?.(data.nodeId)
+                }}
+                onDoubleClick={(event) => {
+                  event.stopPropagation()
+                }}
+              >
+                <GitBranch className="size-3" aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {t("conversation.message.branchFromHere")}
+            </TooltipContent>
+          </Tooltip>
+        )}
         {isCollapsed && data.collapsedDescendantCount > 0 && (
           <Badge
             variant="secondary"
@@ -179,6 +218,11 @@ export type ConversationPanoramaProps = {
   onSelect: (nodeId: string) => void
   /** Leave the canvas and open the conversation pane on this message. */
   onOpenInConversation: (nodeId: string) => void
+  /**
+   * Starts the branch composer on a card's node; null while mutations are
+   * locked, which hides the branch affordance on every card.
+   */
+  onCreateBranch: ((nodeId: string) => void) | null
 }
 
 export function ConversationPanorama(props: ConversationPanoramaProps) {
@@ -198,6 +242,7 @@ function ConversationPanoramaView({
   highlightedPathIds,
   onSelect,
   onOpenInConversation,
+  onCreateBranch,
 }: ConversationPanoramaProps) {
   const { t } = useTranslation()
   const { resolvedTheme } = useTheme()
@@ -311,9 +356,13 @@ function ConversationPanoramaView({
     if (layout === null) return null
     return layout.nodes.map((node) => ({
       ...node,
-      data: { ...node.data, onToggleBranch: handleToggleBranch },
+      data: {
+        ...node.data,
+        onToggleBranch: handleToggleBranch,
+        onCreateBranch,
+      },
     }))
-  }, [layout, handleToggleBranch])
+  }, [layout, handleToggleBranch, onCreateBranch])
 
   const fitViewOptions = React.useMemo(
     () => ({ padding: 0.15, maxZoom: 0.9 }),

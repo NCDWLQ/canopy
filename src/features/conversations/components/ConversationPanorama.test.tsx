@@ -111,6 +111,7 @@ describe("ConversationPanorama", () => {
         activePathIds={activePathIds}
         onSelect={vi.fn()}
         onOpenInConversation={vi.fn()}
+        onCreateBranch={vi.fn()}
       />,
     )
 
@@ -137,6 +138,7 @@ describe("ConversationPanorama", () => {
         activePathIds={activePathIds}
         onSelect={vi.fn()}
         onOpenInConversation={vi.fn()}
+        onCreateBranch={vi.fn()}
       />,
     )
 
@@ -171,6 +173,7 @@ describe("ConversationPanorama", () => {
         activePathIds={activePathIds}
         onSelect={onSelect}
         onOpenInConversation={vi.fn()}
+        onCreateBranch={vi.fn()}
       />,
     )
 
@@ -189,6 +192,7 @@ describe("ConversationPanorama", () => {
         activePathIds={activePathIds}
         onSelect={vi.fn()}
         onOpenInConversation={onOpenInConversation}
+        onCreateBranch={vi.fn()}
       />,
     )
 
@@ -206,6 +210,7 @@ describe("ConversationPanorama", () => {
         activePathIds={activePathIds}
         onSelect={vi.fn()}
         onOpenInConversation={onOpenInConversation}
+        onCreateBranch={vi.fn()}
       />,
     )
 
@@ -222,6 +227,7 @@ describe("ConversationPanorama", () => {
         activePathIds={activePathIds}
         onSelect={vi.fn()}
         onOpenInConversation={vi.fn()}
+        onCreateBranch={vi.fn()}
       />,
     )
 
@@ -246,6 +252,7 @@ describe("ConversationPanorama", () => {
         activePathIds={activePathIds}
         onSelect={vi.fn()}
         onOpenInConversation={vi.fn()}
+        onCreateBranch={vi.fn()}
       />,
     )
 
@@ -272,12 +279,74 @@ describe("ConversationPanorama", () => {
         activePathIds={["only"]}
         onSelect={vi.fn()}
         onOpenInConversation={vi.fn()}
+        onCreateBranch={vi.fn()}
       />,
     )
 
     expect(screen.getByText("SOLO")).toBeVisible()
     expect(
       screen.queryByRole("button", { name: /分支/ }),
+    ).not.toBeInTheDocument()
+  })
+
+  it("offers the branch action only on assistant cards with children", () => {
+    render(
+      <ConversationPanorama
+        rootNodeId="root"
+        nodesById={nodesById}
+        activePathIds={activePathIds}
+        onSelect={vi.fn()}
+        onOpenInConversation={vi.fn()}
+        onCreateBranch={vi.fn()}
+      />,
+    )
+
+    // assistant-a has children; the user cards and childless assistant-left
+    // follow the same eligibility rule as the conversation pane.
+    const branchButtons = screen.getAllByRole("button", {
+      name: "从此处创建分支",
+    })
+    expect(branchButtons).toHaveLength(1)
+    expect(branchButtons[0]?.closest("[data-node-id]")).toHaveAttribute(
+      "data-node-id",
+      "assistant-a",
+    )
+  })
+
+  it("emits the node id through onCreateBranch without selecting the card", () => {
+    const onCreateBranch = vi.fn()
+    const onSelect = vi.fn()
+    render(
+      <ConversationPanorama
+        rootNodeId="root"
+        nodesById={nodesById}
+        activePathIds={activePathIds}
+        onSelect={onSelect}
+        onOpenInConversation={vi.fn()}
+        onCreateBranch={onCreateBranch}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "从此处创建分支" }))
+
+    expect(onCreateBranch).toHaveBeenCalledWith("assistant-a")
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  it("hides the branch action while mutations are locked", () => {
+    render(
+      <ConversationPanorama
+        rootNodeId="root"
+        nodesById={nodesById}
+        activePathIds={activePathIds}
+        onSelect={vi.fn()}
+        onOpenInConversation={vi.fn()}
+        onCreateBranch={null}
+      />,
+    )
+
+    expect(
+      screen.queryByRole("button", { name: "从此处创建分支" }),
     ).not.toBeInTheDocument()
   })
 
@@ -298,6 +367,7 @@ describe("ConversationPanorama", () => {
         activePathIds={["root"]}
         onSelect={vi.fn()}
         onOpenInConversation={vi.fn()}
+        onCreateBranch={vi.fn()}
       />,
     )
 
@@ -321,6 +391,7 @@ describe("ConversationPanorama", () => {
         activePathIds={activePathIds}
         onSelect={vi.fn()}
         onOpenInConversation={vi.fn()}
+        onCreateBranch={vi.fn()}
       />,
     )
 
