@@ -1293,3 +1293,24 @@ Stabilized selectActivePath cache, split workspace streaming subscriptions into 
 ### Status
 
 [OK] **Completed**
+
+
+## Session 58: Memoize message nodes — streaming rerender verification
+
+**Date**: 2026-08-30
+**Task**: Memoize message nodes — streaming rerender verification
+**Branch**: `perf/react-render-hot-path`
+
+### Summary
+
+Completed step 3 of render hot-path work on perf/react-render-hot-path: added messageNodeRenderProbe, integration test proving durable path MessageNodes skip rerenders on generation deltas, stabilized WorkspaceStreamingLayer action objects with useMemo (including archived/read-only guard fix from review).
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `23e1071` | (see git log) |
+
+### Status
+
+[OK] **Completed**
