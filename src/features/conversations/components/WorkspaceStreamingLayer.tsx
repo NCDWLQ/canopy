@@ -178,62 +178,64 @@ export function WorkspaceStreamingLayer({
     pathProjection.kind === "ready" &&
     pathProjection.path.at(-1)?.id === currentRun?.parentNodeId
 
-  const userGenerationAction = React.useMemo((): UserGenerationAction | null => {
-    if (!canMutate || activeNodeId === null || currentRun !== undefined) {
-      return null
-    }
-    const activeNode = nodesById[activeNodeId]
-    if (activeNode?.role !== "user" || activeNode.childIds.length > 0) {
-      return null
-    }
-    if (providerPhase === "ready") {
-      return {
-        kind: "generate",
-        onSelect: onGenerate,
+  const userGenerationAction =
+    React.useMemo((): UserGenerationAction | null => {
+      if (!canMutate || activeNodeId === null || currentRun !== undefined) {
+        return null
       }
-    }
-    return {
-      kind: "configure-provider",
-      onSelect: onConfigureProvider,
-    }
-  }, [
-    activeNodeId,
-    canMutate,
-    currentRun,
-    nodesById,
-    onConfigureProvider,
-    onGenerate,
-    providerPhase,
-  ])
+      const activeNode = nodesById[activeNodeId]
+      if (activeNode?.role !== "user" || activeNode.childIds.length > 0) {
+        return null
+      }
+      if (providerPhase === "ready") {
+        return {
+          kind: "generate",
+          onSelect: onGenerate,
+        }
+      }
+      return {
+        kind: "configure-provider",
+        onSelect: onConfigureProvider,
+      }
+    }, [
+      activeNodeId,
+      canMutate,
+      currentRun,
+      nodesById,
+      onConfigureProvider,
+      onGenerate,
+      providerPhase,
+    ])
 
-  const assistantRegenerationAction = React.useMemo((): AssistantRegenerationAction | null => {
-    if (
-      providerPhase !== "ready" ||
-      currentRun !== undefined ||
-      isArchived ||
-      status !== "ready"
-    ) {
-      return null
-    }
-    if (pathProjection.kind !== "ready") {
-      return null
-    }
-    const target = resolveAssistantRegenerationTarget(
-      useConversationStore.getState(),
-    )
-    if (target === null) return null
-    return {
-      assistantNodeId: target.assistantNodeId,
-      onSelect: onRegenerateAssistant,
-    }
-  }, [
-    providerPhase,
-    onRegenerateAssistant,
-    currentRun,
-    pathProjection,
-    isArchived,
-    status,
-  ])
+  const assistantRegenerationAction =
+    React.useMemo((): AssistantRegenerationAction | null => {
+      if (
+        providerPhase !== "ready" ||
+        currentRun !== undefined ||
+        isArchived ||
+        status !== "ready"
+      ) {
+        return null
+      }
+      if (pathProjection.kind !== "ready") {
+        return null
+      }
+      const target = resolveAssistantRegenerationTarget(
+        useConversationStore.getState(),
+      )
+      if (target === null) return null
+      return {
+        assistantNodeId: target.assistantNodeId,
+        onSelect: onRegenerateAssistant,
+      }
+    }, [
+      providerPhase,
+      onRegenerateAssistant,
+      currentRun,
+      pathProjection,
+      isArchived,
+      status,
+    ])
 
   const composerPlaceholder = isArchived
     ? t("conversation.workspace.placeholderArchived")
