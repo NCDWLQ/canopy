@@ -1,5 +1,5 @@
 import * as React from "react"
-import { TextQuote } from "lucide-react"
+import { SlidersHorizontal } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -113,7 +113,7 @@ export function ConversationSettingsDialog({
               className="size-8"
               aria-label={t("conversation.workspace.conversationSettings")}
             >
-              <TextQuote className="size-4" aria-hidden="true" />
+              <SlidersHorizontal className="size-4" aria-hidden="true" />
             </Button>
           </DialogTrigger>
         </TooltipTrigger>

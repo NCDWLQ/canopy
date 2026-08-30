@@ -848,73 +848,76 @@ export function ConversationWorkspace({
               </Badge>
             )}
             {(isBlankConversation || store.conversationId !== null) && (
-              <>
-                <ConversationProviderPicker
-                  conversationClient={client}
-                  draftMode={isBlankConversation}
-                  providerId={
-                    isBlankConversation
-                      ? (store.draftBinding?.providerId ?? null)
-                      : store.providerId
-                  }
-                  model={
-                    isBlankConversation
-                      ? (store.draftBinding?.model ?? null)
-                      : store.model
-                  }
-                  reasoningEffort={
-                    isBlankConversation
-                      ? store.draftReasoningEffort
-                      : store.reasoningEffort
-                  }
-                  readOnly={!isBlankConversation && store.isArchived}
-                  onManageProviders={() => {
-                    setSettingsCategory("providers")
-                    setIsSettingsOpen(true)
-                  }}
-                />
-                <ConversationSettingsDialog
-                  conversationClient={client}
-                  draftMode={isBlankConversation}
-                  readOnly={!isBlankConversation && store.isArchived}
-                />
-              </>
+              <ConversationProviderPicker
+                conversationClient={client}
+                draftMode={isBlankConversation}
+                providerId={
+                  isBlankConversation
+                    ? (store.draftBinding?.providerId ?? null)
+                    : store.providerId
+                }
+                model={
+                  isBlankConversation
+                    ? (store.draftBinding?.model ?? null)
+                    : store.model
+                }
+                reasoningEffort={
+                  isBlankConversation
+                    ? store.draftReasoningEffort
+                    : store.reasoningEffort
+                }
+                readOnly={!isBlankConversation && store.isArchived}
+                onManageProviders={() => {
+                  setSettingsCategory("providers")
+                  setIsSettingsOpen(true)
+                }}
+              />
             )}
           </div>
-          {!isBlankConversation && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant={isPanoramaOpen ? "secondary" : "ghost"}
-                  size="icon"
-                  className={cn(
-                    "size-8",
-                    isPanoramaOpen && "bg-secondary text-secondary-foreground",
-                  )}
-                  aria-label={
-                    isPanoramaOpen
-                      ? t("conversation.panorama.closePanorama")
-                      : t("conversation.panorama.openPanorama")
-                  }
-                  aria-pressed={isPanoramaOpen}
-                  disabled={store.status === "loading"}
-                  onClick={() => setIsPanoramaOpen((isOpen) => !isOpen)}
-                >
-                  {isPanoramaOpen ? (
-                    <MessageSquare className="size-4" aria-hidden="true" />
-                  ) : (
-                    <Waypoints className="size-4" aria-hidden="true" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                {isPanoramaOpen
-                  ? t("conversation.panorama.closePanorama")
-                  : t("conversation.panorama.openPanorama")}
-              </TooltipContent>
-            </Tooltip>
-          )}
+          <div className="flex items-center gap-2">
+            {!isBlankConversation && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant={isPanoramaOpen ? "secondary" : "ghost"}
+                    size="icon"
+                    className={cn(
+                      "size-8",
+                      isPanoramaOpen &&
+                        "bg-secondary text-secondary-foreground",
+                    )}
+                    aria-label={
+                      isPanoramaOpen
+                        ? t("conversation.panorama.closePanorama")
+                        : t("conversation.panorama.openPanorama")
+                    }
+                    aria-pressed={isPanoramaOpen}
+                    disabled={store.status === "loading"}
+                    onClick={() => setIsPanoramaOpen((isOpen) => !isOpen)}
+                  >
+                    {isPanoramaOpen ? (
+                      <MessageSquare className="size-4" aria-hidden="true" />
+                    ) : (
+                      <Waypoints className="size-4" aria-hidden="true" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {isPanoramaOpen
+                    ? t("conversation.panorama.closePanorama")
+                    : t("conversation.panorama.openPanorama")}
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {(isBlankConversation || store.conversationId !== null) && (
+              <ConversationSettingsDialog
+                conversationClient={client}
+                draftMode={isBlankConversation}
+                readOnly={!isBlankConversation && store.isArchived}
+              />
+            )}
+          </div>
         </header>
 
         {isBlankConversation ? (
