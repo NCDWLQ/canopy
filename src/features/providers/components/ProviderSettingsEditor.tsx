@@ -502,7 +502,10 @@ export function ProviderSettingsEditor({
                     onKeyDown={(event) => {
                       // Enter adds the typed model instead of implicitly
                       // submitting the whole provider form.
-                      if (event.key !== "Enter" || event.nativeEvent.isComposing)
+                      if (
+                        event.key !== "Enter" ||
+                        event.nativeEvent.isComposing
+                      )
                         return
                       event.preventDefault()
                       addModel(modelAddition)
@@ -552,7 +555,9 @@ export function ProviderSettingsEditor({
                           aria-label={t("settings.providers.removeModelAria", {
                             model,
                           })}
-                          disabled={mutationDisabled || draft.models.length <= 1}
+                          disabled={
+                            mutationDisabled || draft.models.length <= 1
+                          }
                           onClick={() => removeModel(model)}
                           className="rounded-sm opacity-60 transition-opacity hover:opacity-100 disabled:pointer-events-none"
                         >
