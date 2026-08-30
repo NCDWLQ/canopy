@@ -1,9 +1,14 @@
 import * as React from "react"
-import { EllipsisVertical, Plus, Star, Trash2 } from "lucide-react"
+import { ChevronDown, EllipsisVertical, Plus, Star, Trash2 } from "lucide-react"
 
 import { formatProviderModelsSummary } from "./formatProviderModelsSummary"
 import { useProviderStore } from "../store"
 import type { ProviderView } from "../types"
+import {
+  CUSTOM_PRESET_ID,
+  PROVIDER_PRESETS,
+  type ProviderPresetSelection,
+} from "../presets"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,7 +23,9 @@ import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
@@ -28,7 +35,10 @@ import { useTranslation } from "@/lib/i18n"
 export type ProviderSettingsListProps = {
   client: ProviderClient
   readOnly: boolean
-  onEdit: (providerId: string | null) => void
+  onEdit: (
+    providerId: string | null,
+    presetId?: ProviderPresetSelection,
+  ) => void
 }
 
 export function ProviderSettingsList({
@@ -64,16 +74,41 @@ export function ProviderSettingsList({
             <h2 id="provider-list-title" className="font-medium">
               {t("settings.providers.allProviders")}
             </h2>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={mutationDisabled}
-              onClick={() => onEdit(null)}
-            >
-              <Plus data-icon="inline-start" />
-              {t("settings.providers.create")}
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={mutationDisabled}
+                >
+                  <Plus data-icon="inline-start" />
+                  {t("settings.providers.create")}
+                  <ChevronDown data-icon="inline-end" aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-auto min-w-52">
+                <DropdownMenuItem
+                  onSelect={() => onEdit(null, CUSTOM_PRESET_ID)}
+                >
+                  {t("settings.providers.presetCustom")}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>
+                    {t("settings.providers.presetMenuLabel")}
+                  </DropdownMenuLabel>
+                  {PROVIDER_PRESETS.map((preset) => (
+                    <DropdownMenuItem
+                      key={preset.id}
+                      onSelect={() => onEdit(null, preset.id)}
+                    >
+                      {t(preset.nameKey)}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           <div className="flex flex-col gap-1 rounded-lg border p-1">
             {providers.length === 0 ? (
