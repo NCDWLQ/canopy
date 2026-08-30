@@ -1,11 +1,18 @@
-import { act, render, screen, waitFor } from "@testing-library/react"
+import { act, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { toast } from "sonner"
 
 import { ProviderSettingsPanel } from "./ProviderSettingsPanel"
 import { useProviderStore } from "../store"
 import type { ProviderView } from "../types"
 import type { ProviderClient } from "@/lib/tauri"
+
+vi.mock("sonner", () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
+}))
+
+const toastSuccessMock = vi.mocked(toast.success)
 
 type SaveProviderInput = Parameters<ProviderClient["saveProvider"]>[0]
 
@@ -73,6 +80,7 @@ async function startNewProvider(
 
 describe("ProviderSettingsPanel", () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     setupDom()
     useProviderStore.setState({
       phase: "ready",
@@ -133,6 +141,11 @@ describe("ProviderSettingsPanel", () => {
       ),
     )
     expect(screen.getByLabelText("名称")).toHaveValue("Renamed")
+    expect(toastSuccessMock).toHaveBeenCalledWith("模型提供商已保存。")
+    // A successful save resets dirty tracking: leaving needs no confirmation.
+    await user.click(screen.getByRole("button", { name: "取消" }))
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "全部提供商" })).toBeVisible()
   })
 
   it("reveals the saved key masked, toggles visibility, and keeps it when unchanged", async () => {
@@ -403,7 +416,7 @@ describe("ProviderSettingsPanel", () => {
     expect(screen.queryByLabelText("名称")).not.toBeInTheDocument()
   })
 
-  it("cancels creating a provider and returns to the list", async () => {
+  it("cancels creating a provider and returns to the list after confirming the discard", async () => {
     const user = userEvent.setup()
     render(
       <ProviderSettingsPanel
@@ -415,8 +428,45 @@ describe("ProviderSettingsPanel", () => {
     expect(screen.getByLabelText("名称")).toBeVisible()
     await user.type(screen.getByLabelText("名称"), "draft")
     await user.click(screen.getByRole("button", { name: "取消" }))
+    const confirm = screen.getByRole("alertdialog")
+    expect(confirm).toHaveTextContent("丢弃未保存的更改？")
+    await user.click(within(confirm).getByRole("button", { name: "丢弃" }))
     expect(screen.getByRole("heading", { name: "全部提供商" })).toBeVisible()
     expect(screen.queryByLabelText("名称")).not.toBeInTheDocument()
+  })
+
+  it("keeps the draft when the discard confirmation is cancelled", async () => {
+    const user = userEvent.setup()
+    render(
+      <ProviderSettingsPanel
+        client={client() as ProviderClient}
+        readOnly={false}
+      />,
+    )
+    await openProviderEditor(user)
+    const name = screen.getByLabelText("名称")
+    await user.clear(name)
+    await user.type(name, "Unsaved rename")
+    await user.click(screen.getByRole("button", { name: "取消" }))
+    const confirm = screen.getByRole("alertdialog")
+    await user.click(within(confirm).getByRole("button", { name: "取消" }))
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+    expect(screen.getByLabelText("名称")).toHaveValue("Unsaved rename")
+  })
+
+  it("adds a typed model with Enter instead of submitting the form", async () => {
+    const user = userEvent.setup()
+    const bridge = client()
+    render(
+      <ProviderSettingsPanel
+        client={bridge as ProviderClient}
+        readOnly={false}
+      />,
+    )
+    await openProviderEditor(user)
+    await user.type(screen.getByLabelText("模型列表"), "gpt-new{Enter}")
+    expect(screen.getByRole("button", { name: "移除 gpt-new" })).toBeVisible()
+    expect(bridge.saveProvider).not.toHaveBeenCalled()
   })
 
   it("prefills a preset when creating from the list menu", async () => {
@@ -468,7 +518,7 @@ describe("ProviderSettingsPanel", () => {
     )
   })
 
-  it("cancels editing a provider and returns to the list", async () => {
+  it("cancels editing a provider and returns to the list after confirming the discard", async () => {
     const user = userEvent.setup()
     render(
       <ProviderSettingsPanel
@@ -481,6 +531,11 @@ describe("ProviderSettingsPanel", () => {
     await user.clear(name)
     await user.type(name, "Unsaved rename")
     await user.click(screen.getByRole("button", { name: "取消" }))
+    await user.click(
+      within(screen.getByRole("alertdialog")).getByRole("button", {
+        name: "丢弃",
+      }),
+    )
     expect(screen.getByRole("heading", { name: "全部提供商" })).toBeVisible()
     expect(screen.queryByLabelText("名称")).not.toBeInTheDocument()
     await user.click(

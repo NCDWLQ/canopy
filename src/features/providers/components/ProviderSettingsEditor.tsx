@@ -1,5 +1,6 @@
 import * as React from "react"
 import { Eye, EyeOff, Plus, X } from "lucide-react"
+import { toast } from "sonner"
 
 import { resolveApiKeyAction } from "./apiKeyAction"
 import { ProviderPresetIcon } from "./ProviderPresetIcon"
@@ -70,6 +71,7 @@ export type ProviderSettingsEditorProps = {
   onBack: () => void
   onSaved: (provider: ProviderView) => void
   onDetailCrumbChange: (crumb: ProviderDetailCrumb) => void
+  onDirtyChange?: (dirty: boolean) => void
 }
 
 const emptyDraft = (): ProviderDraft => ({
@@ -125,6 +127,7 @@ export function ProviderSettingsEditor({
   onBack,
   onSaved,
   onDetailCrumbChange,
+  onDirtyChange,
 }: ProviderSettingsEditorProps) {
   const { t } = useTranslation()
   const phase = useProviderStore((state) => state.phase)
@@ -145,6 +148,10 @@ export function ProviderSettingsEditor({
   const [selectedPresetId, setSelectedPresetId] =
     React.useState<ProviderPresetSelection>(initialPresetId)
   const [draft, setDraft] = React.useState<ProviderDraft>(() =>
+    createInitialDraft(providerId, initialPresetId, initialPresetName),
+  )
+  // Baseline for dirty tracking: the draft as mounted or last saved.
+  const [savedDraft, setSavedDraft] = React.useState<ProviderDraft>(() =>
     createInitialDraft(providerId, initialPresetId, initialPresetName),
   )
   const [apiKey, setApiKey] = React.useState("")
@@ -198,6 +205,20 @@ export function ProviderSettingsEditor({
     key: K,
     value: ProviderDraft[K],
   ) => setDraft((current) => ({ ...current, [key]: value }))
+
+  const draftDirty =
+    draft.name !== savedDraft.name ||
+    draft.protocol !== savedDraft.protocol ||
+    draft.baseEndpoint !== savedDraft.baseEndpoint ||
+    draft.model !== savedDraft.model ||
+    draft.models.length !== savedDraft.models.length ||
+    draft.models.some((model, index) => savedDraft.models[index] !== model)
+  const editorDirty =
+    draftDirty || apiKey !== (savedApiKey ?? "") || modelAddition.trim() !== ""
+
+  React.useEffect(() => {
+    onDirtyChange?.(editorDirty)
+  }, [editorDirty, onDirtyChange])
 
   const applyPresetSelection = (presetId: ProviderPresetSelection) => {
     setSelectedPresetId(presetId)
@@ -292,8 +313,11 @@ export function ProviderSettingsEditor({
       apiKey: resolveApiKeyAction(existing, apiKey, savedApiKey),
     })
     if (saved !== null) {
+      toast.success(t("settings.providers.providerSaved"))
       onSaved(saved)
-      setDraft(draftFromProvider(saved))
+      const nextDraft = draftFromProvider(saved)
+      setDraft(nextDraft)
+      setSavedDraft(nextDraft)
       setApiKey("")
       setSavedApiKey(null)
       setShowApiKey(false)
@@ -464,6 +488,14 @@ export function ProviderSettingsEditor({
                   id="provider-model-add"
                   value={modelAddition}
                   onChange={(event) => setModelAddition(event.target.value)}
+                  onKeyDown={(event) => {
+                    // Enter adds the typed model instead of implicitly
+                    // submitting the whole provider form.
+                    if (event.key !== "Enter" || event.nativeEvent.isComposing)
+                      return
+                    event.preventDefault()
+                    addModel(modelAddition)
+                  }}
                   placeholder={t("settings.providers.modelInputPlaceholder")}
                   disabled={mutationDisabled}
                 />

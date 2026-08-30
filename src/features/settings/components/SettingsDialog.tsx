@@ -1,11 +1,12 @@
 import * as React from "react"
-import { Bot, MessageSquare, Palette, Settings2 } from "lucide-react"
+import { Bot, MessageSquare, Palette, Settings } from "lucide-react"
 
 import { AppearanceSettingsPanel } from "./AppearanceSettingsPanel"
 import { ConversationSettingsPanel } from "./ConversationSettingsPanel"
 import { GeneralSettingsPanel } from "./GeneralSettingsPanel"
 import { ProviderSettingsPanel } from "@/features/providers/components/ProviderSettingsPanel"
 import { Button } from "@/components/ui/button"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import {
   Dialog,
   DialogContent,
@@ -32,6 +33,9 @@ export type SettingsDialogProps = SettingsDialogBaseProps &
 export type SettingsCategory =
   "general" | "appearance" | "providers" | "conversation"
 
+type PendingDiscard =
+  { kind: "switch"; category: SettingsCategory } | { kind: "close" }
+
 export function SettingsDialog(props: SettingsDialogProps) {
   const { client, readOnly, initialCategory = "general" } = props
   const { t } = useTranslation()
@@ -39,6 +43,9 @@ export function SettingsDialog(props: SettingsDialogProps) {
   const [category, setCategory] =
     React.useState<SettingsCategory>(initialCategory)
   const [providerSessionKey, setProviderSessionKey] = React.useState(0)
+  const [panelDirty, setPanelDirty] = React.useState(false)
+  const [pendingDiscard, setPendingDiscard] =
+    React.useState<PendingDiscard | null>(null)
 
   const isControlled = props.open !== undefined
   const open = isControlled ? props.open : uncontrolledOpen
@@ -52,16 +59,43 @@ export function SettingsDialog(props: SettingsDialogProps) {
     if (open) {
       setCategory(initialCategory)
       setProviderSessionKey((current) => current + 1)
+      setPanelDirty(false)
+      setPendingDiscard(null)
     }
   }
 
+  const closeDialog = () => {
+    if (!isControlled) setUncontrolledOpen(false)
+    props.onOpenChange?.(false)
+  }
+
   const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && panelDirty) {
+      setPendingDiscard({ kind: "close" })
+      return
+    }
     if (!isControlled) setUncontrolledOpen(nextOpen)
     props.onOpenChange?.(nextOpen)
   }
 
   const selectCategory = (nextCategory: SettingsCategory) => {
+    if (nextCategory !== category && panelDirty) {
+      setPendingDiscard({ kind: "switch", category: nextCategory })
+      return
+    }
     setCategory(nextCategory)
+  }
+
+  const confirmDiscard = () => {
+    const action = pendingDiscard
+    setPendingDiscard(null)
+    setPanelDirty(false)
+    if (action === null) return
+    if (action.kind === "switch") {
+      setCategory(action.category)
+    } else {
+      closeDialog()
+    }
   }
 
   return (
@@ -72,7 +106,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
           size="sm"
           className="w-full justify-start text-muted-foreground hover:text-foreground"
         >
-          <Settings2 data-icon="inline-start" />
+          <Settings data-icon="inline-start" />
           {t("common.settings")}
         </Button>
       </DialogTrigger>
@@ -95,7 +129,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
               aria-current={category === "general" ? "page" : undefined}
               onClick={() => selectCategory("general")}
             >
-              <Settings2 data-icon="inline-start" />
+              <Settings data-icon="inline-start" />
               {t("settings.dialog.generalCategory")}
             </Button>
             <Button
@@ -139,16 +173,28 @@ export function SettingsDialog(props: SettingsDialogProps) {
                 <ConversationSettingsPanel
                   client={client}
                   readOnly={readOnly}
+                  onDirtyChange={setPanelDirty}
                 />
               ) : (
                 <ProviderSettingsPanel
                   key={providerSessionKey}
                   client={client}
                   readOnly={readOnly}
+                  onDirtyChange={setPanelDirty}
                 />
               ))}
           </div>
         </div>
+        <ConfirmDialog
+          open={pendingDiscard !== null}
+          title={t("common.unsavedChangesTitle")}
+          description={t("common.unsavedChangesBody")}
+          cancelLabel={t("common.cancel")}
+          confirmLabel={t("common.discard")}
+          destructive
+          onCancel={() => setPendingDiscard(null)}
+          onConfirm={confirmDiscard}
+        />
       </DialogContent>
     </Dialog>
   )

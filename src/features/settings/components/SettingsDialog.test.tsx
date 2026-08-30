@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -254,5 +254,72 @@ describe("SettingsDialog", () => {
     expect(
       screen.queryByRole("combobox", { name: "语言" }),
     ).not.toBeInTheDocument()
+  })
+
+  it("asks before switching away from unsaved conversation settings", async () => {
+    const user = userEvent.setup()
+    render(
+      <SettingsDialog
+        client={client() as ProviderClient}
+        readOnly={false}
+        initialCategory="conversation"
+      />,
+    )
+    await user.click(screen.getByRole("button", { name: "设置" }))
+    const textarea = screen.getByRole("textbox", { name: "默认系统提示词" })
+    await user.type(textarea, "Be brief")
+
+    await user.click(screen.getByRole("button", { name: "通用" }))
+    // The switch is blocked and the draft survives a cancelled confirmation.
+    const confirm = screen.getByRole("alertdialog")
+    expect(confirm).toHaveTextContent("丢弃未保存的更改？")
+    await user.click(within(confirm).getByRole("button", { name: "取消" }))
+    expect(screen.getByRole("textbox", { name: "默认系统提示词" })).toHaveValue(
+      "Be brief",
+    )
+
+    // Confirming discards the draft and switches category.
+    await user.click(screen.getByRole("button", { name: "通用" }))
+    await user.click(
+      within(screen.getByRole("alertdialog")).getByRole("button", {
+        name: "丢弃",
+      }),
+    )
+    expect(screen.getByRole("combobox", { name: "语言" })).toBeVisible()
+    await user.click(screen.getByRole("button", { name: "对话" }))
+    expect(screen.getByRole("textbox", { name: "默认系统提示词" })).toHaveValue(
+      "",
+    )
+  })
+
+  it("asks before closing the dialog with unsaved changes", async () => {
+    const user = userEvent.setup()
+    render(
+      <SettingsDialog
+        client={client() as ProviderClient}
+        readOnly={false}
+        initialCategory="conversation"
+      />,
+    )
+    await user.click(screen.getByRole("button", { name: "设置" }))
+    await user.type(
+      screen.getByRole("textbox", { name: "默认系统提示词" }),
+      "Be brief",
+    )
+    await user.keyboard("{Escape}")
+    // The dialog stays open behind the discard confirmation (aria-hidden
+    // while the modal alertdialog is on top).
+    expect(screen.getByRole("alertdialog")).toBeVisible()
+    expect(screen.getByRole("dialog", { hidden: true })).toBeInTheDocument()
+    await user.click(
+      within(screen.getByRole("alertdialog")).getByRole("button", {
+        name: "丢弃",
+      }),
+    )
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("dialog", { hidden: true }),
+      ).not.toBeInTheDocument(),
+    )
   })
 })

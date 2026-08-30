@@ -1,7 +1,9 @@
 import * as React from "react"
+import { toast } from "sonner"
 
 import { useProviderStore } from "@/features/providers/store"
 import type { TitleModelBinding } from "@/features/providers/types"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -32,7 +34,7 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import type { ProviderClient } from "@/lib/tauri"
 import { trimRustWhitespace } from "@/lib/tauri/schemas"
-import { useTranslation } from "@/lib/i18n"
+import { commandErrorMessage, useTranslation } from "@/lib/i18n"
 
 const FOLLOW_SESSION_TITLE_MODEL = "follow"
 
@@ -53,15 +55,20 @@ function parseTitleModelValue(value: string): TitleModelBinding | null {
 export type ConversationSettingsPanelProps = {
   client: ProviderClient
   readOnly: boolean
+  onDirtyChange?: (dirty: boolean) => void
 }
 
 export function ConversationSettingsPanel({
   client,
   readOnly,
+  onDirtyChange,
 }: ConversationSettingsPanelProps) {
   const { t } = useTranslation()
   const phase = useProviderStore((state) => state.phase)
   const providers = useProviderStore((state) => state.providers)
+  const storeError = useProviderStore((state) =>
+    state.phase === "error" ? state.error : null,
+  )
   const autoGenerateTitle = useProviderStore((state) => state.autoGenerateTitle)
   const titleModelBinding = useProviderStore((state) => state.titleModelBinding)
   const defaultSystemPrompt = useProviderStore(
@@ -80,6 +87,20 @@ export function ConversationSettingsPanel({
   const promptDraft = promptEdit ?? defaultSystemPrompt ?? ""
   const promptDirty =
     trimRustWhitespace(promptDraft) !== (defaultSystemPrompt ?? "")
+
+  React.useEffect(() => {
+    onDirtyChange?.(promptDirty)
+  }, [promptDirty, onDirtyChange])
+
+  const saveSystemPrompt = async () => {
+    const trimmed = trimRustWhitespace(promptDraft)
+    await setDefaultSystemPrompt(client, trimmed.length === 0 ? null : trimmed)
+    // Failure surfaces through the storeError alert above; keep the draft so
+    // the user can retry.
+    if (useProviderStore.getState().phase === "error") return
+    setPromptEdit(null)
+    toast.success(t("settings.conversation.systemPromptSaved"))
+  }
 
   const mutationDisabled = readOnly || phase === "loading"
   const titleModelValue =
@@ -109,6 +130,14 @@ export function ConversationSettingsPanel({
           aria-label={t("settings.conversation.title")}
           className="flex flex-col gap-4"
         >
+          {storeError !== null && (
+            <Alert variant="destructive">
+              <AlertTitle>{t("settings.conversation.updateFailed")}</AlertTitle>
+              <AlertDescription>
+                {commandErrorMessage(storeError.code)}
+              </AlertDescription>
+            </Alert>
+          )}
           <FieldGroup>
             <FieldSet>
               <Field orientation="horizontal" data-disabled={mutationDisabled}>
@@ -201,13 +230,7 @@ export function ConversationSettingsPanel({
                 <Button
                   type="button"
                   disabled={mutationDisabled || !promptDirty}
-                  onClick={() => {
-                    const trimmed = trimRustWhitespace(promptDraft)
-                    void setDefaultSystemPrompt(
-                      client,
-                      trimmed.length === 0 ? null : trimmed,
-                    )
-                  }}
+                  onClick={() => void saveSystemPrompt()}
                 >
                   {t("settings.conversation.saveDefaultSystemPrompt")}
                 </Button>

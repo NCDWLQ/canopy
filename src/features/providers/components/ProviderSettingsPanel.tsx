@@ -16,12 +16,14 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import type { ProviderClient } from "@/lib/tauri"
 import { useTranslation } from "@/lib/i18n"
 
 export type ProviderSettingsPanelProps = {
   client: ProviderClient
   readOnly: boolean
+  onDirtyChange?: (dirty: boolean) => void
 }
 
 type ProviderRoute =
@@ -35,9 +37,12 @@ type ProviderRoute =
 export function ProviderSettingsPanel({
   client,
   readOnly,
+  onDirtyChange,
 }: ProviderSettingsPanelProps) {
   const { t } = useTranslation()
   const [route, setRoute] = React.useState<ProviderRoute>({ view: "list" })
+  const [editorDirty, setEditorDirty] = React.useState(false)
+  const [confirmBackToList, setConfirmBackToList] = React.useState(false)
   const providers = useProviderStore((state) => state.providers)
   // Stored as a semantic value, not rendered text, so a locale switch derives
   // the label fresh from `t()` instead of replaying the previous language.
@@ -53,6 +58,16 @@ export function ProviderSettingsPanel({
         : t("settings.providers.crumbEdit")
 
   const goToList = React.useCallback(() => {
+    if (editorDirty) {
+      setConfirmBackToList(true)
+      return
+    }
+    setRoute({ view: "list" })
+  }, [editorDirty])
+
+  const confirmGoToList = React.useCallback(() => {
+    setConfirmBackToList(false)
+    setEditorDirty(false)
     setRoute({ view: "list" })
   }, [])
 
@@ -61,6 +76,7 @@ export function ProviderSettingsPanel({
       providerId: string | null,
       presetId: ProviderPresetSelection = CUSTOM_PRESET_ID,
     ) => {
+      setEditorDirty(false)
       setRoute({ view: "edit", providerId, presetId })
       if (providerId === null) {
         setDetailCrumb({ kind: "new" })
@@ -88,6 +104,12 @@ export function ProviderSettingsPanel({
         : { kind: "editFallback" },
     )
   }, [])
+
+  const panelDirty = route.view === "edit" && editorDirty
+
+  React.useEffect(() => {
+    onDirtyChange?.(panelDirty)
+  }, [panelDirty, onDirtyChange])
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -144,8 +166,19 @@ export function ProviderSettingsPanel({
           onBack={goToList}
           onSaved={handleSaved}
           onDetailCrumbChange={setDetailCrumb}
+          onDirtyChange={setEditorDirty}
         />
       )}
+      <ConfirmDialog
+        open={confirmBackToList}
+        title={t("common.unsavedChangesTitle")}
+        description={t("common.unsavedChangesBody")}
+        cancelLabel={t("common.cancel")}
+        confirmLabel={t("common.discard")}
+        destructive
+        onCancel={() => setConfirmBackToList(false)}
+        onConfirm={confirmGoToList}
+      />
     </div>
   )
 }

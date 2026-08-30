@@ -1,11 +1,18 @@
 import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { toast } from "sonner"
 
 import { ConversationSettingsPanel } from "./ConversationSettingsPanel"
 import { useProviderStore } from "@/features/providers/store"
 import type { ProviderView } from "@/features/providers/types"
 import type { ProviderClient } from "@/lib/tauri"
+
+vi.mock("sonner", () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
+}))
+
+const toastSuccessMock = vi.mocked(toast.success)
 
 const provider: ProviderView = {
   id: "provider-1",
@@ -39,6 +46,7 @@ function client() {
 
 describe("ConversationSettingsPanel", () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     vi.stubGlobal(
       "ResizeObserver",
       class ResizeObserverStub {
@@ -133,6 +141,9 @@ describe("ConversationSettingsPanel", () => {
     await waitFor(() =>
       expect(bridge.setDefaultSystemPrompt).toHaveBeenCalledWith("Be helpful"),
     )
+    await waitFor(() =>
+      expect(toastSuccessMock).toHaveBeenCalledWith("默认系统提示词已保存。"),
+    )
 
     useProviderStore.setState({ defaultSystemPrompt: "Be helpful" })
     await waitFor(() => expect(textarea).toHaveValue("Be helpful"))
@@ -141,5 +152,26 @@ describe("ConversationSettingsPanel", () => {
     await waitFor(() =>
       expect(bridge.setDefaultSystemPrompt).toHaveBeenCalledWith(null),
     )
+  })
+
+  it("keeps the draft and surfaces an error alert when saving fails", async () => {
+    const user = userEvent.setup()
+    const bridge = client()
+    bridge.setDefaultSystemPrompt.mockRejectedValueOnce(new Error("offline"))
+    render(
+      <ConversationSettingsPanel
+        client={bridge as ProviderClient}
+        readOnly={false}
+      />,
+    )
+
+    const textarea = screen.getByRole("textbox", { name: "默认系统提示词" })
+    await user.type(textarea, "Be helpful")
+    await user.click(screen.getByRole("button", { name: "保存" }))
+    expect(await screen.findByText("对话设置未保存")).toBeVisible()
+    expect(screen.getByText("发生意外错误。")).toBeVisible()
+    // The draft is preserved for retry and no success toast fires.
+    expect(textarea).toHaveValue("Be helpful")
+    expect(toastSuccessMock).not.toHaveBeenCalled()
   })
 })

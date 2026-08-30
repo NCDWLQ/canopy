@@ -16,6 +16,10 @@ export const en = {
   "common.default": "Default",
   "common.settings": "Settings",
   "common.breadcrumb": "Breadcrumb",
+  "common.discard": "Discard",
+  "common.unsavedChangesTitle": "Discard unsaved changes?",
+  "common.unsavedChangesBody":
+    "Your changes have not been saved. Continuing will discard them.",
 
   // CommandErrorCode mapping plus frontend fallback error copy.
   "errors.invalidInput": "The request contains invalid input.",
@@ -286,6 +290,8 @@ export const en = {
   "settings.conversation.defaultSystemPromptPlaceholder":
     "Leave empty for no default",
   "settings.conversation.saveDefaultSystemPrompt": "Save",
+  "settings.conversation.updateFailed": "Conversation setting was not saved",
+  "settings.conversation.systemPromptSaved": "Default system prompt saved.",
 
   // ConversationSettingsDialog.tsx
   "conversation.settingsDialog.title": "Conversation settings",
@@ -365,6 +371,7 @@ export const en = {
   "settings.providers.showApiKey": "Show API key",
   "settings.providers.hideApiKey": "Hide API key",
   "settings.providers.saveAria": "Save model provider",
+  "settings.providers.providerSaved": "Provider saved.",
 
   // formatProviderModelsSummary.ts
   "providers.modelsSummary.empty": "No models added",

@@ -19,6 +19,9 @@ export const zhCN = {
   "common.default": "默认",
   "common.settings": "设置",
   "common.breadcrumb": "面包屑",
+  "common.discard": "丢弃",
+  "common.unsavedChangesTitle": "丢弃未保存的更改？",
+  "common.unsavedChangesBody": "当前修改尚未保存，继续操作将丢失这些修改。",
 
   // CommandErrorCode mapping plus frontend fallback error copy.
   "errors.invalidInput": "请求包含无效输入。",
@@ -279,6 +282,8 @@ export const zhCN = {
     "对话未单独设置时，默认使用此系统提示词",
   "settings.conversation.defaultSystemPromptPlaceholder": "留空表示不设置",
   "settings.conversation.saveDefaultSystemPrompt": "保存",
+  "settings.conversation.updateFailed": "对话设置未保存",
+  "settings.conversation.systemPromptSaved": "默认系统提示词已保存。",
 
   // ConversationSettingsDialog.tsx
   "conversation.settingsDialog.title": "对话设置",
@@ -356,6 +361,7 @@ export const zhCN = {
   "settings.providers.showApiKey": "显示 API 密钥",
   "settings.providers.hideApiKey": "隐藏 API 密钥",
   "settings.providers.saveAria": "保存模型提供商",
+  "settings.providers.providerSaved": "模型提供商已保存。",
 
   // formatProviderModelsSummary.ts
   "providers.modelsSummary.empty": "未添加模型",
