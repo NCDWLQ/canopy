@@ -401,6 +401,31 @@ describe("ProviderSettingsPanel", () => {
     expect(screen.queryByText("保存失败，请稍后重试。")).not.toBeInTheDocument()
   })
 
+  it("shows a duplicate-name message when saving collides with an existing provider", async () => {
+    const user = userEvent.setup()
+    useProviderStore.setState({
+      phase: "error",
+      error: {
+        code: "invalid_input",
+        message: "请求包含无效输入。",
+        retryable: false,
+        details: { field: "name", reason: "duplicate" },
+      },
+      providers: [provider],
+      activeProviderId: provider.id,
+    })
+    render(
+      <ProviderSettingsPanel
+        client={client() as ProviderClient}
+        readOnly={false}
+      />,
+    )
+    await openProviderEditor(user)
+    expect(screen.getByText("操作未完成")).toBeVisible()
+    expect(screen.getByText("名称「OpenAI」已被使用")).toBeVisible()
+    expect(screen.queryByText("请求包含无效输入。")).not.toBeInTheDocument()
+  })
+
   it("returns to the list via the model-provider breadcrumb", async () => {
     const user = userEvent.setup()
     render(

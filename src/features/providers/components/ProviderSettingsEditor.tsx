@@ -45,6 +45,7 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { ConversationCommandError, type ProviderClient } from "@/lib/tauri"
 import { commandErrorMessage, useTranslation } from "@/lib/i18n"
+import { providerCommandErrorMessage } from "../provider-error-message"
 
 type ProviderDraft = {
   id?: string
@@ -358,7 +359,7 @@ export function ProviderSettingsEditor({
             <Alert variant="destructive">
               <AlertTitle>{t("settings.providers.incompleteAlert")}</AlertTitle>
               <AlertDescription>
-                {commandErrorMessage(storeError.code)}
+                {providerCommandErrorMessage(storeError, { name: draft.name })}
               </AlertDescription>
             </Alert>
           )}

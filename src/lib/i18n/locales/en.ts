@@ -346,6 +346,8 @@ export const en = {
   "settings.providers.editorNewTitle": "New model provider",
   "settings.providers.editorEditTitle": "Edit model provider",
   "settings.providers.incompleteAlert": "Action not completed",
+  "settings.providers.errors.duplicateName": ({ name }: { name: string }) =>
+    `The name “${name}” is already in use`,
   "settings.providers.readOnlyAlert": "Read-only",
   "settings.providers.readOnlyAlertBody":
     "Provider settings cannot be changed while viewing an archived conversation.",
