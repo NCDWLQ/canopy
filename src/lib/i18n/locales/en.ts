@@ -280,6 +280,23 @@ export const en = {
     "After the first exchange, titles are generated automatically with the model configured below",
   "settings.conversation.titleModel": "Title model",
   "settings.conversation.followSession": "Follow conversation",
+  "settings.conversation.defaultSystemPrompt": "Default system prompt",
+  "settings.conversation.defaultSystemPromptDescription":
+    "Applied to conversations without a custom system prompt",
+  "settings.conversation.defaultSystemPromptPlaceholder":
+    "Leave empty for no default",
+  "settings.conversation.saveDefaultSystemPrompt": "Save",
+
+  // ConversationSettingsDialog.tsx
+  "conversation.settingsDialog.title": "Conversation settings",
+  "conversation.settingsDialog.systemPrompt": "System prompt",
+  "conversation.settingsDialog.systemPromptDescription":
+    "Applies to new messages only; chat history remains unchanged",
+  "conversation.settingsDialog.followGlobal": "Follow global default",
+  "conversation.settingsDialog.globalPreview": "Current global default",
+  "conversation.settingsDialog.restoreFollowGlobal": "Reset to global default",
+  "conversation.settingsDialog.save": "Save",
+  "conversation.workspace.conversationSettings": "Conversation settings",
 
   // ProviderSettingsPanel.tsx + ProviderSettingsList.tsx
   "settings.providers.crumbEdit": "Edit",

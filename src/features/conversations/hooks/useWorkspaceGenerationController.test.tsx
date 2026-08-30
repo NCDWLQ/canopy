@@ -275,6 +275,14 @@ function createConversationClient() {
           reasoningEffort: input.reasoningEffort,
         }),
       ),
+    setConversationSystemPrompt: vi
+      .fn<ConversationClient["setConversationSystemPrompt"]>()
+      .mockImplementation((input) =>
+        Promise.resolve({
+          id: input.conversationId,
+          systemPrompt: input.systemPrompt,
+        }),
+      ),
   } satisfies ConversationClient
 }
 
@@ -287,6 +295,7 @@ function createProviderClient() {
       titleModelBinding: null,
       language: "system",
       theme: "system",
+      defaultSystemPrompt: null,
     }),
     saveProvider: vi.fn<ProviderClient["saveProvider"]>(),
     deleteProvider: vi.fn<ProviderClient["deleteProvider"]>(),
@@ -295,6 +304,7 @@ function createProviderClient() {
     setTitleModelBinding: vi.fn<ProviderClient["setTitleModelBinding"]>(),
     setLanguage: vi.fn<ProviderClient["setLanguage"]>(),
     setTheme: vi.fn<ProviderClient["setTheme"]>(),
+    setDefaultSystemPrompt: vi.fn<ProviderClient["setDefaultSystemPrompt"]>(),
     revealProviderApiKey: vi
       .fn<ProviderClient["revealProviderApiKey"]>()
       .mockResolvedValue(null),
@@ -315,8 +325,10 @@ function resetConversationStore() {
     providerId: null,
     model: null,
     reasoningEffort: null,
+    systemPrompt: null,
     draftBinding: null,
     draftReasoningEffort: null,
+    draftSystemPrompt: null,
     rootNodeId: null,
     activeNodeId: null,
     nodesById: {},
@@ -579,6 +591,65 @@ describe("workspace generation controller", () => {
       createdRoot.id,
       expect.any(Function),
     )
+  })
+
+  it("applies a draft system prompt after create, before generation", async () => {
+    resetConversationStore()
+    useConversationStore.getState().setDraftSystemPrompt("Be concise")
+    conversationClient.createConversation.mockResolvedValueOnce(createdTree)
+    providerClient.generateFromActivePath.mockReturnValueOnce(
+      deferred<Awaited<ReturnType<ProviderClient["generateFromActivePath"]>>>()
+        .promise,
+    )
+    const { result } = renderHook(() =>
+      useWorkspaceGenerationController({ conversationClient, providerClient }),
+    )
+
+    await act(async () => {
+      await result.current.createConversation(createdRoot.content)
+    })
+
+    expect(conversationClient.setConversationSystemPrompt).toHaveBeenCalledWith(
+      {
+        conversationId: createdConversation.id,
+        systemPrompt: "Be concise",
+      },
+    )
+    expect(conversationClient.setConversationProvider).toHaveBeenCalled()
+    const providerOrder =
+      conversationClient.setConversationProvider.mock.invocationCallOrder[0]
+    const promptOrder =
+      conversationClient.setConversationSystemPrompt.mock.invocationCallOrder[0]
+    const generateOrder =
+      providerClient.generateFromActivePath.mock.invocationCallOrder[0]
+    expect(providerOrder).toBeLessThan(promptOrder ?? Number.POSITIVE_INFINITY)
+    expect(promptOrder).toBeLessThan(generateOrder ?? Number.POSITIVE_INFINITY)
+    expect(providerClient.generateFromActivePath).toHaveBeenCalledTimes(1)
+  })
+
+  it("does not generate when applying the draft system prompt fails", async () => {
+    resetConversationStore()
+    useConversationStore.getState().setDraftSystemPrompt("Be concise")
+    conversationClient.createConversation.mockResolvedValueOnce(createdTree)
+    conversationClient.setConversationSystemPrompt.mockRejectedValueOnce(
+      new ConversationCommandError({
+        code: "database_unavailable",
+        message: "Prompt failed.",
+        retryable: true,
+      }),
+    )
+    const { result } = renderHook(() =>
+      useWorkspaceGenerationController({ conversationClient, providerClient }),
+    )
+
+    await act(async () => {
+      await result.current.createConversation(createdRoot.content)
+    })
+
+    expect(useConversationStore.getState().error?.message).toBe(
+      "Prompt failed.",
+    )
+    expect(providerClient.generateFromActivePath).not.toHaveBeenCalled()
   })
 
   it("does not generate when binding the created conversation fails", async () => {

@@ -11,8 +11,9 @@ use canopy_lib::{
         PROVIDER_COMMAND_NAMES,
     },
     settings::commands::{
-        SetAutoGenerateTitleRequest, SetAutoGenerateTitleResult, SetLanguageRequest,
-        SetLanguageResult, SetThemeRequest, SetThemeResult,
+        SetAutoGenerateTitleRequest, SetAutoGenerateTitleResult, SetDefaultSystemPromptRequest,
+        SetDefaultSystemPromptResult, SetLanguageRequest, SetLanguageResult, SetThemeRequest,
+        SetThemeResult,
     },
 };
 use serde_json::Value;
@@ -42,6 +43,7 @@ fn shared_provider_fixture_round_trips_rust_wire_types() {
     request!("set_title_model_binding", SetTitleModelBindingRequest);
     request!("set_language", SetLanguageRequest);
     request!("set_theme", SetThemeRequest);
+    request!("set_default_system_prompt", SetDefaultSystemPromptRequest);
     request!("reveal_provider_api_key", RevealProviderApiKeyRequest);
     request!("list_provider_models", ListProviderModelsRequest);
     request!("generate_from_active_path", GenerateFromActivePathRequest);
@@ -82,6 +84,12 @@ fn shared_provider_fixture_round_trips_rust_wire_types() {
     assert_eq!(
         serde_json::to_value(theme).unwrap(),
         fixture["successes"]["set_theme"]
+    );
+    let default_prompt: SetDefaultSystemPromptResult =
+        serde_json::from_value(fixture["successes"]["set_default_system_prompt"].clone()).unwrap();
+    assert_eq!(
+        serde_json::to_value(default_prompt).unwrap(),
+        fixture["successes"]["set_default_system_prompt"]
     );
     let revealed: RevealProviderApiKeyResult =
         serde_json::from_value(fixture["successes"]["reveal_api_key"].clone()).unwrap();

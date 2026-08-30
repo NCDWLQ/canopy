@@ -153,6 +153,7 @@ impl From<GenerationError> for CommandError {
             GenerationError::Persistence(error) => Self::from(error),
             GenerationError::Provider(error) => Self::from(error),
             GenerationError::Llm(error) => Self::from(error),
+            GenerationError::Settings(error) => Self::from(error),
         }
     }
 }

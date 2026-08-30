@@ -131,6 +131,33 @@ export const setConversationProviderRequestSchema = z
     reasoning_effort: z.enum(["low", "medium", "high"]).nullable(),
   })
   .strict()
+const systemPromptValueSchema = unicodeScalarStringSchema
+  .transform(trimRustWhitespace)
+  .refine(
+    (value) =>
+      value.length === 0 ||
+      new TextEncoder().encode(value).byteLength <= 1024 * 1024,
+  )
+  .transform((value) => (value.length === 0 ? null : value))
+
+export const systemPromptInputSchema = z.union([
+  z.null(),
+  systemPromptValueSchema,
+])
+
+export const setConversationSystemPromptRequestSchema = z
+  .object({
+    conversation_id: idSchema,
+    system_prompt: systemPromptInputSchema,
+  })
+  .strict()
+export const setConversationSystemPromptResultSchema = z
+  .object({
+    conversation_id: idSchema,
+    system_prompt: unicodeScalarStringSchema.nullable(),
+  })
+  .strict()
+
 export const conversationProviderBindingResultSchema = z
   .object({
     conversation_id: idSchema,
@@ -241,6 +268,7 @@ const conversationDtoBaseSchema = z
     provider_id: idSchema.nullable().optional(),
     model: unicodeScalarStringSchema.nullable().optional(),
     reasoning_effort: z.enum(["low", "medium", "high"]).nullable().optional(),
+    system_prompt: unicodeScalarStringSchema.nullable().optional(),
   })
   .strict()
 export const conversationDtoSchema = conversationDtoBaseSchema.superRefine(
@@ -325,6 +353,9 @@ export type DeleteConversationSuccessDto = z.infer<
 >
 export type ConversationProviderBindingResultDto = z.infer<
   typeof conversationProviderBindingResultSchema
+>
+export type ConversationSystemPromptResultDto = z.infer<
+  typeof setConversationSystemPromptResultSchema
 >
 export type WriteExportFileResultDto = z.infer<
   typeof writeExportFileResultSchema

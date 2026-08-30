@@ -12,6 +12,7 @@
     "delete_conversation",
     "unarchive_conversation",
     "set_conversation_provider",
+    "set_conversation_system_prompt",
     "search_conversations",
     "write_export_file"
   ],
@@ -63,6 +64,10 @@
         "model": "fixture-model"
       },
       "reasoning_effort": "medium"
+    },
+    "set_conversation_system_prompt": {
+      "conversation_id": "conversation-fixture",
+      "system_prompt": "Be concise"
     },
     "search_conversations": {
       "query": "branch"
@@ -265,6 +270,10 @@
       "provider_id": "provider-fixture",
       "model": "fixture-model",
       "reasoning_effort": "medium"
+    },
+    "set_conversation_system_prompt": {
+      "conversation_id": "conversation-fixture",
+      "system_prompt": "Be concise"
     },
     "search_results": [
       {

@@ -62,6 +62,7 @@ import {
   type SettingsCategory,
 } from "@/features/settings/components"
 import { ConversationProviderPicker } from "./ConversationProviderPicker"
+import { ConversationSettingsDialog } from "./ConversationSettingsDialog"
 import { useProviderStore } from "@/features/providers/store"
 import {
   createConversationClient,
@@ -847,30 +848,37 @@ export function ConversationWorkspace({
               </Badge>
             )}
             {(isBlankConversation || store.conversationId !== null) && (
-              <ConversationProviderPicker
-                conversationClient={client}
-                draftMode={isBlankConversation}
-                providerId={
-                  isBlankConversation
-                    ? (store.draftBinding?.providerId ?? null)
-                    : store.providerId
-                }
-                model={
-                  isBlankConversation
-                    ? (store.draftBinding?.model ?? null)
-                    : store.model
-                }
-                reasoningEffort={
-                  isBlankConversation
-                    ? store.draftReasoningEffort
-                    : store.reasoningEffort
-                }
-                readOnly={!isBlankConversation && store.isArchived}
-                onManageProviders={() => {
-                  setSettingsCategory("providers")
-                  setIsSettingsOpen(true)
-                }}
-              />
+              <>
+                <ConversationProviderPicker
+                  conversationClient={client}
+                  draftMode={isBlankConversation}
+                  providerId={
+                    isBlankConversation
+                      ? (store.draftBinding?.providerId ?? null)
+                      : store.providerId
+                  }
+                  model={
+                    isBlankConversation
+                      ? (store.draftBinding?.model ?? null)
+                      : store.model
+                  }
+                  reasoningEffort={
+                    isBlankConversation
+                      ? store.draftReasoningEffort
+                      : store.reasoningEffort
+                  }
+                  readOnly={!isBlankConversation && store.isArchived}
+                  onManageProviders={() => {
+                    setSettingsCategory("providers")
+                    setIsSettingsOpen(true)
+                  }}
+                />
+                <ConversationSettingsDialog
+                  conversationClient={client}
+                  draftMode={isBlankConversation}
+                  readOnly={!isBlankConversation && store.isArchived}
+                />
+              </>
             )}
           </div>
           {!isBlankConversation && (

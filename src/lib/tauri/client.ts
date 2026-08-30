@@ -34,6 +34,8 @@ import {
   renameConversationRequestSchema,
   searchConversationsRequestSchema,
   setConversationProviderRequestSchema,
+  setConversationSystemPromptRequestSchema,
+  setConversationSystemPromptResultSchema,
   unarchiveConversationRequestSchema,
   conversationProviderBindingResultSchema,
   writeExportFileRequestSchema,
@@ -46,6 +48,7 @@ import {
   type DeleteConversationSuccessDto,
   type NodeDto,
   type ConversationProviderBindingResultDto,
+  type ConversationSystemPromptResultDto,
   type WriteExportFileResultDto,
 } from "./schemas"
 
@@ -62,6 +65,7 @@ export const CONVERSATION_COMMANDS = {
   deleteConversation: "delete_conversation",
   unarchiveConversation: "unarchive_conversation",
   setConversationProvider: "set_conversation_provider",
+  setConversationSystemPrompt: "set_conversation_system_prompt",
   searchConversations: "search_conversations",
   writeExportFile: "write_export_file",
 } as const
@@ -113,6 +117,10 @@ export type SetConversationProviderInput = {
   conversationId: string
   binding: { providerId: string; model: string } | null
   reasoningEffort: "low" | "medium" | "high" | null
+}
+export type SetConversationSystemPromptInput = {
+  conversationId: string
+  systemPrompt: string | null
 }
 export type WriteExportFileInput = { path: string; content: string }
 export type WriteExportFileResult = { bytesWritten: number }
@@ -284,6 +292,20 @@ export function createConversationClient(
       )
     },
 
+    setConversationSystemPrompt(input: SetConversationSystemPromptInput) {
+      return call(
+        transport,
+        CONVERSATION_COMMANDS.setConversationSystemPrompt,
+        setConversationSystemPromptRequestSchema,
+        {
+          conversation_id: input.conversationId,
+          system_prompt: input.systemPrompt,
+        },
+        setConversationSystemPromptResultSchema,
+        mapConversationSystemPrompt,
+      )
+    },
+
     searchConversations(query: string) {
       return call(
         transport,
@@ -385,6 +407,7 @@ function mapConversation(dto: ConversationDto): ConversationView {
     providerId: dto.provider_id ?? null,
     model: dto.model ?? null,
     reasoningEffort: dto.reasoning_effort ?? null,
+    systemPrompt: dto.system_prompt ?? null,
   }
 }
 
@@ -417,6 +440,15 @@ export function mapNode(dto: NodeDto): ConversationNodeView {
     createdAt: dto.created_at,
     metadata: dto.metadata,
     ...(thinking === undefined ? {} : { thinking }),
+  }
+}
+
+function mapConversationSystemPrompt(
+  dto: ConversationSystemPromptResultDto,
+): Pick<ConversationView, "id" | "systemPrompt"> {
+  return {
+    id: dto.conversation_id,
+    systemPrompt: dto.system_prompt,
   }
 }
 

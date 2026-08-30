@@ -223,6 +223,8 @@ function createMockClient() {
         model: null,
         reasoningEffort: null,
       }),
+    setConversationSystemPrompt:
+      vi.fn<ConversationClient["setConversationSystemPrompt"]>(),
   } satisfies ConversationClient
 }
 
@@ -235,6 +237,7 @@ function createMockProviderClient() {
       titleModelBinding: null,
       language: "system",
       theme: "system",
+      defaultSystemPrompt: null,
     }),
     saveProvider: vi.fn<ProviderClient["saveProvider"]>(),
     deleteProvider: vi.fn<ProviderClient["deleteProvider"]>(),
@@ -243,6 +246,7 @@ function createMockProviderClient() {
     setTitleModelBinding: vi.fn<ProviderClient["setTitleModelBinding"]>(),
     setLanguage: vi.fn<ProviderClient["setLanguage"]>(),
     setTheme: vi.fn<ProviderClient["setTheme"]>(),
+    setDefaultSystemPrompt: vi.fn<ProviderClient["setDefaultSystemPrompt"]>(),
     revealProviderApiKey: vi
       .fn<ProviderClient["revealProviderApiKey"]>()
       .mockResolvedValue(null),
@@ -260,6 +264,13 @@ function resetStore() {
     conversationId: null,
     title: null,
     isArchived: false,
+    providerId: null,
+    model: null,
+    reasoningEffort: null,
+    systemPrompt: null,
+    draftBinding: null,
+    draftReasoningEffort: null,
+    draftSystemPrompt: null,
     rootNodeId: null,
     activeNodeId: null,
     nodesById: {},
@@ -276,6 +287,7 @@ function resetStore() {
     activeProviderId: null,
     autoGenerateTitle: true,
     titleModelBinding: null,
+    defaultSystemPrompt: null,
   })
 }
 
@@ -396,6 +408,7 @@ describe("ConversationWorkspace", () => {
     await user.click(
       await screen.findByRole("button", { name: "选择模型与推理强度" }),
     )
+    expect(screen.getByRole("button", { name: "对话设置" })).toBeVisible()
     await user.click(screen.getByRole("button", { name: "管理模型提供商" }))
     expect(screen.getByRole("dialog")).toHaveAccessibleName("设置")
     expect(
@@ -1130,6 +1143,7 @@ describe("ConversationWorkspace", () => {
       titleModelBinding: null,
       language: "system",
       theme: "system",
+      defaultSystemPrompt: null,
     })
     client.createConversation.mockResolvedValueOnce(rootOnlyTree)
     render(<ConversationWorkspace />)
@@ -2359,6 +2373,7 @@ describe("ConversationWorkspace", () => {
       titleModelBinding: null,
       language: "system",
       theme: "system",
+      defaultSystemPrompt: null,
     })
     providerClient.saveProvider = vi.fn().mockResolvedValueOnce({
       id: "provider-1",

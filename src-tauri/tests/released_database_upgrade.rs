@@ -343,6 +343,27 @@ async fn assert_released_baseline(pool: &SqlitePool) {
             0,
         )
     );
+    let system_prompt_columns: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM pragma_table_info('conversations') WHERE name = 'system_prompt'",
+    )
+    .fetch_one(pool)
+    .await
+    .expect("system_prompt column is inspectable");
+    assert_eq!(
+        system_prompt_columns, 1,
+        "migration 0008 must add conversations.system_prompt on upgrade"
+    );
+    let bound_system_prompt: Option<String> =
+        sqlx::query_scalar("SELECT system_prompt FROM conversations WHERE id = ?1")
+            .bind(CONVERSATION_BOUND_ID)
+            .fetch_one(pool)
+            .await
+            .expect("bound conversation system_prompt is readable");
+    assert_eq!(
+        bound_system_prompt, None,
+        "upgrade must leave released conversation rows without a system prompt"
+    );
+
     let residual_orphan_models: i64 =
         sqlx::query_scalar("SELECT count(*) FROM conversations WHERE model = ?1")
             .bind(STALE_MODEL)

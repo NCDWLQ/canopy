@@ -5,6 +5,7 @@ import {
   containsNonRustWhitespace,
   idSchema,
   nodeDtoSchema,
+  systemPromptInputSchema,
   trimRustWhitespace,
   unicodeScalarStringSchema,
 } from "./schemas"
@@ -103,6 +104,12 @@ export const setThemeRequestSchema = z
   .object({ theme: themePreferenceSchema })
   .strict()
 export const setThemeResultSchema = setThemeRequestSchema
+export const setDefaultSystemPromptRequestSchema = z
+  .object({ prompt: systemPromptInputSchema })
+  .strict()
+export const setDefaultSystemPromptResultSchema = z
+  .object({ prompt: unicodeScalarStringSchema.nullable() })
+  .strict()
 export const revealProviderApiKeyRequestSchema = deleteProviderRequestSchema
 export const revealProviderApiKeyResultSchema = z
   .object({ api_key: secretSchema.nullable() })
@@ -150,6 +157,7 @@ export const listProvidersResultSchema = z
     title_model_binding: titleModelBindingDtoSchema.nullable(),
     language: languagePreferenceSchema,
     theme: themePreferenceSchema,
+    default_system_prompt: unicodeScalarStringSchema.nullable(),
   })
   .strict()
   .superRefine((result, context) => {

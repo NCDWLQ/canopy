@@ -43,7 +43,7 @@ class WireExportWriteError extends Error {
 }
 
 describe("conversation Tauri contract", () => {
-  it("uses the shared exact command list and maps all fourteen request shapes", async () => {
+  it("uses the shared exact command list and maps all fifteen request shapes", async () => {
     expect(Object.values(CONVERSATION_COMMANDS)).toEqual(fixture.command_names)
     const transport = resolvingTransport({
       create_conversation: fixture.successes.conversation_tree,
@@ -58,6 +58,8 @@ describe("conversation Tauri contract", () => {
       delete_conversation: fixture.successes.deleted_conversation,
       unarchive_conversation: fixture.successes.unarchived_conversation,
       set_conversation_provider: fixture.successes.set_conversation_provider,
+      set_conversation_system_prompt:
+        fixture.successes.set_conversation_system_prompt,
       search_conversations: fixture.successes.search_results,
       write_export_file: fixture.successes.write_export_file,
     })
@@ -114,6 +116,12 @@ describe("conversation Tauri contract", () => {
       reasoningEffort: fixture.requests.set_conversation_provider
         .reasoning_effort as "low" | "medium" | "high",
     })
+    await client.setConversationSystemPrompt({
+      conversationId:
+        fixture.requests.set_conversation_system_prompt.conversation_id,
+      systemPrompt:
+        fixture.requests.set_conversation_system_prompt.system_prompt,
+    })
     await client.searchConversations(
       fixture.requests.search_conversations.query,
     )
@@ -131,6 +139,49 @@ describe("conversation Tauri contract", () => {
         },
       })),
     )
+  })
+
+  it("rejects oversized or surrogate system prompts before invoke", async () => {
+    const transport = resolvingTransport({
+      set_conversation_system_prompt:
+        fixture.successes.set_conversation_system_prompt,
+    })
+    const client = createConversationClient(transport)
+
+    await expect(
+      client.setConversationSystemPrompt({
+        conversationId:
+          fixture.requests.set_conversation_system_prompt.conversation_id,
+        systemPrompt: "a".repeat(1024 * 1024 + 1),
+      }),
+    ).rejects.toMatchObject({ code: "invalid_input", retryable: false })
+    await expect(
+      client.setConversationSystemPrompt({
+        conversationId:
+          fixture.requests.set_conversation_system_prompt.conversation_id,
+        systemPrompt: "\ud800",
+      }),
+    ).rejects.toMatchObject({ code: "invalid_input", retryable: false })
+    expect(transport.calls).toHaveLength(0)
+
+    await expect(
+      client.setConversationSystemPrompt({
+        conversationId:
+          fixture.requests.set_conversation_system_prompt.conversation_id,
+        systemPrompt: "  \n\t  ",
+      }),
+    ).resolves.toEqual({
+      id: fixture.successes.set_conversation_system_prompt.conversation_id,
+      systemPrompt:
+        fixture.successes.set_conversation_system_prompt.system_prompt,
+    })
+    expect(transport.calls[0]?.args).toEqual({
+      request: {
+        conversation_id:
+          fixture.requests.set_conversation_system_prompt.conversation_id,
+        system_prompt: null,
+      },
+    })
   })
 
   it("projects rename, delete, and unarchive results from the shared fixture", async () => {
@@ -155,6 +206,7 @@ describe("conversation Tauri contract", () => {
       providerId: null,
       model: null,
       reasoningEffort: null,
+      systemPrompt: null,
     })
     await expect(
       client.deleteConversation("conversation-fixture"),
@@ -169,6 +221,7 @@ describe("conversation Tauri contract", () => {
       providerId: null,
       model: null,
       reasoningEffort: null,
+      systemPrompt: null,
     })
 
     const malformedClient = createConversationClient(
@@ -221,6 +274,7 @@ describe("conversation Tauri contract", () => {
         providerId: null,
         model: null,
         reasoningEffort: null,
+        systemPrompt: null,
       },
       {
         id: "conversation-archived",
@@ -231,6 +285,7 @@ describe("conversation Tauri contract", () => {
         providerId: null,
         model: null,
         reasoningEffort: null,
+        systemPrompt: null,
       },
     ])
 
@@ -275,6 +330,7 @@ describe("conversation Tauri contract", () => {
       providerId: null,
       model: null,
       reasoningEffort: null,
+      systemPrompt: null,
     })
     expect(tree.nodesById.root?.childIds).toEqual(["assistant-a"])
     expect(tree.nodesById["assistant-a"]?.childIds).toEqual([

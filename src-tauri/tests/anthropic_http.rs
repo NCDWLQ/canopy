@@ -22,7 +22,7 @@ fn chat_prompt(
     model: &str,
     effort: Option<ReasoningEffort>,
 ) -> canopy_lib::llm::ChatPrompt {
-    chat_prompt_from_path(path, model, effort).unwrap()
+    chat_prompt_from_path(path, model, effort, None).unwrap()
 }
 
 fn node(id: &str, parent_id: Option<&str>, role: Role, content: &str, created_at: i64) -> NewNode {
@@ -163,6 +163,64 @@ fn anthropic_stream_routes_blocks_and_sends_native_headers_and_body() {
                 "thinking": {"type": "enabled", "budget_tokens": 2048},
                 "stream": true
             })
+        );
+    });
+}
+
+#[test]
+fn injected_system_prompt_becomes_the_anthropic_system_field() {
+    run_async(async {
+        let pool = migrated_pool().await;
+        let service = ConversationPersistenceService::new(pool);
+        service
+            .create_conversation(
+                NewConversation {
+                    id: "protocol-conversation".to_owned(),
+                    title: "Protocol".to_owned(),
+                    root_node_id: "root".to_owned(),
+                },
+                node("root", None, Role::User, "SELECTED_SENTINEL", 1),
+            )
+            .await
+            .unwrap();
+        let path = service
+            .load_generation_context("protocol-conversation", "root")
+            .await
+            .unwrap()
+            .1;
+        let server = TestServer::spawn(
+            "200 OK",
+            &[("Content-Type", "text/event-stream")],
+            anthropic_events(),
+        );
+        let endpoint = ValidatedEndpoint::parse(&server.endpoint, Protocol::Anthropic).unwrap();
+        let client = OpenAiCompatibleClient::new().unwrap();
+        anthropic::stream(
+            &client,
+            StreamingRequest {
+                endpoint: &endpoint,
+                prompt: &chat_prompt_from_path(
+                    &path,
+                    "claude-fixture",
+                    None,
+                    Some("INJECTED_SYSTEM"),
+                )
+                .unwrap(),
+                secret: None,
+                cancellation: &CancellationToken::new(),
+            },
+            |_| Ok(()),
+            |_| Ok(()),
+        )
+        .await
+        .unwrap();
+        let request = server.finish();
+        let body = request.split("\r\n\r\n").nth(1).unwrap();
+        let value: serde_json::Value = serde_json::from_str(body).unwrap();
+        assert_eq!(value["system"], "INJECTED_SYSTEM");
+        assert_eq!(
+            value["messages"],
+            json!([{"role": "user", "content": "SELECTED_SENTINEL"}])
         );
     });
 }

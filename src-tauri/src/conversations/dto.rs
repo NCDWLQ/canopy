@@ -116,6 +116,20 @@ pub struct SearchConversationsRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct SetConversationSystemPromptRequest {
+    pub conversation_id: String,
+    pub system_prompt: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct SetConversationSystemPromptResult {
+    pub conversation_id: String,
+    pub system_prompt: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct SearchHitDto {
     pub node_id: String,
     pub role: RoleDto,
@@ -168,6 +182,8 @@ pub struct ConversationDto {
     pub model: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<ReasoningEffortDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub system_prompt: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -232,6 +248,7 @@ impl From<Conversation> for ConversationDto {
             provider_id: conversation.provider_id.clone(),
             model: binding_model(&conversation.provider_id, &conversation.model),
             reasoning_effort: conversation.reasoning_effort.map(Into::into),
+            system_prompt: conversation.system_prompt,
         }
     }
 }

@@ -11,6 +11,7 @@ export {
   type EditNodeAsBranchInput,
   type RenameConversationInput,
   type SetConversationProviderInput,
+  type SetConversationSystemPromptInput,
   type WriteExportFileInput,
   type WriteExportFileResult,
   type InvokeTransport,

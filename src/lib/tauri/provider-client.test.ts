@@ -58,6 +58,7 @@ describe("provider Tauri contract", () => {
       set_title_model_binding: fixture.successes.set_title_model_binding,
       set_language: fixture.successes.set_language,
       set_theme: fixture.successes.set_theme,
+      set_default_system_prompt: fixture.successes.set_default_system_prompt,
       reveal_provider_api_key: fixture.successes.reveal_api_key,
       list_provider_models: { models: [{ id: "fixture-model" }] },
       cancel_generation: fixture.successes.cancel,
@@ -78,6 +79,7 @@ describe("provider Tauri contract", () => {
       titleModelBinding: null,
       language: "system",
       theme: "system",
+      defaultSystemPrompt: null,
     })
     await expect(
       client.saveProvider({
@@ -105,6 +107,9 @@ describe("provider Tauri contract", () => {
     })
     await expect(client.setLanguage("zh-CN")).resolves.toBe("zh-CN")
     await expect(client.setTheme("dark")).resolves.toBe("dark")
+    await expect(client.setDefaultSystemPrompt("Be helpful")).resolves.toBe(
+      "Be helpful",
+    )
     await expect(client.revealProviderApiKey("provider-fixture")).resolves.toBe(
       "fixture-revealed-key-sentinel",
     )
@@ -129,6 +134,9 @@ describe("provider Tauri contract", () => {
     })
     expect(transport.calls[7]?.args).toEqual({
       request: { theme: "dark" },
+    })
+    expect(transport.calls[8]?.args).toEqual({
+      request: { prompt: "Be helpful" },
     })
   })
 

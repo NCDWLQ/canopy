@@ -44,6 +44,7 @@ export type ListProvidersView = {
   titleModelBinding: TitleModelBinding | null
   language: LocalePreference
   theme: ThemePreference
+  defaultSystemPrompt: string | null
 }
 
 export type ModelSummaryView = {

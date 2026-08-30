@@ -42,6 +42,34 @@ pub struct SetThemeResult {
     pub theme: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct SetDefaultSystemPromptRequest {
+    pub prompt: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct SetDefaultSystemPromptResult {
+    pub prompt: Option<String>,
+}
+
+const MAX_SYSTEM_PROMPT_BYTES: usize = 1024 * 1024;
+
+fn normalize_system_prompt(value: Option<&str>) -> Result<Option<String>, CommandError> {
+    let Some(raw) = value else {
+        return Ok(None);
+    };
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    if trimmed.len() > MAX_SYSTEM_PROMPT_BYTES {
+        return Err(CommandError::invalid_input("prompt", "too_large"));
+    }
+    Ok(Some(trimmed.to_owned()))
+}
+
 fn production_service(pool: sqlx::SqlitePool) -> SettingsService {
     SettingsService::new(pool)
 }
@@ -96,5 +124,21 @@ pub async fn set_theme(
         .map(|theme| SetThemeResult {
             theme: theme.as_setting_text().to_owned(),
         })
+        .map_err(CommandError::from)
+}
+
+#[tauri::command]
+pub async fn set_default_system_prompt(
+    request: SetDefaultSystemPromptRequest,
+    instances: State<'_, DbInstances>,
+) -> Result<SetDefaultSystemPromptResult, CommandError> {
+    let prompt = normalize_system_prompt(request.prompt.as_deref())?;
+    let pool = managed_sqlite_pool(instances.inner())
+        .await
+        .map_err(CommandError::from)?;
+    production_service(pool)
+        .set_default_system_prompt(prompt)
+        .await
+        .map(|prompt| SetDefaultSystemPromptResult { prompt })
         .map_err(CommandError::from)
 }

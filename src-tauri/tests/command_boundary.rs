@@ -17,7 +17,7 @@ use canopy_lib::{
             DeleteConversationSuccess, EditNodeAsBranchRequest, ListConversationsRequest,
             LoadActivePathRequest, LoadConversationTreeRequest, NodeDto, RenameConversationRequest,
             RoleDto, SearchConversationsRequest, SetConversationProviderRequest,
-            UnarchiveConversationRequest,
+            SetConversationSystemPromptRequest, UnarchiveConversationRequest,
         },
         ConversationPersistenceService, NewConversation, NewNode, PersistenceError, Role,
     },
@@ -115,6 +115,10 @@ fn shared_fixture_round_trips_rust_requests_dtos_errors_and_exact_command_names(
     assert_request!("delete_conversation", DeleteConversationRequest);
     assert_request!("unarchive_conversation", UnarchiveConversationRequest);
     assert_request!("set_conversation_provider", SetConversationProviderRequest);
+    assert_request!(
+        "set_conversation_system_prompt",
+        SetConversationSystemPromptRequest
+    );
     assert_request!("search_conversations", SearchConversationsRequest);
     assert_request!("write_export_file", WriteExportFileRequest);
 

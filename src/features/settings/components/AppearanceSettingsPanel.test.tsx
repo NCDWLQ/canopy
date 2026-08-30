@@ -31,6 +31,7 @@ function client() {
     setTitleModelBinding: vi.fn().mockResolvedValue(null),
     setLanguage: vi.fn().mockResolvedValue("system"),
     setTheme: vi.fn().mockResolvedValue("system"),
+    setDefaultSystemPrompt: vi.fn().mockResolvedValue(null),
     revealProviderApiKey: vi.fn().mockResolvedValue(null),
     listProviderModels: vi.fn(),
     generateFromActivePath: vi.fn(),

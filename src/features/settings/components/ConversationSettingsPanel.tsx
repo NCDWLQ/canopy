@@ -1,3 +1,5 @@
+import * as React from "react"
+
 import { useProviderStore } from "@/features/providers/store"
 import type { TitleModelBinding } from "@/features/providers/types"
 import {
@@ -25,8 +27,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
+import { Textarea } from "@/components/ui/textarea"
 import type { ProviderClient } from "@/lib/tauri"
+import { trimRustWhitespace } from "@/lib/tauri/schemas"
 import { useTranslation } from "@/lib/i18n"
 
 const FOLLOW_SESSION_TITLE_MODEL = "follow"
@@ -59,12 +64,22 @@ export function ConversationSettingsPanel({
   const providers = useProviderStore((state) => state.providers)
   const autoGenerateTitle = useProviderStore((state) => state.autoGenerateTitle)
   const titleModelBinding = useProviderStore((state) => state.titleModelBinding)
+  const defaultSystemPrompt = useProviderStore(
+    (state) => state.defaultSystemPrompt,
+  )
   const setAutoGenerateTitle = useProviderStore(
     (state) => state.setAutoGenerateTitle,
   )
   const setTitleModelBinding = useProviderStore(
     (state) => state.setTitleModelBinding,
   )
+  const setDefaultSystemPrompt = useProviderStore(
+    (state) => state.setDefaultSystemPrompt,
+  )
+  const [promptEdit, setPromptEdit] = React.useState<string | null>(null)
+  const promptDraft = promptEdit ?? defaultSystemPrompt ?? ""
+  const promptDirty =
+    trimRustWhitespace(promptDraft) !== (defaultSystemPrompt ?? "")
 
   const mutationDisabled = readOnly || phase === "loading"
   const titleModelValue =
@@ -164,6 +179,38 @@ export function ConversationSettingsPanel({
                     )}
                   </SelectContent>
                 </Select>
+              </Field>
+              <Field data-disabled={mutationDisabled}>
+                <FieldContent>
+                  <FieldLabel htmlFor="default-system-prompt">
+                    {t("settings.conversation.defaultSystemPrompt")}
+                  </FieldLabel>
+                  <FieldDescription>
+                    {t("settings.conversation.defaultSystemPromptDescription")}
+                  </FieldDescription>
+                </FieldContent>
+                <Textarea
+                  id="default-system-prompt"
+                  value={promptDraft}
+                  disabled={mutationDisabled}
+                  placeholder={t(
+                    "settings.conversation.defaultSystemPromptPlaceholder",
+                  )}
+                  onChange={(event) => setPromptEdit(event.target.value)}
+                />
+                <Button
+                  type="button"
+                  disabled={mutationDisabled || !promptDirty}
+                  onClick={() => {
+                    const trimmed = trimRustWhitespace(promptDraft)
+                    void setDefaultSystemPrompt(
+                      client,
+                      trimmed.length === 0 ? null : trimmed,
+                    )
+                  }}
+                >
+                  {t("settings.conversation.saveDefaultSystemPrompt")}
+                </Button>
               </Field>
             </FieldSet>
           </FieldGroup>

@@ -133,6 +133,8 @@ function createMockClient() {
     writeExportFile: vi
       .fn<ConversationClient["writeExportFile"]>()
       .mockResolvedValue({ bytesWritten: 0 }),
+    setConversationSystemPrompt:
+      vi.fn<ConversationClient["setConversationSystemPrompt"]>(),
   } satisfies ConversationClient
 }
 
@@ -144,8 +146,10 @@ function resetStore() {
     providerId: null,
     model: null,
     reasoningEffort: null,
+    systemPrompt: null,
     draftBinding: null,
     draftReasoningEffort: null,
+    draftSystemPrompt: null,
     rootNodeId: null,
     activeNodeId: null,
     nodesById: {},
@@ -1504,6 +1508,94 @@ describe("conversation store", () => {
     const failed = useConversationStore.getState()
     expect(failed.error?.code).toBe("not_found")
     expect(failed.providerId).toBeNull()
+  })
+
+  it("applies an authoritative system prompt without rewriting history", async () => {
+    client.setConversationSystemPrompt.mockResolvedValue({
+      id: conversation.id,
+      systemPrompt: "Be concise",
+    })
+    await useConversationStore
+      .getState()
+      .loadConversation(client, conversation.id)
+    useConversationStore.setState({
+      history: { status: "ready", summaries: [summary], error: null },
+    })
+
+    await useConversationStore
+      .getState()
+      .setConversationSystemPrompt(client, "Be concise")
+
+    const state = useConversationStore.getState()
+    expect(state.systemPrompt).toBe("Be concise")
+    expect(state.history.summaries).toEqual([summary])
+    expect(client.setConversationSystemPrompt).toHaveBeenCalledWith({
+      conversationId: conversation.id,
+      systemPrompt: "Be concise",
+    })
+  })
+
+  it("ignores a stale system-prompt write after a newer request", async () => {
+    const first = deferred<{ id: string; systemPrompt: string | null }>()
+    const second = deferred<{ id: string; systemPrompt: string | null }>()
+    client.setConversationSystemPrompt
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise)
+    await useConversationStore
+      .getState()
+      .loadConversation(client, conversation.id)
+
+    const firstWrite = useConversationStore
+      .getState()
+      .setConversationSystemPrompt(client, "first")
+    const secondWrite = useConversationStore
+      .getState()
+      .setConversationSystemPrompt(client, "second")
+    first.resolve({ id: conversation.id, systemPrompt: "first" })
+    await firstWrite
+    expect(useConversationStore.getState().systemPrompt).toBeNull()
+
+    second.resolve({ id: conversation.id, systemPrompt: "second" })
+    await secondWrite
+    expect(useConversationStore.getState().systemPrompt).toBe("second")
+  })
+
+  it("does not write a system prompt when unloaded or archived", async () => {
+    await useConversationStore
+      .getState()
+      .setConversationSystemPrompt(client, "ignored")
+    expect(client.setConversationSystemPrompt).not.toHaveBeenCalled()
+
+    await useConversationStore
+      .getState()
+      .loadConversation(client, conversation.id)
+    useConversationStore.setState({ isArchived: true })
+    await useConversationStore
+      .getState()
+      .setConversationSystemPrompt(client, "ignored")
+    expect(client.setConversationSystemPrompt).not.toHaveBeenCalled()
+  })
+
+  it("loads a stored system prompt and clears draft prompt on create entry", async () => {
+    client.loadConversationTree.mockResolvedValueOnce({
+      ...tree,
+      conversation: { ...conversation, systemPrompt: "Loaded prompt" },
+    })
+    useConversationStore.getState().setDraftSystemPrompt("Draft prompt")
+    expect(useConversationStore.getState().draftSystemPrompt).toBe(
+      "Draft prompt",
+    )
+
+    await useConversationStore
+      .getState()
+      .loadConversation(client, conversation.id)
+    expect(useConversationStore.getState().systemPrompt).toBe("Loaded prompt")
+    expect(useConversationStore.getState().draftSystemPrompt).toBeNull()
+
+    useConversationStore.getState().setDraftSystemPrompt("Next draft")
+    useConversationStore.getState().enterConversationCreation()
+    expect(useConversationStore.getState().draftSystemPrompt).toBeNull()
+    expect(useConversationStore.getState().systemPrompt).toBe("Loaded prompt")
   })
 })
 

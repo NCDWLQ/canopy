@@ -82,4 +82,21 @@ impl SettingsService {
         transaction.commit().await?;
         Ok(theme)
     }
+
+    pub async fn get_default_system_prompt(&self) -> Result<Option<String>, SettingsError> {
+        let mut transaction = self.pool.begin().await?;
+        let prompt = SettingsRepository::get_default_system_prompt(&mut transaction).await?;
+        transaction.commit().await?;
+        Ok(prompt)
+    }
+
+    pub async fn set_default_system_prompt(
+        &self,
+        prompt: Option<String>,
+    ) -> Result<Option<String>, SettingsError> {
+        let mut transaction = self.pool.begin().await?;
+        SettingsRepository::set_default_system_prompt(&mut transaction, prompt.as_deref()).await?;
+        transaction.commit().await?;
+        Ok(prompt)
+    }
 }

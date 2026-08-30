@@ -32,6 +32,7 @@ pub struct Conversation {
     pub provider_id: Option<String>,
     pub model: Option<String>,
     pub reasoning_effort: Option<ReasoningEffort>,
+    pub system_prompt: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
