@@ -9,6 +9,7 @@ export type MessageBubbleProps = {
   children: ReactNode
   actions?: ReactNode
   footer?: ReactNode
+  pager?: ReactNode
   className?: string
   // Stable scroll anchor for search-result positioning.
   nodeId?: string
@@ -20,6 +21,7 @@ export function MessageBubble({
   children,
   actions,
   footer,
+  pager,
   className,
   nodeId,
   articleRef,
@@ -47,9 +49,14 @@ export function MessageBubble({
           {children}
         </div>
         {footer && <div className="mt-1 w-full max-w-[85%]">{footer}</div>}
-        {actions && (
-          <div className="mt-1 flex items-center justify-end gap-1 text-muted-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-            {actions}
+        {(pager !== undefined || actions !== undefined) && (
+          <div className="mt-1 flex w-full max-w-[85%] items-center justify-end gap-1">
+            {actions && (
+              <div className="flex items-center justify-end gap-1 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                {actions}
+              </div>
+            )}
+            {pager}
           </div>
         )}
       </article>
@@ -69,8 +76,9 @@ export function MessageBubble({
       >
         <div className="w-full text-sm">{children}</div>
         {footer && <div className="w-full">{footer}</div>}
-        {actions && (
-          <div className="mt-2 flex items-center gap-1 text-muted-foreground">
+        {(pager !== undefined || actions !== undefined) && (
+          <div className="mt-2 flex w-full items-center gap-1 text-muted-foreground">
+            {pager}
             {actions}
           </div>
         )}
@@ -89,9 +97,14 @@ export function MessageBubble({
         {children}
       </div>
       {footer && <div className="w-full">{footer}</div>}
-      {actions && (
-        <div className="mt-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
-          {actions}
+      {(pager !== undefined || actions !== undefined) && (
+        <div className="mt-1 flex items-center gap-1">
+          {actions && (
+            <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+              {actions}
+            </div>
+          )}
+          {pager}
         </div>
       )}
     </article>

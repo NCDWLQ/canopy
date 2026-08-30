@@ -637,6 +637,29 @@ describe("ConversationWorkspace", () => {
     expect(within(pane).queryByText(left.content)).not.toBeInTheDocument()
   })
 
+  it("switches sibling branches from the linear branch switcher", async () => {
+    const user = userEvent.setup()
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(right.id)
+
+    render(<ConversationWorkspace />)
+
+    const pane = screen.getByTestId("conversation-pane")
+    expect(within(pane).getByText(right.content)).toBeVisible()
+    expect(within(pane).queryByText(left.content)).not.toBeInTheDocument()
+    expect(within(pane).getByRole("group", { name: "分支 2/2" })).toBeVisible()
+
+    await user.click(within(pane).getByRole("button", { name: "上一条分支" }))
+
+    await waitFor(() => {
+      expect(within(pane).getByText(left.content)).toBeVisible()
+    })
+    expect(within(pane).queryByText(right.content)).not.toBeInTheDocument()
+    expect(within(pane).getByRole("group", { name: "分支 1/2" })).toBeVisible()
+  })
+
   it("renders Markdown only for durable assistant messages", async () => {
     const markdownTree: ConversationTreeView = {
       ...tree,

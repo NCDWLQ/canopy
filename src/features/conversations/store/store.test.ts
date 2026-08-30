@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import {
   newestLeafDescendant,
   selectActivePath,
+  siblingBranchInfo,
   useConversationStore,
 } from "./index"
 import type {
@@ -1727,5 +1728,36 @@ describe("revealSearchHit", () => {
     expect(
       newestLeafDescendant(tree.nodesById, tiedFullNodes, assistant.id),
     ).toBe("left")
+  })
+})
+
+describe("siblingBranchInfo", () => {
+  it("returns null for the root and for nodes without siblings", () => {
+    expect(siblingBranchInfo(tree.nodesById, root.id)).toBeNull()
+    expect(siblingBranchInfo(tree.nodesById, assistant.id)).toBeNull()
+  })
+
+  it("returns index, count, and adjacent sibling ids for branch leaves", () => {
+    expect(siblingBranchInfo(tree.nodesById, left.id)).toEqual({
+      index: 0,
+      count: 2,
+      nextId: right.id,
+    })
+    expect(siblingBranchInfo(tree.nodesById, right.id)).toEqual({
+      index: 1,
+      count: 2,
+      prevId: left.id,
+    })
+  })
+
+  it("returns null when the node id is missing from the parent child list", () => {
+    const brokenNodesById = {
+      ...tree.nodesById,
+      assistant: {
+        ...tree.nodesById.assistant,
+        childIds: ["ghost"],
+      },
+    } as typeof tree.nodesById
+    expect(siblingBranchInfo(brokenNodesById, left.id)).toBeNull()
   })
 })

@@ -6,6 +6,7 @@ import { ThinkingBlock } from "./ThinkingBlock"
 import {
   MessageNode,
   type AssistantRegenerationAction,
+  type BranchSwitcherControl,
   type UserGenerationAction,
 } from "./MessageNode"
 import { Button } from "@/components/ui/button"
@@ -19,7 +20,11 @@ import { AlertCircle, GitBranch, RefreshCw } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import { commandErrorMessage, useTranslation } from "@/lib/i18n"
 
-export type { AssistantRegenerationAction, UserGenerationAction }
+export type {
+  AssistantRegenerationAction,
+  BranchSwitcherControl,
+  UserGenerationAction,
+}
 
 export type ConversationPaneProps = {
   path: readonly PathMessageView[]
@@ -37,6 +42,7 @@ export type ConversationPaneProps = {
   userGenerationAction?: UserGenerationAction | null
   assistantRegenerationAction?: AssistantRegenerationAction | null
   pendingBranchOriginId?: string | null
+  branchSwitcherFor?: (nodeId: string) => BranchSwitcherControl | null
   // Active search/Panorama reveal: scrolls the hit message into view
   // anchored at its start and highlights matches until the next navigation
   // clears it.
@@ -173,6 +179,7 @@ export function ConversationPane({
   userGenerationAction,
   assistantRegenerationAction,
   pendingBranchOriginId = null,
+  branchSwitcherFor,
   reveal = null,
 }: ConversationPaneProps) {
   const { t } = useTranslation()
@@ -297,6 +304,7 @@ export function ConversationPane({
                     : undefined
                 }
                 scrollContainerRef={containerRef}
+                branchSwitcher={branchSwitcherFor?.(msg.id) ?? undefined}
               />
               {pendingBranchOriginId === msg.id && (
                 <Marker
