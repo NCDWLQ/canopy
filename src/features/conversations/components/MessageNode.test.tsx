@@ -366,4 +366,32 @@ describe("MessageNode", () => {
       screen.queryByRole("button", { name: "导出对话至该消息" }),
     ).not.toBeInTheDocument()
   })
+
+  it("renders the branch switcher when provided and hides it while editing", async () => {
+    const user = userEvent.setup()
+    render(
+      <MessageNode
+        message={userMessage}
+        canBranch={false}
+        canEdit
+        onCreateBranch={vi.fn()}
+        onEditAsBranch={vi.fn()}
+        branchSwitcher={{
+          index: 1,
+          count: 2,
+          onPrev: vi.fn(),
+          onNext: vi.fn(),
+          prevDisabled: false,
+          nextDisabled: true,
+        }}
+      />,
+    )
+
+    expect(screen.getByRole("group", { name: "分支 2/2" })).toBeVisible()
+
+    await user.click(screen.getByRole("button", { name: "编辑为新分支" }))
+    expect(
+      screen.queryByRole("group", { name: "分支 2/2" }),
+    ).not.toBeInTheDocument()
+  })
 })

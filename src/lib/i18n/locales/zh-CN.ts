@@ -108,6 +108,15 @@ export const zhCN = {
   "conversation.message.regenerate": "重新生成",
   "conversation.message.editAsBranch": "编辑为新分支",
   "conversation.message.branchFromHere": "从此处创建分支",
+  "conversation.message.branchPrev": "上一条分支",
+  "conversation.message.branchNext": "下一条分支",
+  "conversation.message.branchPosition": ({
+    index,
+    count,
+  }: {
+    index: number
+    count: number
+  }) => `分支 ${index}/${count}`,
   "conversation.message.copied": "已复制",
   "conversation.message.copy": "复制",
   "conversation.message.editContent": "编辑消息内容",

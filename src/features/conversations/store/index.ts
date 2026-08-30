@@ -445,6 +445,34 @@ export function newestLeafDescendant(
   return newest?.id ?? nodeId
 }
 
+export type SiblingBranchInfo = {
+  index: number
+  count: number
+  prevId?: string
+  nextId?: string
+}
+
+/** Sibling pagination metadata for a node on the active path; null when none. */
+export function siblingBranchInfo(
+  nodesById: Readonly<Record<string, TreeNodeView>>,
+  nodeId: string,
+): SiblingBranchInfo | null {
+  const node = nodesById[nodeId]
+  if (node === undefined || node.parentId === undefined) return null
+  const parent = nodesById[node.parentId]
+  if (parent === undefined) return null
+  const { childIds } = parent
+  if (childIds.length < 2) return null
+  const index = childIds.indexOf(nodeId)
+  if (index === -1) return null
+  return {
+    index,
+    count: childIds.length,
+    ...(index > 0 ? { prevId: childIds[index - 1] } : {}),
+    ...(index < childIds.length - 1 ? { nextId: childIds[index + 1] } : {}),
+  }
+}
+
 /** Root -> node chain via parent links; null on missing nodes or a cycle. */
 export function pathIdsToNode(
   nodesById: Readonly<Record<string, TreeNodeView>>,

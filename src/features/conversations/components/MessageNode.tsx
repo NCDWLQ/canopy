@@ -11,6 +11,7 @@ import {
   RefreshCw,
 } from "lucide-react"
 import { AssistantMarkdown } from "./AssistantMarkdown"
+import { BranchSwitcher } from "./BranchSwitcher"
 import { MessageBubble } from "./MessageBubble"
 import { ThinkingBlock } from "./ThinkingBlock"
 import type { PathMessageView } from "../types"
@@ -38,6 +39,15 @@ export type AssistantRegenerationAction = {
   onSelect: (assistantNodeId: string) => void
 }
 
+export type BranchSwitcherControl = {
+  index: number
+  count: number
+  onPrev: () => void
+  onNext: () => void
+  prevDisabled: boolean
+  nextDisabled: boolean
+}
+
 export type MessageNodeProps = {
   message: PathMessageView
   canBranch: boolean
@@ -51,6 +61,8 @@ export type MessageNodeProps = {
   scrollContainerRef?: React.RefObject<HTMLElement | null>
   /** Present only on assistant messages; undefined hides the export button. */
   onExportMessage?: (nodeId: string) => void
+  /** Present when the message has sibling branches on the active path. */
+  branchSwitcher?: BranchSwitcherControl
   /** True while this conversation is generating (streaming content is not durable yet). */
   exportDisabled?: boolean
 }
@@ -66,6 +78,7 @@ export function MessageNode({
   highlightQuery,
   scrollContainerRef,
   onExportMessage,
+  branchSwitcher,
   exportDisabled = false,
 }: MessageNodeProps) {
   const { t } = useTranslation()
@@ -203,12 +216,24 @@ export function MessageNode({
     !isEditing
 
   const showGenerationAction = generationAction !== undefined && !isEditing
+  const branchPager =
+    branchSwitcher !== undefined && !isEditing ? (
+      <BranchSwitcher
+        index={branchSwitcher.index}
+        count={branchSwitcher.count}
+        onPrev={branchSwitcher.onPrev}
+        onNext={branchSwitcher.onNext}
+        prevDisabled={branchSwitcher.prevDisabled}
+        nextDisabled={branchSwitcher.nextDisabled}
+      />
+    ) : undefined
 
   return (
     <MessageBubble
       role={message.role}
       nodeId={message.id}
       articleRef={revealArticleRef}
+      pager={branchPager}
       footer={
         isEditing ? (
           <div className="flex justify-end gap-2 mt-2">

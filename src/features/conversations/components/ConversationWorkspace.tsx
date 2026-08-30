@@ -31,6 +31,7 @@ import {
   pathIdsToNode,
   selectActivePath,
   selectActiveRunIds,
+  siblingBranchInfo,
   type ConversationTreeState,
   useConversationStore,
 } from "../store"
@@ -188,6 +189,25 @@ export function ConversationWorkspace({
   const selectNode = useConversationStore((state) => state.selectNode)
   const selectBranchAtNode = useConversationStore(
     (state) => state.selectBranchAtNode,
+  )
+  const branchSwitcherFor = React.useCallback(
+    (nodeId: string) => {
+      const info = siblingBranchInfo(store.nodesById, nodeId)
+      if (info === null) return null
+      return {
+        index: info.index,
+        count: info.count,
+        prevDisabled: info.prevId === undefined,
+        nextDisabled: info.nextId === undefined,
+        onPrev: () => {
+          if (info.prevId !== undefined) selectBranchAtNode(info.prevId)
+        },
+        onNext: () => {
+          if (info.nextId !== undefined) selectBranchAtNode(info.nextId)
+        },
+      }
+    },
+    [selectBranchAtNode, store.nodesById],
   )
   const pathProjection = useConversationStore(useShallow(selectActivePath))
   const controller = useWorkspaceGenerationController({
@@ -1055,6 +1075,7 @@ export function ConversationWorkspace({
               assistantRegenerationAction={assistantRegenerationAction}
               pendingBranchOriginId={pendingBranchOriginId}
               reveal={store.reveal}
+              branchSwitcherFor={branchSwitcherFor}
             />
 
             <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10">

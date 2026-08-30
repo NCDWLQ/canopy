@@ -108,6 +108,15 @@ export const en = {
   "conversation.message.regenerate": "Regenerate",
   "conversation.message.editAsBranch": "Edit as new branch",
   "conversation.message.branchFromHere": "Branch from here",
+  "conversation.message.branchPrev": "Previous branch",
+  "conversation.message.branchNext": "Next branch",
+  "conversation.message.branchPosition": ({
+    index,
+    count,
+  }: {
+    index: number
+    count: number
+  }) => `Branch ${index}/${count}`,
   "conversation.message.copied": "Copied",
   "conversation.message.copy": "Copy",
   "conversation.message.editContent": "Edit message content",
