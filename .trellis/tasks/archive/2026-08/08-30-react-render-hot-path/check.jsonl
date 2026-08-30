@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "verify narrow selectors and no duplicated path projection in hooks"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "verify selectActivePath cache preserves projection invariants"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "lint, typecheck, test gate"}
