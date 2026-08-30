@@ -161,7 +161,11 @@ describe("provider store", () => {
 
   it("does not auto-activate when saving a second provider", async () => {
     const bridge = client()
-    const second: ProviderView = { ...provider, id: "provider-2", name: "Secondary" }
+    const second: ProviderView = {
+      ...provider,
+      id: "provider-2",
+      name: "Secondary",
+    }
     bridge.saveProvider.mockResolvedValueOnce(second)
     useProviderStore.setState({
       phase: "ready",

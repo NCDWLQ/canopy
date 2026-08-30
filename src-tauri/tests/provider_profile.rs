@@ -1098,7 +1098,8 @@ fn saving_the_first_provider_auto_activates_and_later_saves_do_not() {
         let (_, active) = service.list_providers().await.unwrap();
         assert_eq!(active.as_deref(), Some("provider-a"));
 
-        service.delete("provider-a", "operation-delete-a".to_owned())
+        service
+            .delete("provider-a", "operation-delete-a".to_owned())
             .await
             .unwrap();
         let (_, active) = service.list_providers().await.unwrap();
