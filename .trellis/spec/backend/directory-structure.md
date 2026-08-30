@@ -17,7 +17,8 @@ src-tauri/
 │   ├── 0004_provider_profile.sql
 │   ├── 0005_multi_provider.sql
 │   ├── 0006_provider_models.sql
-│   └── 0007_conversation_provider_binding_integrity.sql
+│   ├── 0007_conversation_provider_binding_integrity.sql
+│   └── 0008_conversation_system_prompt.sql
 ├── src/
 │   ├── lib.rs                # Tauri builder, production command registry
 │   ├── main.rs               # desktop process entry point only
@@ -30,7 +31,7 @@ src-tauri/
 │   │   ├── error.rs          # SettingsError (corrupt values, storage)
 │   │   ├── repository.rs     # typed app_settings SQL
 │   │   ├── service.rs
-│   │   └── commands.rs       # set_language / set_theme / set_auto_generate_title
+│   │   └── commands.rs       # set_language / set_theme / set_auto_generate_title / set_default_system_prompt
 │   ├── llm/
 │   │   ├── domain.rs         # Protocol, ValidatedEndpoint, prompt types
 │   │   ├── error.rs          # LlmError
@@ -52,7 +53,7 @@ src-tauri/
 │   │   ├── repository.rs
 │   │   ├── service.rs
 │   │   ├── dto.rs            # conversation/node/binding wire DTOs
-│   │   └── commands.rs       # tree / search / archive / rename / delete
+│   │   └── commands.rs       # tree / search / archive / rename / delete / set_conversation_system_prompt
 │   ├── generation/
 │   │   ├── error.rs          # GenerationError
 │   │   ├── runtime.rs        # lease, cancel, Running/Finalizing/Cancelling
@@ -143,7 +144,9 @@ Cross-cutting type ownership:
 | `validate_model` / `validate_models` | `providers::domain` |
 | `set_conversation_provider` orchestration and handler | `generation::{service,commands}` |
 | Conversation binding SQL (no provider table) | `conversations::repository` |
-| `set_language` / `set_theme` / `set_auto_generate_title` | `settings::commands` |
+| `set_language` / `set_theme` / `set_auto_generate_title` / `set_default_system_prompt` | `settings::commands` |
+| `set_conversation_system_prompt` and `conversations.system_prompt` SQL | `conversations::{commands,service,repository}` |
+| Effective system-prompt resolve + prepend at prepare | `generation::service` |
 | `set_title_model_binding` | `providers::{service,commands}` |
 | `LanguagePreference` / `ThemePreference` / `TitleModelBinding` | `settings::domain` |
 | Identity/time source | `infra::identity` |

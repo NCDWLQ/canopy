@@ -54,6 +54,11 @@ pub const MIGRATION_CATALOG: &[ApplicationMigration] = &[
         description: "conversation_provider_binding_integrity",
         sql: include_str!("../../migrations/0007_conversation_provider_binding_integrity.sql"),
     },
+    ApplicationMigration {
+        version: 8,
+        description: "conversation_system_prompt",
+        sql: include_str!("../../migrations/0008_conversation_system_prompt.sql"),
+    },
 ];
 
 pub fn plugin_migrations() -> Vec<Migration> {

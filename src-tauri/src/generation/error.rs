@@ -1,6 +1,9 @@
 use thiserror::Error;
 
-use crate::{conversations::PersistenceError, llm::LlmError, providers::ProviderError};
+use crate::{
+    conversations::PersistenceError, llm::LlmError, providers::ProviderError,
+    settings::SettingsError,
+};
 
 /// Application-workflow failures for reply generation, cancellation, and
 /// conversation-provider binding. Domain errors are composed transparently so
@@ -27,6 +30,9 @@ pub enum GenerationError {
 
     #[error(transparent)]
     Llm(#[from] LlmError),
+
+    #[error("settings failure")]
+    Settings(#[from] SettingsError),
 }
 
 impl GenerationError {

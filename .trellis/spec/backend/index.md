@@ -12,11 +12,11 @@ application core. Product code is organized by capability:
 | Module | Owns |
 |--------|------|
 | `infra` | `DATABASE_URL`, ordered migration catalog, managed SQLite pool, identity/time |
-| `settings` | typed `app_settings` (language, theme, auto-title, title-model binding) |
+| `settings` | typed `app_settings` (language, theme, auto-title, title-model binding, default system prompt) |
 | `llm` | protocol, endpoint validation, HTTP adapters, model discovery (no SQL/Tauri) |
 | `providers` | profiles, keyring credentials, active provider, `list_providers` façade, title-binding validation |
 | `conversations` | conversation tree, search, persistence; no provider table SQL |
-| `generation` | reply runtime, prepare/run/finalize, conversation-provider binding, auto-title |
+| `generation` | reply runtime, prepare/run/finalize, conversation-provider binding, system-prompt injection, auto-title |
 | `exports` | bounded Markdown file writes (path/content validation + filesystem IO) |
 | `error.rs` | `CommandError` IPC mapping only |
 

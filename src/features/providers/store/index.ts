@@ -41,6 +41,7 @@ export type ProviderState = (
 ) & {
   autoGenerateTitle: boolean
   titleModelBinding: TitleModelBinding | null
+  defaultSystemPrompt: string | null
   language: LocalePreference
   theme: ThemePreference
 }
@@ -72,6 +73,10 @@ export type ProviderStore = ProviderState & {
     language: LocalePreference,
   ) => Promise<void>
   setTheme: (client: ProviderClient, theme: ThemePreference) => Promise<void>
+  setDefaultSystemPrompt: (
+    client: ProviderClient,
+    prompt: string | null,
+  ) => Promise<void>
 }
 
 // Display sites render this through commandErrorMessage(code); the message
@@ -101,6 +106,7 @@ function readyOrUnconfigured(
   titleModelBinding: TitleModelBinding | null,
   language: LocalePreference,
   theme: ThemePreference,
+  defaultSystemPrompt: string | null,
 ): ProviderState {
   if (activeProviderId !== null) {
     return {
@@ -109,6 +115,7 @@ function readyOrUnconfigured(
       activeProviderId,
       autoGenerateTitle,
       titleModelBinding,
+      defaultSystemPrompt,
       language,
       theme,
     }
@@ -119,6 +126,7 @@ function readyOrUnconfigured(
     activeProviderId: null,
     autoGenerateTitle,
     titleModelBinding,
+    defaultSystemPrompt,
     language,
     theme,
   }
@@ -153,6 +161,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
       activeProviderId: previous.activeProviderId,
       autoGenerateTitle: previous.autoGenerateTitle,
       titleModelBinding: previous.titleModelBinding,
+      defaultSystemPrompt: previous.defaultSystemPrompt,
       language: previous.language,
       theme: previous.theme,
     })
@@ -167,6 +176,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
       activeProviderId: previous.activeProviderId,
       autoGenerateTitle: previous.autoGenerateTitle,
       titleModelBinding: previous.titleModelBinding,
+      defaultSystemPrompt: previous.defaultSystemPrompt,
       language: previous.language,
       theme: previous.theme,
       error: normalizeError(error),
@@ -179,6 +189,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
     activeProviderId: null,
     autoGenerateTitle: true,
     titleModelBinding: null,
+    defaultSystemPrompt: null,
     language: "system",
     theme: "system",
 
@@ -200,6 +211,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
               result.titleModelBinding,
               language,
               theme,
+              result.defaultSystemPrompt,
             ),
           )
           // Boot hydration (design 08-22-i18n §3): only an explicit preference
@@ -234,6 +246,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
               previous.titleModelBinding,
               previous.language,
               previous.theme,
+              previous.defaultSystemPrompt,
             ),
           )
         }
@@ -266,6 +279,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
               : previous.titleModelBinding,
             previous.language,
             previous.theme,
+            previous.defaultSystemPrompt,
           ),
         )
         return deleted
@@ -288,6 +302,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
               previous.titleModelBinding,
               previous.language,
               previous.theme,
+              previous.defaultSystemPrompt,
             ),
           )
         }
@@ -309,6 +324,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
               previous.titleModelBinding,
               previous.language,
               previous.theme,
+              previous.defaultSystemPrompt,
             ),
           )
         }
@@ -330,6 +346,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
               titleModelBinding,
               previous.language,
               previous.theme,
+              previous.defaultSystemPrompt,
             ),
           )
         }
@@ -351,6 +368,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
               previous.titleModelBinding,
               stored,
               previous.theme,
+              previous.defaultSystemPrompt,
             ),
           )
           // Unlike boot hydration, an explicit "system" selection recomputes
@@ -375,9 +393,32 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
               previous.titleModelBinding,
               previous.language,
               stored,
+              previous.defaultSystemPrompt,
             ),
           )
           useThemeStore.getState().setThemePreference(stored)
+        }
+      } catch (error: unknown) {
+        fail(epoch, previous, error)
+      }
+    },
+
+    setDefaultSystemPrompt: async (client, prompt) => {
+      const { epoch, previous } = beginRequest()
+      try {
+        const defaultSystemPrompt = await client.setDefaultSystemPrompt(prompt)
+        if (isCurrent(epoch)) {
+          set(
+            readyOrUnconfigured(
+              previous.providers,
+              previous.activeProviderId,
+              previous.autoGenerateTitle,
+              previous.titleModelBinding,
+              previous.language,
+              previous.theme,
+              defaultSystemPrompt,
+            ),
+          )
         }
       } catch (error: unknown) {
         fail(epoch, previous, error)

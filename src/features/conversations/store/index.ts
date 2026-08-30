@@ -15,7 +15,10 @@ import type {
 import type { GenerationEventView } from "@/features/providers/types"
 import { commandErrorMessage, t } from "@/lib/i18n"
 import { ConversationCommandError, type ConversationClient } from "@/lib/tauri"
-import type { SetConversationProviderInput } from "@/lib/tauri"
+import type {
+  SetConversationProviderInput,
+  SetConversationSystemPromptInput,
+} from "@/lib/tauri"
 
 type StartedGenerationEvent = Extract<GenerationEventView, { type: "started" }>
 type StreamingGenerationEvent = Extract<
@@ -86,11 +89,13 @@ export type ConversationTreeState = {
   providerId: string | null
   model: string | null
   reasoningEffort: "low" | "medium" | "high" | null
+  systemPrompt: string | null
   // Blank/new-conversation picker draft. Null binding means "snapshot the
   // active provider at create time"; UI never clears a chosen draft back to
   // follow-global.
   draftBinding: ConversationProviderBinding | null
   draftReasoningEffort: "low" | "medium" | "high" | null
+  draftSystemPrompt: string | null
   rootNodeId: string | null
   activeNodeId: string | null
   nodesById: Readonly<Record<string, TreeNodeView>>
@@ -187,10 +192,15 @@ export type ConversationStore = ConversationTreeState & {
     client: ConversationClient,
     input: Omit<SetConversationProviderInput, "conversationId">,
   ) => Promise<void>
+  setConversationSystemPrompt: (
+    client: ConversationClient,
+    systemPrompt: SetConversationSystemPromptInput["systemPrompt"],
+  ) => Promise<void>
   setDraftConversationProvider: (input: {
     binding: ConversationProviderBinding | null
     reasoningEffort: "low" | "medium" | "high" | null
   }) => void
+  setDraftSystemPrompt: (systemPrompt: string | null) => void
   clearError: () => void
   applyTitleUpdate: (update: { conversationId: string; title: string }) => void
   beginGeneration: (explicitParentNodeId?: string) => number | null
@@ -273,8 +283,10 @@ const initialState: ConversationTreeState = {
   providerId: null,
   model: null,
   reasoningEffort: null,
+  systemPrompt: null,
   draftBinding: null,
   draftReasoningEffort: null,
+  draftSystemPrompt: null,
   rootNodeId: null,
   activeNodeId: null,
   nodesById: emptyRecord(),
@@ -505,8 +517,10 @@ function loadedTreeState(
     providerId: tree.conversation.providerId ?? null,
     model: tree.conversation.model ?? null,
     reasoningEffort: tree.conversation.reasoningEffort ?? null,
+    systemPrompt: tree.conversation.systemPrompt ?? null,
     draftBinding: null,
     draftReasoningEffort: null,
+    draftSystemPrompt: null,
     rootNodeId: tree.rootNodeId,
     activeNodeId,
     nodesById: copyRecord(tree.nodesById),
@@ -708,6 +722,7 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
   let nextRunId = 0
   let requestEpoch = 0
   let bindingEpoch = 0
+  let systemPromptEpoch = 0
 
   const loadSelectedConversation = async (
     client: ConversationClient,
@@ -756,6 +771,7 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
         isCreatingConversation: true,
         draftBinding: null,
         draftReasoningEffort: null,
+        draftSystemPrompt: null,
         status: state.conversationId === null ? "idle" : "ready",
         error: null,
         reveal: null,
@@ -1601,11 +1617,49 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
       }
     },
 
+    setConversationSystemPrompt: async (client, systemPrompt) => {
+      const state = get()
+      const conversationId = state.conversationId
+      if (conversationId === null || state.isArchived) {
+        return
+      }
+      const epoch = ++systemPromptEpoch
+      try {
+        const result = await client.setConversationSystemPrompt({
+          conversationId,
+          systemPrompt,
+        })
+        const live = get()
+        if (
+          epoch !== systemPromptEpoch ||
+          live.conversationId !== conversationId
+        ) {
+          return
+        }
+        if (result.id !== conversationId) {
+          set({ error: TREE_INTEGRITY_ERROR })
+          return
+        }
+        set({ systemPrompt: result.systemPrompt ?? null })
+      } catch (error: unknown) {
+        if (
+          epoch === systemPromptEpoch &&
+          get().conversationId === conversationId
+        ) {
+          set({ error: normalizeUiError(error) })
+        }
+      }
+    },
+
     setDraftConversationProvider: (input) => {
       set({
         draftBinding: input.binding,
         draftReasoningEffort: input.reasoningEffort,
       })
+    },
+
+    setDraftSystemPrompt: (systemPrompt) => {
+      set({ draftSystemPrompt: systemPrompt })
     },
 
     archiveConversation: async (client, targetId) => {

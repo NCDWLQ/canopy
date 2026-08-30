@@ -20,6 +20,7 @@ export type ConversationView = {
   providerId?: string | null
   model?: string | null
   reasoningEffort?: "low" | "medium" | "high" | null
+  systemPrompt?: string | null
 }
 
 export type ConversationSummaryView = ConversationView & {

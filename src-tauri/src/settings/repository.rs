@@ -7,6 +7,7 @@ const AUTO_GENERATE_TITLE_SETTING_KEY: &str = "auto_generate_title";
 const TITLE_MODEL_BINDING_SETTING_KEY: &str = "title_model_binding";
 const LANGUAGE_SETTING_KEY: &str = "language";
 const THEME_SETTING_KEY: &str = "theme";
+const DEFAULT_SYSTEM_PROMPT_SETTING_KEY: &str = "default_system_prompt";
 
 #[derive(Debug, Default)]
 pub(crate) struct SettingsRepository;
@@ -146,6 +147,24 @@ impl SettingsRepository {
         theme: ThemePreference,
     ) -> Result<(), SettingsError> {
         Self::set_setting(connection, THEME_SETTING_KEY, theme.as_setting_text()).await
+    }
+
+    pub(crate) async fn get_default_system_prompt(
+        connection: &mut SqliteConnection,
+    ) -> Result<Option<String>, SettingsError> {
+        Self::get_setting(connection, DEFAULT_SYSTEM_PROMPT_SETTING_KEY).await
+    }
+
+    pub(crate) async fn set_default_system_prompt(
+        connection: &mut SqliteConnection,
+        prompt: Option<&str>,
+    ) -> Result<(), SettingsError> {
+        match prompt {
+            Some(value) => {
+                Self::set_setting(connection, DEFAULT_SYSTEM_PROMPT_SETTING_KEY, value).await
+            }
+            None => Self::delete_setting(connection, DEFAULT_SYSTEM_PROMPT_SETTING_KEY).await,
+        }
     }
 
     async fn get_setting(

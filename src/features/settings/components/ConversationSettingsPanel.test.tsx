@@ -29,6 +29,7 @@ function client() {
     setTitleModelBinding: vi.fn().mockResolvedValue(null),
     setLanguage: vi.fn().mockResolvedValue("system"),
     setTheme: vi.fn().mockResolvedValue("system"),
+    setDefaultSystemPrompt: vi.fn().mockResolvedValue(null),
     revealProviderApiKey: vi.fn().mockResolvedValue(null),
     listProviderModels: vi.fn(),
     generateFromActivePath: vi.fn(),
@@ -56,6 +57,7 @@ describe("ConversationSettingsPanel", () => {
       activeProviderId: provider.id,
       autoGenerateTitle: true,
       titleModelBinding: null,
+      defaultSystemPrompt: null,
     })
   })
 
@@ -109,6 +111,35 @@ describe("ConversationSettingsPanel", () => {
     useProviderStore.setState({ autoGenerateTitle: false })
     await waitFor(() =>
       expect(screen.getByRole("combobox", { name: "标题模型" })).toBeDisabled(),
+    )
+  })
+
+  it("saves a dirty default system prompt and can clear it", async () => {
+    const user = userEvent.setup()
+    const bridge = client()
+    bridge.setDefaultSystemPrompt.mockResolvedValueOnce("Be helpful")
+    render(
+      <ConversationSettingsPanel
+        client={bridge as ProviderClient}
+        readOnly={false}
+      />,
+    )
+
+    const textarea = screen.getByRole("textbox", { name: "默认系统提示词" })
+    expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
+    await user.type(textarea, "Be helpful")
+    expect(screen.getByRole("button", { name: "保存" })).toBeEnabled()
+    await user.click(screen.getByRole("button", { name: "保存" }))
+    await waitFor(() =>
+      expect(bridge.setDefaultSystemPrompt).toHaveBeenCalledWith("Be helpful"),
+    )
+
+    useProviderStore.setState({ defaultSystemPrompt: "Be helpful" })
+    await waitFor(() => expect(textarea).toHaveValue("Be helpful"))
+    await user.clear(textarea)
+    await user.click(screen.getByRole("button", { name: "保存" }))
+    await waitFor(() =>
+      expect(bridge.setDefaultSystemPrompt).toHaveBeenCalledWith(null),
     )
   })
 })

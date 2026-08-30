@@ -62,6 +62,7 @@ import {
   type SettingsCategory,
 } from "@/features/settings/components"
 import { ConversationProviderPicker } from "./ConversationProviderPicker"
+import { ConversationSettingsDialog } from "./ConversationSettingsDialog"
 import { useProviderStore } from "@/features/providers/store"
 import {
   createConversationClient,
@@ -873,40 +874,50 @@ export function ConversationWorkspace({
               />
             )}
           </div>
-          {!isBlankConversation && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant={isPanoramaOpen ? "secondary" : "ghost"}
-                  size="icon"
-                  className={cn(
-                    "size-8",
-                    isPanoramaOpen && "bg-secondary text-secondary-foreground",
-                  )}
-                  aria-label={
-                    isPanoramaOpen
-                      ? t("conversation.panorama.closePanorama")
-                      : t("conversation.panorama.openPanorama")
-                  }
-                  aria-pressed={isPanoramaOpen}
-                  disabled={store.status === "loading"}
-                  onClick={() => setIsPanoramaOpen((isOpen) => !isOpen)}
-                >
-                  {isPanoramaOpen ? (
-                    <MessageSquare className="size-4" aria-hidden="true" />
-                  ) : (
-                    <Waypoints className="size-4" aria-hidden="true" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                {isPanoramaOpen
-                  ? t("conversation.panorama.closePanorama")
-                  : t("conversation.panorama.openPanorama")}
-              </TooltipContent>
-            </Tooltip>
-          )}
+          <div className="flex items-center gap-2">
+            {!isBlankConversation && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant={isPanoramaOpen ? "secondary" : "ghost"}
+                    size="icon"
+                    className={cn(
+                      "size-8",
+                      isPanoramaOpen &&
+                        "bg-secondary text-secondary-foreground",
+                    )}
+                    aria-label={
+                      isPanoramaOpen
+                        ? t("conversation.panorama.closePanorama")
+                        : t("conversation.panorama.openPanorama")
+                    }
+                    aria-pressed={isPanoramaOpen}
+                    disabled={store.status === "loading"}
+                    onClick={() => setIsPanoramaOpen((isOpen) => !isOpen)}
+                  >
+                    {isPanoramaOpen ? (
+                      <MessageSquare className="size-4" aria-hidden="true" />
+                    ) : (
+                      <Waypoints className="size-4" aria-hidden="true" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {isPanoramaOpen
+                    ? t("conversation.panorama.closePanorama")
+                    : t("conversation.panorama.openPanorama")}
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {(isBlankConversation || store.conversationId !== null) && (
+              <ConversationSettingsDialog
+                conversationClient={client}
+                draftMode={isBlankConversation}
+                readOnly={!isBlankConversation && store.isArchived}
+              />
+            )}
+          </div>
         </header>
 
         {isBlankConversation ? (

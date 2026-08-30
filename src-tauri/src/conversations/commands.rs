@@ -16,6 +16,7 @@ use super::dto::{
     CreateConversationRequest, DeleteConversationRequest, DeleteConversationSuccess,
     EditNodeAsBranchRequest, ListConversationsRequest, LoadActivePathRequest,
     LoadConversationTreeRequest, NodeDto, RenameConversationRequest, SearchConversationsRequest,
+    SetConversationSystemPromptRequest, SetConversationSystemPromptResult,
     UnarchiveConversationRequest,
 };
 
@@ -34,6 +35,7 @@ pub const CONVERSATION_COMMAND_NAMES: &[&str] = &[
     "delete_conversation",
     "unarchive_conversation",
     "set_conversation_provider", // handler lives in generation::commands; name stays for the frozen conversation fixture
+    "set_conversation_system_prompt",
     "search_conversations",
     "write_export_file", // handler lives in exports::commands; name stays for the frozen conversation fixture
 ];
@@ -252,6 +254,23 @@ impl<S: IdentityTimeSource> ConversationCommandService<S> {
             })
             .map_err(CommandError::from)
     }
+
+    pub async fn set_conversation_system_prompt(
+        &self,
+        request: SetConversationSystemPromptRequest,
+    ) -> Result<SetConversationSystemPromptResult, CommandError> {
+        validate_id("conversation_id", &request.conversation_id)?;
+        let system_prompt = normalize_system_prompt(request.system_prompt.as_deref())?;
+        let conversation = self
+            .persistence
+            .set_system_prompt(&request.conversation_id, system_prompt)
+            .await
+            .map_err(CommandError::from)?;
+        Ok(SetConversationSystemPromptResult {
+            conversation_id: conversation.id,
+            system_prompt: conversation.system_prompt,
+        })
+    }
 }
 
 pub(crate) fn validate_title(title: &str) -> Result<String, CommandError> {
@@ -259,6 +278,20 @@ pub(crate) fn validate_title(title: &str) -> Result<String, CommandError> {
         TitleParseError::Blank => CommandError::invalid_input("title", "blank"),
         TitleParseError::TooLong => CommandError::invalid_input("title", "too_long"),
     })
+}
+
+fn normalize_system_prompt(value: Option<&str>) -> Result<Option<String>, CommandError> {
+    let Some(raw) = value else {
+        return Ok(None);
+    };
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    if trimmed.len() > MAX_CONTENT_BYTES {
+        return Err(CommandError::invalid_input("system_prompt", "too_large"));
+    }
+    Ok(Some(trimmed.to_owned()))
 }
 
 fn validate_content(content: &str) -> Result<(), CommandError> {
@@ -453,21 +486,39 @@ pub async fn search_conversations(
         .await
 }
 
+#[tauri::command]
+pub async fn set_conversation_system_prompt(
+    request: SetConversationSystemPromptRequest,
+    instances: State<'_, DbInstances>,
+) -> Result<SetConversationSystemPromptResult, CommandError> {
+    production_service(instances.inner())
+        .await?
+        .set_conversation_system_prompt(request)
+        .await
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{validate_content, validate_query, validate_title, CONVERSATION_COMMAND_NAMES};
+    use super::{
+        normalize_system_prompt, validate_content, validate_query, validate_title,
+        CONVERSATION_COMMAND_NAMES,
+    };
     use crate::error::CommandErrorCode;
 
     #[test]
     fn command_names_are_frozen() {
-        assert_eq!(CONVERSATION_COMMAND_NAMES.len(), 14);
+        assert_eq!(CONVERSATION_COMMAND_NAMES.len(), 15);
         assert_eq!(CONVERSATION_COMMAND_NAMES[0], "create_conversation");
         assert_eq!(CONVERSATION_COMMAND_NAMES[8], "rename_conversation");
         assert_eq!(CONVERSATION_COMMAND_NAMES[9], "delete_conversation");
         assert_eq!(CONVERSATION_COMMAND_NAMES[10], "unarchive_conversation");
         assert_eq!(CONVERSATION_COMMAND_NAMES[11], "set_conversation_provider");
-        assert_eq!(CONVERSATION_COMMAND_NAMES[12], "search_conversations");
-        assert_eq!(CONVERSATION_COMMAND_NAMES[13], "write_export_file");
+        assert_eq!(
+            CONVERSATION_COMMAND_NAMES[12],
+            "set_conversation_system_prompt"
+        );
+        assert_eq!(CONVERSATION_COMMAND_NAMES[13], "search_conversations");
+        assert_eq!(CONVERSATION_COMMAND_NAMES[14], "write_export_file");
     }
 
     #[test]
@@ -516,6 +567,23 @@ mod tests {
         assert!(validate_content(&"a".repeat(1024 * 1024)).is_ok());
         assert_eq!(
             validate_content(&"a".repeat(1024 * 1024 + 1))
+                .unwrap_err()
+                .code,
+            CommandErrorCode::InvalidInput
+        );
+    }
+
+    #[test]
+    fn system_prompt_trims_blank_to_none_and_enforces_utf8_limit() {
+        assert_eq!(normalize_system_prompt(None).unwrap(), None);
+        assert_eq!(normalize_system_prompt(Some(" \n\t ")).unwrap(), None);
+        assert_eq!(
+            normalize_system_prompt(Some("\u{0085}  Be concise  \u{0085}")).unwrap(),
+            Some("Be concise".to_owned())
+        );
+        assert!(normalize_system_prompt(Some(&"a".repeat(1024 * 1024))).is_ok());
+        assert_eq!(
+            normalize_system_prompt(Some(&"a".repeat(1024 * 1024 + 1)))
                 .unwrap_err()
                 .code,
             CommandErrorCode::InvalidInput

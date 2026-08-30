@@ -18,6 +18,7 @@ vi.mock("@/lib/tauri", () => ({
         titleModelBinding: null,
         language: "system",
         theme: "system",
+        defaultSystemPrompt: null,
       }),
   }),
 }))

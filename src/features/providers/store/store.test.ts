@@ -27,6 +27,7 @@ function client() {
     setTitleModelBinding: vi.fn(),
     setLanguage: vi.fn(),
     setTheme: vi.fn(),
+    setDefaultSystemPrompt: vi.fn(),
     revealProviderApiKey: vi.fn(),
     listProviderModels: vi.fn(),
     generateFromActivePath: vi.fn(),
@@ -44,6 +45,7 @@ describe("provider store", () => {
       titleModelBinding: null,
       language: "system",
       theme: "system",
+      defaultSystemPrompt: null,
     })
     useLocaleStore.getState().setLocale("zh-CN")
     useThemeStore.getState().setThemePreference("system")
@@ -58,12 +60,14 @@ describe("provider store", () => {
       titleModelBinding: null,
       language: "system",
       theme: "system",
+      defaultSystemPrompt: "Be helpful",
     })
     await useProviderStore.getState().loadProviders(bridge)
     expect(useProviderStore.getState()).toMatchObject({
       phase: "ready",
       providers: [provider],
       activeProviderId: provider.id,
+      defaultSystemPrompt: "Be helpful",
     })
   })
 
@@ -75,6 +79,7 @@ describe("provider store", () => {
       autoGenerateTitle: true,
       titleModelBinding: null,
       language: "en",
+      defaultSystemPrompt: null,
     })
     await useProviderStore.getState().loadProviders(bridge)
     expect(useProviderStore.getState().language).toBe("en")
@@ -89,6 +94,7 @@ describe("provider store", () => {
       autoGenerateTitle: true,
       titleModelBinding: null,
       language: "system",
+      defaultSystemPrompt: null,
     })
     await useProviderStore.getState().loadProviders(bridge)
     expect(useProviderStore.getState().language).toBe("system")
@@ -117,6 +123,7 @@ describe("provider store", () => {
       titleModelBinding: null,
       language: "system",
       theme: "dark",
+      defaultSystemPrompt: null,
     })
     await useProviderStore.getState().loadProviders(bridge)
     expect(useProviderStore.getState().theme).toBe("dark")
@@ -255,5 +262,29 @@ describe("provider store", () => {
         model: provider.model,
       },
     })
+  })
+
+  it("persists the default system prompt and can clear it", async () => {
+    const bridge = client()
+    bridge.setDefaultSystemPrompt
+      .mockResolvedValueOnce("Be helpful")
+      .mockResolvedValueOnce(null)
+    useProviderStore.setState({
+      phase: "ready",
+      providers: [provider],
+      activeProviderId: provider.id,
+    })
+
+    await useProviderStore
+      .getState()
+      .setDefaultSystemPrompt(bridge, "Be helpful")
+    expect(useProviderStore.getState().defaultSystemPrompt).toBe("Be helpful")
+    await useProviderStore.getState().setDefaultSystemPrompt(bridge, null)
+    expect(useProviderStore.getState().defaultSystemPrompt).toBeNull()
+    expect(bridge.setDefaultSystemPrompt).toHaveBeenNthCalledWith(
+      1,
+      "Be helpful",
+    )
+    expect(bridge.setDefaultSystemPrompt).toHaveBeenNthCalledWith(2, null)
   })
 })

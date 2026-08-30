@@ -33,11 +33,13 @@ and released-database upgrade tests must both call
 SQL ownership by table family:
 
 - `conversations` / `nodes` — `conversations::repository`. Binding columns
-  (`provider_id`, `model`, `reasoning_effort`) may be written after an
-  already-validated payload; this SQL must not `FROM providers` or
-  `JOIN providers`.
+  (`provider_id`, `model`, `reasoning_effort`) and `system_prompt` may be
+  written after an already-validated payload; this SQL must not `FROM
+  providers` or `JOIN providers`. `system_prompt` is independent of provider
+  delete: the migration 7 trigger must not clear it.
 - `providers` / `provider_credential_operations` — `providers::repository`.
-- typed `app_settings` keys — `settings::repository`.
+- typed `app_settings` keys — `settings::repository` (`language`, `theme`,
+  `auto_generate_title`, `title_model_binding`, `default_system_prompt`).
 - `generation` does not own SQL. It composes provider validation and the
   conversation persistence-only setter in one service transaction.
 
@@ -706,6 +708,80 @@ for migration in MIGRATION_CATALOG {
 let app = register_sql_plugin(tauri::Builder::default())
     .build(/* mock context with plugins.sql.preload */)?;
 let pool = managed_sqlite_pool(app.state::<DbInstances>().inner()).await?;
+```
+
+### Scenario: Conversation system prompt (migration 0008)
+
+#### 1. Scope / Trigger
+
+Use this contract when changing `conversations.system_prompt`,
+`app_settings.default_system_prompt`, or migration `0008`. Generation
+injection lives in `generation::service` and must not own SQL.
+
+#### 2. Signatures
+
+```sql
+-- 0008_conversation_system_prompt.sql
+ALTER TABLE conversations ADD COLUMN system_prompt TEXT;
+```
+
+```text
+app_settings key: default_system_prompt   -- absent = no global default
+conversations.system_prompt TEXT NULL     -- NULL = inherit global default
+```
+
+#### 3. Contracts
+
+- `NULL` on the conversation column is the only inherit marker. There is no
+  "explicitly unused" sentinel and no built-in preset prompt.
+- Clearing a conversation override writes SQL `NULL`. Clearing the global
+  default deletes the `app_settings` key (same pattern as
+  `delete_title_model_binding`).
+- Provider-delete trigger from migration 7 must not clear `system_prompt`.
+- `ConversationSummary` / history list DTOs do not carry `system_prompt`.
+- Nodes stay immutable. Do not persist the prompt as a mutable system root.
+
+#### 4. Validation & Error Matrix
+
+| Condition | Required result |
+|---|---|
+| Upgrade from v0.4.0 fixture | `system_prompt` column exists; seed rows stay `NULL` |
+| Conversation write while archived | `archived_conversation_write` → `invalid_input` |
+| Blank / whitespace-only input | persist `NULL` / delete the settings key |
+| Prompt > 1 MiB UTF-8 | `invalid_input` (`system_prompt` or `prompt`) |
+| Restart after migration 8 | Ledger complete; seed rows not rewritten |
+
+#### 5. Good / Base / Bad Cases
+
+- **Good**: set override, load tree, clear to `NULL`; global key delete
+  restores inherit.
+- **Base**: missing column before 0008 is repaired by the forward migration;
+  unset rows stay `NULL`.
+- **Bad**: editing 0001–0007 bytes; storing the prompt as a system node;
+  treating empty string and `NULL` as different inherit states.
+
+#### 6. Tests Required
+
+- `tree_persistence` asserts the column exists and
+  set/clear/archived-reject round-trips.
+- `released_database_upgrade` asserts ledger version 8 and seed
+  `system_prompt IS NULL`.
+
+#### 7. Wrong vs Correct
+
+##### Wrong
+
+```sql
+-- persist inherit as empty string, or mutate a system root node
+UPDATE conversations SET system_prompt = '' WHERE id = ?1;
+UPDATE nodes SET content = ?1 WHERE role = 'system';
+```
+
+##### Correct
+
+```sql
+UPDATE conversations SET system_prompt = ?1 WHERE id = ?2;
+-- bind None to inherit; never UPDATE node history
 ```
 
 ## Common Mistakes

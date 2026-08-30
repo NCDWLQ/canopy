@@ -251,6 +251,8 @@ function createClient() {
     unarchiveConversation: () => Promise.resolve(conversation),
     searchConversations: () => Promise.resolve([]),
     writeExportFile: () => Promise.resolve({ bytesWritten: 0 }),
+    setConversationSystemPrompt: () =>
+      Promise.resolve({ id: conversation.id, systemPrompt: null }),
   } satisfies ConversationClient
 }
 

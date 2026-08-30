@@ -25,6 +25,7 @@ pub(crate) fn register_commands<R: tauri::Runtime>(
         conversations::commands::delete_conversation,
         conversations::commands::unarchive_conversation,
         generation::commands::set_conversation_provider,
+        conversations::commands::set_conversation_system_prompt,
         conversations::commands::search_conversations,
         exports::commands::write_export_file,
         providers::commands::list_providers,
@@ -35,6 +36,7 @@ pub(crate) fn register_commands<R: tauri::Runtime>(
         providers::commands::set_title_model_binding,
         settings::commands::set_language,
         settings::commands::set_theme,
+        settings::commands::set_default_system_prompt,
         providers::commands::reveal_provider_api_key,
         generation::commands::generate_from_active_path,
         generation::commands::cancel_generation,
@@ -242,6 +244,17 @@ mod tests {
             ),
             ("set_theme", json!({ "request": { "theme": "dark" } })),
             (
+                "set_conversation_system_prompt",
+                json!({ "request": {
+                    "conversation_id": "conversation",
+                    "system_prompt": null
+                } }),
+            ),
+            (
+                "set_default_system_prompt",
+                json!({ "request": { "prompt": null } }),
+            ),
+            (
                 "reveal_provider_api_key",
                 json!({ "request": { "provider_id": "provider" } }),
             ),
@@ -262,7 +275,7 @@ mod tests {
                 }),
             ),
         ];
-        assert_eq!(database_backed.len(), 24);
+        assert_eq!(database_backed.len(), 26);
 
         for (command, body) in database_backed {
             let response = invoke(&webview, command, body).unwrap_err();

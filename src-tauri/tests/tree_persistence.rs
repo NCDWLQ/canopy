@@ -156,6 +156,7 @@ fn ordered_migrations_create_the_expected_schema_and_managed_pool_is_reused() {
                 (5, "multi_provider"),
                 (6, "provider_models"),
                 (7, "conversation_provider_binding_integrity"),
+                (8, "conversation_system_prompt"),
             ]
         );
 
@@ -231,6 +232,17 @@ fn ordered_migrations_create_the_expected_schema_and_managed_pool_is_reused() {
         .await
         .expect("conversation DDL is inspectable");
         assert!(conversation_sql.contains("DEFERRABLE INITIALLY DEFERRED"));
+        let conversation_columns: Vec<String> =
+            sqlx::query_scalar("SELECT name FROM pragma_table_info('conversations') ORDER BY name")
+                .fetch_all(&pool)
+                .await
+                .expect("conversation columns are inspectable");
+        assert!(
+            conversation_columns
+                .iter()
+                .any(|name| name == "system_prompt"),
+            "migration 0008 must add conversations.system_prompt, got {conversation_columns:?}"
+        );
 
         let node_foreign_keys: i64 =
             sqlx::query_scalar("SELECT count(*) FROM pragma_foreign_key_list('nodes')")
@@ -1166,5 +1178,50 @@ fn corrupt_full_tree_fails_closed_instead_of_returning_disconnected_nodes() {
             service.load_conversation_tree("conversation-a").await,
             Err(PersistenceError::TreeIntegrity { .. })
         ));
+    });
+}
+
+#[test]
+fn system_prompt_round_trips_clears_to_null_and_rejects_archived_writes() {
+    run_async(async {
+        let pool = migrated_pool().await;
+        let service = create_branch_fixture(&pool).await;
+
+        let stored = service
+            .set_system_prompt("conversation-a", Some("  Be concise  ".to_owned()))
+            .await
+            .expect("writable conversation accepts a system prompt");
+        assert_eq!(stored.system_prompt.as_deref(), Some("  Be concise  "));
+        let tree = service
+            .load_conversation_tree("conversation-a")
+            .await
+            .expect("tree remains readable");
+        assert_eq!(
+            tree.conversation.system_prompt.as_deref(),
+            Some("  Be concise  ")
+        );
+
+        let cleared = service
+            .set_system_prompt("conversation-a", None)
+            .await
+            .expect("clearing the override writes NULL");
+        assert_eq!(cleared.system_prompt, None);
+
+        service
+            .archive_conversation("conversation-a")
+            .await
+            .expect("archive succeeds");
+        assert!(matches!(
+            service
+                .set_system_prompt("conversation-a", Some("after archive".to_owned()))
+                .await,
+            Err(PersistenceError::InvalidInput { operation, .. })
+                if operation == "archived_conversation_write"
+        ));
+        let archived = service
+            .load_conversation_tree("conversation-a")
+            .await
+            .expect("archived tree remains readable");
+        assert_eq!(archived.conversation.system_prompt, None);
     });
 }

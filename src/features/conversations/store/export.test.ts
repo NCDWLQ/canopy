@@ -113,6 +113,8 @@ function createExportClient() {
     writeExportFile: vi
       .fn<ConversationClient["writeExportFile"]>()
       .mockResolvedValue({ bytesWritten: 96 }),
+    setConversationSystemPrompt:
+      vi.fn<ConversationClient["setConversationSystemPrompt"]>(),
   } satisfies ConversationClient
 }
 
@@ -125,8 +127,10 @@ function resetStore() {
     providerId: null,
     model: null,
     reasoningEffort: null,
+    systemPrompt: null,
     draftBinding: null,
     draftReasoningEffort: null,
+    draftSystemPrompt: null,
     rootNodeId: null,
     activeNodeId: null,
     nodesById: {},

@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 58
+- **Total Sessions**: 59
 - **Last Active**: 2026-08-30
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1316 | Active |
+| `journal-1.md` | ~1338 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 59 | 2026-08-30 | 系统提示词功能 | `7e8f12f`, `7c3cef6` | `feat/system-prompt` |
 | 58 | 2026-08-30 | Memoize message nodes — streaming rerender verification | `23e1071` | `perf/react-render-hot-path` |
 | 57 | 2026-08-30 | React render hot-path performance | `57c3bc4` | `perf/react-render-hot-path` |
 | 56 | 2026-08-30 | 线性视图分支切换器 | `1eb57f4`, `bca0dd8` | `main` |

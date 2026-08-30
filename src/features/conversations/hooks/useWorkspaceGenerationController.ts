@@ -413,6 +413,7 @@ export function useWorkspaceGenerationController({
       const prior = useConversationStore.getState()
       let binding = prior.draftBinding
       const reasoningEffort = prior.draftReasoningEffort
+      const draftSystemPrompt = prior.draftSystemPrompt
       if (binding === null) {
         const providers = useProviderStore.getState()
         if (providers.activeProviderId !== null) {
@@ -460,6 +461,15 @@ export function useWorkspaceGenerationController({
             binding,
             reasoningEffort,
           })
+        if (useConversationStore.getState().error !== null) {
+          return false
+        }
+      }
+
+      if (draftSystemPrompt !== null) {
+        await useConversationStore
+          .getState()
+          .setConversationSystemPrompt(conversationClient, draftSystemPrompt)
         if (useConversationStore.getState().error !== null) {
           return false
         }

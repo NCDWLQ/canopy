@@ -185,6 +185,7 @@ loadConversationTree(conversationId): Promise<ConversationTreeView>
 loadActivePath(conversationId, activeNodeId): Promise<ActivePathView>
 archiveConversation(conversationId): Promise<ConversationView>
 setConversationProvider(input): Promise<Pick<ConversationView, "id" | "providerId" | "model" | "reasoningEffort">>
+setConversationSystemPrompt(conversationId, systemPrompt): Promise<Pick<ConversationView, "id" | "systemPrompt">>
 searchConversations(query): Promise<readonly ConversationSearchResultView[]>
 writeExportFile({ path, content }): Promise<{ bytesWritten: number }>
 ```
@@ -192,7 +193,9 @@ writeExportFile({ path, content }): Promise<{ bytesWritten: number }>
 These map to the frozen snake-case commands `create_conversation`,
 `append_node`, `create_branch`, `edit_node_as_branch`,
 `list_conversations`, `load_conversation_tree`, `load_active_path`,
-`archive_conversation`, `set_conversation_provider`, and
+`archive_conversation`, `set_conversation_provider`,
+`set_conversation_system_prompt` (added 2026-08-30: nullable override;
+blank/whitespace = inherit global; summaries omit the field), and
 `search_conversations` (added 2026-08-23 with
 task 08-23-search: substring search over user/assistant content and titles;
 snippets are windowed SQL-side and the query is trimmed/≤200 chars on both
@@ -326,8 +329,8 @@ The generation-path freeze is still: no extra **generation** command and no
 terminal Channel event (profile CRUD plus `generate_from_active_path` and
 `cancel_generation`). Later additive provider-settings commands
 (`list_providers`, `save_provider`, `delete_provider`, `set_active_provider`,
-`set_auto_generate_title`, `set_title_model_binding`, and related model/key
-helpers) are allowed. Generation alone creates one `Channel<unknown>` and
+`set_auto_generate_title`, `set_title_model_binding`,
+`set_default_system_prompt`, and related model/key helpers) are allowed. Generation alone creates one `Channel<unknown>` and
 validates values before invoking `onEvent`. Title updates use a separate
 global event; see the auto-title scenario below.
 
@@ -451,26 +454,30 @@ Tauri event. Settings round-trip through invoke, not localStorage.
 listProviders(): Promise<{
   autoGenerateTitle: boolean
   titleModelBinding: { providerId: string; model: string } | null
+  defaultSystemPrompt: string | null
   /* plus providers / activeProviderId */
 }>
 setAutoGenerateTitle(enabled: boolean): Promise<boolean>
 setTitleModelBinding(
   binding: { providerId: string; model: string } | null,
 ): Promise<{ providerId: string; model: string } | null>
+setDefaultSystemPrompt(prompt: string | null): Promise<string | null>
 listenForConversationTitleUpdates(
   onUpdate: (update: { conversationId: string; title: string }) => void,
 ): Promise<UnlistenFn>
 ```
 
 Commands: `list_providers`, `set_auto_generate_title`,
-`set_title_model_binding`. Event name: `conversation://title-updated`.
+`set_title_model_binding`, `set_default_system_prompt`. Event name:
+`conversation://title-updated`.
 
 ### 3. Contracts
 
 - Every invoke still sends `{ request: <strict snake_case DTO> }`.
-- `list_providers` returns `auto_generate_title: boolean` and
-  `title_model_binding: { provider_id, model } | null`. Frontend must not
-  require extra commands to read the toggle after a successful list.
+- `list_providers` returns `auto_generate_title: boolean`,
+  `title_model_binding: { provider_id, model } | null`, and
+  `default_system_prompt: string | null`. Frontend must not require extra
+  commands to read those settings after a successful list.
 - `set_title_model_binding` wires follow-conversation as JSON `null`, not an
   omitted field or a sentinel string.
 - Event payload is snake_case `{ conversation_id, title }`. Decode in
@@ -526,6 +533,76 @@ listen(CONVERSATION_TITLE_UPDATED_EVENT, (event) => {
   if (update === null) return
   applyTitleUpdate(update)
 })
+```
+
+## Scenario: System Prompt Settings IPC
+
+### 1. Scope / Trigger
+
+Use this contract when changing `set_conversation_system_prompt`,
+`set_default_system_prompt`, `list_providers.default_system_prompt`, or
+`ConversationDto.system_prompt`. Owning files: `src/lib/tauri/{schemas,
+client,provider-schemas,provider-client}.ts` and the conversation /
+providers stores.
+
+### 2. Signatures
+
+```ts
+setConversationSystemPrompt(systemPrompt: string | null)
+  -> { id, systemPrompt }
+setDefaultSystemPrompt(prompt: string | null) -> string | null
+listProviders().defaultSystemPrompt -> string | null
+ConversationView.systemPrompt?: string | null
+```
+
+Wire: `system_prompt` on conversation DTOs; `prompt` on the global setter;
+`default_system_prompt` on `list_providers`.
+
+### 3. Contracts
+
+- Zod mirrors Rust: Unicode scalars, trim-to-empty becomes `null`, UTF-8
+  byte cap 1 MiB. History summaries omit `system_prompt`.
+- `null` on a conversation is inherit-global, not "explicitly unused".
+- Providers store hydrates `defaultSystemPrompt` from `list_providers`.
+- Conversation store hydrates `systemPrompt` from the loaded tree only.
+
+### 4. Validation & Error Matrix
+
+| Condition | Frontend result |
+|---|---|
+| Oversized / surrogate prompt | local `invalid_input`; no invoke |
+| Malformed success DTO | safe `internal`; no store write |
+| Archived conversation | store action no-ops; dialog read-only |
+| Save IPC failure | store records `error`; dialog stays open |
+
+### 5. Good / Base / Bad Cases
+
+- **Good**: list hydrates the global default; conversation override
+  round-trips; draft applies after create.
+- **Base**: both `null` → no system message on generate.
+- **Bad**: closing the dialog before the stored value matches; putting the
+  prompt on `ConversationSummaryView`.
+
+### 6. Tests Required
+
+- Schema / client fixtures for both setters and `list_providers`.
+- Store epoch guard and draft-then-apply controller test.
+- Dialog stays open on a rejected save.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+await setConversationSystemPrompt(client, draft)
+setOpen(false) // store swallowed the IPC error
+```
+
+#### Correct
+
+```ts
+await setConversationSystemPrompt(client, draft)
+if (useConversationStore.getState().systemPrompt === draft) setOpen(false)
 ```
 
 ## Forbidden Patterns

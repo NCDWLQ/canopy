@@ -12,6 +12,7 @@ use crate::llm::{
     OpenAiCompatibleClient, PromptMessage, Protocol, StreamingRequest, ValidatedEndpoint,
 };
 use crate::providers::{domain::validate_model, ProviderError, ProviderService};
+use crate::settings::SettingsService;
 
 use super::{GenerationError, GenerationLease, GenerationRuntime};
 
@@ -21,6 +22,7 @@ pub fn chat_prompt_from_path(
     path: &ValidatedPath,
     model: &str,
     reasoning_effort: Option<ReasoningEffort>,
+    system_prompt: Option<&str>,
 ) -> Result<ChatPrompt, GenerationError> {
     let model = match validate_model(model) {
         Ok(model) => model,
@@ -36,32 +38,36 @@ pub fn chat_prompt_from_path(
             "terminal_role_must_be_user",
         ));
     }
-    let messages = nodes
-        .iter()
-        .map(|node| {
-            let role = match node.role {
-                Role::System => MessageRole::System,
-                Role::User => MessageRole::User,
-                Role::Assistant => MessageRole::Assistant,
-                Role::Tool => {
-                    return Err(GenerationError::invalid_input(
-                        "active_node_id",
-                        "tool_role_unsupported",
-                    ))
-                }
-            };
-            if node.content.trim().is_empty() {
+    let mut messages = Vec::new();
+    if let Some(prompt) = system_prompt.filter(|value| !value.is_empty()) {
+        messages.push(PromptMessage {
+            role: MessageRole::System,
+            content: prompt.to_owned(),
+        });
+    }
+    for node in nodes {
+        let role = match node.role {
+            Role::System => MessageRole::System,
+            Role::User => MessageRole::User,
+            Role::Assistant => MessageRole::Assistant,
+            Role::Tool => {
                 return Err(GenerationError::invalid_input(
                     "active_node_id",
-                    "blank_content",
-                ));
+                    "tool_role_unsupported",
+                ))
             }
-            Ok(PromptMessage {
-                role,
-                content: node.content.clone(),
-            })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+        };
+        if node.content.trim().is_empty() {
+            return Err(GenerationError::invalid_input(
+                "active_node_id",
+                "blank_content",
+            ));
+        }
+        messages.push(PromptMessage {
+            role,
+            content: node.content.clone(),
+        });
+    }
     Ok(ChatPrompt {
         model,
         messages,
@@ -264,7 +270,7 @@ pub(crate) async fn prepare_generation(
     active_node_id: String,
     generation_id: String,
 ) -> Result<PreparedGeneration, GenerationError> {
-    let persistence = ConversationPersistenceService::new(pool);
+    let persistence = ConversationPersistenceService::new(pool.clone());
     let (conversation, path) = persistence
         .load_generation_context(&conversation_id, &active_node_id)
         .await?;
@@ -279,7 +285,24 @@ pub(crate) async fn prepare_generation(
         None => provider.model.clone(),
     };
     let endpoint = ValidatedEndpoint::parse(&provider.base_endpoint, provider.protocol)?;
-    let prompt = chat_prompt_from_path(&path, &model, conversation.reasoning_effort)?;
+    let effective_system_prompt = match conversation
+        .system_prompt
+        .as_deref()
+        .filter(|value| !value.is_empty())
+    {
+        Some(prompt) => Some(prompt.to_owned()),
+        None => {
+            SettingsService::new(pool.clone())
+                .get_default_system_prompt()
+                .await?
+        }
+    };
+    let prompt = chat_prompt_from_path(
+        &path,
+        &model,
+        conversation.reasoning_effort,
+        effective_system_prompt.as_deref(),
+    )?;
     let client = OpenAiCompatibleClient::new()?;
     let lease = runtime.reserve(conversation_id.clone(), generation_id)?;
 
@@ -311,8 +334,9 @@ mod tests {
         },
         error::{CommandError, CommandErrorCode},
         infra::database::MIGRATION_CATALOG,
-        llm::{LlmError, Protocol},
+        llm::{LlmError, MessageRole, Protocol},
         providers::{NativeCredentialStore, ProviderService},
+        settings::SettingsService,
     };
 
     use super::{
@@ -837,7 +861,7 @@ mod tests {
     fn chat_prompt_from_path_rejects_tool_and_non_user_terminals() {
         let tool_path = ValidatedPath::new(vec![path_node("tool", None, Role::Tool, "tool")]);
         assert!(matches!(
-            chat_prompt_from_path(&tool_path, "model", None),
+            chat_prompt_from_path(&tool_path, "model", None, None),
             Err(GenerationError::InvalidInput {
                 field: "active_node_id",
                 reason: "terminal_role_must_be_user"
@@ -850,7 +874,7 @@ mod tests {
             "answer",
         )]);
         assert!(matches!(
-            chat_prompt_from_path(&assistant_path, "model", None),
+            chat_prompt_from_path(&assistant_path, "model", None, None),
             Err(GenerationError::InvalidInput {
                 field: "active_node_id",
                 reason: "terminal_role_must_be_user"
@@ -858,7 +882,7 @@ mod tests {
         ));
         let blank_path = ValidatedPath::new(vec![path_node("user", None, Role::User, "  \n\t ")]);
         assert!(matches!(
-            chat_prompt_from_path(&blank_path, "model", None),
+            chat_prompt_from_path(&blank_path, "model", None, None),
             Err(GenerationError::InvalidInput {
                 field: "active_node_id",
                 reason: "blank_content"
@@ -866,7 +890,7 @@ mod tests {
         ));
         let user_path = ValidatedPath::new(vec![path_node("user", None, Role::User, "question")]);
         assert!(matches!(
-            chat_prompt_from_path(&user_path, &"m".repeat(201), None),
+            chat_prompt_from_path(&user_path, &"m".repeat(201), None, None),
             Err(GenerationError::InvalidInput {
                 field: "model",
                 reason: "too_long"
@@ -877,11 +901,108 @@ mod tests {
             path_node("user", Some("tool"), Role::User, "question"),
         ]);
         assert!(matches!(
-            chat_prompt_from_path(&tool_then_user, "model", None),
+            chat_prompt_from_path(&tool_then_user, "model", None, None),
             Err(GenerationError::InvalidInput {
                 field: "active_node_id",
                 reason: "tool_role_unsupported"
             })
         ));
+    }
+
+    #[test]
+    fn chat_prompt_from_path_prepends_system_prompt_without_changing_path() {
+        let user_path = ValidatedPath::new(vec![path_node("user", None, Role::User, "question")]);
+        let without = chat_prompt_from_path(&user_path, "model", None, None).unwrap();
+        assert_eq!(without.messages.len(), 1);
+        assert_eq!(without.messages[0].role, MessageRole::User);
+        assert_eq!(without.messages[0].content, "question");
+
+        let with = chat_prompt_from_path(&user_path, "model", None, Some("Be concise")).unwrap();
+        assert_eq!(with.messages.len(), 2);
+        assert_eq!(with.messages[0].role, MessageRole::System);
+        assert_eq!(with.messages[0].content, "Be concise");
+        assert_eq!(with.messages[1].role, MessageRole::User);
+        assert_eq!(with.messages[1].content, "question");
+    }
+
+    #[test]
+    fn prepare_generation_resolves_system_prompt_override_then_global_then_none() {
+        test_runtime().block_on(async {
+            let (pool, persistence) = seeded_persistence().await;
+            insert_provider(&pool, "active", Protocol::OpenAiCompatible, "active-model").await;
+            sqlx::query(
+                "INSERT INTO app_settings (key, value) VALUES ('active_provider_id', 'active')",
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            let service = ProviderService::new(pool.clone(), Arc::new(NativeCredentialStore));
+            let settings = SettingsService::new(pool.clone());
+            let runtime = GenerationRuntime::default();
+
+            let unset = prepare_generation(
+                pool.clone(),
+                &service,
+                &runtime,
+                "conversation".to_owned(),
+                "user".to_owned(),
+                GENERATION_A.to_owned(),
+            )
+            .await
+            .unwrap();
+            assert_eq!(unset.prompt.messages.len(), 1);
+            assert_eq!(unset.prompt.messages[0].role, MessageRole::User);
+            drop(unset);
+
+            settings
+                .set_default_system_prompt(Some("Global default".to_owned()))
+                .await
+                .unwrap();
+            let from_global = prepare_generation(
+                pool.clone(),
+                &service,
+                &runtime,
+                "conversation".to_owned(),
+                "user".to_owned(),
+                GENERATION_B.to_owned(),
+            )
+            .await
+            .unwrap();
+            assert_eq!(from_global.prompt.messages[0].role, MessageRole::System);
+            assert_eq!(from_global.prompt.messages[0].content, "Global default");
+            drop(from_global);
+
+            persistence
+                .set_system_prompt("conversation", Some("Conversation override".to_owned()))
+                .await
+                .unwrap();
+            let from_override = prepare_generation(
+                pool.clone(),
+                &service,
+                &runtime,
+                "conversation".to_owned(),
+                "user".to_owned(),
+                GENERATION_A.to_owned(),
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                from_override.prompt.messages[0].content,
+                "Conversation override"
+            );
+
+            settings
+                .set_default_system_prompt(Some("Changed global".to_owned()))
+                .await
+                .unwrap();
+            persistence
+                .set_system_prompt("conversation", Some("Changed override".to_owned()))
+                .await
+                .unwrap();
+            assert_eq!(
+                from_override.prompt.messages[0].content,
+                "Conversation override"
+            );
+        });
     }
 }

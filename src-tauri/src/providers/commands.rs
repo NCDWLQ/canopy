@@ -37,6 +37,7 @@ pub const PROVIDER_COMMAND_NAMES: &[&str] = &[
     "set_title_model_binding",
     "set_language",
     "set_theme",
+    "set_default_system_prompt",
     "reveal_provider_api_key",
     "list_provider_models",
     "generate_from_active_path",
@@ -168,6 +169,7 @@ pub struct ListProvidersResult {
     pub title_model_binding: Option<TitleModelBindingDto>,
     pub language: String,
     pub theme: String,
+    pub default_system_prompt: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -261,6 +263,10 @@ pub async fn list_providers(
         .map_err(CommandError::from)?;
     let language = settings.get_language().await.map_err(CommandError::from)?;
     let theme = settings.get_theme().await.map_err(CommandError::from)?;
+    let default_system_prompt = settings
+        .get_default_system_prompt()
+        .await
+        .map_err(CommandError::from)?;
     Ok(ListProvidersResult {
         providers: providers.into_iter().map(ProviderDto::from).collect(),
         active_provider_id,
@@ -268,6 +274,7 @@ pub async fn list_providers(
         title_model_binding: title_model_binding.map(Into::into),
         language: language.as_setting_text().to_owned(),
         theme: theme.as_setting_text().to_owned(),
+        default_system_prompt,
     })
 }
 

@@ -274,6 +274,22 @@ export const zhCN = {
     "首轮对话后，使用下方配置的模型自动生成标题",
   "settings.conversation.titleModel": "标题模型",
   "settings.conversation.followSession": "跟随对话",
+  "settings.conversation.defaultSystemPrompt": "默认系统提示词",
+  "settings.conversation.defaultSystemPromptDescription":
+    "对话未单独设置时，默认使用此系统提示词",
+  "settings.conversation.defaultSystemPromptPlaceholder": "留空表示不设置",
+  "settings.conversation.saveDefaultSystemPrompt": "保存",
+
+  // ConversationSettingsDialog.tsx
+  "conversation.settingsDialog.title": "对话设置",
+  "conversation.settingsDialog.systemPrompt": "系统提示词",
+  "conversation.settingsDialog.systemPromptDescription":
+    "仅对后续消息生效，不影响历史记录",
+  "conversation.settingsDialog.followGlobal": "跟随全局默认",
+  "conversation.settingsDialog.globalPreview": "当前全局默认",
+  "conversation.settingsDialog.restoreFollowGlobal": "恢复全局默认",
+  "conversation.settingsDialog.save": "保存",
+  "conversation.workspace.conversationSettings": "对话设置",
 
   // ProviderSettingsPanel.tsx + ProviderSettingsList.tsx
   "settings.providers.crumbEdit": "编辑",

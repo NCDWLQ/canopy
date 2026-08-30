@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "迁移 0008、conversations 表列、repository/service 事务模式、released-database 升级门禁"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "settings/conversations/generation 模块所有权边界：generation 不拥有 SQL，settings 拥有 app_settings key"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Zustand 投影、草稿态、epoch 守卫与持久化 action 模式（setConversationProvider 为模板）"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "IPC 双向 Zod 校验与 DTO 映射契约"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "新增 UI 文案需同步 en/zh-CN typed dictionary"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "设置面板 Field 模式与新对话框组件的 shadcn 组合约定"}

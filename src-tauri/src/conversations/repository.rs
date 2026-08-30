@@ -66,7 +66,8 @@ impl ConversationRepository {
         conversation_id: &str,
     ) -> Result<Option<Conversation>, PersistenceError> {
         let row = sqlx::query(
-            "SELECT id, title, root_node_id, is_archived, provider_id, model, reasoning_effort \
+            "SELECT id, title, root_node_id, is_archived, provider_id, model, reasoning_effort, \
+                    system_prompt \
              FROM conversations WHERE id = ?1",
         )
         .bind(conversation_id)
@@ -460,6 +461,26 @@ impl ConversationRepository {
                 entity: "conversation",
             })
     }
+
+    pub(crate) async fn write_system_prompt(
+        connection: &mut SqliteConnection,
+        conversation_id: &str,
+        system_prompt: Option<&str>,
+    ) -> Result<Conversation, PersistenceError> {
+        sqlx::query("UPDATE conversations SET system_prompt = ?1 WHERE id = ?2")
+            .bind(system_prompt)
+            .bind(conversation_id)
+            .execute(&mut *connection)
+            .await
+            .map_err(|error| {
+                PersistenceError::from_write("set_conversation_system_prompt", error)
+            })?;
+        Self::load_conversation(connection, conversation_id)
+            .await?
+            .ok_or(PersistenceError::NotFound {
+                entity: "conversation",
+            })
+    }
 }
 
 fn canonical_json(value: &Value) -> Result<String, PersistenceError> {
@@ -519,6 +540,7 @@ fn decode_conversation(row: SqliteRow) -> Result<Conversation, PersistenceError>
         provider_id: row.try_get("provider_id")?,
         model: row.try_get("model")?,
         reasoning_effort: decode_reasoning_effort(&row)?,
+        system_prompt: row.try_get("system_prompt")?,
     })
 }
 

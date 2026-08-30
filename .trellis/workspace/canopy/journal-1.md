@@ -1314,3 +1314,25 @@ Completed step 3 of render hot-path work on perf/react-render-hot-path: added me
 ### Status
 
 [OK] **Completed**
+
+
+## Session 59: 系统提示词功能
+
+**Date**: 2026-08-30
+**Task**: 系统提示词功能
+**Branch**: `feat/system-prompt`
+
+### Summary
+
+在 feat/system-prompt 落地全局默认 + 每对话覆盖的系统提示词：迁移 0008、生成时按对话>全局>无注入、设置面板与对话设置对话框、IPC/store/i18n 全链路；spec 记录契约。全景不体现、无预置提示词。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7e8f12f` | (see git log) |
+| `7c3cef6` | (see git log) |
+
+### Status
+
+[OK] **Completed**

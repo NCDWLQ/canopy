@@ -16,7 +16,7 @@ use tokio_util::sync::CancellationToken;
 use support::{migrated_pool, run_async, sse, TestServer};
 
 fn chat_prompt(path: &ValidatedPath, model: &str) -> canopy_lib::llm::ChatPrompt {
-    chat_prompt_from_path(path, model, None).unwrap()
+    chat_prompt_from_path(path, model, None, None).unwrap()
 }
 
 fn node(id: &str, parent_id: Option<&str>, role: Role, content: &str, created_at: i64) -> NewNode {
@@ -130,6 +130,59 @@ fn local_sse_stream_preserves_deltas_request_path_and_header_boundary() {
             json!([
                 {"role": "system", "content": "system"},
                 {"role": "assistant", "content": "shared"},
+                {"role": "user", "content": "SELECTED_SENTINEL"}
+            ])
+        );
+    });
+}
+
+#[test]
+fn injected_system_prompt_is_prepended_on_a_user_root_path() {
+    run_async(async {
+        let pool = migrated_pool().await;
+        let service = ConversationPersistenceService::new(pool);
+        service
+            .create_conversation(
+                NewConversation {
+                    id: "http-conversation".to_owned(),
+                    title: "HTTP".to_owned(),
+                    root_node_id: "root".to_owned(),
+                },
+                node("root", None, Role::User, "SELECTED_SENTINEL", 1),
+            )
+            .await
+            .unwrap();
+        let path = service
+            .load_generation_context("http-conversation", "root")
+            .await
+            .unwrap()
+            .1;
+        let server = TestServer::spawn(
+            "200 OK",
+            &[("Content-Type", "text/event-stream")],
+            vec![b"data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n".to_vec()],
+        );
+        let endpoint =
+            ValidatedEndpoint::parse(&server.endpoint, Protocol::OpenAiCompatible).unwrap();
+        let client = OpenAiCompatibleClient::new().unwrap();
+        client
+            .stream(
+                &endpoint,
+                &chat_prompt_from_path(&path, "fixture-model", None, Some("INJECTED_SYSTEM"))
+                    .unwrap(),
+                None,
+                &CancellationToken::new(),
+                |_| Ok(()),
+            )
+            .await
+            .unwrap();
+        let request = server.finish();
+        let body = request.split("\r\n\r\n").nth(1).unwrap();
+        let value: serde_json::Value = serde_json::from_str(body).unwrap();
+        assert_eq!(
+            value["messages"],
+            json!([
+                {"role": "system", "content": "INJECTED_SYSTEM"},
                 {"role": "user", "content": "SELECTED_SENTINEL"}
             ])
         );

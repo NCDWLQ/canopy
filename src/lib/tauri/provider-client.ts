@@ -44,6 +44,8 @@ import {
   setAutoGenerateTitleResultSchema,
   setLanguageRequestSchema,
   setLanguageResultSchema,
+  setDefaultSystemPromptRequestSchema,
+  setDefaultSystemPromptResultSchema,
   setThemeRequestSchema,
   setThemeResultSchema,
   setTitleModelBindingRequestSchema,
@@ -64,6 +66,7 @@ export const PROVIDER_COMMANDS = {
   setTitleModelBinding: "set_title_model_binding",
   setLanguage: "set_language",
   setTheme: "set_theme",
+  setDefaultSystemPrompt: "set_default_system_prompt",
   revealProviderApiKey: "reveal_provider_api_key",
   listProviderModels: "list_provider_models",
   generateFromActivePath: "generate_from_active_path",
@@ -219,6 +222,19 @@ export function createProviderClient(
         { theme },
         setThemeResultSchema,
         (value) => value.theme,
+      )
+    },
+
+    async setDefaultSystemPrompt(
+      prompt: string | null,
+    ): Promise<string | null> {
+      return providerCall(
+        transport,
+        PROVIDER_COMMANDS.setDefaultSystemPrompt,
+        setDefaultSystemPromptRequestSchema,
+        { prompt },
+        setDefaultSystemPromptResultSchema,
+        (value) => value.prompt,
       )
     },
 
@@ -503,6 +519,7 @@ function mapListProviders(dto: ListProvidersResultDto): ListProvidersView {
           },
     language: dto.language,
     theme: dto.theme,
+    defaultSystemPrompt: dto.default_system_prompt,
   }
 }
 

@@ -297,6 +297,23 @@ impl ConversationPersistenceService {
         Ok(conversation)
     }
 
+    pub async fn set_system_prompt(
+        &self,
+        conversation_id: &str,
+        system_prompt: Option<String>,
+    ) -> Result<Conversation, PersistenceError> {
+        let mut transaction = self.pool.begin().await?;
+        Self::require_writable_conversation(&mut transaction, conversation_id).await?;
+        let conversation = ConversationRepository::write_system_prompt(
+            &mut transaction,
+            conversation_id,
+            system_prompt.as_deref(),
+        )
+        .await?;
+        transaction.commit().await?;
+        Ok(conversation)
+    }
+
     /// Persistence-only write of binding columns. Caller validates provider
     /// existence in the same transaction when the write is part of a
     /// generation-owned binding command.

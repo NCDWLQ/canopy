@@ -17,8 +17,9 @@ Ownership is split:
 - `src-tauri/src/llm/` — `Protocol`, `ValidatedEndpoint`, hardened HTTP,
   protocol adapters, model discovery (no SQLite, Tauri, or conversation types)
 - `src-tauri/src/generation/` — `GenerationRuntime`, prepare/run/finalize,
-  `set_conversation_provider`, auto-title
-- `src-tauri/src/settings/` — typed auto-title / language / theme keys
+  `set_conversation_provider`, system-prompt injection, auto-title
+- `src-tauri/src/settings/` — typed auto-title / language / theme /
+  `default_system_prompt` keys
 - `conversations::service` — validated path load and assistant persist
 - migrations `0004_provider_profile.sql` through
   `0007_conversation_provider_binding_integrity.sql`
@@ -30,7 +31,8 @@ above; names and `{ request }` wrappers do not move:
 
 ```text
 list_providers({}) -> { providers, active_provider_id, auto_generate_title,
-                        title_model_binding, language, theme }
+                        title_model_binding, language, theme,
+                        default_system_prompt }
 save_provider(...) -> ProviderDto
 delete_provider({ provider_id }) -> { deleted }
 set_active_provider({ provider_id }) -> { provider_id }
@@ -56,7 +58,8 @@ failed { generation_id, stage: generation|persistence, error }
 The request and runtime boundary is deliberately closed:
 
 ```rust
-chat_prompt_from_path(&ValidatedPath) -> Result<ChatPrompt, GenerationError>
+chat_prompt_from_path(&ValidatedPath, model, effort, system_prompt)
+  -> Result<ChatPrompt, GenerationError>
 ValidatedEndpoint::parse(&str, Protocol) -> Result<ValidatedEndpoint, LlmError>
 GenerationRuntime::reserve(conversation_id, generation_id) -> GenerationLease
 GenerationRuntime::cancel(generation_id) -> Result<bool, GenerationError>
@@ -363,4 +366,89 @@ format!("<user>\n{user}\n</user>") // user may contain </conversation>
 tokio::spawn(generate_conversation_title(...)); // no GenerationRuntime
 strip_wrapping_quotes(title); // paired wrappers only
 escape_markup(&truncate(user)) // then interpolate
+```
+
+## Scenario: System Prompt Injection At Prepare
+
+### 1. Scope / Trigger
+
+Use this contract when changing conversation/global system-prompt storage,
+`chat_prompt_from_path`, or `prepare_generation` prompt assembly. Owning
+files: `conversations::{repository,service,commands}` (override column),
+`settings::{repository,service,commands}` (`default_system_prompt` key),
+`generation::service` (resolve + prepend). Auto-title
+(`title_prompt.rs`) does not consume the user prompt.
+
+### 2. Signatures
+
+```text
+set_conversation_system_prompt({ conversation_id, system_prompt })
+  -> { conversation_id, system_prompt }
+set_default_system_prompt({ prompt }) -> { prompt }
+list_providers({}).default_system_prompt -> string | null
+chat_prompt_from_path(path, model, effort, system_prompt)
+  -> ChatPrompt
+```
+
+Both write commands trim Unicode whitespace, treat blank as `null` (inherit /
+no default), and reject UTF-8 payloads over 1 MiB.
+
+### 3. Contracts
+
+- Effective prompt at prepare: non-empty `conversation.system_prompt`, else
+  `SettingsService::get_default_system_prompt`, else none.
+- Non-empty effective prompt is prepended as the first `PromptMessage`
+  with `MessageRole::System` before path nodes. Path system nodes, if any,
+  stay after it. Empty / unset leaves the request body unchanged.
+- The resolved prompt is part of the prepare snapshot. Later setting edits
+  must not change an in-flight `PreparedGeneration`.
+- OpenAI-compatible adapters send `role: "system"`; Anthropic joins system
+  messages into the top-level `system` field.
+- Product copy uses 对话. Panorama and Markdown export do not surface the
+  prompt. There is no built-in preset.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+|---|---|
+| Conversation override set | HTTP body starts with that system message |
+| Override `NULL`, global set | HTTP body uses the global default |
+| Both unset / blank | No extra system message vs pre-feature requests |
+| Archived conversation write | `invalid_input` (`archived_conversation_write`) |
+| Prompt > 1 MiB | `invalid_input` |
+| In-flight settings change | Prepared prompt unchanged |
+
+### 5. Good / Base / Bad Cases
+
+- **Good**: override beats global; clear override inherits global; both
+  protocols carry the injected system text.
+- **Base**: no prompt configured → request body identical to the previous
+  user-root path.
+- **Bad**: persisting the prompt as a mutable system node; reading the
+  setting again after `run` starts; feeding the user prompt into auto-title.
+
+### 6. Tests Required
+
+- `chat_prompt_from_path` prepends without rewriting path nodes.
+- `prepare_generation` resolve order plus snapshot isolation.
+- `provider_http` / `anthropic_http` assert the real request body.
+- Persistence: round-trip, clear-to-null, archived reject, fixture upgrade.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```rust
+// mutate an immutable system root, or re-read settings during run()
+persistence.update_node_content(system_root_id, prompt)?;
+let prompt = settings.get_default_system_prompt().await?; // after prepare
+```
+
+#### Correct
+
+```rust
+let effective = conversation.system_prompt
+    .filter(|value| !value.is_empty())
+    .or(settings.get_default_system_prompt().await?);
+chat_prompt_from_path(&path, &model, effort, effective.as_deref())?;
 ```

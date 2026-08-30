@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "跨 5 层特性的数据流/契约核对清单，含 app_settings key 新增触发条件"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "校验迁移前向兼容、fixture ledger、触发器与表结构断言未被破坏"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "后端测试策略与 fmt/clippy 门禁"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "核对 store action 的 epoch 守卫、草稿重置与后台生成语义未被破坏"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "前端代码标准与禁用模式检查"}
