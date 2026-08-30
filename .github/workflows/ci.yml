@@ -107,6 +107,7 @@ jobs:
 
   tauri-smoke:
     name: Tauri smoke build
+    if: github.event_name == 'push'
     runs-on: ubuntu-22.04
     timeout-minutes: 25
     needs:
