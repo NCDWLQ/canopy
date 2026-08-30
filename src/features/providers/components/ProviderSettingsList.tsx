@@ -2,6 +2,7 @@ import * as React from "react"
 import { ChevronDown, EllipsisVertical, Plus, Star, Trash2 } from "lucide-react"
 
 import { formatProviderModelsSummary } from "./formatProviderModelsSummary"
+import { ProviderPresetIcon } from "./ProviderPresetIcon"
 import { useProviderStore } from "../store"
 import type { ProviderView } from "../types"
 import {
@@ -91,6 +92,7 @@ export function ProviderSettingsList({
                 <DropdownMenuItem
                   onSelect={() => onEdit(null, CUSTOM_PRESET_ID)}
                 >
+                  <ProviderPresetIcon presetId={CUSTOM_PRESET_ID} />
                   {t("settings.providers.presetCustom")}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
@@ -103,6 +105,7 @@ export function ProviderSettingsList({
                       key={preset.id}
                       onSelect={() => onEdit(null, preset.id)}
                     >
+                      <ProviderPresetIcon presetId={preset.id} />
                       {t(preset.nameKey)}
                     </DropdownMenuItem>
                   ))}

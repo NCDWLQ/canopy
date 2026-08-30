@@ -2,6 +2,7 @@ import * as React from "react"
 import { Eye, EyeOff, Plus, X } from "lucide-react"
 
 import { resolveApiKeyAction } from "./apiKeyAction"
+import { ProviderPresetIcon } from "./ProviderPresetIcon"
 import { useProviderStore } from "../store"
 import type { ModelSummaryView, ProviderProtocol, ProviderView } from "../types"
 import {
@@ -34,6 +35,8 @@ import {
   SelectContent,
   SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
@@ -366,10 +369,18 @@ export function ProviderSettingsEditor({
                   <SelectContent position="popper">
                     <SelectGroup>
                       <SelectItem value={CUSTOM_PRESET_ID}>
+                        <ProviderPresetIcon presetId={CUSTOM_PRESET_ID} />
                         {t("settings.providers.presetCustom")}
                       </SelectItem>
+                    </SelectGroup>
+                    <SelectSeparator />
+                    <SelectGroup>
+                      <SelectLabel>
+                        {t("settings.providers.presetMenuLabel")}
+                      </SelectLabel>
                       {PROVIDER_PRESETS.map((preset) => (
                         <SelectItem key={preset.id} value={preset.id}>
+                          <ProviderPresetIcon presetId={preset.id} />
                           {t(preset.nameKey)}
                         </SelectItem>
                       ))}
