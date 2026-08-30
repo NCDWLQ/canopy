@@ -1,3 +1,5 @@
+import { Monitor, Moon, Sun, type LucideIcon } from "lucide-react"
+
 import { useProviderStore } from "@/features/providers/store"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
@@ -38,10 +40,15 @@ const THEME_OPTIONS: readonly {
     | "settings.appearance.themeSystem"
     | "settings.appearance.themeLight"
     | "settings.appearance.themeDark"
+  icon: LucideIcon
 }[] = [
-  { value: "system", labelKey: "settings.appearance.themeSystem" },
-  { value: "light", labelKey: "settings.appearance.themeLight" },
-  { value: "dark", labelKey: "settings.appearance.themeDark" },
+  {
+    value: "system",
+    labelKey: "settings.appearance.themeSystem",
+    icon: Monitor,
+  },
+  { value: "light", labelKey: "settings.appearance.themeLight", icon: Sun },
+  { value: "dark", labelKey: "settings.appearance.themeDark", icon: Moon },
 ]
 
 export function AppearanceSettingsPanel({
@@ -109,9 +116,10 @@ export function AppearanceSettingsPanel({
                   </SelectTrigger>
                   <SelectContent position="popper" align="end">
                     <SelectGroup>
-                      {THEME_OPTIONS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {t(option.labelKey)}
+                      {THEME_OPTIONS.map(({ value, labelKey, icon: Icon }) => (
+                        <SelectItem key={value} value={value}>
+                          <Icon aria-hidden className="text-muted-foreground" />
+                          {t(labelKey)}
                         </SelectItem>
                       ))}
                     </SelectGroup>
