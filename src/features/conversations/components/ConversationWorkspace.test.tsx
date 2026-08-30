@@ -2361,6 +2361,7 @@ describe("ConversationWorkspace", () => {
     expect(screen.getByRole("dialog")).toHaveAccessibleName("设置")
     await user.click(screen.getByRole("button", { name: "模型提供商" }))
     await user.click(screen.getByRole("button", { name: "新建" }))
+    await user.click(screen.getByRole("menuitem", { name: "自定义" }))
 
     await user.type(screen.getByLabelText("名称"), "Fixture provider")
     await user.type(

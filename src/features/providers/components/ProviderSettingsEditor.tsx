@@ -4,6 +4,13 @@ import { Eye, EyeOff, Plus, X } from "lucide-react"
 import { resolveApiKeyAction } from "./apiKeyAction"
 import { useProviderStore } from "../store"
 import type { ModelSummaryView, ProviderProtocol, ProviderView } from "../types"
+import {
+  CUSTOM_PRESET_ID,
+  findProviderPreset,
+  isProviderPresetId,
+  PROVIDER_PRESETS,
+  type ProviderPresetSelection,
+} from "../presets"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/reui/badge"
 import { Button } from "@/components/ui/button"
@@ -56,6 +63,7 @@ export type ProviderSettingsEditorProps = {
   client: ProviderClient
   readOnly: boolean
   providerId: string | null
+  initialPresetId?: ProviderPresetSelection
   onBack: () => void
   onSaved: (provider: ProviderView) => void
   onDetailCrumbChange: (crumb: ProviderDetailCrumb) => void
@@ -82,8 +90,24 @@ function draftFromProvider(provider: ProviderView): ProviderDraft {
   }
 }
 
-function createInitialDraft(providerId: string | null): ProviderDraft {
-  if (providerId === null) return emptyDraft()
+function createInitialDraft(
+  providerId: string | null,
+  initialPresetId: ProviderPresetSelection,
+  presetName: string,
+): ProviderDraft {
+  if (providerId === null) {
+    if (initialPresetId === CUSTOM_PRESET_ID) return emptyDraft()
+    const preset = findProviderPreset(initialPresetId)
+    if (preset === undefined) return emptyDraft()
+    return {
+      name: presetName,
+      protocol: preset.protocol,
+      baseEndpoint: preset.baseEndpoint,
+      model: "",
+      models: [],
+      hasApiKey: false,
+    }
+  }
   const provider = useProviderStore
     .getState()
     .providers.find((item) => item.id === providerId)
@@ -94,6 +118,7 @@ export function ProviderSettingsEditor({
   client,
   readOnly,
   providerId,
+  initialPresetId = CUSTOM_PRESET_ID,
   onBack,
   onSaved,
   onDetailCrumbChange,
@@ -107,9 +132,17 @@ export function ProviderSettingsEditor({
   const saveProvider = useProviderStore((state) => state.saveProvider)
 
   const mutationDisabled = readOnly || phase === "loading"
+  const isNewProvider = providerId === null
+  let initialPresetName = ""
+  if (initialPresetId !== CUSTOM_PRESET_ID) {
+    const preset = findProviderPreset(initialPresetId)
+    if (preset !== undefined) initialPresetName = t(preset.nameKey)
+  }
 
+  const [selectedPresetId, setSelectedPresetId] =
+    React.useState<ProviderPresetSelection>(initialPresetId)
   const [draft, setDraft] = React.useState<ProviderDraft>(() =>
-    createInitialDraft(providerId),
+    createInitialDraft(providerId, initialPresetId, initialPresetName),
   )
   const [apiKey, setApiKey] = React.useState("")
   const [savedApiKey, setSavedApiKey] = React.useState<string | null>(null)
@@ -162,6 +195,31 @@ export function ProviderSettingsEditor({
     key: K,
     value: ProviderDraft[K],
   ) => setDraft((current) => ({ ...current, [key]: value }))
+
+  const applyPresetSelection = (presetId: ProviderPresetSelection) => {
+    setSelectedPresetId(presetId)
+    if (presetId === CUSTOM_PRESET_ID) {
+      setDraft((current) => ({
+        ...emptyDraft(),
+        hasApiKey: current.hasApiKey,
+      }))
+      setModels([])
+      setModelsError(null)
+      return
+    }
+    const preset = findProviderPreset(presetId)
+    if (preset === undefined) return
+    setDraft((current) => ({
+      ...current,
+      name: t(preset.nameKey),
+      protocol: preset.protocol,
+      baseEndpoint: preset.baseEndpoint,
+      model: "",
+      models: [],
+    }))
+    setModels([])
+    setModelsError(null)
+  }
 
   const fetchModels = async () => {
     if (mutationDisabled || !draft.baseEndpoint.trim()) return
@@ -285,6 +343,41 @@ export function ProviderSettingsEditor({
             </Alert>
           )}
           <FieldGroup>
+            {isNewProvider && (
+              <Field data-disabled={mutationDisabled}>
+                <FieldLabel htmlFor="provider-preset">
+                  {t("settings.providers.presetField")}
+                </FieldLabel>
+                <Select
+                  value={selectedPresetId}
+                  disabled={mutationDisabled}
+                  onValueChange={(value) => {
+                    if (
+                      value === CUSTOM_PRESET_ID ||
+                      isProviderPresetId(value)
+                    ) {
+                      applyPresetSelection(value)
+                    }
+                  }}
+                >
+                  <SelectTrigger id="provider-preset" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent position="popper">
+                    <SelectGroup>
+                      <SelectItem value={CUSTOM_PRESET_ID}>
+                        {t("settings.providers.presetCustom")}
+                      </SelectItem>
+                      {PROVIDER_PRESETS.map((preset) => (
+                        <SelectItem key={preset.id} value={preset.id}>
+                          {t(preset.nameKey)}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
             <Field data-disabled={mutationDisabled}>
               <FieldLabel htmlFor="provider-name">
                 {t("settings.providers.nameField")}

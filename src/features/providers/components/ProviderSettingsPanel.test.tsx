@@ -62,6 +62,14 @@ async function openProviderEditor(
   )
 }
 
+async function startNewProvider(
+  user: ReturnType<typeof userEvent.setup>,
+  presetLabel = "自定义",
+) {
+  await user.click(screen.getByRole("button", { name: "新建" }))
+  await user.click(screen.getByRole("menuitem", { name: presetLabel }))
+}
+
 describe("ProviderSettingsPanel", () => {
   beforeEach(() => {
     setupDom()
@@ -402,12 +410,61 @@ describe("ProviderSettingsPanel", () => {
         readOnly={false}
       />,
     )
-    await user.click(screen.getByRole("button", { name: "新建" }))
+    await startNewProvider(user)
     expect(screen.getByLabelText("名称")).toBeVisible()
     await user.type(screen.getByLabelText("名称"), "draft")
     await user.click(screen.getByRole("button", { name: "取消" }))
     expect(screen.getByRole("heading", { name: "全部提供商" })).toBeVisible()
     expect(screen.queryByLabelText("名称")).not.toBeInTheDocument()
+  })
+
+  it("prefills a preset when creating from the list menu", async () => {
+    const user = userEvent.setup()
+    render(
+      <ProviderSettingsPanel
+        client={client() as ProviderClient}
+        readOnly={false}
+      />,
+    )
+    await startNewProvider(user, "OpenAI")
+    expect(screen.getByLabelText("名称")).toHaveValue("OpenAI")
+    expect(screen.getByLabelText("基础端点")).toHaveValue(
+      "https://api.openai.com/v1",
+    )
+    expect(screen.getByLabelText("预设")).toBeVisible()
+  })
+
+  it("does not show the preset selector when editing an existing provider", async () => {
+    const user = userEvent.setup()
+    render(
+      <ProviderSettingsPanel
+        client={client() as ProviderClient}
+        readOnly={false}
+      />,
+    )
+    await openProviderEditor(user)
+    expect(screen.queryByLabelText("预设")).not.toBeInTheDocument()
+  })
+
+  it("keeps the API key when switching presets in the new-provider editor", async () => {
+    const user = userEvent.setup()
+    render(
+      <ProviderSettingsPanel
+        client={client() as ProviderClient}
+        readOnly={false}
+      />,
+    )
+    await startNewProvider(user, "OpenAI")
+    await user.type(screen.getByLabelText("API 密钥"), "DRAFT_SECRET_SENTINEL")
+    await user.click(screen.getByLabelText("预设"))
+    await user.click(screen.getByRole("option", { name: "DeepSeek" }))
+    expect(screen.getByLabelText("名称")).toHaveValue("DeepSeek")
+    expect(screen.getByLabelText("基础端点")).toHaveValue(
+      "https://api.deepseek.com/v1",
+    )
+    expect(screen.getByLabelText("API 密钥")).toHaveValue(
+      "DRAFT_SECRET_SENTINEL",
+    )
   })
 
   it("cancels editing a provider and returns to the list", async () => {

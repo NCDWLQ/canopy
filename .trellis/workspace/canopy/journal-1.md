@@ -1229,3 +1229,24 @@ Added the branch-from-here action to panorama node cards in worktree canopy-pano
 ### Status
 
 [OK] **Completed**
+
+
+## Session 55: Provider presets (B+ dual entry)
+
+**Date**: 2026-08-30
+**Task**: Provider presets (B+ dual entry)
+**Branch**: `feat/provider-presets`
+
+### Summary
+
+Planned and implemented mainstream vendor presets for new providers: static presets.ts catalog (9 vendors), B+ dual entry (list New dropdown with chevron + editor preset selector), i18n zh-CN/en, and ProviderSettingsPanel tests. Dropped endpoint normalization WIP; opened draft PR #26 on feat/provider-presets.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4bf4fe1` | (see git log) |
+
+### Status
+
+[OK] **Completed**

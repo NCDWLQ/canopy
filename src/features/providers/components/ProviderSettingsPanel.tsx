@@ -7,6 +7,7 @@ import {
 import { ProviderSettingsList } from "./ProviderSettingsList"
 import { useProviderStore } from "../store"
 import type { ProviderView } from "../types"
+import { CUSTOM_PRESET_ID, type ProviderPresetSelection } from "../presets"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -24,7 +25,12 @@ export type ProviderSettingsPanelProps = {
 }
 
 type ProviderRoute =
-  { view: "list" } | { view: "edit"; providerId: string | null }
+  | { view: "list" }
+  | {
+      view: "edit"
+      providerId: string | null
+      presetId: ProviderPresetSelection
+    }
 
 export function ProviderSettingsPanel({
   client,
@@ -51,8 +57,11 @@ export function ProviderSettingsPanel({
   }, [])
 
   const goToEdit = React.useCallback(
-    (providerId: string | null) => {
-      setRoute({ view: "edit", providerId })
+    (
+      providerId: string | null,
+      presetId: ProviderPresetSelection = CUSTOM_PRESET_ID,
+    ) => {
+      setRoute({ view: "edit", providerId, presetId })
       if (providerId === null) {
         setDetailCrumb({ kind: "new" })
         return
@@ -68,7 +77,11 @@ export function ProviderSettingsPanel({
   )
 
   const handleSaved = React.useCallback((saved: ProviderView) => {
-    setRoute({ view: "edit", providerId: saved.id })
+    setRoute({
+      view: "edit",
+      providerId: saved.id,
+      presetId: CUSTOM_PRESET_ID,
+    })
     setDetailCrumb(
       saved.name.trim() !== ""
         ? { kind: "name", name: saved.name }
@@ -123,10 +136,11 @@ export function ProviderSettingsPanel({
         />
       ) : (
         <ProviderSettingsEditor
-          key={route.providerId ?? "new"}
+          key={route.providerId ?? `new-${route.presetId}`}
           client={client}
           readOnly={readOnly}
           providerId={route.providerId}
+          initialPresetId={route.presetId}
           onBack={goToList}
           onSaved={handleSaved}
           onDetailCrumbChange={setDetailCrumb}
