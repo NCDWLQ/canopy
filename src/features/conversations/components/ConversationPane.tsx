@@ -198,6 +198,10 @@ export function ConversationPane({
   const revealQuery = reveal?.query ?? ""
   const revealOnPath =
     revealNodeId !== null && path.some((message) => message.id === revealNodeId)
+  // A queryless reveal (e.g. Panorama "open in conversation") has no match
+  // text for MessageNode to position on, so the pane scrolls the revealed
+  // message's row to the top itself.
+  const revealNeedsPaneScroll = revealOnPath && revealQuery === ""
 
   React.useEffect(() => {
     if (status === "ready" || status === "streaming") {
@@ -218,6 +222,23 @@ export function ConversationPane({
     transientGeneration?.phase,
     revealOnPath,
   ])
+
+  React.useEffect(() => {
+    if (!revealNeedsPaneScroll || revealNodeId === null) return
+    if (status !== "ready" && status !== "streaming") return
+    const row = containerRef.current?.querySelector<HTMLElement>(
+      `[data-message-row-id="${CSS.escape(revealNodeId)}"]`,
+    )
+    if (row == null) return
+    const reducedMotion = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)",
+    ).matches
+    row.scrollIntoView?.({
+      block: "start",
+      inline: "nearest",
+      behavior: reducedMotion ? "auto" : "smooth",
+    })
+  }, [revealNeedsPaneScroll, revealNodeId, status])
 
   if (status === "loading" && path.length === 0) {
     return (
@@ -286,14 +307,10 @@ export function ConversationPane({
             assistantRegenerationAction?.assistantNodeId === msg.id
               ? assistantRegenerationAction
               : undefined
+          const isRevealed = revealNodeId !== null && revealNodeId === msg.id
           return (
             <React.Fragment key={msg.id}>
-              {/* content-visibility lets the browser skip layout/paint for
-                  offscreen messages while keeping the DOM intact, so bottom
-                  autoscroll, reveal scrollIntoView, and find-in-page all keep
-                  working on long paths. The intrinsic size is only a
-                  pre-first-render estimate; `auto` remembers real heights. */}
-              <div className="[content-visibility:auto] [contain-intrinsic-size:auto_200px]">
+              <div data-message-row-id={msg.id}>
                 <MessageNode
                   message={msg}
                   canBranch={canBranch(msg.id)}
@@ -304,11 +321,7 @@ export function ConversationPane({
                   exportDisabled={exportDisabled}
                   generationAction={nodeGenerationAction}
                   assistantRegenerationAction={nodeAssistantRegenerationAction}
-                  highlightQuery={
-                    revealNodeId !== null && revealNodeId === msg.id
-                      ? revealQuery
-                      : undefined
-                  }
+                  highlightQuery={isRevealed ? revealQuery : undefined}
                   scrollContainerRef={containerRef}
                   branchSwitcher={branchSwitcherFor?.(msg.id) ?? undefined}
                 />
