@@ -209,6 +209,8 @@ export function ConversationSettingsPanel({
                   </SelectContent>
                 </Select>
               </Field>
+            </FieldSet>
+            <FieldSet>
               <Field data-disabled={mutationDisabled}>
                 <FieldContent>
                   <FieldLabel htmlFor="default-system-prompt">
