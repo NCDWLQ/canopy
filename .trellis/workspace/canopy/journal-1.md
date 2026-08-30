@@ -1272,3 +1272,45 @@ Planned and implemented mainstream vendor presets for new providers: static pres
 ### Status
 
 [OK] **Completed**
+
+
+## Session 57: React render hot-path performance
+
+**Date**: 2026-08-30
+**Task**: React render hot-path performance
+**Branch**: `perf/react-render-hot-path`
+
+### Summary
+
+Stabilized selectActivePath cache, split workspace streaming subscriptions into WorkspaceStreamingLayer, memoized MessageNode/AssistantMarkdown, isolated App theme sync. pnpm check: 384 tests passed.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `57c3bc4` | (see git log) |
+
+### Status
+
+[OK] **Completed**
+
+
+## Session 58: Memoize message nodes — streaming rerender verification
+
+**Date**: 2026-08-30
+**Task**: Memoize message nodes — streaming rerender verification
+**Branch**: `perf/react-render-hot-path`
+
+### Summary
+
+Completed step 3 of render hot-path work on perf/react-render-hot-path: added messageNodeRenderProbe, integration test proving durable path MessageNodes skip rerenders on generation deltas, stabilized WorkspaceStreamingLayer action objects with useMemo (including archived/read-only guard fix from review).
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `23e1071` | (see git log) |
+
+### Status
+
+[OK] **Completed**

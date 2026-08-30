@@ -1,5 +1,6 @@
 import { act, render, screen } from "@testing-library/react"
 import App from "./App"
+import { workspaceRenderProbe } from "@/features/conversations/components/workspaceRenderProbe"
 import { useLocaleStore } from "@/lib/i18n/locale-store"
 import { useThemeStore } from "@/lib/theme"
 
@@ -23,6 +24,7 @@ vi.mock("@/lib/tauri", () => ({
 
 describe("Canopy scaffold", () => {
   beforeEach(() => {
+    workspaceRenderProbe.count = 0
     useLocaleStore.getState().setLocale("zh-CN")
     useThemeStore.getState().setThemePreference("light")
   })
@@ -69,5 +71,24 @@ describe("Canopy scaffold", () => {
     })
     expect(document.documentElement.classList.contains("dark")).toBe(false)
     expect(document.documentElement.style.colorScheme).toBe("light")
+  })
+
+  it("does not re-render ConversationWorkspace when theme changes", async () => {
+    render(<App />)
+    await screen.findByRole("heading", { name: "开始新对话" })
+    const rendersAfterMount = workspaceRenderProbe.count
+    expect(rendersAfterMount).toBeGreaterThan(0)
+
+    act(() => {
+      useThemeStore.getState().setThemePreference("dark")
+    })
+    expect(document.documentElement.classList.contains("dark")).toBe(true)
+    expect(workspaceRenderProbe.count).toBe(rendersAfterMount)
+
+    act(() => {
+      useThemeStore.getState().setThemePreference("light")
+    })
+    expect(document.documentElement.classList.contains("dark")).toBe(false)
+    expect(workspaceRenderProbe.count).toBe(rendersAfterMount)
   })
 })

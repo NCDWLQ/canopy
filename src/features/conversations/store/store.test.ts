@@ -1760,4 +1760,89 @@ describe("siblingBranchInfo", () => {
     } as typeof tree.nodesById
     expect(siblingBranchInfo(brokenNodesById, left.id)).toBeNull()
   })
+
+  it("keeps selectActivePath path reference stable across generation-only updates", () => {
+    useConversationStore.setState({
+      isCreatingConversation: false,
+      conversationId: conversation.id,
+      isArchived: false,
+      rootNodeId: root.id,
+      activeNodeId: right.id,
+      nodesById: tree.nodesById,
+      fullNodes: {
+        [root.id]: root,
+        [assistant.id]: assistant,
+        [left.id]: left,
+        [right.id]: right,
+      },
+      expandedIds: new Set([root.id, assistant.id, right.id]),
+      status: "ready",
+      error: null,
+      generationRuns: {},
+      history: { status: "ready", summaries: [summary], error: null },
+    })
+
+    const stateBefore = useConversationStore.getState()
+    const projectionBefore = selectActivePath(stateBefore)
+    expect(projectionBefore.kind).toBe("ready")
+
+    useConversationStore.setState({
+      generationRuns: {
+        [conversation.id]: {
+          phase: "streaming",
+          runId: 1,
+          conversationId: conversation.id,
+          parentNodeId: right.id,
+          priorChildIds: [],
+          generationId: "11111111-1111-4111-8111-111111111111",
+          model: "fixture-model",
+          content: "STREAM_DELTA",
+          thinking: "",
+        },
+      },
+    })
+
+    const projectionAfter = selectActivePath(useConversationStore.getState())
+    expect(projectionAfter.kind).toBe("ready")
+    if (projectionBefore.kind === "ready" && projectionAfter.kind === "ready") {
+      expect(projectionAfter.path).toBe(projectionBefore.path)
+    }
+  })
+
+  it("rebuilds selectActivePath when the active node changes", () => {
+    useConversationStore.setState({
+      isCreatingConversation: false,
+      conversationId: conversation.id,
+      isArchived: false,
+      rootNodeId: root.id,
+      activeNodeId: right.id,
+      nodesById: tree.nodesById,
+      fullNodes: {
+        [root.id]: root,
+        [assistant.id]: assistant,
+        [left.id]: left,
+        [right.id]: right,
+      },
+      expandedIds: new Set([root.id, assistant.id, right.id]),
+      status: "ready",
+      error: null,
+      generationRuns: {},
+      history: { status: "ready", summaries: [summary], error: null },
+    })
+
+    const projectionBefore = selectActivePath(useConversationStore.getState())
+    useConversationStore.setState({ activeNodeId: left.id })
+    const projectionAfter = selectActivePath(useConversationStore.getState())
+
+    expect(projectionBefore.kind).toBe("ready")
+    expect(projectionAfter.kind).toBe("ready")
+    if (projectionBefore.kind === "ready" && projectionAfter.kind === "ready") {
+      expect(projectionAfter.path).not.toBe(projectionBefore.path)
+      expect(projectionAfter.path.map((message) => message.id)).toEqual([
+        root.id,
+        assistant.id,
+        left.id,
+      ])
+    }
+  })
 })

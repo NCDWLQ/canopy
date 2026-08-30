@@ -29,6 +29,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { useTranslation } from "@/lib/i18n"
+import { messageNodeRenderProbe } from "./messageNodeRenderProbe"
 
 export type UserGenerationAction =
   | { kind: "generate"; onSelect: () => void }
@@ -67,7 +68,7 @@ export type MessageNodeProps = {
   exportDisabled?: boolean
 }
 
-export function MessageNode({
+export const MessageNode = React.memo(function MessageNode({
   message,
   canBranch,
   canEdit,
@@ -81,6 +82,7 @@ export function MessageNode({
   branchSwitcher,
   exportDisabled = false,
 }: MessageNodeProps) {
+  messageNodeRenderProbe.record(message.id)
   const { t } = useTranslation()
   const [isEditing, setIsEditing] = React.useState(false)
   const [editContent, setEditContent] = React.useState(message.content)
@@ -424,4 +426,4 @@ export function MessageNode({
       )}
     </MessageBubble>
   )
-}
+})

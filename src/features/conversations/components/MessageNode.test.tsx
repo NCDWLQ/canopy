@@ -5,6 +5,15 @@ import { describe, expect, it, vi } from "vitest"
 import { MessageNode } from "./MessageNode"
 import type { PathMessageView } from "../types"
 
+const assistantMarkdownRender = vi.fn(({ content }: { content: string }) => (
+  <div data-testid="assistant-markdown">{content}</div>
+))
+
+vi.mock("./AssistantMarkdown", () => ({
+  AssistantMarkdown: (props: { content: string }) =>
+    assistantMarkdownRender(props),
+}))
+
 const userMessage: PathMessageView = {
   id: "user-1",
   role: "user",
@@ -393,5 +402,29 @@ describe("MessageNode", () => {
     expect(
       screen.queryByRole("group", { name: "分支 2/2" }),
     ).not.toBeInTheDocument()
+  })
+
+  it("skips rerendering when memoized message props are unchanged", () => {
+    assistantMarkdownRender.mockClear()
+    const sharedProps = {
+      message: assistantMessage,
+      canBranch: false,
+      canEdit: false,
+      onCreateBranch: vi.fn(),
+      onEditAsBranch: vi.fn(),
+    }
+    const { rerender } = render(<MessageNode {...sharedProps} />)
+    expect(assistantMarkdownRender).toHaveBeenCalledTimes(1)
+
+    rerender(<MessageNode {...sharedProps} />)
+    expect(assistantMarkdownRender).toHaveBeenCalledTimes(1)
+
+    rerender(
+      <MessageNode
+        {...sharedProps}
+        message={{ ...assistantMessage, content: "UPDATED_ASSISTANT_CONTENT" }}
+      />,
+    )
+    expect(assistantMarkdownRender).toHaveBeenCalledTimes(2)
   })
 })

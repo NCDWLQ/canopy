@@ -11,6 +11,8 @@ import { StrictMode } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { ConversationWorkspace } from "./ConversationWorkspace"
+import { messageNodeRenderProbe } from "./messageNodeRenderProbe"
+import { workspaceRenderProbe } from "./workspaceRenderProbe"
 import { useConversationStore, type GenerationRun } from "../store"
 import type { ConversationNodeView, ConversationTreeView } from "../types"
 import { useProviderStore } from "@/features/providers/store"
@@ -288,6 +290,8 @@ describe("ConversationWorkspace", () => {
   let providerClient: ReturnType<typeof createMockProviderClient>
 
   beforeEach(() => {
+    workspaceRenderProbe.count = 0
+    messageNodeRenderProbe.reset()
     vi.stubGlobal(
       "ResizeObserver",
       class ResizeObserverStub {
@@ -3011,6 +3015,88 @@ describe("ConversationWorkspace", () => {
     expect(scrollIntoView).toHaveBeenCalledWith(
       expect.objectContaining({ block: "start" }),
     )
+  })
+
+  it("does not re-render the main workspace shell on generation deltas", async () => {
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(right.id)
+    seedGenerationRun({
+      phase: "streaming",
+      runId: 7,
+      conversationId: root.conversationId,
+      parentNodeId: right.id,
+      priorChildIds: [],
+      generationId: "11111111-1111-4111-8111-111111111111",
+      model: "fixture-model",
+      content: "HELLO",
+      thinking: "",
+    })
+    render(<ConversationWorkspace />)
+    const pane = await screen.findByTestId("conversation-pane")
+    await waitFor(() =>
+      expect(within(pane).getByText("HELLO")).toBeInTheDocument(),
+    )
+    const rendersBeforeDelta = workspaceRenderProbe.count
+
+    act(() => {
+      expect(
+        useConversationStore.getState().appendGenerationDelta(7, {
+          type: "delta",
+          generationId: "11111111-1111-4111-8111-111111111111",
+          content: " WORLD",
+        }),
+      ).toBe(true)
+    })
+
+    expect(workspaceRenderProbe.count).toBe(rendersBeforeDelta)
+    expect(within(pane).getByText("HELLO WORLD")).toBeInTheDocument()
+  })
+
+  it("does not re-render durable path MessageNodes on generation deltas", async () => {
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(right.id)
+    seedGenerationRun({
+      phase: "streaming",
+      runId: 7,
+      conversationId: root.conversationId,
+      parentNodeId: right.id,
+      priorChildIds: [],
+      generationId: "11111111-1111-4111-8111-111111111111",
+      model: "fixture-model",
+      content: "HELLO",
+      thinking: "",
+    })
+    render(<ConversationWorkspace />)
+    const pane = await screen.findByTestId("conversation-pane")
+    await waitFor(() =>
+      expect(within(pane).getByText("HELLO")).toBeInTheDocument(),
+    )
+    const rendersBeforeDelta = new Map(messageNodeRenderProbe.counts)
+
+    act(() => {
+      expect(
+        useConversationStore.getState().appendGenerationDelta(7, {
+          type: "delta",
+          generationId: "11111111-1111-4111-8111-111111111111",
+          content: " WORLD",
+        }),
+      ).toBe(true)
+    })
+
+    expect(messageNodeRenderProbe.counts.get(root.id)).toBe(
+      rendersBeforeDelta.get(root.id),
+    )
+    expect(messageNodeRenderProbe.counts.get(assistant.id)).toBe(
+      rendersBeforeDelta.get(assistant.id),
+    )
+    expect(messageNodeRenderProbe.counts.get(right.id)).toBe(
+      rendersBeforeDelta.get(right.id),
+    )
+    expect(within(pane).getByText("HELLO WORLD")).toBeInTheDocument()
   })
 })
 

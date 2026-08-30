@@ -6,17 +6,19 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 import { useTranslation } from "@/lib/i18n"
 import { useTheme, useThemeStore } from "@/lib/theme"
 
-export default function App() {
+function DocumentLocaleSync() {
   const { locale } = useTranslation()
-  const { theme, resolvedTheme } = useTheme()
 
-  // Keeps the document language in sync for assistive tech, hyphenation, and
-  // translation hints; runs once on mount and after every locale switch.
   React.useEffect(() => {
     document.documentElement.lang = locale
   }, [locale])
 
-  // Synchronizes document dark class and colorScheme with resolved theme.
+  return null
+}
+
+function DocumentThemeSync() {
+  const { theme, resolvedTheme } = useTheme()
+
   React.useEffect(() => {
     const root = document.documentElement
     if (resolvedTheme === "dark") {
@@ -28,7 +30,6 @@ export default function App() {
     }
   }, [resolvedTheme])
 
-  // When theme preference is 'system', listen for system color scheme changes.
   React.useEffect(() => {
     if (theme !== "system") return
     if (
@@ -47,8 +48,14 @@ export default function App() {
     }
   }, [theme])
 
+  return null
+}
+
+export default function App() {
   return (
     <TooltipProvider>
+      <DocumentLocaleSync />
+      <DocumentThemeSync />
       <main className="h-dvh overflow-hidden bg-background text-foreground">
         <ConversationWorkspace />
         <Toaster />

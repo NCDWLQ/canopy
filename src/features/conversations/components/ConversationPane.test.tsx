@@ -94,7 +94,9 @@ describe("ConversationPane", () => {
       "true",
     )
     expect(marker.querySelector('[data-slot="marker-icon"] svg')).not.toBeNull()
-    expect(assistantArticle?.nextElementSibling).toBe(marker)
+    // Messages are wrapped in a content-visibility row; the marker must
+    // immediately follow the origin message's row.
+    expect(assistantArticle?.parentElement?.nextElementSibling).toBe(marker)
 
     act(() => {
       useLocaleStore.getState().setLocale("en")
@@ -678,5 +680,37 @@ describe("ConversationPane search reveal", () => {
       expect.objectContaining({ block: "center" }),
     )
     expect(screen.queryByText("USER_1_CONTENT")).toBeInTheDocument()
+  })
+
+  it("scrolls the revealed message row to the container top for queryless reveals", () => {
+    const scrollIntoView = vi.fn()
+    installScrollIntoView(scrollIntoView)
+
+    render(
+      <ConversationPane
+        path={[user1, assistant1, user2]}
+        status="ready"
+        canBranch={() => false}
+        canEdit={() => false}
+        onCreateBranch={vi.fn()}
+        onEditAsBranch={vi.fn()}
+        transientGeneration={null}
+        onRegenerate={vi.fn()}
+        // Panorama "open in conversation" reveal: a node id without a query.
+        reveal={{ conversationId: "c1", nodeId: assistant1.id, query: "" }}
+      />,
+    )
+
+    const container = screen.getByTestId("conversation-pane")
+    const row = container.querySelector(
+      `[data-message-row-id="${assistant1.id}"]`,
+    )
+    expect(row).not.toBeNull()
+    // The row itself is the scroll target so the message lands at the top
+    // of the pane regardless of its height.
+    expect(scrollIntoView.mock.contexts).toContain(row)
+    expect(scrollIntoView).toHaveBeenCalledWith(
+      expect.objectContaining({ block: "start", behavior: "smooth" }),
+    )
   })
 })

@@ -1,4 +1,5 @@
 import * as React from "react"
+import { useShallow } from "zustand/react/shallow"
 
 import { deriveConversationTitle } from "../deriveConversationTitle"
 import {
@@ -68,8 +69,10 @@ export function useWorkspaceGenerationController({
   )
   const isArchived = useConversationStore((state) => state.isArchived)
   const status = useConversationStore((state) => state.status)
-  const currentRun = useConversationStore(selectCurrentRun)
-  const pathProjection = useConversationStore(selectActivePath)
+  const hasActiveRun = useConversationStore((state) =>
+    isRunActive(selectCurrentRun(state)),
+  )
+  const pathProjection = useConversationStore(useShallow(selectActivePath))
   const cancelRequestedRuns = React.useRef(new Set<number>())
   const cancelSentIds = React.useRef(new Set<string>())
   const generationIds = React.useRef(new Map<number, string>())
@@ -340,8 +343,8 @@ export function useWorkspaceGenerationController({
     startGeneration()
   }, [startGeneration])
 
-  const mutationLocked = isRunActive(currentRun)
-  const canCancel = isRunActive(currentRun)
+  const mutationLocked = hasActiveRun
+  const canCancel = hasActiveRun
   const canGenerate =
     providerPhase === "ready" &&
     conversationId !== null &&
@@ -349,7 +352,7 @@ export function useWorkspaceGenerationController({
     status === "ready" &&
     pathProjection.kind === "ready" &&
     activeNodeRole === "user" &&
-    !isRunActive(currentRun)
+    !hasActiveRun
 
   let unavailableReason: string | null = null
   if (!canGenerate && !canCancel) {

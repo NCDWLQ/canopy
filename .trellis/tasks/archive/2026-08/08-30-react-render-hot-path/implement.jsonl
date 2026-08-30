@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "frontend spec entry and quality gate"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "narrow zustand selectors and useWorkspaceGenerationController boundaries"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "conversation store shape, generationRuns, selectActivePath conventions"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "memo and composition patterns for MessageNode/MessageBubble"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "forbidden patterns and test expectations"}
