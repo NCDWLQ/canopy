@@ -35,7 +35,9 @@ These guides help you **ask the right questions before coding**.
 - [ ] Multiple consumers need the same data
 - [ ] You're not sure where to put some logic
 - [ ] You are adding an event kind, JSONL record, RPC payload, config field,
-      `app_settings` key, or a global Tauri `emit` (non-Channel)
+      `app_settings` key (including `default_system_prompt`), a conversation
+      metadata column such as `system_prompt`, or a global Tauri `emit`
+      (non-Channel)
 - [ ] UI / command code starts casting raw payload fields directly
 - [ ] A backend side effect looks like generation but must not use
       `GenerationRuntime` (auto-title is the current example)

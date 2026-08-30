@@ -38,6 +38,8 @@ type ConversationTreeState = {
   isArchived: boolean
   rootNodeId: string | null
   activeNodeId: string | null
+  systemPrompt: string | null
+  draftSystemPrompt: string | null
   nodesById: Readonly<Record<string, TreeNodeView>>
   expandedIds: ReadonlySet<string>
   status: "idle" | "loading" | "ready" | "streaming" | "error"
@@ -56,6 +58,11 @@ decoded and projected before entering the store.
   toggle expansion, append, create a branch, edit as a branch, and archive.
 - Persistence actions call the typed Tauri bridge, then merge the returned
   authoritative DTO. They do not mutate durable history optimistically.
+  `setConversationSystemPrompt` uses the same epoch guard as
+  `setConversationProvider` and must not patch history summaries. Close the
+  settings dialog only after the stored `systemPrompt` matches the saved
+  value — the action swallows IPC errors, so an optimistic close looks like
+  success.
 - Global non-Channel events (today: `conversation://title-updated`) are
   subscribed in a workspace/app hook, decoded in `src/lib/tauri`, then applied
   through `applyTitleUpdate`. That action patches the matching history
@@ -94,6 +101,10 @@ decoded and projected before entering the store.
   Composer submit derives a local title and calls the existing atomic
   conversation-plus-user-root command. Successful creation installs the
   returned tree; failure retains the draft and previous safe projection.
+  `draftSystemPrompt` follows the same draft-then-apply path as
+  `draftBinding`: the controller writes it with
+  `setConversationSystemPrompt` after create (after provider binding,
+  before generate) and the store clears it on create/load/enter-blank.
 - Deferred append, branch, and edit-as-branch actions capture a unique request
   epoch with the conversation, command target, and active selection. Completion
   rereads the live store, rejects a changed epoch/conversation, and merges
@@ -181,7 +192,8 @@ result.
 ### 3. Contracts
 
 - Provider profile state contains only `ProviderProfileView`, a safe `UiError`,
-  and request status. API-key text may exist in local dialog state while
+  request status, and settings hydrated from `list_providers` (including
+  `defaultSystemPrompt`). API-key text may exist in local dialog state while
   editing, but it is cleared on close and after every save attempt.
 - Deltas live only in the run record's `content`. They never enter
   `nodesById`, the active path, or the outline.

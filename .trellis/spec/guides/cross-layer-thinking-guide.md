@@ -338,8 +338,9 @@ generation. Before adding HTTP or an event:
 - [ ] Are user strings interpolated into prompt markup? Escape `& < >` so
       data cannot close a wrapper tag.
 
-→ Specs: `.trellis/spec/backend/provider-guidelines.md` (auto-title),
-`.trellis/spec/frontend/type-safety.md` (title event).
+→ Specs: `.trellis/spec/backend/provider-guidelines.md` (auto-title,
+system-prompt injection), `.trellis/spec/frontend/type-safety.md` (title
+event), `.trellis/spec/backend/database-guidelines.md` (migration 0008).
 
 ---
 
