@@ -221,11 +221,15 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
           ...previous.providers.filter((item) => item.id !== provider.id),
           provider,
         ]
+        const activeProviderId =
+          previous.activeProviderId === null && previous.providers.length === 0
+            ? provider.id
+            : previous.activeProviderId
         if (isCurrent(epoch)) {
           set(
             readyOrUnconfigured(
               providers,
-              previous.activeProviderId,
+              activeProviderId,
               previous.autoGenerateTitle,
               previous.titleModelBinding,
               previous.language,

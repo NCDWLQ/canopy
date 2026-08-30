@@ -2322,7 +2322,7 @@ describe("ConversationWorkspace", () => {
     ).toBe(false)
   })
 
-  it("opens SettingsDialog via contextual '配置服务提供商以生成' and updates to '生成回复' after choosing a global default", async () => {
+  it("opens SettingsDialog via contextual '配置服务提供商以生成' and updates to '生成回复' after saving the first provider", async () => {
     const user = userEvent.setup()
     clearActiveProvider()
     providerClient.listProviders.mockResolvedValue({
@@ -2344,9 +2344,6 @@ describe("ConversationWorkspace", () => {
       createdAt: 10,
       updatedAt: 11,
     })
-    providerClient.setActiveProvider = vi
-      .fn()
-      .mockResolvedValueOnce("provider-1")
 
     await useConversationStore
       .getState()
@@ -2384,14 +2381,12 @@ describe("ConversationWorkspace", () => {
         apiKey: { action: "remove" },
       })
     })
-    await user.click(screen.getByRole("button", { name: "返回模型提供商列表" }))
-    await user.click(
-      screen.getByRole("button", { name: "更多操作：Fixture provider" }),
-    )
-    await user.click(screen.getByRole("menuitem", { name: "设为默认" }))
 
     await user.click(screen.getByRole("button", { name: "关闭" }))
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+
+    // First provider save auto-activates; no separate "set as default" step.
+    expect(providerClient.setActiveProvider).not.toHaveBeenCalled()
 
     // Now contextual action becomes "生成回复"
     expect(within(pane).getByRole("button", { name: "生成回复" })).toBeVisible()

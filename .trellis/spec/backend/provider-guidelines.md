@@ -203,7 +203,9 @@ late cancellation.
   `'default'`); the global default lives in `app_settings` under
   `active_provider_id`. Deleting the active provider clears the setting —
   never auto-promote a successor: an explicit unconfigured state beats a
-  silent endpoint switch.
+  silent endpoint switch. Saving the first provider (empty list before save)
+  auto-writes `active_provider_id` in the same transaction; all other saves
+  leave the current default unchanged.
 - Providers persist a `models` JSON list (1..=50, order-preserving dedup; the
   default model must be a member — `validate_models`). The conversation picker
   reads this list offline and never fetches; only the settings dialog fetches
