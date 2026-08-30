@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "frontend spec entry (checklist + quality gate)"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "MessageBubble/MessageNode composition and shadcn button conventions"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "zustand selector conventions for siblingBranchInfo and workspace wiring"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "typed-dictionary locale keys for branch switcher labels"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "strict TS conventions for new props and pure helper"}

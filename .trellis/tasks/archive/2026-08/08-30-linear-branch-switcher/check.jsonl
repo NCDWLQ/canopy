@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "frontend spec entry (checklist + quality gate)"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "code standards and forbidden patterns for review"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "verify pager slot composition matches component conventions"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "verify en/zh-CN key parity and translation boundaries"}
