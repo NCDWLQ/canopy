@@ -119,10 +119,12 @@ impl ProviderService {
 
         let mut transaction = self.pool.begin().await?;
         let providers = ProviderRepository::list_providers(&mut transaction).await?;
+        let was_empty = providers.is_empty();
         let existing = providers
             .iter()
             .find(|provider| provider.id == provider_id)
             .cloned();
+        let is_create = existing.is_none();
         if providers
             .iter()
             .any(|provider| provider.id != provider_id && provider.name.eq_ignore_ascii_case(&name))
@@ -160,6 +162,10 @@ impl ProviderService {
                     &provider.models,
                 )
                 .await?;
+                if was_empty && is_create {
+                    SettingsRepository::set_active_provider_id(&mut transaction, provider_id)
+                        .await?;
+                }
                 transaction.commit().await?;
             }
             ApiKeyAction::Replace(secret) => {
@@ -201,6 +207,10 @@ impl ProviderService {
                     updated_at: Some(now_millis),
                 };
                 ProviderRepository::insert_operation(&mut transaction, &operation).await?;
+                if was_empty && is_create {
+                    SettingsRepository::set_active_provider_id(&mut transaction, provider_id)
+                        .await?;
+                }
                 transaction.commit().await?;
                 self.credential_set(credential_ref, secret).await?;
                 self.reconcile_inner().await?;
@@ -231,6 +241,10 @@ impl ProviderService {
                         &provider.models,
                     )
                     .await?;
+                    if was_empty && is_create {
+                        SettingsRepository::set_active_provider_id(&mut transaction, provider_id)
+                            .await?;
+                    }
                     transaction.commit().await?;
                 } else {
                     let staged = Provider {
@@ -264,6 +278,10 @@ impl ProviderService {
                         updated_at: Some(now_millis),
                     };
                     ProviderRepository::insert_operation(&mut transaction, &operation).await?;
+                    if was_empty && is_create {
+                        SettingsRepository::set_active_provider_id(&mut transaction, provider_id)
+                            .await?;
+                    }
                     transaction.commit().await?;
                     self.reconcile_inner().await?;
                 }

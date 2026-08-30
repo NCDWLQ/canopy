@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "后端质量检查清单（测试覆盖、lint、clippy）"}
+{"file": ".trellis/spec/backend/provider-guidelines.md", "reason": "校验实现未偏离命令表面冻结与 §8 多提供商规则，且新规则已回填 spec"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "前端质量检查清单"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "核对 saveProvider 的 epoch 竞态防护与 phase 状态机未被绕过"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "本任务横跨 service→IPC→store→CTA 四层，核查 activeProviderId 数据流一致性"}

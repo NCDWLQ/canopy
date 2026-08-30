@@ -293,6 +293,8 @@ fn provider_crud_round_trip_keeps_secrets_only_in_injected_store() {
         assert!(saved.has_api_key);
         assert_eq!((saved.created_at, saved.updated_at), (100, 100));
         assert_eq!(store.snapshot().get("credential-a").unwrap(), sentinel);
+        let (_, active) = service.list_providers().await.unwrap();
+        assert_eq!(active.as_deref(), Some("provider-a"));
 
         let database_text: String = sqlx::query_scalar(
             "SELECT coalesce(group_concat(value, '|'), '') FROM ( \
@@ -352,7 +354,7 @@ fn provider_crud_round_trip_keeps_secrets_only_in_injected_store() {
                 .collect::<Vec<_>>(),
             ["provider-a", "provider-b"]
         );
-        assert_eq!(active, None);
+        assert_eq!(active.as_deref(), Some("provider-a"));
 
         assert_eq!(
             service.set_active("provider-a").await.unwrap(),
@@ -1056,5 +1058,84 @@ fn model_list_is_validated_deduplicated_and_persisted() {
                 "list size must be enforced"
             );
         }
+    });
+}
+
+#[test]
+fn saving_the_first_provider_auto_activates_and_later_saves_do_not() {
+    run_async(async {
+        let pool = migrated_pool().await;
+        let store = Arc::new(FakeCredentialStore::default());
+        let service = ProviderService::new(pool.clone(), store);
+
+        service
+            .save(
+                "provider-a",
+                input(
+                    "Primary",
+                    ApiKeyAction::Replace(SecretString::from("secret-a")),
+                ),
+                "operation-a".to_owned(),
+                "credential-a".to_owned(),
+                1,
+            )
+            .await
+            .unwrap();
+        let (_, active) = service.list_providers().await.unwrap();
+        assert_eq!(active.as_deref(), Some("provider-a"));
+        assert_eq!(service.load_active().await.unwrap().id, "provider-a");
+
+        service
+            .save(
+                "provider-b",
+                input("Secondary", ApiKeyAction::Keep),
+                "operation-b".to_owned(),
+                "unused".to_owned(),
+                2,
+            )
+            .await
+            .unwrap();
+        let (_, active) = service.list_providers().await.unwrap();
+        assert_eq!(active.as_deref(), Some("provider-a"));
+
+        service.delete("provider-a", "operation-delete-a".to_owned())
+            .await
+            .unwrap();
+        let (_, active) = service.list_providers().await.unwrap();
+        assert_eq!(active, None);
+
+        service
+            .save(
+                "provider-b",
+                input(
+                    "Secondary",
+                    ApiKeyAction::Replace(SecretString::from("secret-b")),
+                ),
+                "operation-b-update".to_owned(),
+                "credential-b".to_owned(),
+                3,
+            )
+            .await
+            .unwrap();
+        let (_, active) = service.list_providers().await.unwrap();
+        assert_eq!(active, None);
+
+        assert_duplicate_name(
+            service
+                .save(
+                    "provider-c",
+                    input("Secondary", ApiKeyAction::Keep),
+                    "operation-c".to_owned(),
+                    "unused".to_owned(),
+                    4,
+                )
+                .await,
+        );
+        let active_setting: Option<String> =
+            sqlx::query_scalar("SELECT value FROM app_settings WHERE key = 'active_provider_id'")
+                .fetch_optional(&pool)
+                .await
+                .unwrap();
+        assert_eq!(active_setting, None);
     });
 }

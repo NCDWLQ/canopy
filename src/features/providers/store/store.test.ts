@@ -138,7 +138,7 @@ describe("provider store", () => {
     expect(useThemeStore.getState().resolvedTheme).toBe("dark")
   })
 
-  it("stores only the redacted save result and does not auto-activate a new provider", async () => {
+  it("auto-activates the first saved provider when the list was empty", async () => {
     const bridge = client()
     const secret = "STORE_SECRET_SENTINEL"
     bridge.saveProvider.mockResolvedValueOnce(provider)
@@ -152,11 +152,61 @@ describe("provider store", () => {
     })
     expect(saved).toEqual(provider)
     expect(useProviderStore.getState()).toMatchObject({
+      phase: "ready",
+      providers: [provider],
+      activeProviderId: provider.id,
+    })
+    expect(JSON.stringify(useProviderStore.getState())).not.toContain(secret)
+  })
+
+  it("does not auto-activate when saving a second provider", async () => {
+    const bridge = client()
+    const second: ProviderView = { ...provider, id: "provider-2", name: "Secondary" }
+    bridge.saveProvider.mockResolvedValueOnce(second)
+    useProviderStore.setState({
+      phase: "ready",
+      providers: [provider],
+      activeProviderId: provider.id,
+    })
+    await useProviderStore.getState().saveProvider(bridge, {
+      name: second.name,
+      protocol: second.protocol,
+      baseEndpoint: second.baseEndpoint,
+      model: second.model,
+      models: second.models,
+      apiKey: { action: "keep" },
+    })
+    expect(useProviderStore.getState()).toMatchObject({
+      phase: "ready",
+      providers: [provider, second],
+      activeProviderId: provider.id,
+    })
+  })
+
+  it("does not auto-activate when active is cleared but providers remain", async () => {
+    const bridge = client()
+    bridge.saveProvider.mockResolvedValueOnce({
+      ...provider,
+      model: "updated-model",
+      models: ["updated-model"],
+    })
+    useProviderStore.setState({
       phase: "idle",
       providers: [provider],
       activeProviderId: null,
     })
-    expect(JSON.stringify(useProviderStore.getState())).not.toContain(secret)
+    await useProviderStore.getState().saveProvider(bridge, {
+      name: provider.name,
+      protocol: provider.protocol,
+      baseEndpoint: provider.baseEndpoint,
+      model: "updated-model",
+      models: ["updated-model"],
+      apiKey: { action: "keep" },
+    })
+    expect(useProviderStore.getState()).toMatchObject({
+      phase: "idle",
+      activeProviderId: null,
+    })
   })
 
   it("clears the active selection when deleting the active provider", async () => {

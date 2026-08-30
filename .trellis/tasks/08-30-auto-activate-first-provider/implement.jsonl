@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "后端入口：Pre-Development Checklist 与各指南索引"}
+{"file": ".trellis/spec/backend/provider-guidelines.md", "reason": "provider 模块既有约定：命令表面冻结、凭据三态、§8 多提供商规则（删除默认不自动提升），本次在 save() 内新增首存激活规则"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "前端入口：Pre-Development Checklist 与各指南索引"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "zustand store 约定（requestEpoch 竞态防护、readyOrUnconfigured 状态机），saveProvider 改动需遵循"}
+{"file": ".trellis/tasks/08-30-auto-activate-first-provider/design.md", "reason": "本任务技术设计：规则收窄理由、后端事务内写入位置、前端乐观镜像方案"}
