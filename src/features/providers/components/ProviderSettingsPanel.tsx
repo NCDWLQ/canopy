@@ -7,10 +7,7 @@ import {
 import { ProviderSettingsList } from "./ProviderSettingsList"
 import { useProviderStore } from "../store"
 import type { ProviderView } from "../types"
-import {
-  CUSTOM_PRESET_ID,
-  type ProviderPresetSelection,
-} from "../presets"
+import { CUSTOM_PRESET_ID, type ProviderPresetSelection } from "../presets"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -139,10 +136,7 @@ export function ProviderSettingsPanel({
         />
       ) : (
         <ProviderSettingsEditor
-          key={
-            route.providerId ??
-            `new-${route.presetId}`
-          }
+          key={route.providerId ?? `new-${route.presetId}`}
           client={client}
           readOnly={readOnly}
           providerId={route.providerId}

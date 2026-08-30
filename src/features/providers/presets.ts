@@ -14,9 +14,7 @@ export type ProviderPresetId =
   | "gemini"
   | "opencode-go"
 
-export type ProviderPresetSelection =
-  | typeof CUSTOM_PRESET_ID
-  | ProviderPresetId
+export type ProviderPresetSelection = typeof CUSTOM_PRESET_ID | ProviderPresetId
 
 export type ProviderPreset = {
   id: ProviderPresetId
@@ -72,8 +70,7 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
     id: "gemini",
     nameKey: "settings.providers.preset.gemini",
     protocol: "openai_compatible",
-    baseEndpoint:
-      "https://generativelanguage.googleapis.com/v1beta/openai",
+    baseEndpoint: "https://generativelanguage.googleapis.com/v1beta/openai",
   },
   {
     id: "opencode-go",
