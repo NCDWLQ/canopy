@@ -178,7 +178,7 @@ export function WorkspaceStreamingLayer({
     pathProjection.kind === "ready" &&
     pathProjection.path.at(-1)?.id === currentRun?.parentNodeId
 
-  const userGenerationAction: UserGenerationAction | null = (() => {
+  const userGenerationAction = React.useMemo((): UserGenerationAction | null => {
     if (!canMutate || activeNodeId === null || currentRun !== undefined) {
       return null
     }
@@ -196,19 +196,44 @@ export function WorkspaceStreamingLayer({
       kind: "configure-provider",
       onSelect: onConfigureProvider,
     }
-  })()
+  }, [
+    activeNodeId,
+    canMutate,
+    currentRun,
+    nodesById,
+    onConfigureProvider,
+    onGenerate,
+    providerPhase,
+  ])
 
-  const assistantRegenerationTarget =
-    providerPhase === "ready"
-      ? resolveAssistantRegenerationTarget(useConversationStore.getState())
-      : null
-  const assistantRegenerationAction: AssistantRegenerationAction | null =
-    assistantRegenerationTarget === null
-      ? null
-      : {
-          assistantNodeId: assistantRegenerationTarget.assistantNodeId,
-          onSelect: onRegenerateAssistant,
-        }
+  const assistantRegenerationAction = React.useMemo((): AssistantRegenerationAction | null => {
+    if (
+      providerPhase !== "ready" ||
+      currentRun !== undefined ||
+      isArchived ||
+      status !== "ready"
+    ) {
+      return null
+    }
+    if (pathProjection.kind !== "ready") {
+      return null
+    }
+    const target = resolveAssistantRegenerationTarget(
+      useConversationStore.getState(),
+    )
+    if (target === null) return null
+    return {
+      assistantNodeId: target.assistantNodeId,
+      onSelect: onRegenerateAssistant,
+    }
+  }, [
+    providerPhase,
+    onRegenerateAssistant,
+    currentRun,
+    pathProjection,
+    isArchived,
+    status,
+  ])
 
   const composerPlaceholder = isArchived
     ? t("conversation.workspace.placeholderArchived")
