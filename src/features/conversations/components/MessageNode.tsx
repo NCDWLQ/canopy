@@ -67,7 +67,7 @@ export type MessageNodeProps = {
   exportDisabled?: boolean
 }
 
-export function MessageNode({
+export const MessageNode = React.memo(function MessageNode({
   message,
   canBranch,
   canEdit,
@@ -424,4 +424,4 @@ export function MessageNode({
       )}
     </MessageBubble>
   )
-}
+})

@@ -1936,24 +1936,43 @@ function hasValidTreeShape(state: ConversationTreeState): boolean {
   )
 }
 
+type PathCacheEntry = {
+  activeNodeId: string | null
+  rootNodeId: string | null
+  conversationId: string | null
+  projection: ActivePathProjection
+}
+
 const activePathProjectionCache = new WeakMap<
-  ConversationTreeState,
-  ActivePathProjection
+  Readonly<Record<string, ConversationNodeView>>,
+  PathCacheEntry
 >()
 
 function cacheActivePathProjection(
   state: ConversationTreeState,
   projection: ActivePathProjection,
 ): ActivePathProjection {
-  activePathProjectionCache.set(state, projection)
+  activePathProjectionCache.set(state.fullNodes, {
+    activeNodeId: state.activeNodeId,
+    rootNodeId: state.rootNodeId,
+    conversationId: state.conversationId,
+    projection,
+  })
   return projection
 }
 
 export const selectActivePath = (
   state: ConversationTreeState,
 ): ActivePathProjection => {
-  const cached = activePathProjectionCache.get(state)
-  if (cached !== undefined) return cached
+  const cached = activePathProjectionCache.get(state.fullNodes)
+  if (
+    cached !== undefined &&
+    cached.activeNodeId === state.activeNodeId &&
+    cached.rootNodeId === state.rootNodeId &&
+    cached.conversationId === state.conversationId
+  ) {
+    return cached.projection
+  }
 
   const isEmpty =
     state.conversationId === null &&

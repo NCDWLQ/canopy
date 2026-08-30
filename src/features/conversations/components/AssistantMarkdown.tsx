@@ -1,4 +1,4 @@
-import { useMemo } from "react"
+import { memo, useMemo } from "react"
 import type { ComponentProps, MouseEvent, ReactNode } from "react"
 import { openUrl } from "@tauri-apps/plugin-opener"
 import { code } from "@streamdown/code"
@@ -169,7 +169,7 @@ const MARKDOWN_COMPONENTS = {
   table: LeanTable,
 } satisfies Components
 
-export function AssistantMarkdown({
+export const AssistantMarkdown = memo(function AssistantMarkdown({
   content,
   isStreaming = false,
 }: AssistantMarkdownProps) {
@@ -209,4 +209,4 @@ export function AssistantMarkdown({
       {content}
     </Streamdown>
   )
-}
+})

@@ -15,14 +15,11 @@ import {
 import { useShallow } from "zustand/react/shallow"
 
 import { Composer, type ComposerAction, type ComposerHandle } from "./Composer"
-import {
-  ConversationPane,
-  type AssistantRegenerationAction,
-  type UserGenerationAction,
-} from "./ConversationPane"
 import { ConversationPanorama } from "./ConversationPanorama"
 import { RenameConversationDialog } from "./RenameConversationDialog"
 import { SearchDialog } from "./SearchDialog"
+import { WorkspaceStreamingLayer } from "./WorkspaceStreamingLayer"
+import { workspaceRenderProbe } from "./workspaceRenderProbe"
 import { useConversationTitleUpdates } from "../hooks/useConversationTitleUpdates"
 import { useWorkspaceGenerationController } from "../hooks/useWorkspaceGenerationController"
 import {
@@ -30,9 +27,7 @@ import {
   newestLeafDescendant,
   pathIdsToNode,
   selectActivePath,
-  selectActiveRunIds,
   siblingBranchInfo,
-  type ConversationTreeState,
   useConversationStore,
 } from "../store"
 import { Badge } from "@/components/ui/badge"
@@ -81,62 +76,32 @@ export type ConversationWorkspaceProps = {
   providerClient?: ProviderClient
 }
 
-type AssistantRegenerationTarget = {
-  conversationId: string
-  assistantNodeId: string
-  parentUserNodeId: string
-}
-
 type BranchComposerTarget = {
   conversationId: string
   parentNodeId: string
 }
 
-function resolveAssistantRegenerationTarget(
-  state: ConversationTreeState,
-): AssistantRegenerationTarget | null {
-  if (
-    state.isCreatingConversation ||
-    state.conversationId === null ||
-    state.isArchived ||
-    state.status !== "ready" ||
-    state.generationRuns[state.conversationId] !== undefined
-  ) {
-    return null
-  }
+function HistoryGeneratingSpinner({
+  conversationId,
+}: {
+  conversationId: string
+}) {
+  const { t } = useTranslation()
+  const isGenerating = useConversationStore((state) =>
+    isRunActive(state.generationRuns[conversationId]),
+  )
+  if (!isGenerating) return null
+  return (
+    <Spinner
+      className="size-3.5 shrink-0 text-muted-foreground"
+      aria-label={t("conversation.workspace.generatingReply")}
+    />
+  )
+}
 
-  const projection = selectActivePath(state)
-  const finalMessage =
-    projection.kind === "ready" ? projection.path.at(-1) : null
-  if (
-    finalMessage?.role !== "assistant" ||
-    state.activeNodeId !== finalMessage.id
-  ) {
-    return null
-  }
-
-  const assistantNode = state.fullNodes[finalMessage.id]
-  if (
-    assistantNode?.role !== "assistant" ||
-    assistantNode.parentId === undefined ||
-    assistantNode.conversationId !== state.conversationId
-  ) {
-    return null
-  }
-
-  const parentNode = state.fullNodes[assistantNode.parentId]
-  if (
-    parentNode?.role !== "user" ||
-    parentNode.conversationId !== state.conversationId
-  ) {
-    return null
-  }
-
-  return {
-    conversationId: state.conversationId,
-    assistantNodeId: assistantNode.id,
-    parentUserNodeId: parentNode.id,
-  }
+function WorkspaceRenderProbe() {
+  workspaceRenderProbe.count += 1
+  return null
 }
 
 export function ConversationWorkspace({
@@ -154,7 +119,6 @@ export function ConversationWorkspace({
     [injectedProviderClient],
   )
   const loadProviders = useProviderStore((state) => state.loadProviders)
-  const providerPhase = useProviderStore((state) => state.phase)
   const store = useConversationStore(
     useShallow((state) => ({
       conversationId: state.conversationId,
@@ -170,11 +134,9 @@ export function ConversationWorkspace({
       activeNodeId: state.activeNodeId,
       nodesById: state.nodesById,
       fullNodes: state.fullNodes,
-      expandedIds: state.expandedIds,
       status: state.status,
       error: state.error,
       reveal: state.reveal,
-      generationRuns: state.generationRuns,
       history: state.history,
       clearError: state.clearError,
       retryHistory: state.retryHistory,
@@ -189,25 +151,6 @@ export function ConversationWorkspace({
   const selectNode = useConversationStore((state) => state.selectNode)
   const selectBranchAtNode = useConversationStore(
     (state) => state.selectBranchAtNode,
-  )
-  const branchSwitcherFor = React.useCallback(
-    (nodeId: string) => {
-      const info = siblingBranchInfo(store.nodesById, nodeId)
-      if (info === null) return null
-      return {
-        index: info.index,
-        count: info.count,
-        prevDisabled: info.prevId === undefined,
-        nextDisabled: info.nextId === undefined,
-        onPrev: () => {
-          if (info.prevId !== undefined) selectBranchAtNode(info.prevId)
-        },
-        onNext: () => {
-          if (info.nextId !== undefined) selectBranchAtNode(info.nextId)
-        },
-      }
-    },
-    [selectBranchAtNode, store.nodesById],
   )
   const pathProjection = useConversationStore(useShallow(selectActivePath))
   const controller = useWorkspaceGenerationController({
@@ -298,49 +241,6 @@ export function ConversationWorkspace({
   const isBlankConversation =
     store.isCreatingConversation ||
     (store.conversationId === null && store.history.status === "empty")
-  const currentRun =
-    store.conversationId === null
-      ? undefined
-      : store.generationRuns[store.conversationId]
-  const activeRunIds = selectActiveRunIds({
-    generationRuns: store.generationRuns,
-  })
-  const transientGeneration = (() => {
-    if (currentRun === undefined) return null
-    switch (currentRun.phase) {
-      case "starting":
-        return { phase: "starting" as const }
-      case "streaming":
-        return {
-          phase: "streaming" as const,
-          content: currentRun.content,
-          thinking: currentRun.thinking,
-        }
-      case "failed":
-        return currentRun.failureKind === "generation"
-          ? {
-              phase: "failed" as const,
-              failureKind: "generation" as const,
-            }
-          : {
-              phase: "failed" as const,
-              failureKind: "persistence" as const,
-              content: currentRun.content,
-            }
-      case "cancelled":
-        return {
-          phase: "cancelled" as const,
-          content: currentRun.content,
-        }
-    }
-  })()
-  // The transient bubble belongs under the run's parent. When the user is
-  // browsing another branch, the run keeps streaming in the background of
-  // this conversation and the composer keeps the cancel affordance.
-  const transientBubbleVisible =
-    transientGeneration !== null &&
-    pathProjection.kind === "ready" &&
-    pathProjection.path.at(-1)?.id === currentRun?.parentNodeId
 
   const canEditDraft =
     !isBlankConversation &&
@@ -355,29 +255,6 @@ export function ConversationWorkspace({
     if (!canMutate || store.activeNodeId === null) return false
     const node = store.nodesById[store.activeNodeId]
     return node?.role === "assistant" && node.childIds.length === 0
-  })()
-
-  const userGenerationAction: UserGenerationAction | null = (() => {
-    if (!canMutate || store.activeNodeId === null || currentRun !== undefined) {
-      return null
-    }
-    const activeNode = store.nodesById[store.activeNodeId]
-    if (activeNode?.role !== "user" || activeNode.childIds.length > 0) {
-      return null
-    }
-    if (providerPhase === "ready") {
-      return {
-        kind: "generate",
-        onSelect: controller.generate,
-      }
-    }
-    return {
-      kind: "configure-provider",
-      onSelect: () => {
-        setSettingsCategory("providers")
-        setIsSettingsOpen(true)
-      },
-    }
   })()
 
   const activeBranchComposerTarget =
@@ -400,6 +277,42 @@ export function ConversationWorkspace({
     pendingBranchOriginIndex === -1 || activeBranchComposerTarget === null
       ? null
       : activeBranchComposerTarget.parentNodeId
+
+  const branchSwitcherMap = React.useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        index: number
+        count: number
+        prevDisabled: boolean
+        nextDisabled: boolean
+        onPrev: () => void
+        onNext: () => void
+      }
+    >()
+    for (const message of renderedMessagePath) {
+      const info = siblingBranchInfo(store.nodesById, message.id)
+      if (info === null) continue
+      map.set(message.id, {
+        index: info.index,
+        count: info.count,
+        prevDisabled: info.prevId === undefined,
+        nextDisabled: info.nextId === undefined,
+        onPrev: () => {
+          if (info.prevId !== undefined) selectBranchAtNode(info.prevId)
+        },
+        onNext: () => {
+          if (info.nextId !== undefined) selectBranchAtNode(info.nextId)
+        },
+      })
+    }
+    return map
+  }, [renderedMessagePath, selectBranchAtNode, store.nodesById])
+
+  const branchSwitcherFor = React.useCallback(
+    (nodeId: string) => branchSwitcherMap.get(nodeId) ?? null,
+    [branchSwitcherMap],
+  )
 
   React.useEffect(
     () =>
@@ -434,19 +347,46 @@ export function ConversationWorkspace({
           activeBranchComposerTarget === null ? !canAppend : !canSubmitBranch,
       }
 
-  const canCreateBranch = (nodeId: string) => {
-    if (!canMutate) return false
-    const node = store.nodesById[nodeId]
-    return node?.role === "assistant" && node.childIds.length > 0
-  }
+  const canCreateBranch = React.useCallback(
+    (nodeId: string) => {
+      if (!canMutate) return false
+      const node = store.nodesById[nodeId]
+      return node?.role === "assistant" && node.childIds.length > 0
+    },
+    [canMutate, store.nodesById],
+  )
 
-  const canEditAsBranch = (nodeId: string) => {
-    if (!canMutate) return false
-    const node = store.fullNodes[nodeId]
-    const parent =
-      node?.parentId === undefined ? undefined : store.fullNodes[node.parentId]
-    return node?.role === "user" && parent?.role === "assistant"
-  }
+  const canEditAsBranch = React.useCallback(
+    (nodeId: string) => {
+      if (!canMutate) return false
+      const node = store.fullNodes[nodeId]
+      const parent =
+        node?.parentId === undefined
+          ? undefined
+          : store.fullNodes[node.parentId]
+      return node?.role === "user" && parent?.role === "assistant"
+    },
+    [canMutate, store.fullNodes],
+  )
+
+  const handleEditAsBranch = React.useCallback(
+    (nodeId: string, content: string) => {
+      void controller.editNodeAsBranch(nodeId, content)
+    },
+    [controller],
+  )
+
+  const handleExportMessage = React.useCallback(
+    (nodeId: string) => {
+      void useConversationStore.getState().exportUpToMessage(client, nodeId)
+    },
+    [client],
+  )
+
+  const handleConfigureProvider = React.useCallback(() => {
+    setSettingsCategory("providers")
+    setIsSettingsOpen(true)
+  }, [])
 
   // Shared by the conversation pane's per-message action and the panorama
   // card action. Returns whether the branch composer actually armed; the
@@ -534,34 +474,53 @@ export function ConversationWorkspace({
     return succeeded
   }
 
-  const handleRegenerateAssistant = (assistantNodeId: string) => {
-    if (useProviderStore.getState().phase !== "ready") return
+  const handleRegenerateAssistant = React.useCallback(
+    (assistantNodeId: string) => {
+      if (useProviderStore.getState().phase !== "ready") return
 
-    const target = resolveAssistantRegenerationTarget(
-      useConversationStore.getState(),
-    )
-    if (target?.assistantNodeId !== assistantNodeId) return
+      const state = useConversationStore.getState()
+      if (
+        state.isCreatingConversation ||
+        state.conversationId === null ||
+        state.isArchived ||
+        state.status !== "ready" ||
+        state.generationRuns[state.conversationId] !== undefined
+      ) {
+        return
+      }
 
-    controller.selectNode(target.parentUserNodeId)
-    const selectedState = useConversationStore.getState()
-    if (
-      selectedState.conversationId !== target.conversationId ||
-      selectedState.activeNodeId !== target.parentUserNodeId
-    ) {
-      return
-    }
-    controller.generate()
-  }
+      const projection = selectActivePath(state)
+      const finalMessage =
+        projection.kind === "ready" ? projection.path.at(-1) : null
+      if (
+        finalMessage?.role !== "assistant" ||
+        state.activeNodeId !== finalMessage.id ||
+        finalMessage.id !== assistantNodeId
+      ) {
+        return
+      }
 
-  const assistantRegenerationTarget =
-    providerPhase === "ready" ? resolveAssistantRegenerationTarget(store) : null
-  const assistantRegenerationAction: AssistantRegenerationAction | null =
-    assistantRegenerationTarget === null
-      ? null
-      : {
-          assistantNodeId: assistantRegenerationTarget.assistantNodeId,
-          onSelect: handleRegenerateAssistant,
-        }
+      const assistantNode = state.fullNodes[finalMessage.id]
+      if (
+        assistantNode?.role !== "assistant" ||
+        assistantNode.parentId === undefined
+      ) {
+        return
+      }
+
+      const parentUserNodeId = assistantNode.parentId
+      controller.selectNode(parentUserNodeId)
+      const selectedState = useConversationStore.getState()
+      if (
+        selectedState.conversationId !== state.conversationId ||
+        selectedState.activeNodeId !== parentUserNodeId
+      ) {
+        return
+      }
+      controller.generate()
+    },
+    [controller],
+  )
 
   const handleRetry = () => {
     if (store.conversationId === null) store.clearError()
@@ -573,11 +532,11 @@ export function ConversationWorkspace({
       ? null
       : (store.history.summaries.find((item) => item.id === pendingArchiveId) ??
         null)
-  // Re-evaluated from the live store on every render while the dialog is
-  // open, so the warning reflects the confirm-time run state — including a
-  // background run on a non-current conversation.
-  const pendingArchiveInterrupts =
-    pendingArchiveId !== null && activeRunIds.has(pendingArchiveId)
+  const pendingArchiveInterrupts = useConversationStore(
+    (state) =>
+      pendingArchiveId !== null &&
+      isRunActive(state.generationRuns[pendingArchiveId]),
+  )
   const pendingRenameSummary =
     pendingRenameId === null
       ? null
@@ -588,11 +547,15 @@ export function ConversationWorkspace({
       ? null
       : (store.history.summaries.find((item) => item.id === pendingDeleteId) ??
         null)
-  const pendingDeleteInterrupts =
-    pendingDeleteId !== null && activeRunIds.has(pendingDeleteId)
+  const pendingDeleteInterrupts = useConversationStore(
+    (state) =>
+      pendingDeleteId !== null &&
+      isRunActive(state.generationRuns[pendingDeleteId]),
+  )
 
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
+      <WorkspaceRenderProbe />
       <aside
         id="conversation-tree-sidebar"
         aria-label={t("conversation.workspace.sidebar")}
@@ -659,7 +622,6 @@ export function ConversationWorkspace({
                     const isCurrent =
                       !isBlankConversation &&
                       store.conversationId === summary.id
-                    const isGenerating = activeRunIds.has(summary.id)
                     return (
                       <li key={summary.id}>
                         <div
@@ -689,14 +651,9 @@ export function ConversationWorkspace({
                             >
                               {summary.title}
                             </span>
-                            {isGenerating && (
-                              <Spinner
-                                className="size-3.5 shrink-0 text-muted-foreground"
-                                aria-label={t(
-                                  "conversation.workspace.generatingReply",
-                                )}
-                              />
-                            )}
+                            <HistoryGeneratingSpinner
+                              conversationId={summary.id}
+                            />
                             {summary.isArchived && (
                               <Badge className="shrink-0" variant="secondary">
                                 {t("conversation.workspace.archivedBadge")}
@@ -1048,55 +1005,34 @@ export function ConversationWorkspace({
           </div>
         ) : (
           <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-            <ConversationPane
+            <WorkspaceStreamingLayer
               path={renderedMessagePath}
+              pendingBranchOriginId={pendingBranchOriginId}
               status={projectionError === null ? store.status : "error"}
               error={projectionError ?? store.error}
               onRetry={handleRetry}
               canBranch={canCreateBranch}
               canEdit={canEditAsBranch}
               onCreateBranch={handleStartBranch}
-              onEditAsBranch={(nodeId, content) =>
-                void controller.editNodeAsBranch(nodeId, content)
-              }
-              onExportMessage={(nodeId) => {
-                void useConversationStore
-                  .getState()
-                  .exportUpToMessage(client, nodeId)
-              }}
-              exportDisabled={isRunActive(currentRun)}
-              transientGeneration={
-                pendingBranchOriginId === null && transientBubbleVisible
-                  ? transientGeneration
-                  : null
-              }
+              onEditAsBranch={handleEditAsBranch}
+              onExportMessage={handleExportMessage}
               onRegenerate={controller.generate}
-              userGenerationAction={userGenerationAction}
-              assistantRegenerationAction={assistantRegenerationAction}
-              pendingBranchOriginId={pendingBranchOriginId}
-              reveal={store.reveal}
               branchSwitcherFor={branchSwitcherFor}
+              reveal={store.reveal}
+              canMutate={canMutate}
+              canEditDraft={canEditDraft}
+              isArchived={store.isArchived}
+              activeNodeId={store.activeNodeId}
+              nodesById={store.nodesById}
+              activeBranchComposerTarget={activeBranchComposerTarget}
+              canAppend={canAppend}
+              composerAction={composerAction}
+              composerRef={composerRef}
+              onComposerSubmit={handleComposerSubmit}
+              onConfigureProvider={handleConfigureProvider}
+              onGenerate={controller.generate}
+              onRegenerateAssistant={handleRegenerateAssistant}
             />
-
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10">
-              <Composer
-                ref={composerRef}
-                onSubmit={handleComposerSubmit}
-                inputDisabled={!canEditDraft}
-                action={composerAction}
-                placeholder={
-                  store.isArchived
-                    ? t("conversation.workspace.placeholderArchived")
-                    : isRunActive(currentRun) && !transientBubbleVisible
-                      ? t("conversation.workspace.placeholderGenerating")
-                      : activeBranchComposerTarget !== null
-                        ? t("conversation.workspace.placeholderBranchMessage")
-                        : canAppend
-                          ? t("conversation.workspace.placeholderNextMessage")
-                          : t("conversation.workspace.placeholderDraftOnly")
-                }
-              />
-            </div>
           </div>
         )}
       </div>
