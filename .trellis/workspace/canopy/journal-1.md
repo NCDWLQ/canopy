@@ -1272,3 +1272,24 @@ Planned and implemented mainstream vendor presets for new providers: static pres
 ### Status
 
 [OK] **Completed**
+
+
+## Session 57: React render hot-path performance
+
+**Date**: 2026-08-30
+**Task**: React render hot-path performance
+**Branch**: `perf/react-render-hot-path`
+
+### Summary
+
+Stabilized selectActivePath cache, split workspace streaming subscriptions into WorkspaceStreamingLayer, memoized MessageNode/AssistantMarkdown, isolated App theme sync. pnpm check: 384 tests passed.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `57c3bc4` | (see git log) |
+
+### Status
+
+[OK] **Completed**
