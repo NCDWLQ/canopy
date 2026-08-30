@@ -1250,3 +1250,25 @@ Planned and implemented mainstream vendor presets for new providers: static pres
 ### Status
 
 [OK] **Completed**
+
+
+## Session 56: 线性视图分支切换器
+
+**Date**: 2026-08-30
+**Task**: 线性视图分支切换器
+**Branch**: `main`
+
+### Summary
+
+规划并实现在 ConversationPane 的 ‹ i/n › 分支切换器：siblingBranchInfo + BranchSwitcher 组件，复用 selectBranchAtNode；样式与操作栏对齐（size-7、Tooltip、外边缘分页器）；pnpm check 通过，PR #27 已合并。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1eb57f4` | (see git log) |
+| `bca0dd8` | (see git log) |
+
+### Status
+
+[OK] **Completed**

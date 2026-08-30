@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 55
+- **Total Sessions**: 56
 - **Last Active**: 2026-08-30
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1252 | Active |
+| `journal-1.md` | ~1274 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 56 | 2026-08-30 | 线性视图分支切换器 | `1eb57f4`, `bca0dd8` | `main` |
 | 55 | 2026-08-30 | Provider presets (B+ dual entry) | `4bf4fe1` | `feat/provider-presets` |
 | 54 | 2026-08-29 | Panorama branch-from-here action bar | `c18d518`, `424264a` | `feat/panorama-branch-button` |
 | 53 | 2026-08-27 | Backend residuals tree complete | `b4b28bc`, `c87f8de`, `d8a955b`, `5a57d5b`, `ae53834`, `80531e0` | `fix/backend-residuals` |
