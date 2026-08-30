@@ -94,7 +94,9 @@ describe("ConversationPane", () => {
       "true",
     )
     expect(marker.querySelector('[data-slot="marker-icon"] svg')).not.toBeNull()
-    expect(assistantArticle?.nextElementSibling).toBe(marker)
+    // Messages are wrapped in a content-visibility row; the marker must
+    // immediately follow the origin message's row.
+    expect(assistantArticle?.parentElement?.nextElementSibling).toBe(marker)
 
     act(() => {
       useLocaleStore.getState().setLocale("en")

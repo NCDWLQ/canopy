@@ -288,24 +288,31 @@ export function ConversationPane({
               : undefined
           return (
             <React.Fragment key={msg.id}>
-              <MessageNode
-                message={msg}
-                canBranch={canBranch(msg.id)}
-                canEdit={canEdit(msg.id)}
-                onCreateBranch={onCreateBranch}
-                onEditAsBranch={onEditAsBranch}
-                onExportMessage={onExportMessage}
-                exportDisabled={exportDisabled}
-                generationAction={nodeGenerationAction}
-                assistantRegenerationAction={nodeAssistantRegenerationAction}
-                highlightQuery={
-                  revealNodeId !== null && revealNodeId === msg.id
-                    ? revealQuery
-                    : undefined
-                }
-                scrollContainerRef={containerRef}
-                branchSwitcher={branchSwitcherFor?.(msg.id) ?? undefined}
-              />
+              {/* content-visibility lets the browser skip layout/paint for
+                  offscreen messages while keeping the DOM intact, so bottom
+                  autoscroll, reveal scrollIntoView, and find-in-page all keep
+                  working on long paths. The intrinsic size is only a
+                  pre-first-render estimate; `auto` remembers real heights. */}
+              <div className="[content-visibility:auto] [contain-intrinsic-size:auto_200px]">
+                <MessageNode
+                  message={msg}
+                  canBranch={canBranch(msg.id)}
+                  canEdit={canEdit(msg.id)}
+                  onCreateBranch={onCreateBranch}
+                  onEditAsBranch={onEditAsBranch}
+                  onExportMessage={onExportMessage}
+                  exportDisabled={exportDisabled}
+                  generationAction={nodeGenerationAction}
+                  assistantRegenerationAction={nodeAssistantRegenerationAction}
+                  highlightQuery={
+                    revealNodeId !== null && revealNodeId === msg.id
+                      ? revealQuery
+                      : undefined
+                  }
+                  scrollContainerRef={containerRef}
+                  branchSwitcher={branchSwitcherFor?.(msg.id) ?? undefined}
+                />
+              </div>
               {pendingBranchOriginId === msg.id && (
                 <Marker
                   variant="separator"
