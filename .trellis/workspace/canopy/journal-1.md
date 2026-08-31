@@ -1336,3 +1336,24 @@ Completed step 3 of render hot-path work on perf/react-render-hot-path: added me
 ### Status
 
 [OK] **Completed**
+
+
+## Session 60: 全景视图用户节点删除
+
+**Date**: 2026-08-31
+**Task**: 全景视图用户节点删除
+**Branch**: `feat/message-delete`
+
+### Summary
+
+实现全景视图用户节点删除：新增 delete_conversation_node IPC、store 子树同步、确认框 UI 与用户向文案；创建 Draft PR #30。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bfacd94` | (see git log) |
+
+### Status
+
+[OK] **Completed**
