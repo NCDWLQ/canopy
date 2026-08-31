@@ -13,12 +13,11 @@ use crate::infra::identity::{IdentityTimeSource, SystemIdentityTimeSource};
 use super::dto::{
     ActivePathDto, AppendNodeRequest, ArchiveConversationRequest, ConversationDto,
     ConversationSearchResultDto, ConversationSummaryDto, ConversationTreeDto, CreateBranchRequest,
-    CreateConversationRequest, DeleteConversationRequest, DeleteConversationNodeRequest,
-    DeleteConversationNodeSuccess, DeleteConversationSuccess,
-    EditNodeAsBranchRequest, ListConversationsRequest, LoadActivePathRequest,
-    LoadConversationTreeRequest, NodeDto, RenameConversationRequest, SearchConversationsRequest,
-    SetConversationSystemPromptRequest, SetConversationSystemPromptResult,
-    UnarchiveConversationRequest,
+    CreateConversationRequest, DeleteConversationNodeRequest, DeleteConversationNodeSuccess,
+    DeleteConversationRequest, DeleteConversationSuccess, EditNodeAsBranchRequest,
+    ListConversationsRequest, LoadActivePathRequest, LoadConversationTreeRequest, NodeDto,
+    RenameConversationRequest, SearchConversationsRequest, SetConversationSystemPromptRequest,
+    SetConversationSystemPromptResult, UnarchiveConversationRequest,
 };
 
 const MAX_CONTENT_BYTES: usize = 1024 * 1024;
