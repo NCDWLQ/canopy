@@ -75,6 +75,19 @@ pub struct DeleteConversationRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct DeleteConversationNodeRequest {
+    pub conversation_id: String,
+    pub node_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct DeleteConversationNodeSuccess {
+    pub node_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct UnarchiveConversationRequest {
     pub conversation_id: String,
 }

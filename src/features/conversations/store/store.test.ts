@@ -124,6 +124,9 @@ function createMockClient() {
     archiveConversation: vi.fn<ConversationClient["archiveConversation"]>(),
     renameConversation: vi.fn<ConversationClient["renameConversation"]>(),
     deleteConversation: vi.fn<ConversationClient["deleteConversation"]>(),
+    deleteConversationNode: vi
+      .fn<ConversationClient["deleteConversationNode"]>()
+      .mockResolvedValue({ nodeId: "left" }),
     unarchiveConversation: vi
       .fn<ConversationClient["unarchiveConversation"]>()
       .mockResolvedValue(conversation),
@@ -1596,6 +1599,65 @@ describe("conversation store", () => {
     useConversationStore.getState().enterConversationCreation()
     expect(useConversationStore.getState().draftSystemPrompt).toBeNull()
     expect(useConversationStore.getState().systemPrompt).toBe("Loaded prompt")
+  })
+
+  it("deleteNodeSubtree removes the branch locally and redirects active selection to the parent", async () => {
+    client.deleteConversationNode.mockResolvedValueOnce({ nodeId: left.id })
+    useConversationStore.setState({
+      conversationId: conversation.id,
+      rootNodeId: root.id,
+      activeNodeId: left.id,
+      nodesById: tree.nodesById,
+      fullNodes: Object.fromEntries(tree.nodes.map((node) => [node.id, node])),
+      expandedIds: new Set([root.id, assistant.id, left.id]),
+      status: "ready",
+      error: null,
+    })
+
+    await useConversationStore.getState().deleteNodeSubtree(client, left.id)
+
+    const state = useConversationStore.getState()
+    expect(client.deleteConversationNode).toHaveBeenCalledWith({
+      conversationId: conversation.id,
+      nodeId: left.id,
+    })
+    expect(state.nodesById[left.id]).toBeUndefined()
+    expect(state.nodesById[assistant.id]?.childIds).toEqual([right.id])
+    expect(state.activeNodeId).toBe(assistant.id)
+    expect(selectActivePath(state).kind).toBe("ready")
+  })
+
+  it("deleteNodeSubtree clears an active generation run rooted in the deleted subtree", async () => {
+    client.deleteConversationNode.mockResolvedValueOnce({ nodeId: left.id })
+    useConversationStore.setState({
+      conversationId: conversation.id,
+      rootNodeId: root.id,
+      activeNodeId: right.id,
+      nodesById: tree.nodesById,
+      fullNodes: Object.fromEntries(tree.nodes.map((node) => [node.id, node])),
+      expandedIds: new Set([root.id, assistant.id, right.id]),
+      status: "ready",
+      error: null,
+      generationRuns: {
+        [conversation.id]: {
+          runId: 7,
+          conversationId: conversation.id,
+          parentNodeId: left.id,
+          generationId: "gen-left",
+          model: "fixture-model",
+          phase: "streaming",
+          thinking: "",
+          content: "PARTIAL",
+          priorChildIds: [],
+        },
+      },
+    })
+
+    await useConversationStore.getState().deleteNodeSubtree(client, left.id)
+
+    expect(
+      useConversationStore.getState().generationRuns[conversation.id],
+    ).toBe(undefined)
   })
 })
 

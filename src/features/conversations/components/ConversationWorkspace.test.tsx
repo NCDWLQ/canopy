@@ -206,6 +206,9 @@ function createMockClient() {
     deleteConversation: vi
       .fn<ConversationClient["deleteConversation"]>()
       .mockResolvedValue({ conversationId: root.conversationId }),
+    deleteConversationNode: vi
+      .fn<ConversationClient["deleteConversationNode"]>()
+      .mockResolvedValue({ nodeId: left.id }),
     unarchiveConversation: vi
       .fn<ConversationClient["unarchiveConversation"]>()
       .mockResolvedValue(tree.conversation),
@@ -3030,6 +3033,51 @@ describe("ConversationWorkspace", () => {
     expect(scrollIntoView).toHaveBeenCalledWith(
       expect.objectContaining({ block: "start" }),
     )
+  })
+
+  it("confirms panorama branch deletion and removes the subtree from the store", async () => {
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(left.id)
+    client.deleteConversationNode.mockResolvedValueOnce({ nodeId: left.id })
+
+    render(<ConversationWorkspace />)
+    await userEvent.click(screen.getByRole("button", { name: "查看全景" }))
+    const panorama = screen.getByRole("region", { name: "对话全景" })
+    const leftCard = within(panorama)
+      .getByText("LEFT_BRANCH_SENTINEL")
+      .closest("[data-node-id]") as HTMLElement
+    fireEvent.click(
+      within(leftCard).getByRole("button", { name: "删除该分支" }),
+    )
+
+    expect(client.deleteConversationNode).not.toHaveBeenCalled()
+    expect(
+      screen.getByRole("alertdialog", { name: "删除该分支？" }),
+    ).toBeVisible()
+
+    fireEvent.click(screen.getByRole("button", { name: "取消" }))
+    expect(client.deleteConversationNode).not.toHaveBeenCalled()
+    expect(useConversationStore.getState().nodesById[left.id]).toBeDefined()
+
+    fireEvent.click(
+      within(leftCard).getByRole("button", { name: "删除该分支" }),
+    )
+    const dialog = screen.getByRole("alertdialog", { name: "删除该分支？" })
+    fireEvent.click(within(dialog).getByRole("button", { name: "删除该分支" }))
+
+    await waitFor(() => {
+      expect(client.deleteConversationNode).toHaveBeenCalledWith({
+        conversationId: root.conversationId,
+        nodeId: left.id,
+      })
+    })
+    expect(useConversationStore.getState().nodesById[left.id]).toBeUndefined()
+    expect(
+      within(panorama).queryByText("LEFT_BRANCH_SENTINEL"),
+    ).not.toBeInTheDocument()
+    expect(useConversationStore.getState().activeNodeId).toBe(assistant.id)
   })
 
   it("does not re-render the main workspace shell on generation deltas", async () => {

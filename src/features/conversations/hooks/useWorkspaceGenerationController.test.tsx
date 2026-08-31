@@ -258,6 +258,8 @@ function createConversationClient() {
     archiveConversation: vi.fn<ConversationClient["archiveConversation"]>(),
     renameConversation: vi.fn<ConversationClient["renameConversation"]>(),
     deleteConversation: vi.fn<ConversationClient["deleteConversation"]>(),
+    deleteConversationNode:
+      vi.fn<ConversationClient["deleteConversationNode"]>(),
     unarchiveConversation: vi.fn<ConversationClient["unarchiveConversation"]>(),
     searchConversations: vi
       .fn<ConversationClient["searchConversations"]>()

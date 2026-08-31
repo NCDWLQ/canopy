@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "SQLite 触发器、事务与 repository 约定；delete_subtree 需复用会话级删除的触发器摘除模式"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "conversations 域模块归属：command/service/repository 分层放置新删除逻辑"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "zustand store 规范化状态与 SQLite 持久化约定；子树移除与 activeNodeId 重定向"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "操作栏按钮与 ConfirmDialog 的 shadcn 组合模式"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "新增删除文案 key 的 typed-dictionary 双语规范"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "新 IPC 命令 delete_conversation_node 的严格类型与运行时校验边界"}

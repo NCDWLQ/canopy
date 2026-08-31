@@ -176,6 +176,10 @@ export const zhCN = {
   }) => `展开分支（${count} 条）`,
   "conversation.panorama.hiddenCount": ({ count }: { count: number }) =>
     `${count} 条已折叠`,
+  "conversation.panorama.deleteNode": "删除该分支",
+  "conversation.panorama.deleteNodeConfirmTitle": "删除该分支？",
+  "conversation.panorama.deleteNodeConfirmDescription":
+    "这条消息及其后续的所有回复和分支都会被永久删除，删除后无法恢复。",
 
   // SearchDialog.tsx
   "search.openButton": "搜索对话",

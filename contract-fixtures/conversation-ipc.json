@@ -10,6 +10,7 @@
     "archive_conversation",
     "rename_conversation",
     "delete_conversation",
+    "delete_conversation_node",
     "unarchive_conversation",
     "set_conversation_provider",
     "set_conversation_system_prompt",
@@ -53,6 +54,10 @@
     },
     "delete_conversation": {
       "conversation_id": "conversation-fixture"
+    },
+    "delete_conversation_node": {
+      "conversation_id": "conversation-fixture",
+      "node_id": "user-left"
     },
     "unarchive_conversation": {
       "conversation_id": "conversation-fixture"
@@ -114,6 +119,9 @@
     },
     "deleted_conversation": {
       "conversation_id": "conversation-fixture"
+    },
+    "deleted_conversation_node": {
+      "node_id": "user-left"
     },
     "unarchived_conversation": {
       "id": "conversation-fixture",

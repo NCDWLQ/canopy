@@ -110,6 +110,9 @@ export const renameConversationRequestSchema = z
   .object({ conversation_id: idSchema, title: titleSchema })
   .strict()
 export const deleteConversationRequestSchema = loadConversationTreeRequestSchema
+export const deleteConversationNodeRequestSchema = z
+  .object({ conversation_id: idSchema, node_id: idSchema })
+  .strict()
 export const unarchiveConversationRequestSchema =
   loadConversationTreeRequestSchema
 export const writeExportFileRequestSchema = z
@@ -337,6 +340,10 @@ export const deleteConversationSuccessSchema = z
   .object({ conversation_id: idSchema })
   .strict()
 
+export const deleteConversationNodeSuccessSchema = z
+  .object({ node_id: idSchema })
+  .strict()
+
 export type ConversationDto = z.infer<typeof conversationDtoSchema>
 export type ConversationSummaryDto = z.infer<
   typeof conversationSummaryDtoSchema
@@ -350,6 +357,9 @@ export type ConversationTreeDto = z.infer<typeof conversationTreeDtoSchema>
 export type ActivePathDto = z.infer<typeof activePathDtoSchema>
 export type DeleteConversationSuccessDto = z.infer<
   typeof deleteConversationSuccessSchema
+>
+export type DeleteConversationNodeSuccessDto = z.infer<
+  typeof deleteConversationNodeSuccessSchema
 >
 export type ConversationProviderBindingResultDto = z.infer<
   typeof conversationProviderBindingResultSchema

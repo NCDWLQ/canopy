@@ -25,7 +25,9 @@ import {
   createBranchRequestSchema,
   createConversationRequestSchema,
   deleteConversationRequestSchema,
+  deleteConversationNodeRequestSchema,
   deleteConversationSuccessSchema,
+  deleteConversationNodeSuccessSchema,
   editNodeAsBranchRequestSchema,
   loadActivePathRequestSchema,
   listConversationsRequestSchema,
@@ -46,6 +48,7 @@ import {
   type ConversationSummaryDto,
   type ConversationTreeDto,
   type DeleteConversationSuccessDto,
+  type DeleteConversationNodeSuccessDto,
   type NodeDto,
   type ConversationProviderBindingResultDto,
   type ConversationSystemPromptResultDto,
@@ -63,6 +66,7 @@ export const CONVERSATION_COMMANDS = {
   archiveConversation: "archive_conversation",
   renameConversation: "rename_conversation",
   deleteConversation: "delete_conversation",
+  deleteConversationNode: "delete_conversation_node",
   unarchiveConversation: "unarchive_conversation",
   setConversationProvider: "set_conversation_provider",
   setConversationSystemPrompt: "set_conversation_system_prompt",
@@ -112,6 +116,9 @@ export type RenameConversationInput = {
 }
 export type DeleteConversationSuccess = {
   conversationId: string
+}
+export type DeleteConversationNodeSuccess = {
+  nodeId: string
 }
 export type SetConversationProviderInput = {
   conversationId: string
@@ -257,6 +264,20 @@ export function createConversationClient(
         { conversation_id: conversationId },
         deleteConversationSuccessSchema,
         mapDeleteConversationSuccess,
+      )
+    },
+
+    deleteConversationNode(input: { conversationId: string; nodeId: string }) {
+      return call(
+        transport,
+        CONVERSATION_COMMANDS.deleteConversationNode,
+        deleteConversationNodeRequestSchema,
+        {
+          conversation_id: input.conversationId,
+          node_id: input.nodeId,
+        },
+        deleteConversationNodeSuccessSchema,
+        mapDeleteConversationNodeSuccess,
       )
     },
 
@@ -467,6 +488,12 @@ function mapDeleteConversationSuccess(
   dto: DeleteConversationSuccessDto,
 ): DeleteConversationSuccess {
   return { conversationId: dto.conversation_id }
+}
+
+function mapDeleteConversationNodeSuccess(
+  dto: DeleteConversationNodeSuccessDto,
+): DeleteConversationNodeSuccess {
+  return { nodeId: dto.node_id }
 }
 
 function mapConversationSearchResult(
