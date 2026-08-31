@@ -23,6 +23,7 @@ pub(crate) fn register_commands<R: tauri::Runtime>(
         conversations::commands::archive_conversation,
         conversations::commands::rename_conversation,
         conversations::commands::delete_conversation,
+        conversations::commands::delete_conversation_node,
         conversations::commands::unarchive_conversation,
         generation::commands::set_conversation_provider,
         conversations::commands::set_conversation_system_prompt,
@@ -195,6 +196,13 @@ mod tests {
                 json!({ "request": { "conversation_id": "conversation" } }),
             ),
             (
+                "delete_conversation_node",
+                json!({ "request": {
+                    "conversation_id": "conversation",
+                    "node_id": "node"
+                } }),
+            ),
+            (
                 "unarchive_conversation",
                 json!({ "request": { "conversation_id": "conversation" } }),
             ),
@@ -275,7 +283,7 @@ mod tests {
                 }),
             ),
         ];
-        assert_eq!(database_backed.len(), 26);
+        assert_eq!(database_backed.len(), 27);
 
         for (command, body) in database_backed {
             let response = invoke(&webview, command, body).unwrap_err();

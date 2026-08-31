@@ -18,6 +18,7 @@ import {
   Minus,
   Plus,
   Terminal,
+  Trash2,
   User,
   Wrench,
 } from "lucide-react"
@@ -74,6 +75,11 @@ function PanoramaNodeCard({ data }: NodeProps<PanoramaFlowNode>) {
     data.role === "assistant" &&
     data.childCount > 0 &&
     data.onCreateBranch !== null
+  const canDelete =
+    data.role === "user" &&
+    !data.isRoot &&
+    data.onDeleteNode !== null &&
+    data.onDeleteNode !== undefined
 
   return (
     <div
@@ -200,6 +206,33 @@ function PanoramaNodeCard({ data }: NodeProps<PanoramaFlowNode>) {
           </Tooltip>
         </div>
       )}
+      {canDelete && (
+        <div className="absolute right-2 top-full z-10 mt-0.5 flex opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none">
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className="text-muted-foreground hover:text-destructive"
+                aria-label={t("conversation.panorama.deleteNode")}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  data.onDeleteNode?.(data.nodeId)
+                }}
+                onDoubleClick={(event) => {
+                  event.stopPropagation()
+                }}
+              >
+                <Trash2 className="size-3.5" aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {t("conversation.panorama.deleteNode")}
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      )}
     </div>
   )
 }
@@ -229,6 +262,8 @@ export type ConversationPanoramaProps = {
    * locked, which hides the branch affordance on every card.
    */
   onCreateBranch: ((nodeId: string) => void) | null
+  /** Opens the delete confirmation for a user branch node; null hides it. */
+  onDeleteNode?: ((nodeId: string) => void) | null
 }
 
 export function ConversationPanorama(props: ConversationPanoramaProps) {
@@ -249,6 +284,7 @@ function ConversationPanoramaView({
   onSelect,
   onOpenInConversation,
   onCreateBranch,
+  onDeleteNode,
 }: ConversationPanoramaProps) {
   const { t } = useTranslation()
   const { resolvedTheme } = useTheme()
@@ -364,11 +400,13 @@ function ConversationPanoramaView({
       ...node,
       data: {
         ...node.data,
+        isRoot: node.id === rootNodeId,
         onToggleBranch: handleToggleBranch,
         onCreateBranch,
+        onDeleteNode,
       },
     }))
-  }, [layout, handleToggleBranch, onCreateBranch])
+  }, [layout, handleToggleBranch, onCreateBranch, onDeleteNode, rootNodeId])
 
   const fitViewOptions = React.useMemo(
     () => ({ padding: 0.15, maxZoom: 0.9 }),

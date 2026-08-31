@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react"
+import { fireEvent, render, screen, within } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { ConversationPanorama } from "./ConversationPanorama"
@@ -349,6 +349,81 @@ describe("ConversationPanorama", () => {
 
     expect(
       screen.queryByRole("button", { name: "从此处创建分支" }),
+    ).not.toBeInTheDocument()
+  })
+
+  it("offers delete only on non-root user nodes when deletion is enabled", () => {
+    render(
+      <ConversationPanorama
+        rootNodeId="root"
+        nodesById={nodesById}
+        activePathIds={activePathIds}
+        onSelect={vi.fn()}
+        onOpenInConversation={vi.fn()}
+        onCreateBranch={vi.fn()}
+        onDeleteNode={vi.fn()}
+      />,
+    )
+
+    const deleteButtons = screen.getAllByRole("button", {
+      name: "删除该分支",
+    })
+    expect(deleteButtons).toHaveLength(2)
+    const deleteNodeIds = deleteButtons.map((button) =>
+      button.closest("[data-node-id]")?.getAttribute("data-node-id"),
+    )
+    expect(deleteNodeIds).toEqual(
+      expect.arrayContaining(["user-left", "user-right"]),
+    )
+    expect(
+      within(screen.getByText("ROOT").closest("[data-node-id]")!).queryByRole(
+        "button",
+        { name: "删除该分支" },
+      ),
+    ).not.toBeInTheDocument()
+  })
+
+  it("emits the node id through onDeleteNode without selecting the card", () => {
+    const onDeleteNode = vi.fn()
+    const onSelect = vi.fn()
+    render(
+      <ConversationPanorama
+        rootNodeId="root"
+        nodesById={nodesById}
+        activePathIds={activePathIds}
+        onSelect={onSelect}
+        onOpenInConversation={vi.fn()}
+        onCreateBranch={vi.fn()}
+        onDeleteNode={onDeleteNode}
+      />,
+    )
+
+    fireEvent.click(
+      within(screen.getByText("LEFT").closest("[data-node-id]")!).getByRole(
+        "button",
+        { name: "删除该分支" },
+      ),
+    )
+
+    expect(onDeleteNode).toHaveBeenCalledWith("user-left")
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  it("hides delete while mutations are locked", () => {
+    render(
+      <ConversationPanorama
+        rootNodeId="root"
+        nodesById={nodesById}
+        activePathIds={activePathIds}
+        onSelect={vi.fn()}
+        onOpenInConversation={vi.fn()}
+        onCreateBranch={vi.fn()}
+        onDeleteNode={null}
+      />,
+    )
+
+    expect(
+      screen.queryByRole("button", { name: "删除该分支" }),
     ).not.toBeInTheDocument()
   })
 

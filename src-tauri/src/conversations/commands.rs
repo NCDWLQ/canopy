@@ -13,7 +13,8 @@ use crate::infra::identity::{IdentityTimeSource, SystemIdentityTimeSource};
 use super::dto::{
     ActivePathDto, AppendNodeRequest, ArchiveConversationRequest, ConversationDto,
     ConversationSearchResultDto, ConversationSummaryDto, ConversationTreeDto, CreateBranchRequest,
-    CreateConversationRequest, DeleteConversationRequest, DeleteConversationSuccess,
+    CreateConversationRequest, DeleteConversationRequest, DeleteConversationNodeRequest,
+    DeleteConversationNodeSuccess, DeleteConversationSuccess,
     EditNodeAsBranchRequest, ListConversationsRequest, LoadActivePathRequest,
     LoadConversationTreeRequest, NodeDto, RenameConversationRequest, SearchConversationsRequest,
     SetConversationSystemPromptRequest, SetConversationSystemPromptResult,
@@ -33,6 +34,7 @@ pub const CONVERSATION_COMMAND_NAMES: &[&str] = &[
     "archive_conversation",
     "rename_conversation",
     "delete_conversation",
+    "delete_conversation_node",
     "unarchive_conversation",
     "set_conversation_provider", // handler lives in generation::commands; name stays for the frozen conversation fixture
     "set_conversation_system_prompt",
@@ -223,6 +225,21 @@ impl<S: IdentityTimeSource> ConversationCommandService<S> {
             .map_err(CommandError::from)?;
         Ok(DeleteConversationSuccess {
             conversation_id: request.conversation_id,
+        })
+    }
+
+    pub async fn delete_conversation_node(
+        &self,
+        request: DeleteConversationNodeRequest,
+    ) -> Result<DeleteConversationNodeSuccess, CommandError> {
+        validate_id("conversation_id", &request.conversation_id)?;
+        validate_id("node_id", &request.node_id)?;
+        self.persistence
+            .delete_node_subtree(&request.conversation_id, &request.node_id)
+            .await
+            .map_err(CommandError::from)?;
+        Ok(DeleteConversationNodeSuccess {
+            node_id: request.node_id,
         })
     }
 
@@ -465,6 +482,17 @@ pub async fn delete_conversation(
 }
 
 #[tauri::command]
+pub async fn delete_conversation_node(
+    request: DeleteConversationNodeRequest,
+    instances: State<'_, DbInstances>,
+) -> Result<DeleteConversationNodeSuccess, CommandError> {
+    production_service(instances.inner())
+        .await?
+        .delete_conversation_node(request)
+        .await
+}
+
+#[tauri::command]
 pub async fn unarchive_conversation(
     request: UnarchiveConversationRequest,
     instances: State<'_, DbInstances>,
@@ -507,18 +535,19 @@ mod tests {
 
     #[test]
     fn command_names_are_frozen() {
-        assert_eq!(CONVERSATION_COMMAND_NAMES.len(), 15);
+        assert_eq!(CONVERSATION_COMMAND_NAMES.len(), 16);
         assert_eq!(CONVERSATION_COMMAND_NAMES[0], "create_conversation");
         assert_eq!(CONVERSATION_COMMAND_NAMES[8], "rename_conversation");
         assert_eq!(CONVERSATION_COMMAND_NAMES[9], "delete_conversation");
-        assert_eq!(CONVERSATION_COMMAND_NAMES[10], "unarchive_conversation");
-        assert_eq!(CONVERSATION_COMMAND_NAMES[11], "set_conversation_provider");
+        assert_eq!(CONVERSATION_COMMAND_NAMES[10], "delete_conversation_node");
+        assert_eq!(CONVERSATION_COMMAND_NAMES[11], "unarchive_conversation");
+        assert_eq!(CONVERSATION_COMMAND_NAMES[12], "set_conversation_provider");
         assert_eq!(
-            CONVERSATION_COMMAND_NAMES[12],
+            CONVERSATION_COMMAND_NAMES[13],
             "set_conversation_system_prompt"
         );
-        assert_eq!(CONVERSATION_COMMAND_NAMES[13], "search_conversations");
-        assert_eq!(CONVERSATION_COMMAND_NAMES[14], "write_export_file");
+        assert_eq!(CONVERSATION_COMMAND_NAMES[14], "search_conversations");
+        assert_eq!(CONVERSATION_COMMAND_NAMES[15], "write_export_file");
     }
 
     #[test]

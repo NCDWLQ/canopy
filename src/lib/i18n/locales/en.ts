@@ -177,6 +177,10 @@ export const en = {
   }) => `Expand branch (${count} message${count === 1 ? "" : "s"})`,
   "conversation.panorama.hiddenCount": ({ count }: { count: number }) =>
     `${count} collapsed`,
+  "conversation.panorama.deleteNode": "Delete branch",
+  "conversation.panorama.deleteNodeConfirmTitle": "Delete this branch?",
+  "conversation.panorama.deleteNodeConfirmDescription":
+    "This permanently deletes this message and every reply and branch that follows it. This cannot be undone.",
 
   // SearchDialog.tsx
   "search.openButton": "Search conversations",

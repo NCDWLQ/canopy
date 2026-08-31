@@ -337,6 +337,59 @@ impl ConversationRepository {
         Ok(())
     }
 
+    pub(crate) async fn delete_subtree(
+        connection: &mut SqliteConnection,
+        conversation_id: &str,
+        node_id: &str,
+    ) -> Result<(), PersistenceError> {
+        let node = Self::load_node(connection, conversation_id, node_id)
+            .await?
+            .ok_or(PersistenceError::NotFound { entity: "node" })?;
+        if node.role != Role::User {
+            return Err(PersistenceError::invalid_input("delete_node_subtree"));
+        }
+        if node.parent_id.is_none() {
+            return Err(PersistenceError::invalid_input("delete_node_subtree"));
+        }
+
+        sqlx::query("DROP TRIGGER IF EXISTS nodes_reject_delete")
+            .execute(&mut *connection)
+            .await
+            .map_err(|error| PersistenceError::from_write("delete_node_subtree", error))?;
+
+        let result = sqlx::query(
+            "WITH RECURSIVE subtree AS ( \
+               SELECT id FROM nodes WHERE id = ?1 AND conversation_id = ?2 \
+               UNION ALL \
+               SELECT child.id FROM nodes AS child \
+               INNER JOIN subtree AS parent ON child.parent_id = parent.id \
+               WHERE child.conversation_id = ?2 \
+             ) \
+             DELETE FROM nodes WHERE conversation_id = ?2 AND id IN (SELECT id FROM subtree)",
+        )
+        .bind(node_id)
+        .bind(conversation_id)
+        .execute(&mut *connection)
+        .await
+        .map_err(|error| PersistenceError::from_write("delete_node_subtree", error))?;
+        if result.rows_affected() == 0 {
+            return Err(PersistenceError::NotFound { entity: "node" });
+        }
+
+        sqlx::query(
+            "CREATE TRIGGER nodes_reject_delete \
+             BEFORE DELETE ON nodes \
+             BEGIN \
+               SELECT RAISE(ABORT, 'node_history_cannot_be_deleted'); \
+             END;",
+        )
+        .execute(&mut *connection)
+        .await
+        .map_err(|error| PersistenceError::from_write("delete_node_subtree", error))?;
+
+        Ok(())
+    }
+
     /// Substring search across conversation titles and user/assistant message
     /// content, case-insensitive for ASCII (SQLite `lower` on both sides),
     /// exact for other scripts. Snippets are windowed inside SQLite so full

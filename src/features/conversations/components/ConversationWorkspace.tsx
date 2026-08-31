@@ -32,6 +32,7 @@ import {
 } from "../store"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -173,6 +174,9 @@ export function ConversationWorkspace({
   const [pendingDeleteId, setPendingDeleteId] = React.useState<string | null>(
     null,
   )
+  const [pendingDeleteNodeId, setPendingDeleteNodeId] = React.useState<
+    string | null
+  >(null)
   const [branchComposerTarget, setBranchComposerTarget] =
     React.useState<BranchComposerTarget | null>(null)
   // Keep the pending target through the store's authoritative active-node
@@ -436,6 +440,10 @@ export function ConversationWorkspace({
     },
     [handleStartBranch, selectNode],
   )
+
+  const handlePanoramaDeleteNode = React.useCallback((nodeId: string) => {
+    setPendingDeleteNodeId(nodeId)
+  }, [])
 
   const handleComposerSubmit = async (content: string) => {
     const target = activeBranchComposerTarget
@@ -1003,6 +1011,7 @@ export function ConversationWorkspace({
                   setIsPanoramaOpen(false)
                 }}
                 onCreateBranch={canMutate ? handlePanoramaCreateBranch : null}
+                onDeleteNode={canMutate ? handlePanoramaDeleteNode : null}
               />
             ) : projectionError !== null ? (
               <div className="p-6 text-sm text-destructive" role="alert">
@@ -1106,6 +1115,25 @@ export function ConversationWorkspace({
           }
         />
       )}
+
+      <ConfirmDialog
+        open={pendingDeleteNodeId !== null}
+        title={t("conversation.panorama.deleteNodeConfirmTitle")}
+        description={t("conversation.panorama.deleteNodeConfirmDescription")}
+        cancelLabel={t("common.cancel")}
+        confirmLabel={t("conversation.panorama.deleteNode")}
+        destructive
+        onCancel={() => setPendingDeleteNodeId(null)}
+        onConfirm={() => {
+          const target = pendingDeleteNodeId
+          setPendingDeleteNodeId(null)
+          if (target !== null) {
+            void useConversationStore
+              .getState()
+              .deleteNodeSubtree(client, target)
+          }
+        }}
+      />
 
       <AlertDialog
         open={pendingDeleteId !== null}

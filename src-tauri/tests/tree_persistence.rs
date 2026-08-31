@@ -1225,3 +1225,79 @@ fn system_prompt_round_trips_clears_to_null_and_rejects_archived_writes() {
         assert_eq!(archived.conversation.system_prompt, None);
     });
 }
+
+#[test]
+fn node_subtree_delete_removes_descendants_and_keeps_the_delete_guard() {
+    run_async(async {
+        let pool = migrated_pool().await;
+        let service = create_branch_fixture(&pool).await;
+
+        service
+            .delete_node_subtree("conversation-a", "user-left")
+            .await
+            .expect("user subtree deletes");
+
+        let remaining: Vec<String> = sqlx::query_scalar(
+            "SELECT id FROM nodes WHERE conversation_id = 'conversation-a' ORDER BY id",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("remaining nodes are readable");
+        assert_eq!(
+            remaining,
+            vec![
+                "assistant-a".to_owned(),
+                "root".to_owned(),
+                "user-a".to_owned(),
+                "user-right".to_owned(),
+            ]
+        );
+
+        let direct_delete = sqlx::query("DELETE FROM nodes WHERE id = 'user-right'")
+            .execute(&pool)
+            .await;
+        assert!(direct_delete.is_err());
+
+        let trigger_count: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM sqlite_schema \
+             WHERE type = 'trigger' AND name = 'nodes_reject_delete'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("delete guard presence is readable");
+        assert_eq!(trigger_count, 1);
+    });
+}
+
+#[test]
+fn node_subtree_delete_rejects_root_assistant_and_missing_nodes() {
+    run_async(async {
+        let pool = migrated_pool().await;
+        let service = create_branch_fixture(&pool).await;
+
+        assert!(matches!(
+            service.delete_node_subtree("conversation-a", "root").await,
+            Err(PersistenceError::InvalidInput { operation, .. })
+                if operation == "delete_node_subtree"
+        ));
+        assert!(matches!(
+            service
+                .delete_node_subtree("conversation-a", "assistant-a")
+                .await,
+            Err(PersistenceError::InvalidInput { operation, .. })
+                if operation == "delete_node_subtree"
+        ));
+        assert!(matches!(
+            service
+                .delete_node_subtree("conversation-a", "user-missing")
+                .await,
+            Err(PersistenceError::NotFound { .. })
+        ));
+        assert!(matches!(
+            service
+                .delete_node_subtree("conversation-b", "user-right")
+                .await,
+            Err(PersistenceError::NotFound { .. })
+        ));
+    });
+}

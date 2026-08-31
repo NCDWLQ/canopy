@@ -248,6 +248,7 @@ function createClient() {
       Promise.resolve({ ...conversation, title: "Renamed" }),
     deleteConversation: () =>
       Promise.resolve({ conversationId: conversation.id }),
+    deleteConversationNode: () => Promise.resolve({ nodeId: nodes.left.id }),
     unarchiveConversation: () => Promise.resolve(conversation),
     searchConversations: () => Promise.resolve([]),
     writeExportFile: () => Promise.resolve({ bytesWritten: 0 }),

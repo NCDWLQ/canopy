@@ -476,6 +476,18 @@ impl ConversationPersistenceService {
         Ok(())
     }
 
+    pub async fn delete_node_subtree(
+        &self,
+        conversation_id: &str,
+        node_id: &str,
+    ) -> Result<(), PersistenceError> {
+        let mut transaction = self.pool.begin().await?;
+        Self::require_writable_conversation(&mut transaction, conversation_id).await?;
+        ConversationRepository::delete_subtree(&mut transaction, conversation_id, node_id).await?;
+        transaction.commit().await?;
+        Ok(())
+    }
+
     pub(crate) async fn require_writable_conversation(
         connection: &mut sqlx::SqliteConnection,
         conversation_id: &str,

@@ -43,7 +43,7 @@ class WireExportWriteError extends Error {
 }
 
 describe("conversation Tauri contract", () => {
-  it("uses the shared exact command list and maps all fifteen request shapes", async () => {
+  it("uses the shared exact command list and maps all sixteen request shapes", async () => {
     expect(Object.values(CONVERSATION_COMMANDS)).toEqual(fixture.command_names)
     const transport = resolvingTransport({
       create_conversation: fixture.successes.conversation_tree,
@@ -56,6 +56,7 @@ describe("conversation Tauri contract", () => {
       archive_conversation: fixture.successes.archived_conversation,
       rename_conversation: fixture.successes.renamed_conversation,
       delete_conversation: fixture.successes.deleted_conversation,
+      delete_conversation_node: fixture.successes.deleted_conversation_node,
       unarchive_conversation: fixture.successes.unarchived_conversation,
       set_conversation_provider: fixture.successes.set_conversation_provider,
       set_conversation_system_prompt:
@@ -102,6 +103,10 @@ describe("conversation Tauri contract", () => {
     await client.deleteConversation(
       fixture.requests.delete_conversation.conversation_id,
     )
+    await client.deleteConversationNode({
+      conversationId: fixture.requests.delete_conversation_node.conversation_id,
+      nodeId: fixture.requests.delete_conversation_node.node_id,
+    })
     await client.unarchiveConversation(
       fixture.requests.unarchive_conversation.conversation_id,
     )

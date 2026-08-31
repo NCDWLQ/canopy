@@ -59,6 +59,9 @@ export type PanoramaNodeData = PanoramaCardData & {
   onToggleBranch: (nodeId: string) => void
   /** Starts a branch composer on this card; null hides the affordance. */
   onCreateBranch: ((nodeId: string) => void) | null
+  isRoot?: boolean
+  /** Opens delete confirmation for this user branch node; null hides it. */
+  onDeleteNode?: ((nodeId: string) => void) | null
 }
 
 export type PanoramaCardNode = FlowNode<PanoramaCardData, "panoramaCard">

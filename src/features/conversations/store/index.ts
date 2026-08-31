@@ -184,6 +184,10 @@ export type ConversationStore = ConversationTreeState & {
     client: ConversationClient,
     targetId: string,
   ) => Promise<void>
+  deleteNodeSubtree: (
+    client: ConversationClient,
+    nodeId: string,
+  ) => Promise<void>
   unarchiveConversation: (
     client: ConversationClient,
     targetId: string,
@@ -1845,6 +1849,86 @@ export const useConversationStore = create<ConversationStore>((set, get) => {
         set({
           ...blankTreeState(removeRunRecord(get(), targetId)),
           history: withoutSummary(get().history, targetId),
+        })
+      } catch (error: unknown) {
+        set({ status: "error", error: normalizeUiError(error) })
+      }
+    },
+
+    deleteNodeSubtree: async (client, nodeId) => {
+      const state = get()
+      const conversationId = state.conversationId
+      if (conversationId === null) return
+
+      const targetNode = state.nodesById[nodeId]
+      if (targetNode === undefined) return
+
+      const subtreeIds = new Set<string>()
+      const pending = [nodeId]
+      while (pending.length > 0) {
+        const currentId = pending.pop()
+        if (currentId === undefined || subtreeIds.has(currentId)) continue
+        subtreeIds.add(currentId)
+        const node = state.nodesById[currentId]
+        if (node !== undefined) pending.push(...node.childIds)
+      }
+
+      const parentId = targetNode.parentId
+      try {
+        const result = await client.deleteConversationNode({
+          conversationId,
+          nodeId,
+        })
+        if (result.nodeId !== nodeId) {
+          set({ status: "error", error: TREE_INTEGRITY_ERROR })
+          return
+        }
+
+        const nodesById = copyRecord(state.nodesById)
+        const fullNodes = copyRecord(state.fullNodes)
+        for (const id of subtreeIds) {
+          delete nodesById[id]
+          delete fullNodes[id]
+        }
+
+        if (parentId !== undefined) {
+          const parent = nodesById[parentId]
+          if (parent !== undefined) {
+            nodesById[parentId] = {
+              ...parent,
+              childIds: parent.childIds.filter((childId) => childId !== nodeId),
+            }
+          }
+        }
+
+        const activeNodeId =
+          state.activeNodeId !== null && subtreeIds.has(state.activeNodeId)
+            ? (parentId ?? state.activeNodeId)
+            : state.activeNodeId
+
+        const expandedIds = new Set(
+          [...state.expandedIds].filter((id) => !subtreeIds.has(id)),
+        )
+        if (activeNodeId !== null) {
+          for (const id of expandedIdsFromNodes(fullNodes, activeNodeId)) {
+            expandedIds.add(id)
+          }
+        }
+
+        const run = state.generationRuns[conversationId]
+        const generationRuns =
+          run !== undefined && subtreeIds.has(run.parentNodeId)
+            ? removeRunRecord(state, conversationId)
+            : copyRecord(state.generationRuns)
+
+        set({
+          nodesById,
+          fullNodes,
+          activeNodeId,
+          expandedIds,
+          generationRuns,
+          status: "ready",
+          error: null,
         })
       } catch (error: unknown) {
         set({ status: "error", error: normalizeUiError(error) })
