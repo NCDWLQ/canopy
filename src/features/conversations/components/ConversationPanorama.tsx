@@ -92,12 +92,13 @@ function PanoramaNodeCard({ data }: NodeProps<PanoramaFlowNode>) {
       aria-current={data.isActiveNode ? "true" : undefined}
       aria-label={`${roleLabel}：${label}`}
       className={cn(
-        "group relative flex flex-col gap-1.5 rounded-lg border px-3 py-2 text-left transition-colors motion-reduce:transition-none",
+        "group relative flex flex-col gap-1.5 rounded-lg px-3 py-2 text-left transition-colors motion-reduce:transition-none",
         data.role === "user"
-          ? "border-border bg-muted"
-          : "border-border bg-card",
-        data.isOnActivePath && "border-ring/60",
-        data.isActiveNode && "border-ring ring-2 ring-ring/50",
+          ? "bg-panorama-user"
+          : "border border-border bg-card",
+        data.isOnActivePath && data.role !== "user" && "border-ring/60",
+        data.isOnActivePath && data.role === "user" && "ring-1 ring-ring/60",
+        data.isActiveNode && "ring-2 ring-ring/50",
       )}
       style={{ width: PANORAMA_CARD_WIDTH, height: PANORAMA_CARD_HEIGHT }}
     >
@@ -246,7 +247,8 @@ const NODE_TYPES: NodeTypes = { panoramaCard: PanoramaNodeCard }
 const EMPTY_COLLAPSED_IDS: ReadonlySet<string> = new Set()
 
 function viewportTransitionDuration(): number {
-  return window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false
+  return (window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ??
+    false)
     ? 0
     : 200
 }
@@ -274,7 +276,9 @@ function PanoramaControls({
               size="icon-sm"
               className="rounded-none"
               aria-label={t("conversation.panorama.zoomIn")}
-              onClick={() => void zoomIn({ duration: viewportTransitionDuration() })}
+              onClick={() =>
+                void zoomIn({ duration: viewportTransitionDuration() })
+              }
             >
               <ZoomIn className="size-3.5" aria-hidden="true" />
             </Button>
@@ -291,7 +295,9 @@ function PanoramaControls({
               size="icon-sm"
               className="rounded-none"
               aria-label={t("conversation.panorama.zoomOut")}
-              onClick={() => void zoomOut({ duration: viewportTransitionDuration() })}
+              onClick={() =>
+                void zoomOut({ duration: viewportTransitionDuration() })
+              }
             >
               <ZoomOut className="size-3.5" aria-hidden="true" />
             </Button>

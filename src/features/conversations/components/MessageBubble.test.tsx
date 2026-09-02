@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest"
 import { MessageBubble } from "./MessageBubble"
 
 describe("MessageBubble", () => {
-  it("renders user messages as right-aligned bubbles with bg-muted and without text label", () => {
+  it("renders user messages as right-aligned bubbles with theme-tinted surface and without text label", () => {
     render(
       <MessageBubble role="user" actions={<button>分支</button>}>
         用户问题内容
@@ -18,7 +18,7 @@ describe("MessageBubble", () => {
     expect(screen.queryByText(/^用户$/)).not.toBeInTheDocument()
     expect(screen.getByText("用户问题内容")).toBeVisible()
     expect(screen.getByText("用户问题内容").closest("div")).toHaveClass(
-      "bg-muted",
+      "bg-primary/[0.08]",
       "rounded-2xl",
     )
   })

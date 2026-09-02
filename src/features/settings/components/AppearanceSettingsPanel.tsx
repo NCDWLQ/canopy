@@ -168,7 +168,7 @@ export function AppearanceSettingsPanel({
               </Field>
               <Field orientation="horizontal" data-disabled={mutationDisabled}>
                 <FieldContent>
-                  <FieldLabel id="theme-color-label">
+                  <FieldLabel htmlFor="theme-color">
                     {t("settings.appearance.themeColor")}
                   </FieldLabel>
                   <FieldDescription>
@@ -184,13 +184,10 @@ export function AppearanceSettingsPanel({
                     }
                   }}
                 >
-                  <SelectTrigger
-                    className="ml-auto w-[min(100%,12rem)]"
-                    aria-labelledby="theme-color-label"
-                  >
+                  <SelectTrigger id="theme-color" className="ml-auto w-44">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper" align="end">
                     <SelectGroup>
                       {THEME_COLORS.map((color) => (
                         <SelectItem key={color} value={color}>
