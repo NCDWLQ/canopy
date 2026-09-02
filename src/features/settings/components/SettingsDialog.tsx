@@ -1,5 +1,12 @@
 import * as React from "react"
-import { Archive, Bot, MessageSquare, Palette, Settings, type LucideIcon } from "lucide-react"
+import {
+  Archive,
+  Bot,
+  MessageSquare,
+  Palette,
+  Settings,
+  type LucideIcon,
+} from "lucide-react"
 
 import {
   ArchivedConversationsPanel,

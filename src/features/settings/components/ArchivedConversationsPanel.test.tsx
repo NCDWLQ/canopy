@@ -119,9 +119,7 @@ describe("ArchivedConversationsPanel", () => {
     const onRename = vi.fn()
     const onDelete = vi.fn()
     render(
-      <ArchivedConversationsPanel
-        {...panelProps({ onRename, onDelete })}
-      />,
+      <ArchivedConversationsPanel {...panelProps({ onRename, onDelete })} />,
     )
 
     await user.click(
@@ -141,9 +139,7 @@ describe("ArchivedConversationsPanel", () => {
   it("unarchives via the visible row action", async () => {
     const user = userEvent.setup()
     const onUnarchive = vi.fn()
-    render(
-      <ArchivedConversationsPanel {...panelProps({ onUnarchive })} />,
-    )
+    render(<ArchivedConversationsPanel {...panelProps({ onUnarchive })} />)
 
     await user.click(
       screen.getByRole("button", { name: "取消归档：Archived one" }),
