@@ -152,52 +152,50 @@ export function ArchivedConversationsPanel({
                     </span>
                   </Button>
                   <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="shrink-0 hover:bg-transparent"
-                          aria-label={t("settings.archived.menuAria", {
-                            title: item.title,
-                          })}
-                          disabled={disabled}
-                        >
-                          <EllipsisVertical />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent
-                        align="end"
-                        className="w-auto min-w-40"
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="shrink-0 hover:bg-transparent"
+                        aria-label={t("settings.archived.menuAria", {
+                          title: item.title,
+                        })}
+                        disabled={disabled}
                       >
-                        <DropdownMenuGroup>
-                          <DropdownMenuItem onSelect={() => onRename(item.id)}>
-                            <Pencil />
-                            {t("settings.archived.rename")}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onSelect={() => onUnarchive(item.id)}
-                          >
-                            <ArchiveRestore />
-                            {t("settings.archived.unarchive")}
-                          </DropdownMenuItem>
-                        </DropdownMenuGroup>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuGroup>
-                          <DropdownMenuItem
-                            variant="destructive"
-                            onSelect={() => onDelete(item.id)}
-                          >
-                            <Trash2 />
-                            {t("settings.archived.delete")}
-                          </DropdownMenuItem>
-                        </DropdownMenuGroup>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </li>
-              ))}
-            </ul>
+                        <EllipsisVertical />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="end"
+                      className="w-auto min-w-40"
+                    >
+                      <DropdownMenuGroup>
+                        <DropdownMenuItem onSelect={() => onRename(item.id)}>
+                          <Pencil />
+                          {t("settings.archived.rename")}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => onUnarchive(item.id)}>
+                          <ArchiveRestore />
+                          {t("settings.archived.unarchive")}
+                        </DropdownMenuItem>
+                      </DropdownMenuGroup>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuGroup>
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onSelect={() => onDelete(item.id)}
+                        >
+                          <Trash2 />
+                          {t("settings.archived.delete")}
+                        </DropdownMenuItem>
+                      </DropdownMenuGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
         {showError && (
           <Alert variant="destructive" className="mt-3">

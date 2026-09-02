@@ -6,9 +6,9 @@ describe("formatRelativeUpdatedAt", () => {
   const now = Date.UTC(2026, 0, 10, 12, 0, 0)
 
   it("formats recent updates as relative time", () => {
-    expect(
-      formatRelativeUpdatedAt(now - 2 * 60 * 60 * 1000, "en", now),
-    ).toBe("2 hours ago")
+    expect(formatRelativeUpdatedAt(now - 2 * 60 * 60 * 1000, "en", now)).toBe(
+      "2 hours ago",
+    )
     expect(
       formatRelativeUpdatedAt(now - 2 * 60 * 60 * 1000, "zh-CN", now),
     ).toBe("2小时前")
