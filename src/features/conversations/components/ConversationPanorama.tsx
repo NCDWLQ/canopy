@@ -262,7 +262,7 @@ function PanoramaControls({
   return (
     <Panel
       position="bottom-left"
-      className="overflow-hidden rounded-lg border border-border bg-background shadow-sm"
+      className="overflow-hidden rounded-lg border border-border bg-background"
       aria-label={t("conversation.panorama.controls")}
     >
       <div className="flex flex-col divide-y divide-border">
