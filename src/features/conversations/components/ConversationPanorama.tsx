@@ -145,7 +145,7 @@ function PanoramaNodeCard({ data }: NodeProps<PanoramaFlowNode>) {
               type="button"
               variant="outline"
               size="icon-xs"
-              className="absolute -right-3 top-1/2 z-10 -translate-y-1/2 rounded-full text-muted-foreground hover:text-foreground"
+              className="absolute -right-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-background dark:bg-background text-muted-foreground hover:bg-muted dark:hover:bg-muted hover:text-foreground"
               aria-label={t(
                 isCollapsed
                   ? "conversation.panorama.expandBranch"
