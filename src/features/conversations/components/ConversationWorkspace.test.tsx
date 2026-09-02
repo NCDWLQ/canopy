@@ -3279,6 +3279,33 @@ describe("ConversationWorkspace", () => {
     expect(screen.getByText("已归档 — 只读")).toBeVisible()
     expect(screen.getByRole("textbox", { name: "消息输入框" })).toBeDisabled()
   })
+
+  it("keeps global Settings editable while viewing an archived conversation", async () => {
+    const user = userEvent.setup()
+    client.loadConversationTree.mockResolvedValueOnce({
+      ...tree,
+      conversation: { ...tree.conversation, isArchived: true },
+    })
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(right.id)
+    render(<ConversationWorkspace />)
+
+    expect(screen.getByText("已归档 — 只读")).toBeVisible()
+    expect(screen.getByRole("textbox", { name: "消息输入框" })).toBeDisabled()
+
+    const sidebar = screen.getByRole("complementary", { name: "对话侧栏" })
+    await user.click(within(sidebar).getByRole("button", { name: "设置" }))
+    const dialog = screen.getByRole("dialog")
+    // Global preferences are not conversation-scoped: viewing an archived
+    // conversation must not disable them.
+    await waitFor(() => {
+      expect(
+        within(dialog).getByRole("combobox", { name: "语言" }),
+      ).toBeEnabled()
+    })
+  })
 })
 
 describe("ConversationWorkspace sidebar reveal", () => {
