@@ -2066,11 +2066,16 @@ describe("ConversationWorkspace", () => {
     const sidebar = screen.getByRole("complementary", { name: "对话侧栏" })
     await user.click(within(sidebar).getByRole("button", { name: "设置" }))
     await user.click(screen.getByRole("button", { name: "已归档对话" }))
+    expect(
+      screen.getByRole("button", { name: "取消归档：Archived row" }),
+    ).toBeVisible()
     await user.click(
       screen.getByRole("button", { name: "已归档对话操作：Archived row" }),
     )
     expect(screen.getByRole("menuitem", { name: "重命名" })).toBeVisible()
-    expect(screen.getByRole("menuitem", { name: "取消归档" })).toBeVisible()
+    expect(
+      screen.queryByRole("menuitem", { name: "取消归档" }),
+    ).not.toBeInTheDocument()
     expect(
       screen.queryByRole("menuitem", { name: "归档" }),
     ).not.toBeInTheDocument()
@@ -2383,9 +2388,8 @@ describe("ConversationWorkspace", () => {
     await user.click(within(sidebar).getByRole("button", { name: "设置" }))
     await user.click(screen.getByRole("button", { name: "已归档对话" }))
     await user.click(
-      screen.getByRole("button", { name: "已归档对话操作：Archived row" }),
+      screen.getByRole("button", { name: "取消归档：Archived row" }),
     )
-    await user.click(screen.getByRole("menuitem", { name: "取消归档" }))
 
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
     await waitFor(() => {

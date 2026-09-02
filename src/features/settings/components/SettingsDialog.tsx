@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Archive, Bot, MessageSquare, Palette, Settings } from "lucide-react"
+import { Archive, Bot, MessageSquare, Palette, Settings, type LucideIcon } from "lucide-react"
 
 import {
   ArchivedConversationsPanel,
@@ -39,6 +39,32 @@ export type SettingsCategory =
 
 type PendingDiscard =
   { kind: "switch"; category: SettingsCategory } | { kind: "close" }
+
+function SettingsNavButton({
+  active,
+  label,
+  icon: Icon,
+  onClick,
+}: {
+  active: boolean
+  label: string
+  icon: LucideIcon
+  onClick: () => void
+}) {
+  return (
+    <Button
+      type="button"
+      variant={active ? "secondary" : "ghost"}
+      className="w-full min-w-0 justify-start overflow-hidden"
+      title={label}
+      aria-current={active ? "page" : undefined}
+      onClick={onClick}
+    >
+      <Icon data-icon="inline-start" />
+      <span className="truncate">{label}</span>
+    </Button>
+  )
+}
 
 export function SettingsDialog(props: SettingsDialogProps) {
   const { client, initialCategory = "general", archivedConversations } = props
@@ -121,61 +147,41 @@ export function SettingsDialog(props: SettingsDialogProps) {
             {t("settings.dialog.description")}
           </DialogDescription>
         </DialogHeader>
-        <div className="grid min-h-0 flex-1 md:grid-cols-[12rem_minmax(0,1fr)]">
+        <div className="grid min-h-0 flex-1 md:grid-cols-[14rem_minmax(0,1fr)]">
           <nav
             aria-label={t("settings.dialog.navLabel")}
-            className="flex flex-col gap-1 border-b p-2 md:border-r md:border-b-0"
+            className="flex min-w-0 flex-col gap-1 border-b p-2 md:border-r md:border-b-0"
           >
-            <Button
-              type="button"
-              variant={category === "general" ? "secondary" : "ghost"}
-              className="w-full justify-start"
-              aria-current={category === "general" ? "page" : undefined}
+            <SettingsNavButton
+              active={category === "general"}
+              label={t("settings.dialog.generalCategory")}
+              icon={Settings}
               onClick={() => selectCategory("general")}
-            >
-              <Settings data-icon="inline-start" />
-              {t("settings.dialog.generalCategory")}
-            </Button>
-            <Button
-              type="button"
-              variant={category === "appearance" ? "secondary" : "ghost"}
-              className="w-full justify-start"
-              aria-current={category === "appearance" ? "page" : undefined}
+            />
+            <SettingsNavButton
+              active={category === "appearance"}
+              label={t("settings.dialog.appearanceCategory")}
+              icon={Palette}
               onClick={() => selectCategory("appearance")}
-            >
-              <Palette data-icon="inline-start" />
-              {t("settings.dialog.appearanceCategory")}
-            </Button>
-            <Button
-              type="button"
-              variant={category === "providers" ? "secondary" : "ghost"}
-              className="w-full justify-start"
-              aria-current={category === "providers" ? "page" : undefined}
+            />
+            <SettingsNavButton
+              active={category === "providers"}
+              label={t("settings.dialog.providersCategory")}
+              icon={Bot}
               onClick={() => selectCategory("providers")}
-            >
-              <Bot data-icon="inline-start" />
-              {t("settings.dialog.providersCategory")}
-            </Button>
-            <Button
-              type="button"
-              variant={category === "conversation" ? "secondary" : "ghost"}
-              className="w-full justify-start"
-              aria-current={category === "conversation" ? "page" : undefined}
+            />
+            <SettingsNavButton
+              active={category === "conversation"}
+              label={t("settings.dialog.conversationsCategory")}
+              icon={MessageSquare}
               onClick={() => selectCategory("conversation")}
-            >
-              <MessageSquare data-icon="inline-start" />
-              {t("settings.dialog.conversationsCategory")}
-            </Button>
-            <Button
-              type="button"
-              variant={category === "archived" ? "secondary" : "ghost"}
-              className="w-full justify-start"
-              aria-current={category === "archived" ? "page" : undefined}
+            />
+            <SettingsNavButton
+              active={category === "archived"}
+              label={t("settings.dialog.archivedCategory")}
+              icon={Archive}
               onClick={() => selectCategory("archived")}
-            >
-              <Archive data-icon="inline-start" />
-              {t("settings.dialog.archivedCategory")}
-            </Button>
+            />
           </nav>
           <div className="flex min-h-0 min-w-0 flex-col">
             {open &&
