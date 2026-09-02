@@ -1400,3 +1400,25 @@ Added a persisted seven-color shadcn primary selector to Appearance settings, in
 ### Status
 
 [OK] **Completed**
+
+
+## Session 63: Preserve scroll during streaming
+
+**Date**: 2026-09-02
+**Task**: Preserve scroll during streaming
+**Branch**: `fix/preserve-scroll-during-stream`
+
+### Summary
+
+Replaced ConversationPane's forced bottom-scroll with MessageScroller live-edge following, a localized jump-to-latest control, and spec contracts so streaming deltas no longer yank a user reading earlier messages.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `97d273b` | (see git log) |
+| `9f61dbe` | (see git log) |
+
+### Status
+
+[OK] **Completed**

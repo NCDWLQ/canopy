@@ -1,6 +1,14 @@
-import { act, render, screen, within } from "@testing-library/react"
+import { act, fireEvent, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type MockInstance,
+} from "vitest"
 
 import { ConversationPane } from "./ConversationPane"
 import type { PathMessageView } from "../types"
@@ -15,6 +23,107 @@ function installScrollIntoView(mock: ReturnType<typeof vi.fn>) {
   Object.defineProperty(Element.prototype, "scrollIntoView", {
     configurable: true,
     value: mock,
+  })
+}
+
+const overflowViewportRect = {
+  x: 0,
+  y: 0,
+  top: 0,
+  bottom: 400,
+  left: 0,
+  right: 800,
+  width: 800,
+  height: 400,
+  toJSON: () => ({}),
+}
+
+const overflowContentRect = {
+  x: 0,
+  y: 0,
+  top: 0,
+  bottom: 2000,
+  left: 0,
+  right: 800,
+  width: 800,
+  height: 2000,
+  toJSON: () => ({}),
+}
+
+function mockOverflowMetrics(
+  viewport: HTMLElement,
+  scrollTop: number,
+): {
+  getScrollTop: () => number
+  setScrollTop: (value: number) => void
+  setScrollHeight: (value: number) => void
+} {
+  let top = scrollTop
+  let height = 2000
+  Object.defineProperties(viewport, {
+    clientHeight: { configurable: true, get: () => 400 },
+    scrollHeight: {
+      configurable: true,
+      get: () => height,
+    },
+    scrollTop: {
+      configurable: true,
+      get: () => top,
+      set: (value: number) => {
+        top = value
+      },
+    },
+  })
+  return {
+    getScrollTop: () => top,
+    setScrollTop: (value: number) => {
+      top = value
+    },
+    setScrollHeight: (value: number) => {
+      height = value
+    },
+  }
+}
+
+function installOverflowRects(viewport: HTMLElement) {
+  return vi
+    .spyOn(Element.prototype, "getBoundingClientRect")
+    .mockImplementation(function (this: Element) {
+      if (this === viewport) {
+        return overflowViewportRect
+      }
+      const scrolled = viewport.scrollTop
+      return {
+        ...overflowContentRect,
+        top: overflowContentRect.top - scrolled,
+        bottom: overflowContentRect.bottom - scrolled,
+        y: overflowContentRect.y - scrolled,
+        toJSON: () => ({}),
+      }
+    })
+}
+
+function jumpButton(): HTMLElement | null {
+  return document.querySelector('[data-slot="message-scroller-button"]')
+}
+
+function defineElementScrollTo() {
+  Object.defineProperty(Element.prototype, "scrollTo", {
+    configurable: true,
+    writable: true,
+    value(this: Element, arg?: ScrollToOptions | number, y?: number) {
+      if (typeof arg === "number") {
+        ;(this as HTMLElement).scrollTop = y ?? arg
+        return
+      }
+      if (
+        arg !== undefined &&
+        typeof arg === "object" &&
+        arg.top !== undefined
+      ) {
+        ;(this as HTMLElement).scrollTop = arg.top
+      }
+    },
   })
 }
 
@@ -94,8 +203,8 @@ describe("ConversationPane", () => {
       "true",
     )
     expect(marker.querySelector('[data-slot="marker-icon"] svg')).not.toBeNull()
-    // Messages are wrapped in a content-visibility row; the marker must
-    // immediately follow the origin message's row.
+    // Messages are wrapped in a scroller item; the marker must immediately
+    // follow the origin message's row.
     expect(assistantArticle?.parentElement?.nextElementSibling).toBe(marker)
 
     act(() => {
@@ -306,10 +415,13 @@ describe("ConversationPane", () => {
 
   describe("auto-scroll", () => {
     const scrollIntoView = vi.fn()
+    let scrollTo: MockInstance
 
     beforeEach(() => {
       installScrollIntoView(scrollIntoView)
       scrollIntoView.mockClear()
+      defineElementScrollTo()
+      scrollTo = vi.spyOn(Element.prototype, "scrollTo")
     })
 
     const props = {
@@ -321,6 +433,40 @@ describe("ConversationPane", () => {
       onRegenerate: vi.fn(),
     }
 
+    function prepareOverflow(scrollTop: number) {
+      const viewport = screen.getByTestId("conversation-pane")
+      const metrics = mockOverflowMetrics(viewport, scrollTop)
+      const rectSpy = installOverflowRects(viewport)
+      return { viewport, metrics, rectSpy }
+    }
+
+    function stubResizeObservers(): ResizeObserverCallback[] {
+      const observers: ResizeObserverCallback[] = []
+      vi.stubGlobal(
+        "ResizeObserver",
+        class {
+          constructor(callback: ResizeObserverCallback) {
+            observers.push(callback)
+          }
+          observe() {}
+          unobserve() {}
+          disconnect() {}
+        },
+      )
+      return observers
+    }
+
+    async function flushObservers(observers: ResizeObserverCallback[]) {
+      await act(async () => {
+        for (const callback of observers) {
+          callback([], {} as ResizeObserver)
+        }
+        await new Promise((resolve) => {
+          requestAnimationFrame(resolve)
+        })
+      })
+    }
+
     it("does not scroll when the same path is rebuilt with new identities", () => {
       const { rerender } = render(
         <ConversationPane
@@ -329,7 +475,8 @@ describe("ConversationPane", () => {
           transientGeneration={null}
         />,
       )
-      expect(scrollIntoView).toHaveBeenCalledTimes(1)
+      const { rectSpy } = prepareOverflow(0)
+      scrollTo.mockClear()
 
       // Identity churn mirrors unrelated store updates such as background
       // generation deltas in another conversation.
@@ -340,32 +487,18 @@ describe("ConversationPane", () => {
           transientGeneration={null}
         />,
       )
-      expect(scrollIntoView).toHaveBeenCalledTimes(1)
+      expect(scrollTo).not.toHaveBeenCalled()
+      expect(scrollIntoView).not.toHaveBeenCalled()
+      rectSpy.mockRestore()
     })
 
-    it("scrolls when the displayed tail changes or transient content grows", () => {
-      const { rerender } = render(
+    it("follows streaming growth while the viewport stays in live-edge mode", async () => {
+      const observers = stubResizeObservers()
+      render(
         <ConversationPane
           {...props}
           path={[user1, assistant1]}
-          transientGeneration={null}
-        />,
-      )
-      expect(scrollIntoView).toHaveBeenCalledTimes(1)
-
-      rerender(
-        <ConversationPane
-          {...props}
-          path={[user1, assistant1, user2]}
-          transientGeneration={null}
-        />,
-      )
-      expect(scrollIntoView).toHaveBeenCalledTimes(2)
-
-      rerender(
-        <ConversationPane
-          {...props}
-          path={[user1, assistant1, user2]}
+          status="streaming"
           transientGeneration={{
             phase: "streaming",
             content: "PARTIAL",
@@ -373,12 +506,56 @@ describe("ConversationPane", () => {
           }}
         />,
       )
-      expect(scrollIntoView).toHaveBeenCalledTimes(3)
+      expect(observers.length).toBeGreaterThan(0)
+      const { metrics, rectSpy } = prepareOverflow(1500)
+      scrollTo.mockClear()
+      await flushObservers(observers)
+      expect(scrollTo).toHaveBeenCalled()
+      expect(metrics.getScrollTop()).toBe(1600)
+      rectSpy.mockRestore()
+    })
+
+    it("scrolls when the displayed tail changes but not when transient content grows", () => {
+      const { rerender } = render(
+        <ConversationPane
+          {...props}
+          path={[user1, assistant1]}
+          transientGeneration={null}
+        />,
+      )
+      const { metrics, rectSpy } = prepareOverflow(0)
+      scrollTo.mockClear()
 
       rerender(
         <ConversationPane
           {...props}
           path={[user1, assistant1, user2]}
+          transientGeneration={null}
+        />,
+      )
+      expect(scrollTo).toHaveBeenCalled()
+      expect(metrics.getScrollTop()).toBe(1600)
+      const afterPathChange = scrollTo.mock.calls.length
+
+      rerender(
+        <ConversationPane
+          {...props}
+          path={[user1, assistant1, user2]}
+          status="streaming"
+          transientGeneration={{
+            phase: "streaming",
+            content: "PARTIAL",
+            thinking: "",
+          }}
+        />,
+      )
+      const afterTransientAppears = scrollTo.mock.calls.length
+
+      rerender(
+        <ConversationPane
+          {...props}
+          path={[user1, assistant1, user2]}
+          status="streaming"
           transientGeneration={{
             phase: "streaming",
             content: "PARTIAL_GROWN",
@@ -386,7 +563,217 @@ describe("ConversationPane", () => {
           }}
         />,
       )
-      expect(scrollIntoView).toHaveBeenCalledTimes(4)
+      expect(scrollTo.mock.calls.length).toBe(afterTransientAppears)
+      expect(afterTransientAppears).toBeGreaterThanOrEqual(afterPathChange)
+      expect(scrollIntoView).not.toHaveBeenCalled()
+      rectSpy.mockRestore()
+    })
+
+    it("keeps the jump-to-latest control hidden at the live edge", () => {
+      render(
+        <ConversationPane
+          {...props}
+          path={[user1, assistant1]}
+          transientGeneration={null}
+        />,
+      )
+
+      const button = jumpButton()
+      expect(button).not.toBeNull()
+      expect(button).toHaveAttribute("data-active", "false")
+      expect(button).toHaveAttribute("aria-label", "滚动到最新")
+      expect(button).toHaveAttribute("inert")
+      expect(button).toHaveAttribute("tabindex", "-1")
+    })
+
+    it("releases follow while scrolled away, then jumps back and resumes", async () => {
+      const user = userEvent.setup()
+      const observers = stubResizeObservers()
+      const { rerender } = render(
+        <ConversationPane
+          {...props}
+          path={[user1, assistant1]}
+          status="streaming"
+          transientGeneration={{
+            phase: "streaming",
+            content: "PARTIAL",
+            thinking: "",
+          }}
+        />,
+      )
+
+      const { viewport, metrics, rectSpy } = prepareOverflow(0)
+      fireEvent.wheel(viewport, { deltaY: -120 })
+      fireEvent.scroll(viewport)
+      scrollTo.mockClear()
+
+      const button = jumpButton()
+      expect(button).toHaveAttribute("data-active", "true")
+      expect(screen.getByRole("button", { name: "滚动到最新" })).toBeVisible()
+
+      rerender(
+        <ConversationPane
+          {...props}
+          path={[user1, assistant1]}
+          status="streaming"
+          transientGeneration={{
+            phase: "streaming",
+            content: "PARTIAL_GROWN",
+            thinking: "",
+          }}
+        />,
+      )
+      expect(metrics.getScrollTop()).toBe(0)
+      expect(scrollTo).not.toHaveBeenCalled()
+
+      await user.click(screen.getByRole("button", { name: "滚动到最新" }))
+      expect(metrics.getScrollTop()).toBe(1600)
+      expect(jumpButton()).toHaveAttribute("data-active", "false")
+
+      metrics.setScrollHeight(2400)
+      scrollTo.mockClear()
+      await flushObservers(observers)
+      expect(scrollTo).toHaveBeenCalled()
+      expect(metrics.getScrollTop()).toBe(2000)
+
+      rectSpy.mockRestore()
+    })
+
+    it("resumes live-edge following after the user scrolls back to the bottom", async () => {
+      const observers = stubResizeObservers()
+      const { rerender } = render(
+        <ConversationPane
+          {...props}
+          path={[user1, assistant1]}
+          status="streaming"
+          transientGeneration={{
+            phase: "streaming",
+            content: "PARTIAL",
+            thinking: "",
+          }}
+        />,
+      )
+
+      const { viewport, metrics, rectSpy } = prepareOverflow(0)
+      fireEvent.wheel(viewport, { deltaY: -120 })
+      fireEvent.scroll(viewport)
+      expect(jumpButton()).toHaveAttribute("data-active", "true")
+
+      metrics.setScrollTop(1600)
+      fireEvent.scroll(viewport)
+      expect(jumpButton()).toHaveAttribute("data-active", "false")
+
+      metrics.setScrollHeight(2400)
+      scrollTo.mockClear()
+      rerender(
+        <ConversationPane
+          {...props}
+          path={[user1, assistant1]}
+          status="streaming"
+          transientGeneration={{
+            phase: "streaming",
+            content: "PARTIAL_GROWN",
+            thinking: "",
+          }}
+        />,
+      )
+      await flushObservers(observers)
+      expect(scrollTo).toHaveBeenCalled()
+      expect(metrics.getScrollTop()).toBe(2000)
+
+      rectSpy.mockRestore()
+    })
+
+    it("is keyboard-operable and localizes the jump control", async () => {
+      const user = userEvent.setup()
+      render(
+        <ConversationPane
+          {...props}
+          path={[user1, assistant1]}
+          transientGeneration={null}
+        />,
+      )
+
+      const { viewport, rectSpy } = prepareOverflow(0)
+      fireEvent.wheel(viewport, { deltaY: -120 })
+      fireEvent.scroll(viewport)
+
+      const button = screen.getByRole("button", { name: "滚动到最新" })
+      expect(button.querySelector("svg")).not.toBeNull()
+      button.focus()
+      expect(button).toHaveFocus()
+      await user.keyboard("{Enter}")
+      expect(jumpButton()).toHaveAttribute("data-active", "false")
+
+      act(() => {
+        useLocaleStore.getState().setLocale("en")
+      })
+      fireEvent.wheel(viewport, { deltaY: -120 })
+      fireEvent.scroll(viewport)
+      expect(
+        screen.getByRole("button", { name: "Scroll to latest" }),
+      ).toBeVisible()
+
+      rectSpy.mockRestore()
+    })
+
+    it("does not follow the live edge while a reveal owns the viewport", () => {
+      const { rerender } = render(
+        <ConversationPane
+          {...props}
+          path={[user1, assistant1, user2]}
+          status="streaming"
+          transientGeneration={{
+            phase: "streaming",
+            content: "PARTIAL",
+            thinking: "",
+          }}
+          reveal={{ conversationId: "c1", nodeId: user1.id, query: "USER_1" }}
+        />,
+      )
+      const { metrics, rectSpy } = prepareOverflow(0)
+      scrollTo.mockClear()
+
+      rerender(
+        <ConversationPane
+          {...props}
+          path={[user1, assistant1, user2]}
+          status="streaming"
+          transientGeneration={{
+            phase: "streaming",
+            content: "PARTIAL_GROWN",
+            thinking: "",
+          }}
+          reveal={{ conversationId: "c1", nodeId: user1.id, query: "USER_1" }}
+        />,
+      )
+      expect(scrollTo).not.toHaveBeenCalled()
+      expect(metrics.getScrollTop()).toBe(0)
+      rectSpy.mockRestore()
+    })
+
+    it("uses instant jump scrolling when reduced motion is requested", () => {
+      vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }))
+      const { rerender } = render(
+        <ConversationPane
+          {...props}
+          path={[user1, assistant1]}
+          transientGeneration={null}
+        />,
+      )
+      prepareOverflow(0)
+      scrollTo.mockClear()
+
+      rerender(
+        <ConversationPane
+          {...props}
+          path={[user1, assistant1, user2]}
+          transientGeneration={null}
+        />,
+      )
+      expect(scrollTo).toHaveBeenCalledWith(
+        expect.objectContaining({ behavior: "auto" }),
+      )
     })
   })
 })
@@ -434,7 +821,7 @@ describe("ConversationPane search reveal", () => {
     expect(scrollIntoView).toHaveBeenCalledWith(
       expect.objectContaining({ block: "start" }),
     )
-    expect(scrollIntoView).toHaveBeenCalledTimes(2)
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
     // The scroll targets the matched text, not the message article: a long
     // message anchored on its article can leave the match off-screen.
     const scrollTarget = scrollIntoView.mock.contexts.at(-1) as

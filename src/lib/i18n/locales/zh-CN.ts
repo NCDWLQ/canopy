@@ -97,6 +97,8 @@ export const zhCN = {
   "conversation.pane.empty": "尚未选择消息。",
   "conversation.pane.saving": "正在保存消息",
   "conversation.pane.branchOrigin": "由此处创建分支",
+  "conversation.pane.messages": "对话消息",
+  "conversation.pane.scrollToLatest": "滚动到最新",
 
   // Composer.tsx
   "conversation.composer.placeholder": "输入消息…",

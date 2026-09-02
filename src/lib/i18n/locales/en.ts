@@ -98,6 +98,8 @@ export const en = {
   "conversation.pane.empty": "No message selected.",
   "conversation.pane.saving": "Saving message",
   "conversation.pane.branchOrigin": "Branch from here",
+  "conversation.pane.messages": "Conversation messages",
+  "conversation.pane.scrollToLatest": "Scroll to latest",
 
   // Composer.tsx
   "conversation.composer.placeholder": "Type a message…",

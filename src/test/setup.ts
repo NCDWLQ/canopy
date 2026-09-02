@@ -17,6 +17,22 @@ class ResizeObserverStub {
   disconnect() {}
 }
 
+if (typeof Element.prototype.scrollTo !== "function") {
+  Element.prototype.scrollTo = function (
+    this: Element,
+    arg?: ScrollToOptions | number,
+    y?: number,
+  ) {
+    if (typeof arg === "number") {
+      ;(this as HTMLElement).scrollTop = y ?? arg
+      return
+    }
+    if (arg !== undefined && typeof arg === "object" && arg.top !== undefined) {
+      ;(this as HTMLElement).scrollTop = arg.top
+    }
+  }
+}
+
 beforeEach(() => {
   vi.stubGlobal("ResizeObserver", ResizeObserverStub)
 })
