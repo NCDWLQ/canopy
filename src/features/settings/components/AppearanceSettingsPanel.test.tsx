@@ -70,9 +70,7 @@ describe("AppearanceSettingsPanel", () => {
     useProviderStore.setState({ theme: "dark" })
     render(<AppearanceSettingsPanel client={client() as ProviderClient} />)
 
-    expect(
-      screen.getByRole("combobox", { name: "主题模式" }),
-    ).toHaveTextContent("深色模式")
+    expect(screen.getByRole("radio", { name: "深色模式" })).toBeChecked()
   })
 
   it("persists an explicit theme selection and switches the UI theme", async () => {
@@ -81,8 +79,7 @@ describe("AppearanceSettingsPanel", () => {
     bridge.setTheme.mockResolvedValue("dark")
     render(<AppearanceSettingsPanel client={bridge as ProviderClient} />)
 
-    await user.click(screen.getByRole("combobox", { name: "主题模式" }))
-    await user.click(await screen.findByRole("option", { name: "深色模式" }))
+    await user.click(screen.getByRole("radio", { name: "深色模式" }))
 
     await waitFor(() => expect(bridge.setTheme).toHaveBeenCalledWith("dark"))
     await waitFor(() => expect(useProviderStore.getState().theme).toBe("dark"))
@@ -103,8 +100,7 @@ describe("AppearanceSettingsPanel", () => {
     useProviderStore.setState({ theme: "light" })
     render(<AppearanceSettingsPanel client={bridge as ProviderClient} />)
 
-    await user.click(screen.getByRole("combobox", { name: "主题模式" }))
-    await user.click(await screen.findByRole("option", { name: "深色模式" }))
+    await user.click(screen.getByRole("radio", { name: "深色模式" }))
 
     await waitFor(() => expect(bridge.setTheme).toHaveBeenCalledWith("dark"))
     await waitFor(() =>
@@ -113,9 +109,7 @@ describe("AppearanceSettingsPanel", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       "对话数据库当前不可用。",
     )
-    expect(
-      screen.getByRole("combobox", { name: "主题模式" }),
-    ).toHaveTextContent("浅色模式")
+    expect(screen.getByRole("radio", { name: "浅色模式" })).toBeChecked()
     expect(useProviderStore.getState().theme).toBe("light")
   })
 
@@ -126,8 +120,6 @@ describe("AppearanceSettingsPanel", () => {
     act(() => {
       useLocaleStore.getState().setLocale("en")
     })
-    expect(
-      screen.getByRole("combobox", { name: "Theme mode" }),
-    ).toHaveTextContent("Follow system")
+    expect(screen.getByRole("radio", { name: "Follow system" })).toBeChecked()
   })
 })

@@ -17,14 +17,7 @@ import {
   FieldLabel,
   FieldSet,
 } from "@/components/ui/field"
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import type { ProviderClient } from "@/lib/tauri"
 import { commandErrorMessage, useTranslation } from "@/lib/i18n"
 import type { ThemePreference } from "@/lib/theme"
@@ -95,34 +88,37 @@ export function AppearanceSettingsPanel({
             <FieldSet>
               <Field orientation="horizontal" data-disabled={mutationDisabled}>
                 <FieldContent>
-                  <FieldLabel htmlFor="theme">
+                  <FieldLabel id="theme-label">
                     {t("settings.appearance.theme")}
                   </FieldLabel>
                   <FieldDescription>
                     {t("settings.appearance.themeDescription")}
                   </FieldDescription>
                 </FieldContent>
-                <Select
+                <ToggleGroup
+                  type="single"
                   value={theme}
                   disabled={mutationDisabled}
-                  onValueChange={(value) =>
-                    void setTheme(client, value as ThemePreference)
-                  }
+                  variant="outline"
+                  size="sm"
+                  spacing={0}
+                  className="ml-auto"
+                  aria-labelledby="theme-label"
+                  onValueChange={(value) => {
+                    if (value) void setTheme(client, value as ThemePreference)
+                  }}
                 >
-                  <SelectTrigger id="theme" className="ml-auto w-44">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent position="popper" align="end">
-                    <SelectGroup>
-                      {THEME_OPTIONS.map(({ value, labelKey, icon: Icon }) => (
-                        <SelectItem key={value} value={value}>
-                          <Icon aria-hidden className="text-muted-foreground" />
-                          {t(labelKey)}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
+                  {THEME_OPTIONS.map(({ value, labelKey, icon: Icon }) => (
+                    <ToggleGroupItem
+                      key={value}
+                      value={value}
+                      aria-label={t(labelKey)}
+                    >
+                      <Icon data-icon="inline-start" aria-hidden />
+                      {t(labelKey)}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
               </Field>
             </FieldSet>
           </FieldGroup>
