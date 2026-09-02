@@ -40,6 +40,7 @@ export type ClickableToastOptions = {
   kind: "success" | "error"
   title: string
   description?: string
+  ariaLabel?: string
   onSelect: () => void
 }
 
@@ -49,12 +50,13 @@ export function showClickableToast({
   kind,
   title,
   description,
+  ariaLabel,
   onSelect,
 }: ClickableToastOptions) {
   toast.custom((id) => (
     <button
       type="button"
-      aria-label={t("conversation.toast.jumpToConversation")}
+      aria-label={ariaLabel ?? t("conversation.toast.jumpToConversation")}
       className="flex w-full cursor-pointer items-start gap-3 rounded-[var(--radius)] border border-border bg-popover p-4 text-left text-popover-foreground shadow-lg outline-none transition-colors hover:bg-muted hover:border-ring/40 focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
       onClick={() => {
         onSelect()

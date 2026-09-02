@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Preserve the workspace-global Settings ownership boundary, accessible shadcn composition, and archived read-only UI behavior."}
+{"file":".trellis/spec/frontend/state-management.md","reason":"Keep SQLite/store authority intact and derive active/archived lists without duplicating durable state or mutation logic."}
+{"file":".trellis/spec/frontend/i18n-guidelines.md","reason":"Add complete typed zh-CN/en copy for category, empty/error/list, and accessible action states."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Implement behavior-first accessible tests and run the repository frontend quality gates."}
+{"file":".trellis/tasks/08-31-archived-conversations-settings/research/codebase-survey.md","reason":"Use current code evidence, ownership constraints, existing mutation paths, and component CLI findings."}

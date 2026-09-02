@@ -22,7 +22,6 @@ import { useTranslation } from "@/lib/i18n"
 
 export type ProviderSettingsPanelProps = {
   client: ProviderClient
-  readOnly: boolean
   onDirtyChange?: (dirty: boolean) => void
 }
 
@@ -36,7 +35,6 @@ type ProviderRoute =
 
 export function ProviderSettingsPanel({
   client,
-  readOnly,
   onDirtyChange,
 }: ProviderSettingsPanelProps) {
   const { t } = useTranslation()
@@ -151,16 +149,11 @@ export function ProviderSettingsPanel({
         </Breadcrumb>
       </div>
       {route.view === "list" ? (
-        <ProviderSettingsList
-          client={client}
-          readOnly={readOnly}
-          onEdit={goToEdit}
-        />
+        <ProviderSettingsList client={client} onEdit={goToEdit} />
       ) : (
         <ProviderSettingsEditor
           key={route.providerId ?? `new-${route.presetId}`}
           client={client}
-          readOnly={readOnly}
           providerId={route.providerId}
           initialPresetId={route.presetId}
           onBack={goToList}

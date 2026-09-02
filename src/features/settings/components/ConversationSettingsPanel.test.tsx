@@ -75,12 +75,7 @@ describe("ConversationSettingsPanel", () => {
     bridge.setTitleModelBinding.mockImplementation((binding) =>
       Promise.resolve(binding),
     )
-    render(
-      <ConversationSettingsPanel
-        client={bridge as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<ConversationSettingsPanel client={bridge as ProviderClient} />)
 
     const toggle = screen.getByRole("switch", {
       name: "自动生成标题",
@@ -126,12 +121,7 @@ describe("ConversationSettingsPanel", () => {
     const user = userEvent.setup()
     const bridge = client()
     bridge.setDefaultSystemPrompt.mockResolvedValueOnce("Be helpful")
-    render(
-      <ConversationSettingsPanel
-        client={bridge as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<ConversationSettingsPanel client={bridge as ProviderClient} />)
 
     const textarea = screen.getByRole("textbox", { name: "默认系统提示词" })
     expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
@@ -158,12 +148,7 @@ describe("ConversationSettingsPanel", () => {
     const user = userEvent.setup()
     const bridge = client()
     bridge.setDefaultSystemPrompt.mockRejectedValueOnce(new Error("offline"))
-    render(
-      <ConversationSettingsPanel
-        client={bridge as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<ConversationSettingsPanel client={bridge as ProviderClient} />)
 
     const textarea = screen.getByRole("textbox", { name: "默认系统提示词" })
     await user.type(textarea, "Be helpful")

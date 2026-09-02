@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { SettingsDialog } from "./SettingsDialog"
+import type { ArchivedConversationsPanelProps } from "./ArchivedConversationsPanel"
 import { useProviderStore } from "@/features/providers/store"
 import type { ProviderView } from "@/features/providers/types"
 import type { ProviderClient } from "@/lib/tauri"
@@ -34,6 +35,23 @@ function client() {
     listProviderModels: vi.fn(),
     generateFromActivePath: vi.fn(),
     cancelGeneration: vi.fn(),
+  }
+}
+
+function archivedConversations(
+  overrides?: Partial<ArchivedConversationsPanelProps>,
+): ArchivedConversationsPanelProps {
+  return {
+    status: "empty",
+    items: [],
+    error: null,
+    disabled: false,
+    onSelect: vi.fn(),
+    onRename: vi.fn(),
+    onUnarchive: vi.fn(),
+    onDelete: vi.fn(),
+    onRetry: vi.fn(),
+    ...overrides,
   }
 }
 
@@ -69,7 +87,10 @@ describe("SettingsDialog", () => {
   it("opens on the general category; providers render on demand", async () => {
     const user = userEvent.setup()
     render(
-      <SettingsDialog client={client() as ProviderClient} readOnly={false} />,
+      <SettingsDialog
+        client={client() as ProviderClient}
+        archivedConversations={archivedConversations()}
+      />,
     )
     await user.click(screen.getByRole("button", { name: "设置" }))
     expect(screen.getByRole("dialog")).toHaveAccessibleName("设置")
@@ -102,7 +123,10 @@ describe("SettingsDialog", () => {
   it("navigates from the default general panel to appearance", async () => {
     const user = userEvent.setup()
     render(
-      <SettingsDialog client={client() as ProviderClient} readOnly={false} />,
+      <SettingsDialog
+        client={client() as ProviderClient}
+        archivedConversations={archivedConversations()}
+      />,
     )
     await user.click(screen.getByRole("button", { name: "设置" }))
     const appearance = screen.getByRole("button", { name: "外观" })
@@ -122,7 +146,10 @@ describe("SettingsDialog", () => {
   it("navigates from the default general panel to providers", async () => {
     const user = userEvent.setup()
     render(
-      <SettingsDialog client={client() as ProviderClient} readOnly={false} />,
+      <SettingsDialog
+        client={client() as ProviderClient}
+        archivedConversations={archivedConversations()}
+      />,
     )
     await user.click(screen.getByRole("button", { name: "设置" }))
     const providers = screen.getByRole("button", { name: "模型提供商" })
@@ -152,17 +179,17 @@ describe("SettingsDialog", () => {
     const { rerender } = render(
       <SettingsDialog
         client={bridge}
-        readOnly={false}
         open={false}
         onOpenChange={onOpenChange}
+        archivedConversations={archivedConversations()}
       />,
     )
     rerender(
       <SettingsDialog
         client={bridge}
-        readOnly={false}
         open
         onOpenChange={onOpenChange}
+        archivedConversations={archivedConversations()}
       />,
     )
     expect(screen.getByRole("combobox", { name: "语言" })).toBeVisible()
@@ -174,18 +201,18 @@ describe("SettingsDialog", () => {
     rerender(
       <SettingsDialog
         client={bridge}
-        readOnly={false}
         open={false}
         onOpenChange={onOpenChange}
+        archivedConversations={archivedConversations()}
       />,
     )
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
     rerender(
       <SettingsDialog
         client={bridge}
-        readOnly={false}
         open
         onOpenChange={onOpenChange}
+        archivedConversations={archivedConversations()}
       />,
     )
     expect(screen.getByRole("combobox", { name: "语言" })).toBeVisible()
@@ -200,7 +227,10 @@ describe("SettingsDialog", () => {
     const bridge = client()
     bridge.revealProviderApiKey.mockResolvedValue("STORED_SECRET_SENTINEL")
     render(
-      <SettingsDialog client={bridge as ProviderClient} readOnly={false} />,
+      <SettingsDialog
+        client={bridge as ProviderClient}
+        archivedConversations={archivedConversations()}
+      />,
     )
     await user.click(screen.getByRole("button", { name: "设置" }))
     await user.click(screen.getByRole("button", { name: "模型提供商" }))
@@ -222,8 +252,8 @@ describe("SettingsDialog", () => {
     render(
       <SettingsDialog
         client={client() as ProviderClient}
-        readOnly={false}
         initialCategory="providers"
+        archivedConversations={archivedConversations()}
       />,
     )
     await user.click(screen.getByRole("button", { name: "设置" }))
@@ -241,10 +271,10 @@ describe("SettingsDialog", () => {
     render(
       <SettingsDialog
         client={client() as ProviderClient}
-        readOnly={false}
         open
         onOpenChange={onOpenChange}
         initialCategory="conversation"
+        archivedConversations={archivedConversations()}
       />,
     )
     expect(
@@ -261,8 +291,8 @@ describe("SettingsDialog", () => {
     render(
       <SettingsDialog
         client={client() as ProviderClient}
-        readOnly={false}
         initialCategory="conversation"
+        archivedConversations={archivedConversations()}
       />,
     )
     await user.click(screen.getByRole("button", { name: "设置" }))
@@ -297,8 +327,8 @@ describe("SettingsDialog", () => {
     render(
       <SettingsDialog
         client={client() as ProviderClient}
-        readOnly={false}
         initialCategory="conversation"
+        archivedConversations={archivedConversations()}
       />,
     )
     await user.click(screen.getByRole("button", { name: "设置" }))
@@ -321,5 +351,33 @@ describe("SettingsDialog", () => {
         screen.queryByRole("dialog", { hidden: true }),
       ).not.toBeInTheDocument(),
     )
+  })
+
+  it("navigates to the archived conversations panel", async () => {
+    const user = userEvent.setup()
+    render(
+      <SettingsDialog
+        client={client() as ProviderClient}
+        archivedConversations={archivedConversations({
+          status: "ready",
+          items: [
+            {
+              id: "archived-1",
+              title: "Old chat",
+              updatedAt: Date.UTC(2026, 0, 1),
+              isCurrent: false,
+            },
+          ],
+        })}
+      />,
+    )
+    await user.click(screen.getByRole("button", { name: "设置" }))
+    await user.click(screen.getByRole("button", { name: "已归档对话" }))
+    expect(
+      screen.getByRole("button", { name: "已归档对话", current: "page" }),
+    ).toBeVisible()
+    expect(
+      screen.getByRole("button", { name: "打开已归档对话：Old chat" }),
+    ).toBeVisible()
   })
 })

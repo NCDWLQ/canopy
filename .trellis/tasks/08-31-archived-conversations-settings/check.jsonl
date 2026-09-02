@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Verify Settings dependency direction, shadcn grouping, keyboard/focus semantics, and reuse of existing management behavior."}
+{"file":".trellis/spec/frontend/state-management.md","reason":"Verify one authoritative history projection and correct immediate movement after archive/unarchive/delete results."}
+{"file":".trellis/spec/frontend/i18n-guidelines.md","reason":"Verify no hard-coded copy and exact typed dictionary parity across zh-CN and en."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Verify behavior-focused coverage, lint, strict type-check, full tests, and production build through pnpm check."}
+{"file":".trellis/tasks/08-31-archived-conversations-settings/research/codebase-survey.md","reason":"Cross-check the implementation against current anchors, existing actions, and declared no-backend scope."}

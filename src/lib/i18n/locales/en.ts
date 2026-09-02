@@ -47,6 +47,8 @@ export const en = {
   "conversation.workspace.archive": "Archive",
   "conversation.workspace.loadingHistory": "Loading history…",
   "conversation.workspace.emptyHistory": "No saved conversations yet.",
+  "conversation.workspace.noActiveHistory":
+    "No active conversations. Archived conversations are available in Settings.",
   "conversation.workspace.retryHistory": "Retry loading history",
   "conversation.workspace.noConversationLoaded": "No conversation loaded.",
   "conversation.workspace.collapseSidebar": "Collapse sidebar",
@@ -66,14 +68,13 @@ export const en = {
     "Cannot send directly here; create a branch to continue",
   "conversation.workspace.archiveConfirmTitle": "Archive this conversation?",
   "conversation.workspace.archiveConfirmBody":
-    "Archiving makes the conversation read-only and marks it as archived in history.",
+    "Archiving makes the conversation read-only and removes it from the sidebar history. You can find and manage it in Settings > Archived Conversations.",
   "conversation.workspace.archiveConfirmInterrupts":
     "Archiving will interrupt the generation in progress.",
   "conversation.workspace.archiveConfirmAction": "Archive",
   "conversation.workspace.conversationMenu": ({ title }: { title: string }) =>
     `Conversation actions: ${title}`,
   "conversation.workspace.rename": "Rename",
-  "conversation.workspace.unarchive": "Unarchive",
   "conversation.workspace.renameDialogTitle": "Rename conversation",
   "conversation.workspace.renameDialogLabel": "Conversation title",
   "conversation.workspace.renameDialogTitleBlank": "The title cannot be blank.",
@@ -221,6 +222,10 @@ export const en = {
 
   // toaster.tsx
   "conversation.toast.jumpToConversation": "Jump to conversation",
+  "conversation.toast.archivedTitle": "Conversation archived",
+  "conversation.toast.archivedDescription":
+    "Click to open archived conversations in Settings",
+  "conversation.toast.openArchivedSettings": "Open archived conversations",
 
   // ConversationProviderPicker.tsx
   "conversation.providerPicker.triggerUnconfigured": "No provider configured",
@@ -244,6 +249,22 @@ export const en = {
   "settings.dialog.appearanceCategory": "Appearance",
   "settings.dialog.providersCategory": "Model Providers",
   "settings.dialog.conversationsCategory": "Conversations",
+  "settings.dialog.archivedCategory": "Archived Conversations",
+
+  // ArchivedConversationsPanel.tsx
+  "settings.archived.title": "Archived Conversations",
+  "settings.archived.listLabel": "Archived conversations list",
+  "settings.archived.loading": "Loading archived conversations…",
+  "settings.archived.emptyTitle": "No archived conversations",
+  "settings.archived.emptyDescription":
+    "Archived conversations appear here and remain available to open read-only.",
+  "settings.archived.openAria": ({ title }: { title: string }) =>
+    `Open archived conversation: ${title}`,
+  "settings.archived.menuAria": ({ title }: { title: string }) =>
+    `Archived conversation actions: ${title}`,
+  "settings.archived.rename": "Rename",
+  "settings.archived.unarchive": "Unarchive",
+  "settings.archived.delete": "Delete",
 
   // GeneralSettingsPanel.tsx
   "settings.general.title": "General",
@@ -352,9 +373,6 @@ export const en = {
   "settings.providers.incompleteAlert": "Action not completed",
   "settings.providers.errors.duplicateName": ({ name }: { name: string }) =>
     `The name “${name}” is already in use`,
-  "settings.providers.readOnlyAlert": "Read-only",
-  "settings.providers.readOnlyAlertBody":
-    "Provider settings cannot be changed while viewing an archived conversation.",
   "settings.providers.nameField": "Name",
   "settings.providers.protocolField": "Protocol",
   "settings.providers.protocolPlaceholder": "Select a protocol",

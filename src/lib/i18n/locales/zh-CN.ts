@@ -48,6 +48,8 @@ export const zhCN = {
   "conversation.workspace.archive": "归档",
   "conversation.workspace.loadingHistory": "正在加载历史记录…",
   "conversation.workspace.emptyHistory": "暂无已保存的对话。",
+  "conversation.workspace.noActiveHistory":
+    "没有活跃对话。已归档的对话可在设置中查看。",
   "conversation.workspace.retryHistory": "重试加载历史记录",
   "conversation.workspace.noConversationLoaded": "尚未加载对话。",
   "conversation.workspace.collapseSidebar": "收起侧栏",
@@ -65,14 +67,13 @@ export const zhCN = {
     "当前位置不可直接发送，可创建分支",
   "conversation.workspace.archiveConfirmTitle": "归档对话？",
   "conversation.workspace.archiveConfirmBody":
-    "归档后对话转为只读，并在历史记录中标记为已归档。",
+    "归档后对话转为只读，并从侧栏历史记录中移除；可在设置的「已归档对话」中查看和管理。",
   "conversation.workspace.archiveConfirmInterrupts":
     "归档将打断正在进行的生成。",
   "conversation.workspace.archiveConfirmAction": "归档",
   "conversation.workspace.conversationMenu": ({ title }: { title: string }) =>
     `对话操作：${title}`,
   "conversation.workspace.rename": "重命名",
-  "conversation.workspace.unarchive": "取消归档",
   "conversation.workspace.renameDialogTitle": "重命名对话",
   "conversation.workspace.renameDialogLabel": "对话标题",
   "conversation.workspace.renameDialogTitleBlank": "标题不能为空。",
@@ -217,6 +218,9 @@ export const zhCN = {
 
   // toaster.tsx
   "conversation.toast.jumpToConversation": "跳转到对话",
+  "conversation.toast.archivedTitle": "对话已归档",
+  "conversation.toast.archivedDescription": "点击查看设置中的已归档对话",
+  "conversation.toast.openArchivedSettings": "打开已归档对话设置",
 
   // ConversationProviderPicker.tsx
   "conversation.providerPicker.triggerUnconfigured": "未配置服务提供商",
@@ -239,6 +243,22 @@ export const zhCN = {
   "settings.dialog.appearanceCategory": "外观",
   "settings.dialog.providersCategory": "模型提供商",
   "settings.dialog.conversationsCategory": "对话",
+  "settings.dialog.archivedCategory": "已归档对话",
+
+  // ArchivedConversationsPanel.tsx
+  "settings.archived.title": "已归档对话",
+  "settings.archived.listLabel": "已归档对话列表",
+  "settings.archived.loading": "正在加载已归档对话…",
+  "settings.archived.emptyTitle": "暂无已归档对话",
+  "settings.archived.emptyDescription":
+    "归档的对话会显示在这里，仍可只读打开。",
+  "settings.archived.openAria": ({ title }: { title: string }) =>
+    `打开已归档对话：${title}`,
+  "settings.archived.menuAria": ({ title }: { title: string }) =>
+    `已归档对话操作：${title}`,
+  "settings.archived.rename": "重命名",
+  "settings.archived.unarchive": "取消归档",
+  "settings.archived.delete": "删除",
 
   // GeneralSettingsPanel.tsx
   "settings.general.title": "通用",
@@ -342,9 +362,6 @@ export const zhCN = {
   "settings.providers.incompleteAlert": "操作未完成",
   "settings.providers.errors.duplicateName": ({ name }: { name: string }) =>
     `名称「${name}」已被使用`,
-  "settings.providers.readOnlyAlert": "只读",
-  "settings.providers.readOnlyAlertBody":
-    "查看已归档对话时无法修改模型提供商设置。",
   "settings.providers.nameField": "名称",
   "settings.providers.protocolField": "协议",
   "settings.providers.protocolPlaceholder": "选择协议",
