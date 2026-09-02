@@ -68,12 +68,7 @@ describe("AppearanceSettingsPanel", () => {
 
   it("shows the current persisted theme preference", () => {
     useProviderStore.setState({ theme: "dark" })
-    render(
-      <AppearanceSettingsPanel
-        client={client() as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<AppearanceSettingsPanel client={client() as ProviderClient} />)
 
     expect(
       screen.getByRole("combobox", { name: "主题模式" }),
@@ -84,12 +79,7 @@ describe("AppearanceSettingsPanel", () => {
     const user = userEvent.setup()
     const bridge = client()
     bridge.setTheme.mockResolvedValue("dark")
-    render(
-      <AppearanceSettingsPanel
-        client={bridge as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<AppearanceSettingsPanel client={bridge as ProviderClient} />)
 
     await user.click(screen.getByRole("combobox", { name: "主题模式" }))
     await user.click(await screen.findByRole("option", { name: "深色模式" }))
@@ -111,12 +101,7 @@ describe("AppearanceSettingsPanel", () => {
       }),
     )
     useProviderStore.setState({ theme: "light" })
-    render(
-      <AppearanceSettingsPanel
-        client={bridge as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<AppearanceSettingsPanel client={bridge as ProviderClient} />)
 
     await user.click(screen.getByRole("combobox", { name: "主题模式" }))
     await user.click(await screen.findByRole("option", { name: "深色模式" }))
@@ -134,22 +119,9 @@ describe("AppearanceSettingsPanel", () => {
     expect(useProviderStore.getState().theme).toBe("light")
   })
 
-  it("disables the theme control while read-only", () => {
-    render(
-      <AppearanceSettingsPanel client={client() as ProviderClient} readOnly />,
-    )
-
-    expect(screen.getByRole("combobox", { name: "主题模式" })).toBeDisabled()
-  })
-
   it("retranslates labels when switching locale", () => {
     const bridge = client()
-    render(
-      <AppearanceSettingsPanel
-        client={bridge as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<AppearanceSettingsPanel client={bridge as ProviderClient} />)
 
     act(() => {
       useLocaleStore.getState().setLocale("en")

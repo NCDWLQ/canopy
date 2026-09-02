@@ -804,7 +804,6 @@ export function ConversationWorkspace({
           <footer className="shrink-0 p-2">
             <SettingsDialog
               client={providerClient}
-              readOnly={false}
               open={isSettingsOpen}
               onOpenChange={(nextOpen) => {
                 setIsSettingsOpen(nextOpen)

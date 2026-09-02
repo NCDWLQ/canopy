@@ -373,9 +373,6 @@ export const en = {
   "settings.providers.incompleteAlert": "Action not completed",
   "settings.providers.errors.duplicateName": ({ name }: { name: string }) =>
     `The name “${name}” is already in use`,
-  "settings.providers.readOnlyAlert": "Read-only",
-  "settings.providers.readOnlyAlertBody":
-    "Provider settings cannot be changed while viewing an archived conversation.",
   "settings.providers.nameField": "Name",
   "settings.providers.protocolField": "Protocol",
   "settings.providers.protocolPlaceholder": "Select a protocol",

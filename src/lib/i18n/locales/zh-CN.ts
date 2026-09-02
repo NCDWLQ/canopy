@@ -362,9 +362,6 @@ export const zhCN = {
   "settings.providers.incompleteAlert": "操作未完成",
   "settings.providers.errors.duplicateName": ({ name }: { name: string }) =>
     `名称「${name}」已被使用`,
-  "settings.providers.readOnlyAlert": "只读",
-  "settings.providers.readOnlyAlertBody":
-    "查看已归档对话时无法修改模型提供商设置。",
   "settings.providers.nameField": "名称",
   "settings.providers.protocolField": "协议",
   "settings.providers.protocolPlaceholder": "选择协议",

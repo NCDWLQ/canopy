@@ -78,12 +78,7 @@ describe("GeneralSettingsPanel", () => {
 
   it("shows the current persisted language preference", async () => {
     useProviderStore.setState({ language: "en" })
-    render(
-      <GeneralSettingsPanel
-        client={client() as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<GeneralSettingsPanel client={client() as ProviderClient} />)
 
     await screen.findByText("v0.3.1")
     expect(screen.getByRole("combobox", { name: "语言" })).toHaveTextContent(
@@ -99,12 +94,7 @@ describe("GeneralSettingsPanel", () => {
         resolveCheck = resolve
       }),
     )
-    render(
-      <GeneralSettingsPanel
-        client={client() as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<GeneralSettingsPanel client={client() as ProviderClient} />)
 
     expect(await screen.findByText("v0.3.1")).toBeVisible()
     const checkButton = screen.getByRole("button", { name: "检查更新" })
@@ -131,9 +121,7 @@ describe("GeneralSettingsPanel", () => {
       currentVersion: "0.3.1",
       latestVersion: "0.4.0",
     })
-    render(
-      <GeneralSettingsPanel client={client() as ProviderClient} readOnly />,
-    )
+    render(<GeneralSettingsPanel client={client() as ProviderClient} />)
 
     await user.click(screen.getByRole("button", { name: "检查更新" }))
     expect(
@@ -148,12 +136,7 @@ describe("GeneralSettingsPanel", () => {
     updateClient.check
       .mockRejectedValueOnce(new Error("raw GitHub response"))
       .mockResolvedValueOnce({ kind: "up-to-date", currentVersion: "0.3.1" })
-    render(
-      <GeneralSettingsPanel
-        client={client() as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<GeneralSettingsPanel client={client() as ProviderClient} />)
 
     await user.click(screen.getByRole("button", { name: "检查更新" }))
     const failureStatus = await screen.findByRole("status", {
@@ -171,12 +154,7 @@ describe("GeneralSettingsPanel", () => {
     const user = userEvent.setup()
     const bridge = client()
     bridge.setLanguage.mockResolvedValue("en")
-    render(
-      <GeneralSettingsPanel
-        client={bridge as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<GeneralSettingsPanel client={bridge as ProviderClient} />)
 
     await user.click(screen.getByRole("combobox", { name: "语言" }))
     await user.click(await screen.findByRole("option", { name: "English" }))
@@ -201,12 +179,7 @@ describe("GeneralSettingsPanel", () => {
       const bridge = client()
       bridge.setLanguage.mockResolvedValue("system")
       useProviderStore.setState({ language: "zh-CN" })
-      render(
-        <GeneralSettingsPanel
-          client={bridge as ProviderClient}
-          readOnly={false}
-        />,
-      )
+      render(<GeneralSettingsPanel client={bridge as ProviderClient} />)
 
       await user.click(screen.getByRole("combobox", { name: "语言" }))
       await user.click(await screen.findByRole("option", { name: "跟随系统" }))
@@ -235,12 +208,7 @@ describe("GeneralSettingsPanel", () => {
       }),
     )
     useProviderStore.setState({ language: "zh-CN" })
-    render(
-      <GeneralSettingsPanel
-        client={bridge as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<GeneralSettingsPanel client={bridge as ProviderClient} />)
 
     await user.click(screen.getByRole("combobox", { name: "语言" }))
     await user.click(await screen.findByRole("option", { name: "English" }))
@@ -260,23 +228,9 @@ describe("GeneralSettingsPanel", () => {
     expect(useLocaleStore.getState().locale).toBe("zh-CN")
   })
 
-  it("disables the language control while read-only", async () => {
-    render(
-      <GeneralSettingsPanel client={client() as ProviderClient} readOnly />,
-    )
-
-    await screen.findByText("v0.3.1")
-    expect(screen.getByRole("combobox", { name: "语言" })).toBeDisabled()
-  })
-
   it("reloads nothing on its own; switching locale retranslates labels", async () => {
     const bridge = client()
-    render(
-      <GeneralSettingsPanel
-        client={bridge as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<GeneralSettingsPanel client={bridge as ProviderClient} />)
 
     await screen.findByText("v0.3.1")
     expect(bridge.listProviders).not.toHaveBeenCalled()

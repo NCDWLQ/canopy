@@ -35,7 +35,6 @@ import { useTranslation } from "@/lib/i18n"
 
 export type ProviderSettingsListProps = {
   client: ProviderClient
-  readOnly: boolean
   onEdit: (
     providerId: string | null,
     presetId?: ProviderPresetSelection,
@@ -44,7 +43,6 @@ export type ProviderSettingsListProps = {
 
 export function ProviderSettingsList({
   client,
-  readOnly,
   onEdit,
 }: ProviderSettingsListProps) {
   const { t } = useTranslation()
@@ -56,7 +54,7 @@ export function ProviderSettingsList({
   const [providerPendingDelete, setProviderPendingDelete] =
     React.useState<ProviderView | null>(null)
 
-  const mutationDisabled = readOnly || phase === "loading"
+  const mutationDisabled = phase === "loading"
 
   const handleDelete = async (providerId: string) => {
     if (mutationDisabled || providerId === activeProviderId) return

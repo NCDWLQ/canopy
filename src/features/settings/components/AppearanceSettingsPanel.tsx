@@ -31,7 +31,6 @@ import type { ThemePreference } from "@/lib/theme"
 
 export type AppearanceSettingsPanelProps = {
   client: ProviderClient
-  readOnly: boolean
 }
 
 const THEME_OPTIONS: readonly {
@@ -53,7 +52,6 @@ const THEME_OPTIONS: readonly {
 
 export function AppearanceSettingsPanel({
   client,
-  readOnly,
 }: AppearanceSettingsPanelProps) {
   const { t } = useTranslation()
   const phase = useProviderStore((state) => state.phase)
@@ -63,7 +61,7 @@ export function AppearanceSettingsPanel({
   )
   const setTheme = useProviderStore((state) => state.setTheme)
 
-  const mutationDisabled = readOnly || phase === "loading"
+  const mutationDisabled = phase === "loading"
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">

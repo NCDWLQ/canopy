@@ -24,7 +24,6 @@ import { useTranslation } from "@/lib/i18n"
 
 type SettingsDialogBaseProps = {
   client: ProviderClient
-  readOnly: boolean
   initialCategory?: SettingsCategory
   archivedConversations: ArchivedConversationsPanelProps
 }
@@ -42,12 +41,7 @@ type PendingDiscard =
   { kind: "switch"; category: SettingsCategory } | { kind: "close" }
 
 export function SettingsDialog(props: SettingsDialogProps) {
-  const {
-    client,
-    readOnly,
-    initialCategory = "general",
-    archivedConversations,
-  } = props
+  const { client, initialCategory = "general", archivedConversations } = props
   const { t } = useTranslation()
   const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false)
   const [category, setCategory] =
@@ -186,13 +180,12 @@ export function SettingsDialog(props: SettingsDialogProps) {
           <div className="flex min-h-0 min-w-0 flex-col">
             {open &&
               (category === "general" ? (
-                <GeneralSettingsPanel client={client} readOnly={readOnly} />
+                <GeneralSettingsPanel client={client} />
               ) : category === "appearance" ? (
-                <AppearanceSettingsPanel client={client} readOnly={readOnly} />
+                <AppearanceSettingsPanel client={client} />
               ) : category === "conversation" ? (
                 <ConversationSettingsPanel
                   client={client}
-                  readOnly={readOnly}
                   onDirtyChange={setPanelDirty}
                 />
               ) : category === "archived" ? (
@@ -201,7 +194,6 @@ export function SettingsDialog(props: SettingsDialogProps) {
                 <ProviderSettingsPanel
                   key={providerSessionKey}
                   client={client}
-                  readOnly={readOnly}
                   onDirtyChange={setPanelDirty}
                 />
               ))}

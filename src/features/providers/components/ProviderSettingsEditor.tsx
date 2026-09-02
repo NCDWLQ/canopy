@@ -67,7 +67,6 @@ export type ProviderDetailCrumb =
 
 export type ProviderSettingsEditorProps = {
   client: ProviderClient
-  readOnly: boolean
   providerId: string | null
   initialPresetId?: ProviderPresetSelection
   onBack: () => void
@@ -123,7 +122,6 @@ function createInitialDraft(
 
 export function ProviderSettingsEditor({
   client,
-  readOnly,
   providerId,
   initialPresetId = CUSTOM_PRESET_ID,
   onBack,
@@ -139,7 +137,7 @@ export function ProviderSettingsEditor({
   )
   const saveProvider = useProviderStore((state) => state.saveProvider)
 
-  const mutationDisabled = readOnly || phase === "loading"
+  const mutationDisabled = phase === "loading"
   const isNewProvider = providerId === null
   let initialPresetName = ""
   if (initialPresetId !== CUSTOM_PRESET_ID) {
@@ -360,14 +358,6 @@ export function ProviderSettingsEditor({
               <AlertTitle>{t("settings.providers.incompleteAlert")}</AlertTitle>
               <AlertDescription>
                 {providerCommandErrorMessage(storeError, { name: draft.name })}
-              </AlertDescription>
-            </Alert>
-          )}
-          {readOnly && (
-            <Alert>
-              <AlertTitle>{t("settings.providers.readOnlyAlert")}</AlertTitle>
-              <AlertDescription>
-                {t("settings.providers.readOnlyAlertBody")}
               </AlertDescription>
             </Alert>
           )}

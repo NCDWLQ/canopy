@@ -32,7 +32,6 @@ import { useUpdateCheck } from "../hooks/useUpdateCheck"
 
 export type GeneralSettingsPanelProps = {
   client: ProviderClient
-  readOnly: boolean
 }
 
 const LANGUAGE_OPTIONS: readonly {
@@ -47,10 +46,7 @@ const LANGUAGE_OPTIONS: readonly {
   { value: "en", labelKey: "settings.general.languageEn" },
 ]
 
-export function GeneralSettingsPanel({
-  client,
-  readOnly,
-}: GeneralSettingsPanelProps) {
+export function GeneralSettingsPanel({ client }: GeneralSettingsPanelProps) {
   const { t } = useTranslation()
   const {
     currentVersion,
@@ -65,7 +61,7 @@ export function GeneralSettingsPanel({
   )
   const setLanguage = useProviderStore((state) => state.setLanguage)
 
-  const mutationDisabled = readOnly || phase === "loading"
+  const mutationDisabled = phase === "loading"
   const displayedVersion =
     currentVersion === null
       ? t("settings.general.versionUnavailable")

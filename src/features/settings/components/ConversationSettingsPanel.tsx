@@ -54,13 +54,11 @@ function parseTitleModelValue(value: string): TitleModelBinding | null {
 
 export type ConversationSettingsPanelProps = {
   client: ProviderClient
-  readOnly: boolean
   onDirtyChange?: (dirty: boolean) => void
 }
 
 export function ConversationSettingsPanel({
   client,
-  readOnly,
   onDirtyChange,
 }: ConversationSettingsPanelProps) {
   const { t } = useTranslation()
@@ -102,7 +100,7 @@ export function ConversationSettingsPanel({
     toast.success(t("settings.conversation.systemPromptSaved"))
   }
 
-  const mutationDisabled = readOnly || phase === "loading"
+  const mutationDisabled = phase === "loading"
   const titleModelValue =
     titleModelBinding === null
       ? FOLLOW_SESSION_TITLE_MODEL

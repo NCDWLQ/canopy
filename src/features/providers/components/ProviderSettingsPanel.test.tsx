@@ -102,12 +102,7 @@ describe("ProviderSettingsPanel", () => {
       ],
       activeProviderId: provider.id,
     })
-    render(
-      <ProviderSettingsPanel
-        client={client() as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<ProviderSettingsPanel client={client() as ProviderClient} />)
     expect(screen.getByText("alpha, beta 等 2 个")).toBeVisible()
   })
 
@@ -124,12 +119,7 @@ describe("ProviderSettingsPanel", () => {
         updatedAt: 11,
       }),
     )
-    render(
-      <ProviderSettingsPanel
-        client={bridge as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<ProviderSettingsPanel client={bridge as ProviderClient} />)
     await openProviderEditor(user)
     const name = screen.getByLabelText("名称")
     await user.clear(name)
@@ -153,12 +143,7 @@ describe("ProviderSettingsPanel", () => {
     const bridge = client()
     bridge.revealProviderApiKey.mockResolvedValue("STORED_SECRET_SENTINEL")
     bridge.saveProvider.mockResolvedValue({ ...provider, updatedAt: 11 })
-    render(
-      <ProviderSettingsPanel
-        client={bridge as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<ProviderSettingsPanel client={bridge as ProviderClient} />)
     await openProviderEditor(user)
     expect(bridge.revealProviderApiKey).toHaveBeenCalledWith(provider.id)
     const field = screen.getByLabelText("API 密钥")
@@ -194,12 +179,7 @@ describe("ProviderSettingsPanel", () => {
     const bridge = client()
     bridge.revealProviderApiKey.mockResolvedValue("OLD_SECRET_SENTINEL")
     bridge.saveProvider.mockResolvedValue({ ...provider, updatedAt: 11 })
-    render(
-      <ProviderSettingsPanel
-        client={bridge as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<ProviderSettingsPanel client={bridge as ProviderClient} />)
     await openProviderEditor(user)
     const field = screen.getByLabelText("API 密钥")
     await waitFor(() => expect(field).toHaveValue("OLD_SECRET_SENTINEL"))
@@ -224,12 +204,7 @@ describe("ProviderSettingsPanel", () => {
     const bridge = client()
     bridge.revealProviderApiKey.mockResolvedValueOnce("OLD_SECRET_SENTINEL")
     bridge.saveProvider.mockResolvedValue({ ...provider, updatedAt: 11 })
-    render(
-      <ProviderSettingsPanel
-        client={bridge as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<ProviderSettingsPanel client={bridge as ProviderClient} />)
     await openProviderEditor(user)
     const field = screen.getByLabelText("API 密钥")
     await waitFor(() => expect(field).toHaveValue("OLD_SECRET_SENTINEL"))
@@ -280,12 +255,7 @@ describe("ProviderSettingsPanel", () => {
           resolvers.push(resolve)
         }),
     )
-    render(
-      <ProviderSettingsPanel
-        client={bridge as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<ProviderSettingsPanel client={bridge as ProviderClient} />)
     await openProviderEditor(user)
     await user.click(screen.getByRole("button", { name: "返回模型提供商列表" }))
     await openProviderEditor(user, other.name)
@@ -309,12 +279,7 @@ describe("ProviderSettingsPanel", () => {
       models: ["fixture-model", "gpt-test"],
       updatedAt: 11,
     })
-    render(
-      <ProviderSettingsPanel
-        client={bridge as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<ProviderSettingsPanel client={bridge as ProviderClient} />)
     await openProviderEditor(user)
     await user.click(screen.getByRole("button", { name: "获取模型列表" }))
     await user.click(
@@ -342,12 +307,7 @@ describe("ProviderSettingsPanel", () => {
         displayName: "Claude Sonnet 4",
       },
     ])
-    render(
-      <ProviderSettingsPanel
-        client={bridge as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<ProviderSettingsPanel client={bridge as ProviderClient} />)
     await openProviderEditor(user)
     await user.click(screen.getByRole("button", { name: "获取模型列表" }))
     await user.click(
@@ -362,19 +322,6 @@ describe("ProviderSettingsPanel", () => {
     ).toBeVisible()
   })
 
-  it("keeps the editor viewable but disables mutations for archived conversations", async () => {
-    const user = userEvent.setup()
-    render(
-      <ProviderSettingsPanel client={client() as ProviderClient} readOnly />,
-    )
-    await openProviderEditor(user)
-    expect(screen.getByText("只读")).toBeVisible()
-    expect(screen.getByLabelText("名称")).toBeDisabled()
-    expect(
-      screen.getByRole("button", { name: "保存模型提供商" }),
-    ).toBeDisabled()
-  })
-
   it("shows provider store errors in the editor", async () => {
     const user = userEvent.setup()
     useProviderStore.setState({
@@ -387,12 +334,7 @@ describe("ProviderSettingsPanel", () => {
       providers: [provider],
       activeProviderId: provider.id,
     })
-    render(
-      <ProviderSettingsPanel
-        client={client() as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<ProviderSettingsPanel client={client() as ProviderClient} />)
     await openProviderEditor(user)
     expect(screen.getByText("操作未完成")).toBeVisible()
     // The editor maps the store error through commandErrorMessage(code); the
@@ -414,12 +356,7 @@ describe("ProviderSettingsPanel", () => {
       providers: [provider],
       activeProviderId: provider.id,
     })
-    render(
-      <ProviderSettingsPanel
-        client={client() as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<ProviderSettingsPanel client={client() as ProviderClient} />)
     await openProviderEditor(user)
     expect(screen.getByText("操作未完成")).toBeVisible()
     expect(screen.getByText("名称「OpenAI」已被使用")).toBeVisible()
@@ -428,12 +365,7 @@ describe("ProviderSettingsPanel", () => {
 
   it("returns to the list via the model-provider breadcrumb", async () => {
     const user = userEvent.setup()
-    render(
-      <ProviderSettingsPanel
-        client={client() as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<ProviderSettingsPanel client={client() as ProviderClient} />)
     await openProviderEditor(user)
     expect(screen.getByLabelText("名称")).toBeVisible()
     await user.click(screen.getByRole("button", { name: "返回模型提供商列表" }))
@@ -443,12 +375,7 @@ describe("ProviderSettingsPanel", () => {
 
   it("cancels creating a provider and returns to the list after confirming the discard", async () => {
     const user = userEvent.setup()
-    render(
-      <ProviderSettingsPanel
-        client={client() as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<ProviderSettingsPanel client={client() as ProviderClient} />)
     await startNewProvider(user)
     expect(screen.getByLabelText("名称")).toBeVisible()
     await user.type(screen.getByLabelText("名称"), "draft")
@@ -462,12 +389,7 @@ describe("ProviderSettingsPanel", () => {
 
   it("keeps the draft when the discard confirmation is cancelled", async () => {
     const user = userEvent.setup()
-    render(
-      <ProviderSettingsPanel
-        client={client() as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<ProviderSettingsPanel client={client() as ProviderClient} />)
     await openProviderEditor(user)
     const name = screen.getByLabelText("名称")
     await user.clear(name)
@@ -482,12 +404,7 @@ describe("ProviderSettingsPanel", () => {
   it("adds a typed model with Enter instead of submitting the form", async () => {
     const user = userEvent.setup()
     const bridge = client()
-    render(
-      <ProviderSettingsPanel
-        client={bridge as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<ProviderSettingsPanel client={bridge as ProviderClient} />)
     await openProviderEditor(user)
     await user.type(screen.getByLabelText("模型列表"), "gpt-new{Enter}")
     expect(screen.getByRole("button", { name: "移除 gpt-new" })).toBeVisible()
@@ -496,12 +413,7 @@ describe("ProviderSettingsPanel", () => {
 
   it("prefills a preset when creating from the list menu", async () => {
     const user = userEvent.setup()
-    render(
-      <ProviderSettingsPanel
-        client={client() as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<ProviderSettingsPanel client={client() as ProviderClient} />)
     await startNewProvider(user, "OpenAI")
     expect(screen.getByLabelText("名称")).toHaveValue("OpenAI")
     expect(screen.getByLabelText("基础端点")).toHaveValue(
@@ -512,24 +424,14 @@ describe("ProviderSettingsPanel", () => {
 
   it("does not show the preset selector when editing an existing provider", async () => {
     const user = userEvent.setup()
-    render(
-      <ProviderSettingsPanel
-        client={client() as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<ProviderSettingsPanel client={client() as ProviderClient} />)
     await openProviderEditor(user)
     expect(screen.queryByLabelText("预设")).not.toBeInTheDocument()
   })
 
   it("keeps the API key when switching presets in the new-provider editor", async () => {
     const user = userEvent.setup()
-    render(
-      <ProviderSettingsPanel
-        client={client() as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<ProviderSettingsPanel client={client() as ProviderClient} />)
     await startNewProvider(user, "OpenAI")
     await user.type(screen.getByLabelText("API 密钥"), "DRAFT_SECRET_SENTINEL")
     await user.click(screen.getByLabelText("预设"))
@@ -545,12 +447,7 @@ describe("ProviderSettingsPanel", () => {
 
   it("cancels editing a provider and returns to the list after confirming the discard", async () => {
     const user = userEvent.setup()
-    render(
-      <ProviderSettingsPanel
-        client={client() as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<ProviderSettingsPanel client={client() as ProviderClient} />)
     await openProviderEditor(user)
     const name = screen.getByLabelText("名称")
     await user.clear(name)
@@ -584,12 +481,7 @@ describe("ProviderSettingsPanel", () => {
       activeProviderId: provider.id,
     })
     bridge.setActiveProvider.mockResolvedValueOnce(other.id)
-    render(
-      <ProviderSettingsPanel
-        client={bridge as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<ProviderSettingsPanel client={bridge as ProviderClient} />)
     await user.click(
       screen.getByRole("button", { name: "更多操作：Anthropic" }),
     )
@@ -601,12 +493,7 @@ describe("ProviderSettingsPanel", () => {
 
   it("disables default-provider actions with accessible reasons and native titles", async () => {
     const user = userEvent.setup()
-    render(
-      <ProviderSettingsPanel
-        client={client() as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<ProviderSettingsPanel client={client() as ProviderClient} />)
     await user.click(
       screen.getByRole("button", { name: `更多操作：${provider.name}` }),
     )
@@ -643,12 +530,7 @@ describe("ProviderSettingsPanel", () => {
       activeProviderId: provider.id,
     })
     bridge.deleteProvider.mockResolvedValueOnce(true)
-    render(
-      <ProviderSettingsPanel
-        client={bridge as ProviderClient}
-        readOnly={false}
-      />,
-    )
+    render(<ProviderSettingsPanel client={bridge as ProviderClient} />)
     await user.click(
       screen.getByRole("button", { name: "更多操作：Anthropic" }),
     )

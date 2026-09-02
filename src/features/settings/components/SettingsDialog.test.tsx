@@ -89,7 +89,6 @@ describe("SettingsDialog", () => {
     render(
       <SettingsDialog
         client={client() as ProviderClient}
-        readOnly={false}
         archivedConversations={archivedConversations()}
       />,
     )
@@ -126,7 +125,6 @@ describe("SettingsDialog", () => {
     render(
       <SettingsDialog
         client={client() as ProviderClient}
-        readOnly={false}
         archivedConversations={archivedConversations()}
       />,
     )
@@ -150,7 +148,6 @@ describe("SettingsDialog", () => {
     render(
       <SettingsDialog
         client={client() as ProviderClient}
-        readOnly={false}
         archivedConversations={archivedConversations()}
       />,
     )
@@ -182,7 +179,6 @@ describe("SettingsDialog", () => {
     const { rerender } = render(
       <SettingsDialog
         client={bridge}
-        readOnly={false}
         open={false}
         onOpenChange={onOpenChange}
         archivedConversations={archivedConversations()}
@@ -191,7 +187,6 @@ describe("SettingsDialog", () => {
     rerender(
       <SettingsDialog
         client={bridge}
-        readOnly={false}
         open
         onOpenChange={onOpenChange}
         archivedConversations={archivedConversations()}
@@ -206,7 +201,6 @@ describe("SettingsDialog", () => {
     rerender(
       <SettingsDialog
         client={bridge}
-        readOnly={false}
         open={false}
         onOpenChange={onOpenChange}
         archivedConversations={archivedConversations()}
@@ -216,7 +210,6 @@ describe("SettingsDialog", () => {
     rerender(
       <SettingsDialog
         client={bridge}
-        readOnly={false}
         open
         onOpenChange={onOpenChange}
         archivedConversations={archivedConversations()}
@@ -236,7 +229,6 @@ describe("SettingsDialog", () => {
     render(
       <SettingsDialog
         client={bridge as ProviderClient}
-        readOnly={false}
         archivedConversations={archivedConversations()}
       />,
     )
@@ -260,7 +252,6 @@ describe("SettingsDialog", () => {
     render(
       <SettingsDialog
         client={client() as ProviderClient}
-        readOnly={false}
         initialCategory="providers"
         archivedConversations={archivedConversations()}
       />,
@@ -280,7 +271,6 @@ describe("SettingsDialog", () => {
     render(
       <SettingsDialog
         client={client() as ProviderClient}
-        readOnly={false}
         open
         onOpenChange={onOpenChange}
         initialCategory="conversation"
@@ -301,7 +291,6 @@ describe("SettingsDialog", () => {
     render(
       <SettingsDialog
         client={client() as ProviderClient}
-        readOnly={false}
         initialCategory="conversation"
         archivedConversations={archivedConversations()}
       />,
@@ -338,7 +327,6 @@ describe("SettingsDialog", () => {
     render(
       <SettingsDialog
         client={client() as ProviderClient}
-        readOnly={false}
         initialCategory="conversation"
         archivedConversations={archivedConversations()}
       />,
@@ -370,7 +358,6 @@ describe("SettingsDialog", () => {
     render(
       <SettingsDialog
         client={client() as ProviderClient}
-        readOnly={false}
         archivedConversations={archivedConversations({
           status: "ready",
           items: [
