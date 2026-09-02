@@ -250,6 +250,7 @@ function createMockProviderClient() {
       titleModelBinding: null,
       language: "system",
       theme: "system",
+      themeColor: "neutral",
       defaultSystemPrompt: null,
     }),
     saveProvider: vi.fn<ProviderClient["saveProvider"]>(),
@@ -259,6 +260,7 @@ function createMockProviderClient() {
     setTitleModelBinding: vi.fn<ProviderClient["setTitleModelBinding"]>(),
     setLanguage: vi.fn<ProviderClient["setLanguage"]>(),
     setTheme: vi.fn<ProviderClient["setTheme"]>(),
+    setThemeColor: vi.fn<ProviderClient["setThemeColor"]>(),
     setDefaultSystemPrompt: vi.fn<ProviderClient["setDefaultSystemPrompt"]>(),
     revealProviderApiKey: vi
       .fn<ProviderClient["revealProviderApiKey"]>()
@@ -1168,6 +1170,7 @@ describe("ConversationWorkspace", () => {
       titleModelBinding: null,
       language: "system",
       theme: "system",
+      themeColor: "neutral",
       defaultSystemPrompt: null,
     })
     client.createConversation.mockResolvedValueOnce(rootOnlyTree)
@@ -2428,6 +2431,7 @@ describe("ConversationWorkspace", () => {
       titleModelBinding: null,
       language: "system",
       theme: "system",
+      themeColor: "neutral",
       defaultSystemPrompt: null,
     })
     providerClient.saveProvider = vi.fn().mockResolvedValueOnce({

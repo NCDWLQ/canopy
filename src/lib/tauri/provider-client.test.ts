@@ -11,6 +11,7 @@ import {
 import {
   listProvidersResultSchema,
   setLanguageRequestSchema,
+  setThemeColorRequestSchema,
   setThemeRequestSchema,
 } from "./provider-schemas"
 import type { InvokeTransport } from "./client"
@@ -58,6 +59,7 @@ describe("provider Tauri contract", () => {
       set_title_model_binding: fixture.successes.set_title_model_binding,
       set_language: fixture.successes.set_language,
       set_theme: fixture.successes.set_theme,
+      set_theme_color: fixture.successes.set_theme_color,
       set_default_system_prompt: fixture.successes.set_default_system_prompt,
       reveal_provider_api_key: fixture.successes.reveal_api_key,
       list_provider_models: { models: [{ id: "fixture-model" }] },
@@ -79,6 +81,7 @@ describe("provider Tauri contract", () => {
       titleModelBinding: null,
       language: "system",
       theme: "system",
+      themeColor: "neutral",
       defaultSystemPrompt: null,
     })
     await expect(
@@ -107,6 +110,7 @@ describe("provider Tauri contract", () => {
     })
     await expect(client.setLanguage("zh-CN")).resolves.toBe("zh-CN")
     await expect(client.setTheme("dark")).resolves.toBe("dark")
+    await expect(client.setThemeColor("blue")).resolves.toBe("blue")
     await expect(client.setDefaultSystemPrompt("Be helpful")).resolves.toBe(
       "Be helpful",
     )
@@ -136,6 +140,9 @@ describe("provider Tauri contract", () => {
       request: { theme: "dark" },
     })
     expect(transport.calls[8]?.args).toEqual({
+      request: { theme_color: "blue" },
+    })
+    expect(transport.calls[9]?.args).toEqual({
       request: { prompt: "Be helpful" },
     })
   })
@@ -183,6 +190,32 @@ describe("provider Tauri contract", () => {
     expect(setThemeRequestSchema.safeParse({}).success).toBe(false)
   })
 
+  it("sends set_theme_color as a single-field request and validates the closed color set", async () => {
+    const transport = recordingTransport({
+      set_theme_color: fixture.successes.set_theme_color,
+    })
+    const client = createProviderClient(transport, new FakeChannelFactory())
+
+    await expect(client.setThemeColor("blue")).resolves.toBe("blue")
+    expect(transport.calls[0]?.args).toEqual({
+      request: { theme_color: "blue" },
+    })
+    expect(
+      setThemeColorRequestSchema.safeParse({ theme_color: "solarized" })
+        .success,
+    ).toBe(false)
+    expect(
+      setThemeColorRequestSchema.safeParse({ theme_color: "BLUE" }).success,
+    ).toBe(false)
+    expect(
+      setThemeColorRequestSchema.safeParse({
+        theme_color: "violet",
+        extra: true,
+      }).success,
+    ).toBe(false)
+    expect(setThemeColorRequestSchema.safeParse({}).success).toBe(false)
+  })
+
   it("decodes the provider list language and theme, and rejects responses without valid ones", () => {
     expect(
       listProvidersResultSchema.safeParse(fixture.successes.providers).success,
@@ -209,6 +242,18 @@ describe("provider Tauri contract", () => {
       listProvidersResultSchema.safeParse({
         ...fixture.successes.providers,
         theme: undefined,
+      }).success,
+    ).toBe(false)
+    expect(
+      listProvidersResultSchema.safeParse({
+        ...fixture.successes.providers,
+        theme_color: "solarized",
+      }).success,
+    ).toBe(false)
+    expect(
+      listProvidersResultSchema.safeParse({
+        ...fixture.successes.providers,
+        theme_color: undefined,
       }).success,
     ).toBe(false)
   })

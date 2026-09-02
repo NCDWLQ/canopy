@@ -8,6 +8,7 @@
     "set_title_model_binding",
     "set_language",
     "set_theme",
+    "set_theme_color",
     "set_default_system_prompt",
     "reveal_provider_api_key",
     "list_provider_models",
@@ -44,6 +45,9 @@
     },
     "set_theme": {
       "theme": "dark"
+    },
+    "set_theme_color": {
+      "theme_color": "blue"
     },
     "set_default_system_prompt": {
       "prompt": "Be helpful"
@@ -98,6 +102,7 @@
       "title_model_binding": null,
       "language": "system",
       "theme": "system",
+      "theme_color": "neutral",
       "default_system_prompt": null
     },
     "active": {
@@ -108,6 +113,9 @@
     },
     "set_theme": {
       "theme": "dark"
+    },
+    "set_theme_color": {
+      "theme_color": "blue"
     },
     "set_default_system_prompt": {
       "prompt": "Be helpful"

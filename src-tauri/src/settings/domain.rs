@@ -68,6 +68,50 @@ impl ThemePreference {
     }
 }
 
+/// Persisted shadcn primary palette stored under the `theme_color` key in
+/// `app_settings`. `Neutral` is the default while the key is absent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThemeColorPreference {
+    Neutral,
+    Blue,
+    Green,
+    Orange,
+    Red,
+    Rose,
+    Violet,
+}
+
+impl ThemeColorPreference {
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "neutral" => Some(Self::Neutral),
+            "blue" => Some(Self::Blue),
+            "green" => Some(Self::Green),
+            "orange" => Some(Self::Orange),
+            "red" => Some(Self::Red),
+            "rose" => Some(Self::Rose),
+            "violet" => Some(Self::Violet),
+            _ => None,
+        }
+    }
+
+    pub fn from_setting_text(value: &str) -> Result<Self, SettingsError> {
+        Self::parse(value).ok_or(SettingsError::CorruptValue)
+    }
+
+    pub fn as_setting_text(self) -> &'static str {
+        match self {
+            Self::Neutral => "neutral",
+            Self::Blue => "blue",
+            Self::Green => "green",
+            Self::Orange => "orange",
+            Self::Red => "red",
+            Self::Rose => "rose",
+            Self::Violet => "violet",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct TitleModelBinding {

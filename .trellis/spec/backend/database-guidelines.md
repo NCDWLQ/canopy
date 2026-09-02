@@ -39,7 +39,8 @@ SQL ownership by table family:
   delete: the migration 7 trigger must not clear it.
 - `providers` / `provider_credential_operations` — `providers::repository`.
 - typed `app_settings` keys — `settings::repository` (`language`, `theme`,
-  `auto_generate_title`, `title_model_binding`, `default_system_prompt`).
+  `theme_color`, `auto_generate_title`, `title_model_binding`,
+  `default_system_prompt`).
 - `generation` does not own SQL. It composes provider validation and the
   conversation persistence-only setter in one service transaction.
 

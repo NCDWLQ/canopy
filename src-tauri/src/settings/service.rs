@@ -1,7 +1,8 @@
 use sqlx::SqlitePool;
 
 use super::{
-    LanguagePreference, SettingsError, SettingsRepository, ThemePreference, TitleModelBinding,
+    LanguagePreference, SettingsError, SettingsRepository, ThemeColorPreference, ThemePreference,
+    TitleModelBinding,
 };
 
 #[derive(Clone)]
@@ -81,6 +82,25 @@ impl SettingsService {
         SettingsRepository::set_theme(&mut transaction, theme).await?;
         transaction.commit().await?;
         Ok(theme)
+    }
+
+    /// Reads the persisted shadcn primary palette. An absent key means
+    /// `Neutral`, preserving the current default appearance.
+    pub async fn get_theme_color(&self) -> Result<ThemeColorPreference, SettingsError> {
+        let mut transaction = self.pool.begin().await?;
+        let theme_color = SettingsRepository::get_theme_color(&mut transaction).await?;
+        transaction.commit().await?;
+        Ok(theme_color)
+    }
+
+    pub async fn set_theme_color(
+        &self,
+        theme_color: ThemeColorPreference,
+    ) -> Result<ThemeColorPreference, SettingsError> {
+        let mut transaction = self.pool.begin().await?;
+        SettingsRepository::set_theme_color(&mut transaction, theme_color).await?;
+        transaction.commit().await?;
+        Ok(theme_color)
     }
 
     pub async fn get_default_system_prompt(&self) -> Result<Option<String>, SettingsError> {

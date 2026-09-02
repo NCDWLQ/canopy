@@ -17,10 +17,23 @@ import {
   FieldLabel,
   FieldSet,
 } from "@/components/ui/field"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import type { ProviderClient } from "@/lib/tauri"
 import { commandErrorMessage, useTranslation } from "@/lib/i18n"
-import type { ThemePreference } from "@/lib/theme"
+import {
+  isThemeColorPreference,
+  THEME_COLORS,
+  type ThemeColorPreference,
+  type ThemePreference,
+} from "@/lib/theme"
 
 export type AppearanceSettingsPanelProps = {
   client: ProviderClient
@@ -43,16 +56,49 @@ const THEME_OPTIONS: readonly {
   { value: "dark", labelKey: "settings.appearance.themeDark", icon: Moon },
 ]
 
+const THEME_COLOR_LABEL_KEYS = {
+  neutral: "settings.appearance.themeColorNeutral",
+  blue: "settings.appearance.themeColorBlue",
+  green: "settings.appearance.themeColorGreen",
+  orange: "settings.appearance.themeColorOrange",
+  red: "settings.appearance.themeColorRed",
+  rose: "settings.appearance.themeColorRose",
+  violet: "settings.appearance.themeColorViolet",
+} as const satisfies Record<
+  ThemeColorPreference,
+  | "settings.appearance.themeColorNeutral"
+  | "settings.appearance.themeColorBlue"
+  | "settings.appearance.themeColorGreen"
+  | "settings.appearance.themeColorOrange"
+  | "settings.appearance.themeColorRed"
+  | "settings.appearance.themeColorRose"
+  | "settings.appearance.themeColorViolet"
+>
+
+function ThemeColorSwatch({ color }: { color: ThemeColorPreference }) {
+  return (
+    <span
+      aria-hidden
+      className="size-3 shrink-0 rounded-full border border-border/60"
+      style={{
+        backgroundColor: `var(--theme-color-${color}-primary)`,
+      }}
+    />
+  )
+}
+
 export function AppearanceSettingsPanel({
   client,
 }: AppearanceSettingsPanelProps) {
   const { t } = useTranslation()
   const phase = useProviderStore((state) => state.phase)
   const theme = useProviderStore((state) => state.theme)
+  const themeColor = useProviderStore((state) => state.themeColor)
   const storeError = useProviderStore((state) =>
     state.phase === "error" ? state.error : null,
   )
   const setTheme = useProviderStore((state) => state.setTheme)
+  const setThemeColor = useProviderStore((state) => state.setThemeColor)
 
   const mutationDisabled = phase === "loading"
 
@@ -119,6 +165,44 @@ export function AppearanceSettingsPanel({
                     </ToggleGroupItem>
                   ))}
                 </ToggleGroup>
+              </Field>
+              <Field orientation="horizontal" data-disabled={mutationDisabled}>
+                <FieldContent>
+                  <FieldLabel id="theme-color-label">
+                    {t("settings.appearance.themeColor")}
+                  </FieldLabel>
+                  <FieldDescription>
+                    {t("settings.appearance.themeColorDescription")}
+                  </FieldDescription>
+                </FieldContent>
+                <Select
+                  value={themeColor}
+                  disabled={mutationDisabled}
+                  onValueChange={(value) => {
+                    if (isThemeColorPreference(value)) {
+                      void setThemeColor(client, value)
+                    }
+                  }}
+                >
+                  <SelectTrigger
+                    className="ml-auto w-[min(100%,12rem)]"
+                    aria-labelledby="theme-color-label"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {THEME_COLORS.map((color) => (
+                        <SelectItem key={color} value={color}>
+                          <span className="flex items-center gap-2">
+                            <ThemeColorSwatch color={color} />
+                            {t(THEME_COLOR_LABEL_KEYS[color])}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
               </Field>
             </FieldSet>
           </FieldGroup>

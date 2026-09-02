@@ -1,12 +1,22 @@
 import { create } from "zustand"
 
-import { effectiveTheme, resolveThemePreference } from "./resolve"
-import type { ResolvedTheme, ThemePreference } from "./types"
+import {
+  effectiveTheme,
+  resolveThemeColorPreference,
+  resolveThemePreference,
+} from "./resolve"
+import type {
+  ResolvedTheme,
+  ThemeColorPreference,
+  ThemePreference,
+} from "./types"
 
 export type ThemeStore = {
   theme: ThemePreference
   resolvedTheme: ResolvedTheme
+  themeColor: ThemeColorPreference
   setThemePreference: (theme: ThemePreference) => void
+  setThemeColorPreference: (themeColor: ThemeColorPreference) => void
   syncSystemTheme: (isDark: boolean) => void
 }
 
@@ -27,10 +37,14 @@ export function systemPrefersDark(): boolean {
 export const useThemeStore = create<ThemeStore>((set, get) => ({
   theme: "system",
   resolvedTheme: effectiveTheme("system", systemPrefersDark()),
+  themeColor: "neutral",
   setThemePreference: (preference) => {
     const theme = resolveThemePreference(preference)
     const resolvedTheme = effectiveTheme(theme, systemPrefersDark())
     set({ theme, resolvedTheme })
+  },
+  setThemeColorPreference: (preference) => {
+    set({ themeColor: resolveThemeColorPreference(preference) })
   },
   syncSystemTheme: (isDark) => {
     const current = get()

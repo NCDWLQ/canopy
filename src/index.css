@@ -165,6 +165,70 @@
   --code-inline-border: oklch(1 0 0 / 12%);
 }
 
+:root {
+  --theme-color-neutral-primary: oklch(0.205 0 0);
+  --theme-color-neutral-primary-foreground: oklch(0.985 0 0);
+  --theme-color-blue-primary: var(--color-blue-600);
+  --theme-color-blue-primary-foreground: var(--color-white);
+  --theme-color-green-primary: var(--color-green-700);
+  --theme-color-green-primary-foreground: var(--color-white);
+  --theme-color-orange-primary: var(--color-orange-700);
+  --theme-color-orange-primary-foreground: var(--color-white);
+  --theme-color-red-primary: var(--color-red-600);
+  --theme-color-red-primary-foreground: var(--color-white);
+  --theme-color-rose-primary: var(--color-rose-600);
+  --theme-color-rose-primary-foreground: var(--color-white);
+  --theme-color-violet-primary: var(--color-violet-600);
+  --theme-color-violet-primary-foreground: var(--color-white);
+}
+
+.dark {
+  --theme-color-neutral-primary: oklch(0.922 0 0);
+  --theme-color-neutral-primary-foreground: oklch(0.205 0 0);
+  --theme-color-blue-primary: var(--color-blue-400);
+  --theme-color-blue-primary-foreground: var(--color-blue-950);
+  --theme-color-green-primary: var(--color-green-400);
+  --theme-color-green-primary-foreground: var(--color-green-950);
+  --theme-color-orange-primary: var(--color-orange-400);
+  --theme-color-orange-primary-foreground: var(--color-orange-950);
+  --theme-color-red-primary: var(--color-red-400);
+  --theme-color-red-primary-foreground: var(--color-red-950);
+  --theme-color-rose-primary: var(--color-rose-400);
+  --theme-color-rose-primary-foreground: var(--color-rose-950);
+  --theme-color-violet-primary: var(--color-violet-400);
+  --theme-color-violet-primary-foreground: var(--color-violet-950);
+}
+
+[data-theme-color="blue"] {
+  --primary: var(--theme-color-blue-primary);
+  --primary-foreground: var(--theme-color-blue-primary-foreground);
+}
+
+[data-theme-color="green"] {
+  --primary: var(--theme-color-green-primary);
+  --primary-foreground: var(--theme-color-green-primary-foreground);
+}
+
+[data-theme-color="orange"] {
+  --primary: var(--theme-color-orange-primary);
+  --primary-foreground: var(--theme-color-orange-primary-foreground);
+}
+
+[data-theme-color="red"] {
+  --primary: var(--theme-color-red-primary);
+  --primary-foreground: var(--theme-color-red-primary-foreground);
+}
+
+[data-theme-color="rose"] {
+  --primary: var(--theme-color-rose-primary);
+  --primary-foreground: var(--theme-color-rose-primary-foreground);
+}
+
+[data-theme-color="violet"] {
+  --primary: var(--theme-color-violet-primary);
+  --primary-foreground: var(--theme-color-violet-primary-foreground);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

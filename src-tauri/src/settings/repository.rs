@@ -1,12 +1,15 @@
 use sqlx::{Row, SqliteConnection};
 
-use super::{LanguagePreference, SettingsError, ThemePreference, TitleModelBinding};
+use super::{
+    LanguagePreference, SettingsError, ThemeColorPreference, ThemePreference, TitleModelBinding,
+};
 
 const ACTIVE_PROVIDER_SETTING_KEY: &str = "active_provider_id";
 const AUTO_GENERATE_TITLE_SETTING_KEY: &str = "auto_generate_title";
 const TITLE_MODEL_BINDING_SETTING_KEY: &str = "title_model_binding";
 const LANGUAGE_SETTING_KEY: &str = "language";
 const THEME_SETTING_KEY: &str = "theme";
+const THEME_COLOR_SETTING_KEY: &str = "theme_color";
 const DEFAULT_SYSTEM_PROMPT_SETTING_KEY: &str = "default_system_prompt";
 
 #[derive(Debug, Default)]
@@ -147,6 +150,30 @@ impl SettingsRepository {
         theme: ThemePreference,
     ) -> Result<(), SettingsError> {
         Self::set_setting(connection, THEME_SETTING_KEY, theme.as_setting_text()).await
+    }
+
+    pub(crate) async fn get_theme_color(
+        connection: &mut SqliteConnection,
+    ) -> Result<ThemeColorPreference, SettingsError> {
+        match Self::get_setting(connection, THEME_COLOR_SETTING_KEY)
+            .await?
+            .as_deref()
+        {
+            None => Ok(ThemeColorPreference::Neutral),
+            Some(value) => ThemeColorPreference::from_setting_text(value),
+        }
+    }
+
+    pub(crate) async fn set_theme_color(
+        connection: &mut SqliteConnection,
+        theme_color: ThemeColorPreference,
+    ) -> Result<(), SettingsError> {
+        Self::set_setting(
+            connection,
+            THEME_COLOR_SETTING_KEY,
+            theme_color.as_setting_text(),
+        )
+        .await
     }
 
     pub(crate) async fn get_default_system_prompt(

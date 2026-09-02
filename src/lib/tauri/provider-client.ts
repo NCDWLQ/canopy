@@ -1,7 +1,7 @@
 import { Channel } from "@tauri-apps/api/core"
 
 import { t, type LocalePreference } from "@/lib/i18n"
-import type { ThemePreference } from "@/lib/theme"
+import type { ThemeColorPreference, ThemePreference } from "@/lib/theme"
 import type {
   GenerationEventView,
   GenerationTerminalView,
@@ -48,6 +48,8 @@ import {
   setDefaultSystemPromptResultSchema,
   setThemeRequestSchema,
   setThemeResultSchema,
+  setThemeColorRequestSchema,
+  setThemeColorResultSchema,
   setTitleModelBindingRequestSchema,
   setTitleModelBindingResultSchema,
   type GenerationEventDto,
@@ -66,6 +68,7 @@ export const PROVIDER_COMMANDS = {
   setTitleModelBinding: "set_title_model_binding",
   setLanguage: "set_language",
   setTheme: "set_theme",
+  setThemeColor: "set_theme_color",
   setDefaultSystemPrompt: "set_default_system_prompt",
   revealProviderApiKey: "reveal_provider_api_key",
   listProviderModels: "list_provider_models",
@@ -222,6 +225,19 @@ export function createProviderClient(
         { theme },
         setThemeResultSchema,
         (value) => value.theme,
+      )
+    },
+
+    async setThemeColor(
+      themeColor: ThemeColorPreference,
+    ): Promise<ThemeColorPreference> {
+      return providerCall(
+        transport,
+        PROVIDER_COMMANDS.setThemeColor,
+        setThemeColorRequestSchema,
+        { theme_color: themeColor },
+        setThemeColorResultSchema,
+        (value) => value.theme_color,
       )
     },
 
@@ -519,6 +535,7 @@ function mapListProviders(dto: ListProvidersResultDto): ListProvidersView {
           },
     language: dto.language,
     theme: dto.theme,
+    themeColor: dto.theme_color,
     defaultSystemPrompt: dto.default_system_prompt,
   }
 }

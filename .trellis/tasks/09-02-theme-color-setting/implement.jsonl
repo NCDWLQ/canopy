@@ -1,0 +1,12 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend guideline index and ownership boundaries."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"shadcn settings-row composition and feature/component ownership."}
+{"file":".trellis/spec/frontend/state-management.md","reason":"SQLite-backed durable preference and Zustand hydration/update rules."}
+{"file":".trellis/spec/frontend/i18n-guidelines.md","reason":"Typed bilingual dictionary conventions for settings labels."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Strict TypeScript and Zod IPC boundary requirements."}
+{"file":".trellis/spec/backend/index.md","reason":"Settings capability ownership and list_providers aggregate boundary."}
+{"file":".trellis/spec/backend/directory-structure.md","reason":"Rust settings, providers, and command registration module ownership."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"app_settings repository and SQLite transaction conventions."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Invalid input and corrupt settings error mapping."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"New app_settings key and IPC field require end-to-end contract tracing."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Keep the seven-value set and CSS palette mappings authoritative."}
+{"file":".trellis/tasks/09-02-theme-color-setting/research/shadcn-theme-color.md","reason":"Verified local shadcn Select, theme token, and persistence evidence."}

@@ -12,8 +12,8 @@ use canopy_lib::{
     },
     settings::commands::{
         SetAutoGenerateTitleRequest, SetAutoGenerateTitleResult, SetDefaultSystemPromptRequest,
-        SetDefaultSystemPromptResult, SetLanguageRequest, SetLanguageResult, SetThemeRequest,
-        SetThemeResult,
+        SetDefaultSystemPromptResult, SetLanguageRequest, SetLanguageResult, SetThemeColorRequest,
+        SetThemeColorResult, SetThemeRequest, SetThemeResult,
     },
 };
 use serde_json::Value;
@@ -43,6 +43,7 @@ fn shared_provider_fixture_round_trips_rust_wire_types() {
     request!("set_title_model_binding", SetTitleModelBindingRequest);
     request!("set_language", SetLanguageRequest);
     request!("set_theme", SetThemeRequest);
+    request!("set_theme_color", SetThemeColorRequest);
     request!("set_default_system_prompt", SetDefaultSystemPromptRequest);
     request!("reveal_provider_api_key", RevealProviderApiKeyRequest);
     request!("list_provider_models", ListProviderModelsRequest);
@@ -84,6 +85,12 @@ fn shared_provider_fixture_round_trips_rust_wire_types() {
     assert_eq!(
         serde_json::to_value(theme).unwrap(),
         fixture["successes"]["set_theme"]
+    );
+    let theme_color: SetThemeColorResult =
+        serde_json::from_value(fixture["successes"]["set_theme_color"].clone()).unwrap();
+    assert_eq!(
+        serde_json::to_value(theme_color).unwrap(),
+        fixture["successes"]["set_theme_color"]
     );
     let default_prompt: SetDefaultSystemPromptResult =
         serde_json::from_value(fixture["successes"]["set_default_system_prompt"].clone()).unwrap();

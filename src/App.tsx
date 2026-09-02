@@ -17,7 +17,7 @@ function DocumentLocaleSync() {
 }
 
 function DocumentThemeSync() {
-  const { theme, resolvedTheme } = useTheme()
+  const { theme, resolvedTheme, themeColor } = useTheme()
 
   React.useEffect(() => {
     const root = document.documentElement
@@ -29,6 +29,15 @@ function DocumentThemeSync() {
       root.style.colorScheme = "light"
     }
   }, [resolvedTheme])
+
+  React.useEffect(() => {
+    const root = document.documentElement
+    if (themeColor === "neutral") {
+      delete root.dataset.themeColor
+    } else {
+      root.dataset.themeColor = themeColor
+    }
+  }, [themeColor])
 
   React.useEffect(() => {
     if (theme !== "system") return

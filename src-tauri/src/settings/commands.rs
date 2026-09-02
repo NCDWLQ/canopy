@@ -4,7 +4,7 @@ use tauri_plugin_sql::DbInstances;
 
 use crate::{error::CommandError, infra::database::managed_sqlite_pool};
 
-use super::{LanguagePreference, SettingsService, ThemePreference};
+use super::{LanguagePreference, SettingsService, ThemeColorPreference, ThemePreference};
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
@@ -40,6 +40,18 @@ pub struct SetThemeRequest {
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct SetThemeResult {
     pub theme: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct SetThemeColorRequest {
+    pub theme_color: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct SetThemeColorResult {
+    pub theme_color: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -123,6 +135,25 @@ pub async fn set_theme(
         .await
         .map(|theme| SetThemeResult {
             theme: theme.as_setting_text().to_owned(),
+        })
+        .map_err(CommandError::from)
+}
+
+#[tauri::command]
+pub async fn set_theme_color(
+    request: SetThemeColorRequest,
+    instances: State<'_, DbInstances>,
+) -> Result<SetThemeColorResult, CommandError> {
+    let theme_color = ThemeColorPreference::parse(&request.theme_color)
+        .ok_or_else(|| CommandError::invalid_input("theme_color", "invalid_theme_color"))?;
+    let pool = managed_sqlite_pool(instances.inner())
+        .await
+        .map_err(CommandError::from)?;
+    production_service(pool)
+        .set_theme_color(theme_color)
+        .await
+        .map(|theme_color| SetThemeColorResult {
+            theme_color: theme_color.as_setting_text().to_owned(),
         })
         .map_err(CommandError::from)
 }

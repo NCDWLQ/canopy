@@ -298,6 +298,15 @@ export const zhCN = {
   "settings.appearance.themeSystem": "跟随系统",
   "settings.appearance.themeLight": "浅色模式",
   "settings.appearance.themeDark": "深色模式",
+  "settings.appearance.themeColor": "主题色",
+  "settings.appearance.themeColorDescription": "选择界面中使用的主色调",
+  "settings.appearance.themeColorNeutral": "中性",
+  "settings.appearance.themeColorBlue": "蓝色",
+  "settings.appearance.themeColorGreen": "绿色",
+  "settings.appearance.themeColorOrange": "橙色",
+  "settings.appearance.themeColorRed": "红色",
+  "settings.appearance.themeColorRose": "玫红",
+  "settings.appearance.themeColorViolet": "紫色",
   "settings.appearance.updateFailed": "外观设置未保存",
 
   // ConversationSettingsPanel.tsx

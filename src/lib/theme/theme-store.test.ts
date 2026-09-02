@@ -7,6 +7,7 @@ describe("useThemeStore", () => {
     useThemeStore.setState({
       theme: "system",
       resolvedTheme: "light",
+      themeColor: "neutral",
     })
   })
 
@@ -32,5 +33,12 @@ describe("useThemeStore", () => {
     useThemeStore.getState().setThemePreference("light")
     useThemeStore.getState().syncSystemTheme(true)
     expect(useThemeStore.getState().resolvedTheme).toBe("light")
+  })
+
+  it("updates the theme color preference", () => {
+    useThemeStore.getState().setThemeColorPreference("blue")
+    expect(useThemeStore.getState().themeColor).toBe("blue")
+    useThemeStore.getState().setThemeColorPreference("violet")
+    expect(useThemeStore.getState().themeColor).toBe("violet")
   })
 })

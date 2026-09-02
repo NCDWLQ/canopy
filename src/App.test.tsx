@@ -18,6 +18,7 @@ vi.mock("@/lib/tauri", () => ({
         titleModelBinding: null,
         language: "system",
         theme: "system",
+        themeColor: "neutral",
         defaultSystemPrompt: null,
       }),
   }),
@@ -90,6 +91,34 @@ describe("Canopy scaffold", () => {
       useThemeStore.getState().setThemePreference("light")
     })
     expect(document.documentElement.classList.contains("dark")).toBe(false)
+    expect(workspaceRenderProbe.count).toBe(rendersAfterMount)
+  })
+
+  it("syncs document data-theme-color with the active theme color", async () => {
+    render(<App />)
+    await screen.findByRole("heading", { name: "开始新对话" })
+    expect(document.documentElement.dataset.themeColor).toBeUndefined()
+
+    act(() => {
+      useThemeStore.getState().setThemeColorPreference("blue")
+    })
+    expect(document.documentElement.dataset.themeColor).toBe("blue")
+
+    act(() => {
+      useThemeStore.getState().setThemeColorPreference("neutral")
+    })
+    expect(document.documentElement.dataset.themeColor).toBeUndefined()
+  })
+
+  it("does not re-render ConversationWorkspace when theme color changes", async () => {
+    render(<App />)
+    await screen.findByRole("heading", { name: "开始新对话" })
+    const rendersAfterMount = workspaceRenderProbe.count
+
+    act(() => {
+      useThemeStore.getState().setThemeColorPreference("violet")
+    })
+    expect(document.documentElement.dataset.themeColor).toBe("violet")
     expect(workspaceRenderProbe.count).toBe(rendersAfterMount)
   })
 })
