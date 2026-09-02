@@ -12,11 +12,20 @@ import {
 import { Button } from "@/components/ui/button"
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker"
 import {
+  MessageScroller,
+  MessageScrollerButton,
+  MessageScrollerContent,
+  MessageScrollerItem,
+  MessageScrollerProvider,
+  MessageScrollerViewport,
+  useMessageScroller,
+} from "@/components/ui/message-scroller"
+import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { AlertCircle, GitBranch, RefreshCw } from "lucide-react"
+import { AlertCircle, ArrowDownIcon, GitBranch, RefreshCw } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import { commandErrorMessage, useTranslation } from "@/lib/i18n"
 
@@ -163,6 +172,35 @@ function TransientGenerationMessage({
   )
 }
 
+function prefersReducedMotion(): boolean {
+  return (
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false
+  )
+}
+
+function ScrollPathToEnd({
+  pathKey,
+  enabled,
+}: {
+  pathKey: string
+  enabled: boolean
+}) {
+  const { scrollToEnd } = useMessageScroller()
+  const scrollToEndRef = React.useRef(scrollToEnd)
+  React.useEffect(() => {
+    scrollToEndRef.current = scrollToEnd
+  }, [scrollToEnd])
+  React.useEffect(() => {
+    if (!enabled) return
+    // Key only on path identity, not on `scrollToEnd` identity: a new
+    // callback must not yank a user who has already left the live edge.
+    scrollToEndRef.current({
+      behavior: prefersReducedMotion() ? "auto" : "smooth",
+    })
+  }, [enabled, pathKey])
+  return null
+}
+
 export function ConversationPane({
   path,
   status,
@@ -183,12 +221,7 @@ export function ConversationPane({
   reveal = null,
 }: ConversationPaneProps) {
   const { t } = useTranslation()
-  const bottomRef = React.useRef<HTMLDivElement>(null)
   const containerRef = React.useRef<HTMLDivElement>(null)
-  const transientContent =
-    transientGeneration !== null && "content" in transientGeneration
-      ? transientGeneration.content
-      : ""
   // `path` is rebuilt with a fresh array identity on unrelated store updates
   // (e.g. background generation deltas in another conversation), so scrolling
   // must key on the displayed tail's content, not on the array reference.
@@ -202,26 +235,9 @@ export function ConversationPane({
   // text for MessageNode to position on, so the pane scrolls the revealed
   // message's row to the top itself.
   const revealNeedsPaneScroll = revealOnPath && revealQuery === ""
-
-  React.useEffect(() => {
-    if (status === "ready" || status === "streaming") {
-      // While a search reveal owns the viewport, MessageNode scrolls to the
-      // matched text; the bottom autoscroll would fight that target.
-      if (revealOnPath) return
-      const reducedMotion = window.matchMedia?.(
-        "(prefers-reduced-motion: reduce)",
-      ).matches
-      bottomRef.current?.scrollIntoView?.({
-        behavior: reducedMotion ? "auto" : "smooth",
-      })
-    }
-  }, [
-    pathScrollKey,
-    status,
-    transientContent,
-    transientGeneration?.phase,
-    revealOnPath,
-  ])
+  const followLiveEdge =
+    (status === "ready" || status === "streaming") && !revealOnPath
+  const reducedMotion = prefersReducedMotion()
 
   React.useEffect(() => {
     if (!revealNeedsPaneScroll || revealNodeId === null) return
@@ -230,13 +246,10 @@ export function ConversationPane({
       `[data-message-row-id="${CSS.escape(revealNodeId)}"]`,
     )
     if (row == null) return
-    const reducedMotion = window.matchMedia?.(
-      "(prefers-reduced-motion: reduce)",
-    ).matches
     row.scrollIntoView?.({
       block: "start",
       inline: "nearest",
-      behavior: reducedMotion ? "auto" : "smooth",
+      behavior: prefersReducedMotion() ? "auto" : "smooth",
     })
   }, [revealNeedsPaneScroll, revealNodeId, status])
 
@@ -250,119 +263,147 @@ export function ConversationPane({
   }
 
   return (
-    <div
-      ref={containerRef}
-      data-testid="conversation-pane"
-      className="relative flex h-full flex-1 flex-col overflow-y-auto px-4 py-6 md:px-8 [contain:paint]"
+    <MessageScrollerProvider
+      autoScroll={followLiveEdge}
+      defaultScrollPosition="end"
     >
-      {error && (
-        <div
-          className="mb-6 flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive shadow-sm"
-          role="alert"
+      <ScrollPathToEnd pathKey={pathScrollKey} enabled={followLiveEdge} />
+      <MessageScroller>
+        <MessageScrollerViewport
+          ref={containerRef}
+          data-testid="conversation-pane"
+          aria-label={t("conversation.pane.messages")}
+          className="px-4 py-6 md:px-8"
         >
-          <AlertCircle className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
-          <div className="flex-1">
-            <h3 className="font-medium text-sm">
-              {t("conversation.pane.errorTitle")}
-            </h3>
-            <p className="text-sm mt-1 opacity-90">
-              {commandErrorMessage(error.code)}
-            </p>
-          </div>
-          {error.retryable && onRetry !== undefined && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onRetry}
-              className="shrink-0"
-            >
-              <RefreshCw aria-hidden="true" />
-              {t("conversation.pane.retry")}
-            </Button>
-          )}
-        </div>
-      )}
-
-      {path.length === 0 && status !== "loading" && !error && (
-        <div className="flex flex-1 items-center justify-center text-muted-foreground">
-          <p>{t("conversation.pane.empty")}</p>
-        </div>
-      )}
-
-      <div
-        className="mx-auto w-full max-w-4xl flex-1 pb-28 md:pb-32"
-        role="log"
-      >
-        {path.map((msg, index) => {
-          const isLastMessage = index === path.length - 1
-          const nodeGenerationAction =
-            isLastMessage && userGenerationAction && msg.role === "user"
-              ? userGenerationAction
-              : undefined
-          const nodeAssistantRegenerationAction =
-            status === "ready" &&
-            transientGeneration === null &&
-            isLastMessage &&
-            msg.role === "assistant" &&
-            assistantRegenerationAction?.assistantNodeId === msg.id
-              ? assistantRegenerationAction
-              : undefined
-          const isRevealed = revealNodeId !== null && revealNodeId === msg.id
-          return (
-            <React.Fragment key={msg.id}>
-              <div data-message-row-id={msg.id}>
-                <MessageNode
-                  message={msg}
-                  canBranch={canBranch(msg.id)}
-                  canEdit={canEdit(msg.id)}
-                  onCreateBranch={onCreateBranch}
-                  onEditAsBranch={onEditAsBranch}
-                  onExportMessage={onExportMessage}
-                  exportDisabled={exportDisabled}
-                  generationAction={nodeGenerationAction}
-                  assistantRegenerationAction={nodeAssistantRegenerationAction}
-                  highlightQuery={isRevealed ? revealQuery : undefined}
-                  scrollContainerRef={containerRef}
-                  branchSwitcher={branchSwitcherFor?.(msg.id) ?? undefined}
-                />
-              </div>
-              {pendingBranchOriginId === msg.id && (
-                <Marker
-                  variant="separator"
-                  className="my-6 animate-in fade-in-0 zoom-in-95 duration-150 ease-[var(--ease-out)] motion-reduce:animate-none"
-                  role="separator"
-                  aria-label={t("conversation.pane.branchOrigin")}
+          <MessageScrollerContent className="mx-auto w-full max-w-4xl flex-1 pb-28 md:pb-32">
+            {error && (
+              <MessageScrollerItem>
+                <div
+                  className="mb-6 flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive shadow-sm"
+                  role="alert"
                 >
-                  <MarkerIcon>
-                    <GitBranch />
-                  </MarkerIcon>
-                  <MarkerContent>
-                    {t("conversation.pane.branchOrigin")}
-                  </MarkerContent>
-                </Marker>
-              )}
-            </React.Fragment>
-          )
-        })}
-        {transientGeneration !== null && (
-          <TransientGenerationMessage
-            generation={transientGeneration}
-            onRegenerate={onRegenerate}
-          />
-        )}
-        {status === "loading" && path.length > 0 && (
-          <div
-            className="flex justify-center p-4"
-            aria-label={t("conversation.pane.saving")}
-          >
-            <Spinner
-              className="size-6 text-muted-foreground"
-              aria-hidden="true"
-            />
-          </div>
-        )}
-        <div ref={bottomRef} aria-hidden="true" />
-      </div>
-    </div>
+                  <AlertCircle
+                    className="mt-0.5 size-5 shrink-0"
+                    aria-hidden="true"
+                  />
+                  <div className="flex-1">
+                    <h3 className="font-medium text-sm">
+                      {t("conversation.pane.errorTitle")}
+                    </h3>
+                    <p className="text-sm mt-1 opacity-90">
+                      {commandErrorMessage(error.code)}
+                    </p>
+                  </div>
+                  {error.retryable && onRetry !== undefined && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={onRetry}
+                      className="shrink-0"
+                    >
+                      <RefreshCw aria-hidden="true" />
+                      {t("conversation.pane.retry")}
+                    </Button>
+                  )}
+                </div>
+              </MessageScrollerItem>
+            )}
+
+            {path.length === 0 && status !== "loading" && !error && (
+              <MessageScrollerItem className="flex flex-1 items-center justify-center text-muted-foreground">
+                <p>{t("conversation.pane.empty")}</p>
+              </MessageScrollerItem>
+            )}
+
+            {path.map((msg, index) => {
+              const isLastMessage = index === path.length - 1
+              const nodeGenerationAction =
+                isLastMessage && userGenerationAction && msg.role === "user"
+                  ? userGenerationAction
+                  : undefined
+              const nodeAssistantRegenerationAction =
+                status === "ready" &&
+                transientGeneration === null &&
+                isLastMessage &&
+                msg.role === "assistant" &&
+                assistantRegenerationAction?.assistantNodeId === msg.id
+                  ? assistantRegenerationAction
+                  : undefined
+              const isRevealed =
+                revealNodeId !== null && revealNodeId === msg.id
+              return (
+                <MessageScrollerItem
+                  key={msg.id}
+                  messageId={msg.id}
+                  scrollAnchor={msg.role === "user"}
+                >
+                  <div data-message-row-id={msg.id}>
+                    <MessageNode
+                      message={msg}
+                      canBranch={canBranch(msg.id)}
+                      canEdit={canEdit(msg.id)}
+                      onCreateBranch={onCreateBranch}
+                      onEditAsBranch={onEditAsBranch}
+                      onExportMessage={onExportMessage}
+                      exportDisabled={exportDisabled}
+                      generationAction={nodeGenerationAction}
+                      assistantRegenerationAction={
+                        nodeAssistantRegenerationAction
+                      }
+                      highlightQuery={isRevealed ? revealQuery : undefined}
+                      scrollContainerRef={containerRef}
+                      branchSwitcher={branchSwitcherFor?.(msg.id) ?? undefined}
+                    />
+                  </div>
+                  {pendingBranchOriginId === msg.id && (
+                    <Marker
+                      variant="separator"
+                      className="my-6 animate-in fade-in-0 zoom-in-95 duration-150 ease-[var(--ease-out)] motion-reduce:animate-none"
+                      role="separator"
+                      aria-label={t("conversation.pane.branchOrigin")}
+                    >
+                      <MarkerIcon>
+                        <GitBranch />
+                      </MarkerIcon>
+                      <MarkerContent>
+                        {t("conversation.pane.branchOrigin")}
+                      </MarkerContent>
+                    </Marker>
+                  )}
+                </MessageScrollerItem>
+              )
+            })}
+            {transientGeneration !== null && (
+              <MessageScrollerItem>
+                <TransientGenerationMessage
+                  generation={transientGeneration}
+                  onRegenerate={onRegenerate}
+                />
+              </MessageScrollerItem>
+            )}
+            {status === "loading" && path.length > 0 && (
+              <MessageScrollerItem>
+                <div
+                  className="flex justify-center p-4"
+                  aria-label={t("conversation.pane.saving")}
+                >
+                  <Spinner
+                    className="size-6 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                </div>
+              </MessageScrollerItem>
+            )}
+          </MessageScrollerContent>
+        </MessageScrollerViewport>
+        <MessageScrollerButton
+          aria-label={t("conversation.pane.scrollToLatest")}
+          behavior={reducedMotion ? "auto" : "smooth"}
+          className="z-10 data-[direction=end]:bottom-24 md:data-[direction=end]:bottom-28"
+        >
+          <ArrowDownIcon aria-hidden="true" />
+        </MessageScrollerButton>
+      </MessageScroller>
+    </MessageScrollerProvider>
   )
 }

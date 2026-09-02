@@ -1602,16 +1602,57 @@ describe("ConversationWorkspace", () => {
   })
 
   it("uses instant scrolling when reduced motion is requested", async () => {
-    const scrollIntoView = vi.fn()
-    Element.prototype.scrollIntoView = scrollIntoView
+    const scrollTo = vi.spyOn(Element.prototype, "scrollTo")
+    const originalClientHeight = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "clientHeight",
+    )
+    const originalScrollHeight = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "scrollHeight",
+    )
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+      configurable: true,
+      get() {
+        return 400
+      },
+    })
+    Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
+      configurable: true,
+      get() {
+        return 2000
+      },
+    })
     vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }))
     await useConversationStore
       .getState()
       .loadConversation(client, root.conversationId)
 
-    render(<ConversationWorkspace />)
-
-    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "auto" })
+    try {
+      render(<ConversationWorkspace />)
+      expect(scrollTo).toHaveBeenCalledWith(
+        expect.objectContaining({ behavior: "auto" }),
+      )
+    } finally {
+      if (originalClientHeight === undefined) {
+        Reflect.deleteProperty(HTMLElement.prototype, "clientHeight")
+      } else {
+        Object.defineProperty(
+          HTMLElement.prototype,
+          "clientHeight",
+          originalClientHeight,
+        )
+      }
+      if (originalScrollHeight === undefined) {
+        Reflect.deleteProperty(HTMLElement.prototype, "scrollHeight")
+      } else {
+        Object.defineProperty(
+          HTMLElement.prototype,
+          "scrollHeight",
+          originalScrollHeight,
+        )
+      }
+    }
   })
 
   it("renders Composer cancel action during starting/streaming and cancels generation on click", async () => {

@@ -1,0 +1,4 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Preserve the established conversation pane, search reveal, reduced-motion, and streaming presentation contracts."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Follow the native WebKitGTK scroll-surface constraints and add the smallest behavioral regression test."}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "Add the icon-only jump control label through the typed English and Simplified Chinese dictionaries."}
