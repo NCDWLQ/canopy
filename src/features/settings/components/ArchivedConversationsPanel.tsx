@@ -31,12 +31,15 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { Spinner } from "@/components/ui/spinner"
+import { formatRelativeUpdatedAt } from "@/lib/format-relative-time"
 import type { UiError } from "@/lib/tauri/types"
 import { commandErrorMessage, useTranslation } from "@/lib/i18n"
+import { cn } from "@/lib/utils"
 
 export type ArchivedConversationItem = {
   id: string
   title: string
+  updatedAt: number
   isCurrent: boolean
 }
 
@@ -66,7 +69,7 @@ export function ArchivedConversationsPanel({
   onDelete,
   onRetry,
 }: ArchivedConversationsPanelProps) {
-  const { t } = useTranslation()
+  const { t, locale } = useTranslation()
   const showList = items.length > 0
   const showLoading = !showList && status === "loading"
   const showEmpty = !showList && status === "empty"
@@ -117,7 +120,12 @@ export function ArchivedConversationsPanel({
           >
             {items.map((item) => (
               <li key={item.id}>
-                <div className="flex items-center rounded-md hover:bg-muted">
+                <div
+                  className={cn(
+                    "flex items-center rounded-md",
+                    item.isCurrent ? "bg-muted" : "hover:bg-muted",
+                  )}
+                >
                   <Button
                     type="button"
                     variant="ghost"
@@ -129,53 +137,67 @@ export function ArchivedConversationsPanel({
                     disabled={disabled}
                     onClick={() => onSelect(item.id)}
                   >
-                    <span className="w-full truncate">{item.title}</span>
+                    <span className="flex w-full min-w-0 flex-col items-start gap-0.5 text-left">
+                      <span
+                        className={cn(
+                          "w-full truncate",
+                          item.isCurrent && "font-medium",
+                        )}
+                      >
+                        {item.title}
+                      </span>
+                      <span className="w-full truncate text-xs font-normal text-muted-foreground">
+                        {formatRelativeUpdatedAt(item.updatedAt, locale)}
+                      </span>
+                    </span>
                   </Button>
                   <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="shrink-0 hover:bg-transparent"
-                        aria-label={t("settings.archived.menuAria", {
-                          title: item.title,
-                        })}
-                        disabled={disabled}
-                      >
-                        <EllipsisVertical />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="end"
-                      className="w-auto min-w-40"
-                    >
-                      <DropdownMenuGroup>
-                        <DropdownMenuItem onSelect={() => onRename(item.id)}>
-                          <Pencil />
-                          {t("settings.archived.rename")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => onUnarchive(item.id)}>
-                          <ArchiveRestore />
-                          {t("settings.archived.unarchive")}
-                        </DropdownMenuItem>
-                      </DropdownMenuGroup>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuGroup>
-                        <DropdownMenuItem
-                          variant="destructive"
-                          onSelect={() => onDelete(item.id)}
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="shrink-0 hover:bg-transparent"
+                          aria-label={t("settings.archived.menuAria", {
+                            title: item.title,
+                          })}
+                          disabled={disabled}
                         >
-                          <Trash2 />
-                          {t("settings.archived.delete")}
-                        </DropdownMenuItem>
-                      </DropdownMenuGroup>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </li>
-            ))}
-          </ul>
+                          <EllipsisVertical />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="end"
+                        className="w-auto min-w-40"
+                      >
+                        <DropdownMenuGroup>
+                          <DropdownMenuItem onSelect={() => onRename(item.id)}>
+                            <Pencil />
+                            {t("settings.archived.rename")}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={() => onUnarchive(item.id)}
+                          >
+                            <ArchiveRestore />
+                            {t("settings.archived.unarchive")}
+                          </DropdownMenuItem>
+                        </DropdownMenuGroup>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuGroup>
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onSelect={() => onDelete(item.id)}
+                          >
+                            <Trash2 />
+                            {t("settings.archived.delete")}
+                          </DropdownMenuItem>
+                        </DropdownMenuGroup>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </li>
+              ))}
+            </ul>
         )}
         {showError && (
           <Alert variant="destructive" className="mt-3">

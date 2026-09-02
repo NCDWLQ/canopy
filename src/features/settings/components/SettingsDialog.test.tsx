@@ -373,7 +373,14 @@ describe("SettingsDialog", () => {
         readOnly={false}
         archivedConversations={archivedConversations({
           status: "ready",
-          items: [{ id: "archived-1", title: "Old chat", isCurrent: false }],
+          items: [
+            {
+              id: "archived-1",
+              title: "Old chat",
+              updatedAt: Date.UTC(2026, 0, 1),
+              isCurrent: false,
+            },
+          ],
         })}
       />,
     )

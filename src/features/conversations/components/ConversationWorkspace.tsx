@@ -268,6 +268,7 @@ export function ConversationWorkspace({
       archivedSummaries.map((summary) => ({
         id: summary.id,
         title: summary.title,
+        updatedAt: summary.updatedAt,
         isCurrent: !isBlankConversation && store.conversationId === summary.id,
       })),
     [archivedSummaries, isBlankConversation, store.conversationId],

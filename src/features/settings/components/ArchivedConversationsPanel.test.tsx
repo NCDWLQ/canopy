@@ -13,8 +13,18 @@ function panelProps(
   return {
     status: "ready",
     items: [
-      { id: "archived-1", title: "Archived one", isCurrent: false },
-      { id: "archived-2", title: "Archived two", isCurrent: true },
+      {
+        id: "archived-1",
+        title: "Archived one",
+        updatedAt: Date.UTC(2026, 0, 1),
+        isCurrent: false,
+      },
+      {
+        id: "archived-2",
+        title: "Archived two",
+        updatedAt: Date.UTC(2026, 0, 2),
+        isCurrent: true,
+      },
     ],
     error: null,
     disabled: false,
@@ -43,6 +53,9 @@ describe("ArchivedConversationsPanel", () => {
         current: "page",
       }),
     ).toBeVisible()
+    expect(screen.getByText("Archived two").closest("span")).toHaveClass(
+      "font-medium",
+    )
   })
 
   it("renders localized empty state", () => {
