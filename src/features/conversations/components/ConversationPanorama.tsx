@@ -1,26 +1,30 @@
 import * as React from "react"
 import {
   Background,
-  Controls,
   Handle,
   MiniMap,
+  Panel,
   Position,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
   useStoreApi,
+  type FitViewOptions,
   type NodeProps,
   type NodeTypes,
 } from "@xyflow/react"
 import {
   Bot,
   GitBranch,
+  Maximize2,
   Minus,
   Plus,
   Terminal,
   Trash2,
   User,
   Wrench,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react"
 
 import type { TreeNodeView } from "../types"
@@ -241,6 +245,88 @@ const NODE_TYPES: NodeTypes = { panoramaCard: PanoramaNodeCard }
 
 const EMPTY_COLLAPSED_IDS: ReadonlySet<string> = new Set()
 
+function viewportTransitionDuration(): number {
+  return window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false
+    ? 0
+    : 200
+}
+
+function PanoramaControls({
+  fitViewOptions,
+}: {
+  fitViewOptions: FitViewOptions
+}) {
+  const { t } = useTranslation()
+  const { zoomIn, zoomOut, fitView } = useReactFlow()
+
+  return (
+    <Panel
+      position="bottom-left"
+      className="overflow-hidden rounded-lg border border-border bg-background shadow-sm"
+      aria-label={t("conversation.panorama.controls")}
+    >
+      <div className="flex flex-col divide-y divide-border">
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="rounded-none"
+              aria-label={t("conversation.panorama.zoomIn")}
+              onClick={() => void zoomIn({ duration: viewportTransitionDuration() })}
+            >
+              <ZoomIn className="size-3.5" aria-hidden="true" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="left" sideOffset={4}>
+            {t("conversation.panorama.zoomIn")}
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="rounded-none"
+              aria-label={t("conversation.panorama.zoomOut")}
+              onClick={() => void zoomOut({ duration: viewportTransitionDuration() })}
+            >
+              <ZoomOut className="size-3.5" aria-hidden="true" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="left" sideOffset={4}>
+            {t("conversation.panorama.zoomOut")}
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="rounded-none"
+              aria-label={t("conversation.panorama.fitView")}
+              onClick={() =>
+                void fitView({
+                  ...fitViewOptions,
+                  duration: viewportTransitionDuration(),
+                })
+              }
+            >
+              <Maximize2 className="size-3.5" aria-hidden="true" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="left" sideOffset={4}>
+            {t("conversation.panorama.fitView")}
+          </TooltipContent>
+        </Tooltip>
+      </div>
+    </Panel>
+  )
+}
+
 /** Screen-space inset before a click triggers a viewport nudge. */
 const NODE_VIEW_PADDING = 48
 
@@ -447,7 +533,7 @@ function ConversationPanoramaView({
         elementsSelectable
       >
         <Background gap={28} />
-        <Controls showInteractive={false} fitViewOptions={fitViewOptions} />
+        <PanoramaControls fitViewOptions={fitViewOptions} />
         <MiniMap pannable zoomable />
       </ReactFlow>
     </div>

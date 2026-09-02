@@ -164,6 +164,10 @@ export const zhCN = {
   "conversation.panorama.openPanorama": "查看全景",
   "conversation.panorama.closePanorama": "返回对话",
   "conversation.panorama.canvas": "对话全景",
+  "conversation.panorama.controls": "画布缩放控件",
+  "conversation.panorama.zoomIn": "放大",
+  "conversation.panorama.zoomOut": "缩小",
+  "conversation.panorama.fitView": "适应视图",
   "conversation.panorama.collapseBranch": ({ label }: { label: string }) =>
     `收起 ${label} 的分支`,
   "conversation.panorama.expandBranch": ({ label }: { label: string }) =>

@@ -165,6 +165,10 @@ export const en = {
   "conversation.panorama.openPanorama": "View Panorama",
   "conversation.panorama.closePanorama": "Back to Conversation",
   "conversation.panorama.canvas": "Conversation Panorama",
+  "conversation.panorama.controls": "Canvas zoom controls",
+  "conversation.panorama.zoomIn": "Zoom in",
+  "conversation.panorama.zoomOut": "Zoom out",
+  "conversation.panorama.fitView": "Fit view",
   "conversation.panorama.collapseBranch": ({ label }: { label: string }) =>
     `Collapse branches of ${label}`,
   "conversation.panorama.expandBranch": ({ label }: { label: string }) =>
