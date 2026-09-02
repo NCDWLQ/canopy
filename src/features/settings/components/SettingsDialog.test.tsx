@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -334,10 +340,9 @@ describe("SettingsDialog", () => {
       />,
     )
     await user.click(screen.getByRole("button", { name: "设置" }))
-    fireEvent.change(
-      screen.getByRole("textbox", { name: "默认系统提示词" }),
-      { target: { value: "Be brief" } },
-    )
+    fireEvent.change(screen.getByRole("textbox", { name: "默认系统提示词" }), {
+      target: { value: "Be brief" },
+    })
     await user.keyboard("{Escape}")
     // The dialog stays open behind the discard confirmation (aria-hidden
     // while the modal alertdialog is on top).

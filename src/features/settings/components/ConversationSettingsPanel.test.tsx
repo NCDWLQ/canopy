@@ -100,9 +100,7 @@ describe("ConversationSettingsPanel", () => {
         screen.getByRole("combobox", { name: "标题生成模型" }),
       ).toHaveTextContent(provider.model),
     )
-    expect(
-      screen.getByRole("combobox", { name: "标题生成模型" }),
-    ).toBeEnabled()
+    expect(screen.getByRole("combobox", { name: "标题生成模型" })).toBeEnabled()
 
     useProviderStore.setState({ autoGenerateTitle: false })
     await waitFor(() =>
@@ -125,7 +123,9 @@ describe("ConversationSettingsPanel", () => {
     await user.type(textarea, "Be helpful")
     await waitFor(
       () =>
-        expect(bridge.setDefaultSystemPrompt).toHaveBeenCalledWith("Be helpful"),
+        expect(bridge.setDefaultSystemPrompt).toHaveBeenCalledWith(
+          "Be helpful",
+        ),
       { timeout: 2000 },
     )
 
