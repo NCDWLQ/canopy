@@ -258,6 +258,8 @@ export const zhCN = {
     `已归档对话操作：${title}`,
   "settings.archived.rename": "重命名",
   "settings.archived.unarchive": "取消归档",
+  "settings.archived.unarchiveAria": ({ title }: { title: string }) =>
+    `取消归档：${title}`,
   "settings.archived.delete": "删除",
 
   // GeneralSettingsPanel.tsx

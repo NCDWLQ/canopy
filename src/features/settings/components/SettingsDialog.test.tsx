@@ -137,7 +137,7 @@ describe("SettingsDialog", () => {
     expect(
       screen.getByRole("button", { name: "外观", current: "page" }),
     ).toBeVisible()
-    expect(screen.getByRole("combobox", { name: "主题模式" })).toBeVisible()
+    expect(screen.getByRole("radio", { name: "跟随系统" })).toBeVisible()
     expect(
       screen.queryByRole("combobox", { name: "语言" }),
     ).not.toBeInTheDocument()

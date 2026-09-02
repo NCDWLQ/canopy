@@ -264,6 +264,8 @@ export const en = {
     `Archived conversation actions: ${title}`,
   "settings.archived.rename": "Rename",
   "settings.archived.unarchive": "Unarchive",
+  "settings.archived.unarchiveAria": ({ title }: { title: string }) =>
+    `Unarchive: ${title}`,
   "settings.archived.delete": "Delete",
 
   // GeneralSettingsPanel.tsx

@@ -114,14 +114,13 @@ describe("ArchivedConversationsPanel", () => {
     expect(onSelect).toHaveBeenCalledWith("archived-1")
   })
 
-  it("routes rename, unarchive, and delete menu actions by id", async () => {
+  it("routes rename and delete menu actions by id", async () => {
     const user = userEvent.setup()
     const onRename = vi.fn()
-    const onUnarchive = vi.fn()
     const onDelete = vi.fn()
     render(
       <ArchivedConversationsPanel
-        {...panelProps({ onRename, onUnarchive, onDelete })}
+        {...panelProps({ onRename, onDelete })}
       />,
     )
 
@@ -135,14 +134,20 @@ describe("ArchivedConversationsPanel", () => {
     await user.click(
       screen.getByRole("button", { name: "已归档对话操作：Archived one" }),
     )
-    await user.click(screen.getByRole("menuitem", { name: "取消归档" }))
-    expect(onUnarchive).toHaveBeenCalledWith("archived-1")
-
-    await user.keyboard("{Escape}")
-    await user.click(
-      screen.getByRole("button", { name: "已归档对话操作：Archived one" }),
-    )
     await user.click(screen.getByRole("menuitem", { name: "删除" }))
     expect(onDelete).toHaveBeenCalledWith("archived-1")
+  })
+
+  it("unarchives via the visible row action", async () => {
+    const user = userEvent.setup()
+    const onUnarchive = vi.fn()
+    render(
+      <ArchivedConversationsPanel {...panelProps({ onUnarchive })} />,
+    )
+
+    await user.click(
+      screen.getByRole("button", { name: "取消归档：Archived one" }),
+    )
+    expect(onUnarchive).toHaveBeenCalledWith("archived-1")
   })
 })

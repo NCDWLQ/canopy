@@ -1,6 +1,5 @@
 import {
   Archive,
-  ArchiveRestore,
   EllipsisVertical,
   Pencil,
   Trash2,
@@ -116,83 +115,85 @@ export function ArchivedConversationsPanel({
         {showList && (
           <ul
             aria-label={t("settings.archived.listLabel")}
-            className="flex flex-col gap-1 rounded-lg border p-1"
+            className="flex flex-col"
           >
             {items.map((item) => (
-              <li key={item.id}>
-                <div
-                  className={cn(
-                    "flex items-center rounded-md",
-                    item.isCurrent ? "bg-muted" : "hover:bg-muted",
-                  )}
+              <li
+                key={item.id}
+                className="flex items-center gap-2 border-b py-2 last:border-b-0"
+              >
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-auto min-w-0 flex-1 justify-start px-0 py-0 hover:bg-transparent"
+                  aria-label={t("settings.archived.openAria", {
+                    title: item.title,
+                  })}
+                  aria-current={item.isCurrent ? "page" : undefined}
+                  disabled={disabled}
+                  onClick={() => onSelect(item.id)}
                 >
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="h-auto min-w-0 flex-1 justify-start py-2 hover:bg-transparent"
-                    aria-label={t("settings.archived.openAria", {
-                      title: item.title,
-                    })}
-                    aria-current={item.isCurrent ? "page" : undefined}
-                    disabled={disabled}
-                    onClick={() => onSelect(item.id)}
-                  >
-                    <span className="flex w-full min-w-0 flex-col items-start gap-0.5 text-left">
-                      <span
-                        className={cn(
-                          "w-full truncate",
-                          item.isCurrent && "font-medium",
-                        )}
-                      >
-                        {item.title}
-                      </span>
-                      <span className="w-full truncate text-xs font-normal text-muted-foreground">
-                        {formatRelativeUpdatedAt(item.updatedAt, locale)}
-                      </span>
-                    </span>
-                  </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="shrink-0 hover:bg-transparent"
-                        aria-label={t("settings.archived.menuAria", {
-                          title: item.title,
-                        })}
-                        disabled={disabled}
-                      >
-                        <EllipsisVertical />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="end"
-                      className="w-auto min-w-40"
+                  <span className="flex w-full min-w-0 flex-col items-start gap-0.5 text-left">
+                    <span
+                      className={cn(
+                        "w-full truncate text-sm",
+                        item.isCurrent && "font-medium",
+                      )}
                     >
-                      <DropdownMenuGroup>
-                        <DropdownMenuItem onSelect={() => onRename(item.id)}>
-                          <Pencil />
-                          {t("settings.archived.rename")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => onUnarchive(item.id)}>
-                          <ArchiveRestore />
-                          {t("settings.archived.unarchive")}
-                        </DropdownMenuItem>
-                      </DropdownMenuGroup>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuGroup>
-                        <DropdownMenuItem
-                          variant="destructive"
-                          onSelect={() => onDelete(item.id)}
-                        >
-                          <Trash2 />
-                          {t("settings.archived.delete")}
-                        </DropdownMenuItem>
-                      </DropdownMenuGroup>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
+                      {item.title}
+                    </span>
+                    <span className="w-full truncate text-xs font-normal text-muted-foreground">
+                      {formatRelativeUpdatedAt(item.updatedAt, locale)}
+                    </span>
+                  </span>
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="shrink-0"
+                  aria-label={t("settings.archived.unarchiveAria", {
+                    title: item.title,
+                  })}
+                  disabled={disabled}
+                  onClick={() => onUnarchive(item.id)}
+                >
+                  {t("settings.archived.unarchive")}
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="shrink-0"
+                      aria-label={t("settings.archived.menuAria", {
+                        title: item.title,
+                      })}
+                      disabled={disabled}
+                    >
+                      <EllipsisVertical />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-auto min-w-40">
+                    <DropdownMenuGroup>
+                      <DropdownMenuItem onSelect={() => onRename(item.id)}>
+                        <Pencil />
+                        {t("settings.archived.rename")}
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuGroup>
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onSelect={() => onDelete(item.id)}
+                      >
+                        <Trash2 />
+                        {t("settings.archived.delete")}
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </li>
             ))}
           </ul>
