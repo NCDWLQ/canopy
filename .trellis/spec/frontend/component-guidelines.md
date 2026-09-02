@@ -677,5 +677,5 @@ WebGL dependency on WebKitGTK.
   `HTMLElement.prototype.getBoundingClientRect` to a non-zero rect. Click
   nodes/buttons with `fireEvent`, not `userEvent`: jsdom dispatches pointer
   events with a null `view`, which crashes d3-zoom's drag bookkeeping.
-- Keep React Flow's attribution visible (MIT courtesy); the OutlineTree
-  remains the keyboard-accessible navigation surface for the same tree.
+- Hide React Flow attribution in the panorama canvas (`proOptions.hideAttribution`);
+  the OutlineTree remains the keyboard-accessible navigation surface for the same tree.

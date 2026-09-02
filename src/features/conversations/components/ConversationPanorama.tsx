@@ -531,6 +531,7 @@ function ConversationPanoramaView({
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable
+        proOptions={{ hideAttribution: true }}
       >
         <Background gap={28} />
         <PanoramaControls fitViewOptions={fitViewOptions} />
