@@ -18,7 +18,9 @@ release binary at both the default and large window sizes before changing the
 message data path or adding list virtualization.
 
 - Keep the scroll element's flex sizing, `overflow-y-auto`, native scrollbar,
-  focus outlines, and descendant horizontal scrolling intact.
+  focus outlines, and descendant horizontal scrolling intact. The conversation
+  pane viewport is `MessageScrollerViewport`; do not replace it with a second
+  hand-written overflow container.
 - Prefer removing paint work that is not visually required (for example,
   backdrop filters on non-overlay siblings or repeated message shadows) before
   adding compositor hints.
@@ -26,19 +28,23 @@ message data path or adding list virtualization.
   text, test one narrow CSS containment change at a time. Do not combine
   `will-change`, forced transforms, or strict containment without release A/B
   evidence.
+- Do not put `content-visibility: auto` or intrinsic-size hints on
+  `MessageScrollerItem`. Off-screen message rows must keep real layout so
+  search/Panorama reveal can measure and `scrollIntoView` them.
 - Record the manual release result for wheel/trackpad and scrollbar dragging;
   browser/jsdom tests cannot establish GPU frame performance.
 
 ```tsx
-<div className="relative flex h-full flex-1 flex-col overflow-y-auto [contain:paint]">
+<MessageScrollerViewport className="size-full min-h-0 min-w-0 overflow-y-auto [contain:paint]">
   {messages}
-</div>
+</MessageScrollerViewport>
 ```
 
-The containment declaration must remain a local scroll-surface optimization;
-it must not change message ordering, branch isolation, generation state, or
-accessibility semantics. WebKitGTK environment flags are diagnostics only and
-must not become default startup behavior without cross-machine evidence.
+The containment declaration must remain a local scroll-surface optimization
+(`[contain:paint]` only); it must not change message ordering, branch
+isolation, generation state, or accessibility semantics. WebKitGTK environment
+flags are diagnostics only and must not become default startup behavior
+without cross-machine evidence.
 
 ## Forbidden Patterns
 

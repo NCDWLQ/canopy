@@ -38,8 +38,11 @@ registry `@reui` → `https://reui.io/r/{style}/{name}.json`.
 - Generated primitives remain generic under `src/components/ui`; feature UI
   remains separately owned under `src/features`.
 - Extra primitives come from ReUI: `pnpm exec shadcn add @reui/<item>`.
-  Inspect diffs and decline overwrites of authored `label` / `field` / similar
-  files. Do not keep unused `src/components/examples/` copies of ReUI demos.
+  Inspect diffs and decline overwrites of authored `label` / `field` /
+  `Button` / similar files. The conversation pane's local `Button` is
+  customized; a registry dry-run that rewrites `transition-all` or
+  active-press styles must be declined. Do not keep unused
+  `src/components/examples/` copies of ReUI demos.
 
 ### 4. Validation & Error Matrix
 
@@ -402,6 +405,108 @@ function OutlineTree({ nodesById, rootNodeId, onSelect }: OutlineTreeProps) {
 
 The correct form is deterministic, fixture-driven, and independent of SQLite and Tauri.
 
+## Scenario: Conversation Pane Scroll Follow
+
+### 1. Scope / Trigger
+
+Use this contract when changing conversation transcript scrolling, streaming
+content growth, search/Panorama reveal positioning, or adding a jump-to-latest
+control. It keeps live-edge following in the presentation layer and prevents
+forced bottom-scroll from stealing a user's reading position.
+
+### 2. Signatures
+
+```tsx
+<MessageScrollerProvider autoScroll={followLiveEdge} defaultScrollPosition="end">
+  <ScrollPathToEnd pathKey={pathScrollKey} enabled={followLiveEdge} />
+  <MessageScroller>
+    <MessageScrollerViewport ref={containerRef}>
+      <MessageScrollerContent>
+        <MessageScrollerItem messageId={msg.id}>{row}</MessageScrollerItem>
+      </MessageScrollerContent>
+    </MessageScrollerViewport>
+    <MessageScrollerButton aria-label={t("conversation.pane.scrollToLatest")} />
+  </MessageScroller>
+</MessageScrollerProvider>
+```
+
+`pathScrollKey` is `${path.length}|${lastMessage?.id ?? ""}|${lastMessage?.content ?? ""}`.
+`followLiveEdge` is true only when status is `ready` or `streaming` and no
+search/Panorama reveal currently owns the viewport.
+
+### 3. Contracts
+
+- Follow, yield, and jump-to-end live in `MessageScrollerProvider`. Do not
+  duplicate stick-to-bottom flags in the Zustand conversation store.
+- Durable path navigation (including an authoritative stream commit that
+  changes the tail id/content) may scroll to the latest content. Transient
+  assistant growth is delegated to the primitive's auto-scroll and must not
+  run a second bottom-scroll effect.
+- `path` is rebuilt with a fresh array identity on unrelated store updates
+  (background generation deltas in another conversation). Path scrolling must
+  key on the displayed tail, not on the array reference.
+- A `ScrollPathToEnd` effect must key on `pathKey` / `enabled` only. Hold
+  `scrollToEnd` in a ref; a new callback identity must not yank a user who
+  already left the live edge.
+- While a search/Panorama `reveal` owns the viewport, set `autoScroll={false}`
+  and keep targeting the existing viewport ref (`scrollIntoView` / match
+  highlight). Bottom following must not override the reveal target.
+- `MessageScrollerItem` stays `min-w-0 shrink-0`. Do not keep registry
+  `content-visibility: auto` or intrinsic-size hints on items; off-screen
+  rows must keep real layout for reveal geometry.
+- The jump control is icon-only, circular, Lucide `ArrowDownIcon`, localized
+  `aria-label` (`Scroll to latest` / `滚动到最新`), and inert at the live
+  edge. Offset it above the floating composer.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+|---|---|
+| Streaming while viewport is at the live edge | Growing transient content follows the latest content |
+| User scrolls away during streaming | Later deltas do not call the bottom-scroll path or move the reading position |
+| User scrolls back to the live edge | The next streaming update follows again |
+| Jump control activated | Scroll to end, hide the control, resume follow |
+| Unchanged reconstructed path | Viewport stays put |
+| Search/Panorama reveal is active | Reveal target wins; auto-scroll is off |
+| `prefers-reduced-motion` | Instant (`behavior: "auto"`) positioning, no motion on the jump control |
+
+### 5. Good / Base / Bad Cases
+
+- **Good**: live-edge follow, scroll-away release, jump-button show/hide, follow
+  resumption, and reveal ownership are covered by `ConversationPane` tests.
+- **Base**: opening a conversation still lands on the latest content.
+- **Bad**: an effect that lists `scrollToEnd` as a dependency, or a store field
+  that mirrors follow mode.
+
+### 6. Tests Required
+
+- Live-edge follow during streaming content growth.
+- Scroll-away during streaming does not `scrollTo` / `scrollIntoView` the end.
+- Returning to the live edge resumes follow on the next growth.
+- Jump button visibility, keyboard activation, and `zh-CN` / `en` accessible names.
+- Rebuilt unchanged path does not reset the viewport.
+- Queryless and queryful reveal still target the pane viewport.
+- Reduced-motion uses instant scroll.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```tsx
+useEffect(() => {
+  endRef.current?.scrollIntoView({ behavior: "smooth" })
+}, [status, path, transientGeneration?.content])
+```
+
+#### Correct
+
+```tsx
+<MessageScrollerProvider autoScroll={followLiveEdge} defaultScrollPosition="end">
+  <ScrollPathToEnd pathKey={pathScrollKey} enabled={followLiveEdge} />
+  {/* transient growth follows only while the primitive is in follow mode */}
+</MessageScrollerProvider>
+```
+
 ## Props and Composition
 
 - Define named props types; avoid inline object types on exported components.
@@ -598,7 +703,11 @@ action rather than an item belonging strictly to the history list.
 - Rebuilding `Switch` or `Select` (including DropdownMenu-as-select) instead of
   the shadcn primitive.
 - Leaving unused ReUI example files under `src/components/examples/`.
+- Accepting a registry overwrite of the customized local `Button`.
 - Putting a period at the end of `FieldDescription` helptext.
+- Forcing `scrollIntoView` on every streaming delta, or listing
+  `scrollToEnd` in a path-scroll effect's dependency array.
+- Keeping registry `content-visibility: auto` on conversation scroller items.
 
 ## Scenario: Conversation Message Rendering (Bubble vs. Direct Output)
 
