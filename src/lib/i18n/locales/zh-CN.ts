@@ -316,7 +316,7 @@ export const zhCN = {
   "settings.conversation.autoGenerateTitle": "自动生成标题",
   "settings.conversation.autoGenerateTitleDescription":
     "首轮对话后，使用下方配置的模型自动生成标题",
-  "settings.conversation.titleModel": "标题模型",
+  "settings.conversation.titleModel": "标题生成模型",
   "settings.conversation.followSession": "跟随对话",
   "settings.conversation.defaultSystemPrompt": "默认系统提示词",
   "settings.conversation.defaultSystemPromptDescription":

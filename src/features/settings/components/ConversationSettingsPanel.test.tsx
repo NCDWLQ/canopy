@@ -86,12 +86,9 @@ describe("ConversationSettingsPanel", () => {
       screen.getByText("首轮对话后，使用下方配置的模型自动生成标题"),
     ).toBeVisible()
     expect(toggle.closest("fieldset")).toContainElement(
-      screen.getByText("标题模型"),
+      screen.getByText("标题生成模型"),
     )
-    expect(
-      screen.getByText("标题模型").closest("[data-slot=field]"),
-    ).toHaveClass("pl-4")
-    await user.click(screen.getByRole("combobox", { name: "标题模型" }))
+    await user.click(screen.getByRole("combobox", { name: "标题生成模型" }))
     expect(
       await screen.findByRole("option", { name: "跟随对话" }),
     ).toBeVisible()
@@ -107,14 +104,18 @@ describe("ConversationSettingsPanel", () => {
     )
     await waitFor(() =>
       expect(
-        screen.getByRole("combobox", { name: "标题模型" }),
+        screen.getByRole("combobox", { name: "标题生成模型" }),
       ).toHaveTextContent(provider.model),
     )
-    expect(screen.getByRole("combobox", { name: "标题模型" })).toBeEnabled()
+    expect(
+      screen.getByRole("combobox", { name: "标题生成模型" }),
+    ).toBeEnabled()
 
     useProviderStore.setState({ autoGenerateTitle: false })
     await waitFor(() =>
-      expect(screen.getByRole("combobox", { name: "标题模型" })).toBeDisabled(),
+      expect(
+        screen.getByRole("combobox", { name: "标题生成模型" }),
+      ).toBeDisabled(),
     )
   })
 

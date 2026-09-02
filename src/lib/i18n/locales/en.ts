@@ -325,7 +325,7 @@ export const en = {
   "settings.conversation.autoGenerateTitle": "Auto-generate titles",
   "settings.conversation.autoGenerateTitleDescription":
     "After the first exchange, titles are generated automatically with the model configured below",
-  "settings.conversation.titleModel": "Title model",
+  "settings.conversation.titleModel": "Title generation model",
   "settings.conversation.followSession": "Follow conversation",
   "settings.conversation.defaultSystemPrompt": "Default system prompt",
   "settings.conversation.defaultSystemPromptDescription":

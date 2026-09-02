@@ -17,6 +17,7 @@ import {
   FieldDescription,
   FieldGroup,
   FieldLabel,
+  FieldSeparator,
   FieldSet,
 } from "@/components/ui/field"
 import {
@@ -157,10 +158,7 @@ export function ConversationSettingsPanel({
                   }
                 />
               </Field>
-              <Field
-                className="pl-4"
-                data-disabled={mutationDisabled || !autoGenerateTitle}
-              >
+              <Field data-disabled={mutationDisabled || !autoGenerateTitle}>
                 <FieldLabel htmlFor="title-model">
                   {t("settings.conversation.titleModel")}
                 </FieldLabel>
@@ -208,6 +206,7 @@ export function ConversationSettingsPanel({
                 </Select>
               </Field>
             </FieldSet>
+            <FieldSeparator />
             <FieldSet>
               <Field data-disabled={mutationDisabled}>
                 <FieldContent>
