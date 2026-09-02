@@ -11,6 +11,7 @@ import { StrictMode } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { ConversationWorkspace } from "./ConversationWorkspace"
+import { showClickableToast } from "@/components/ui/toaster"
 import { messageNodeRenderProbe } from "./messageNodeRenderProbe"
 import { workspaceRenderProbe } from "./workspaceRenderProbe"
 import { useConversationStore, type GenerationRun } from "../store"
@@ -51,6 +52,15 @@ vi.mock("@/lib/tauri", async (importOriginal) => {
     ...original,
     createConversationClient: vi.fn(),
     createProviderClient: vi.fn(),
+  }
+})
+
+vi.mock("@/components/ui/toaster", async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import("@/components/ui/toaster")>()
+  return {
+    ...original,
+    showClickableToast: vi.fn(),
   }
 })
 const root: ConversationNodeView = {
@@ -303,10 +313,12 @@ function seedGenerationRun(run: GenerationRun) {
 describe("ConversationWorkspace", () => {
   let client: ReturnType<typeof createMockClient>
   let providerClient: ReturnType<typeof createMockProviderClient>
+  const showClickableToastMock = vi.mocked(showClickableToast)
 
   beforeEach(() => {
     workspaceRenderProbe.count = 0
     messageNodeRenderProbe.reset()
+    showClickableToastMock.mockClear()
     vi.stubGlobal(
       "ResizeObserver",
       class ResizeObserverStub {
@@ -501,7 +513,16 @@ describe("ConversationWorkspace", () => {
     const initialPane = await screen.findByTestId("conversation-pane")
     await within(initialPane).findByText(right.content)
 
-    await user.click(screen.getByRole("button", { name: /^Other history/ }))
+    expect(
+      screen.queryByRole("button", { name: /^Other history/ }),
+    ).not.toBeInTheDocument()
+
+    const sidebar = screen.getByRole("complementary", { name: "对话侧栏" })
+    await user.click(within(sidebar).getByRole("button", { name: "设置" }))
+    await user.click(screen.getByRole("button", { name: "已归档对话" }))
+    await user.click(
+      screen.getByRole("button", { name: "打开已归档对话：Other history" }),
+    )
 
     const pane = await screen.findByTestId("conversation-pane")
     await waitFor(() => {
@@ -742,10 +763,11 @@ describe("ConversationWorkspace", () => {
       within(screen.getByTestId("conversation-pane")).getByText(right.content),
     ).toBeVisible()
     expect(screen.getByRole("textbox", { name: "消息输入框" })).toBeDisabled()
-    // The archived history row keeps its badge; with the row menu closed
-    // there is no archive entry point anywhere (header action removed, the
-    // archived row's menu offers unarchive instead — covered separately).
-    expect(screen.getByText("已归档")).toBeVisible()
+    // Archived conversations are listed in Settings, not the sidebar history.
+    expect(
+      screen.queryByRole("button", { name: /^Branch proof/ }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText("已归档")).not.toBeInTheDocument()
     expect(
       screen.queryByRole("button", { name: "归档" }),
     ).not.toBeInTheDocument()
@@ -1329,6 +1351,9 @@ describe("ConversationWorkspace", () => {
       await screen.findByRole("button", { name: "新建对话" }),
     ).toBeEnabled()
     expect(await screen.findByText("已归档 — 只读")).toBeVisible()
+    expect(
+      screen.getByText("没有活跃对话。已归档的对话可在设置中查看。"),
+    ).toBeVisible()
   })
 
   it("visually truncates history titles and exposes the complete title via a native tooltip", async () => {
@@ -1646,7 +1671,7 @@ describe("ConversationWorkspace", () => {
     expect(within(dialog).getByText("Branch proof")).toBeVisible()
     expect(
       within(dialog).getByText(
-        "归档后对话转为只读，并在历史记录中标记为已归档。",
+        "归档后对话转为只读，并从侧栏历史记录中移除；可在设置的「已归档对话」中查看和管理。",
       ),
     ).toBeVisible()
     expect(within(dialog).getByText("归档将打断正在进行的生成。")).toBeVisible()
@@ -1747,7 +1772,7 @@ describe("ConversationWorkspace", () => {
     expect(within(dialog).getByText("Other row")).toBeVisible()
     expect(
       within(dialog).getByText(
-        "归档后对话转为只读，并在历史记录中标记为已归档。",
+        "归档后对话转为只读，并从侧栏历史记录中移除；可在设置的「已归档对话」中查看和管理。",
       ),
     ).toBeVisible()
     expect(
@@ -1773,13 +1798,19 @@ describe("ConversationWorkspace", () => {
     expect(state.status).toBe("ready")
     expect(state.error).toBeNull()
     expect(screen.getByRole("button", { name: /^Branch proof/ })).toBeEnabled()
-    expect(screen.getByRole("button", { name: /^Other row/ })).toBeEnabled()
-    expect(within(otherRow!).getByText("已归档")).toBeVisible()
-    // The row keeps its "…" trigger; the archive action now lives inside it.
     expect(
-      within(otherRow!).getByRole("button", {
-        name: "对话操作：Other row",
-      }),
+      screen.queryByRole("button", { name: /^Other row/ }),
+    ).not.toBeInTheDocument()
+    expect(showClickableToastMock).toHaveBeenCalledTimes(1)
+    const toastOptions = showClickableToastMock.mock.calls[0]![0]
+    expect(toastOptions.title).toBe("对话已归档")
+    toastOptions.onSelect()
+    expect(await screen.findByRole("dialog")).toHaveAccessibleName("设置")
+    expect(
+      screen.getByRole("button", { name: "已归档对话", current: "page" }),
+    ).toBeVisible()
+    expect(
+      screen.getByRole("button", { name: "打开已归档对话：Other row" }),
     ).toBeVisible()
   })
 
@@ -1864,7 +1895,7 @@ describe("ConversationWorkspace", () => {
       ).toBe(true)
     })
     expect(screen.getByText("已归档 — 只读")).toBeVisible()
-    expect(screen.getByText("已归档")).toBeVisible()
+    expect(screen.queryByText("已归档")).not.toBeInTheDocument()
   })
 
   it("archives another row during generation without disturbing the active run", async () => {
@@ -1991,7 +2022,7 @@ describe("ConversationWorkspace", () => {
     expect(useConversationStore.getState().isArchived).toBe(true)
   })
 
-  it("offers rename plus archive or unarchive per row archive state", async () => {
+  it("offers rename, archive, and delete on active sidebar rows; archived rows live in Settings", async () => {
     const user = userEvent.setup()
     const archivedSummary = {
       id: "conversation-other",
@@ -2026,9 +2057,17 @@ describe("ConversationWorkspace", () => {
     ).not.toBeInTheDocument()
     expect(screen.getByRole("menuitem", { name: "删除" })).toBeVisible()
 
+    expect(
+      screen.queryByRole("button", { name: "对话操作：Archived row" }),
+    ).not.toBeInTheDocument()
+
     await user.keyboard("{Escape}")
+
+    const sidebar = screen.getByRole("complementary", { name: "对话侧栏" })
+    await user.click(within(sidebar).getByRole("button", { name: "设置" }))
+    await user.click(screen.getByRole("button", { name: "已归档对话" }))
     await user.click(
-      screen.getByRole("button", { name: "对话操作：Archived row" }),
+      screen.getByRole("button", { name: "已归档对话操作：Archived row" }),
     )
     expect(screen.getByRole("menuitem", { name: "重命名" })).toBeVisible()
     expect(screen.getByRole("menuitem", { name: "取消归档" })).toBeVisible()
@@ -2305,7 +2344,7 @@ describe("ConversationWorkspace", () => {
     expect(screen.getByTestId("conversation-pane")).toBeVisible()
   })
 
-  it("unarchives an archived row straight from the menu without a confirm dialog", async () => {
+  it("unarchives an archived row from Settings without a confirm dialog", async () => {
     const user = userEvent.setup()
     const archivedSummary = {
       id: "conversation-other",
@@ -2336,13 +2375,15 @@ describe("ConversationWorkspace", () => {
     })
     render(<ConversationWorkspace />)
 
-    const otherRow = screen
-      .getByRole("button", { name: /^Archived row/ })
-      .closest("li")
-    expect(within(otherRow!).getByText("已归档")).toBeVisible()
+    expect(
+      screen.queryByRole("button", { name: /^Archived row/ }),
+    ).not.toBeInTheDocument()
 
+    const sidebar = screen.getByRole("complementary", { name: "对话侧栏" })
+    await user.click(within(sidebar).getByRole("button", { name: "设置" }))
+    await user.click(screen.getByRole("button", { name: "已归档对话" }))
     await user.click(
-      within(otherRow!).getByRole("button", { name: "对话操作：Archived row" }),
+      screen.getByRole("button", { name: "已归档对话操作：Archived row" }),
     )
     await user.click(screen.getByRole("menuitem", { name: "取消归档" }))
 
@@ -2353,8 +2394,15 @@ describe("ConversationWorkspace", () => {
       )
     })
     await waitFor(() => {
-      expect(within(otherRow!).queryByText("已归档")).not.toBeInTheDocument()
+      expect(
+        useConversationStore
+          .getState()
+          .history.summaries.find((item) => item.id === archivedSummary.id)
+          ?.isArchived,
+      ).toBe(false)
     })
+    await user.click(screen.getByRole("button", { name: "关闭" }))
+    expect(screen.getByRole("button", { name: /^Archived row/ })).toBeVisible()
     // The loaded conversation keeps its projection untouched.
     const state = useConversationStore.getState()
     expect(state.conversationId).toBe(root.conversationId)
@@ -3160,6 +3208,76 @@ describe("ConversationWorkspace", () => {
       rendersBeforeDelta.get(right.id),
     )
     expect(within(pane).getByText("HELLO WORLD")).toBeInTheDocument()
+  })
+
+  it("opens an archived conversation from Settings in read-only mode and closes the dialog", async () => {
+    const user = userEvent.setup()
+    const archivedSummary = {
+      id: "conversation-other",
+      title: "Settings archived",
+      rootNodeId: "other-root",
+      isArchived: true,
+      updatedAt: 1,
+    }
+    const otherRoot: ConversationNodeView = {
+      id: "other-root",
+      conversationId: archivedSummary.id,
+      role: "user",
+      content: "SETTINGS_ARCHIVED_SENTINEL",
+      createdAt: 8,
+      metadata: null,
+    }
+    const otherTree: ConversationTreeView = {
+      conversation: {
+        id: archivedSummary.id,
+        title: archivedSummary.title,
+        rootNodeId: otherRoot.id,
+        isArchived: true,
+      },
+      rootNodeId: otherRoot.id,
+      nodes: [otherRoot],
+      nodesById: {
+        [otherRoot.id]: {
+          id: otherRoot.id,
+          role: otherRoot.role,
+          preview: otherRoot.content,
+          childIds: [],
+        },
+      },
+    }
+    await useConversationStore
+      .getState()
+      .loadConversation(client, root.conversationId)
+    useConversationStore.getState().selectNode(right.id)
+    useConversationStore.setState({
+      history: {
+        status: "ready",
+        summaries: [
+          { ...tree.conversation, updatedAt: right.createdAt },
+          archivedSummary,
+        ],
+        error: null,
+      },
+    })
+    client.loadConversationTree.mockImplementation((id) =>
+      Promise.resolve(id === archivedSummary.id ? otherTree : tree),
+    )
+    render(<ConversationWorkspace />)
+
+    const sidebar = screen.getByRole("complementary", { name: "对话侧栏" })
+    await user.click(within(sidebar).getByRole("button", { name: "设置" }))
+    await user.click(screen.getByRole("button", { name: "已归档对话" }))
+    await user.click(
+      screen.getByRole("button", { name: "打开已归档对话：Settings archived" }),
+    )
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    const pane = await screen.findByTestId("conversation-pane")
+    await waitFor(() => {
+      expect(within(pane).getByText(otherRoot.content)).toBeVisible()
+    })
+    expect(screen.getByText("已归档 — 只读")).toBeVisible()
+    expect(screen.getByRole("textbox", { name: "消息输入框" })).toBeDisabled()
   })
 })
 

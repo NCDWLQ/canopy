@@ -1,7 +1,6 @@
 import * as React from "react"
 import {
   Archive,
-  ArchiveRestore,
   MessageSquare,
   MoreHorizontal,
   PanelLeftClose,
@@ -34,6 +33,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Spinner } from "@/components/ui/spinner"
+import { showClickableToast } from "@/components/ui/toaster"
 import { cn } from "@/lib/utils"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
@@ -246,6 +246,34 @@ export function ConversationWorkspace({
   const isBlankConversation =
     store.isCreatingConversation ||
     (store.conversationId === null && store.history.status === "empty")
+
+  const activeSummaries = React.useMemo(
+    () => store.history.summaries.filter((summary) => !summary.isArchived),
+    [store.history.summaries],
+  )
+  const archivedSummaries = React.useMemo(
+    () => store.history.summaries.filter((summary) => summary.isArchived),
+    [store.history.summaries],
+  )
+  const archivedPanelStatus = React.useMemo(() => {
+    if (store.history.status === "error") return "error"
+    if (archivedSummaries.length > 0) return "ready"
+    if (store.history.status === "loading" || store.history.status === "idle") {
+      return "loading"
+    }
+    return "empty"
+  }, [archivedSummaries.length, store.history.status])
+  const archivedConversationItems = React.useMemo(
+    () =>
+      archivedSummaries.map((summary) => ({
+        id: summary.id,
+        title: summary.title,
+        isCurrent: !isBlankConversation && store.conversationId === summary.id,
+      })),
+    [archivedSummaries, isBlankConversation, store.conversationId],
+  )
+  const historyMutationDisabled =
+    store.status === "loading" || controller.mutationLocked
 
   const canEditDraft =
     !isBlankConversation &&
@@ -546,6 +574,28 @@ export function ConversationWorkspace({
       pendingArchiveId !== null &&
       isRunActive(state.generationRuns[pendingArchiveId]),
   )
+  const openArchivedSettings = React.useCallback(() => {
+    setSettingsCategory("archived")
+    setIsSettingsOpen(true)
+  }, [])
+  const confirmArchiveConversation = React.useCallback(
+    async (target: string) => {
+      setPendingArchiveId(null)
+      await controller.archiveConversation(target)
+      const summary = useConversationStore
+        .getState()
+        .history.summaries.find((item) => item.id === target)
+      if (summary?.isArchived !== true) return
+      showClickableToast({
+        kind: "success",
+        title: t("conversation.toast.archivedTitle"),
+        description: t("conversation.toast.archivedDescription"),
+        ariaLabel: t("conversation.toast.openArchivedSettings"),
+        onSelect: openArchivedSettings,
+      })
+    },
+    [controller, openArchivedSettings, t],
+  )
   const pendingRenameSummary =
     pendingRenameId === null
       ? null
@@ -622,12 +672,12 @@ export function ConversationWorkspace({
               <div className="sticky top-0 z-10 bg-sidebar px-2.5 pb-1 pt-3 text-sm font-medium text-muted-foreground/70">
                 {t("conversation.workspace.history")}
               </div>
-              {store.history.summaries.length > 0 && (
+              {activeSummaries.length > 0 && (
                 <ul
                   aria-label={t("conversation.workspace.historyList")}
                   className="flex flex-col gap-1"
                 >
-                  {store.history.summaries.map((summary) => {
+                  {activeSummaries.map((summary) => {
                     const isCurrent =
                       !isBlankConversation &&
                       store.conversationId === summary.id
@@ -663,11 +713,6 @@ export function ConversationWorkspace({
                             <HistoryGeneratingSpinner
                               conversationId={summary.id}
                             />
-                            {summary.isArchived && (
-                              <Badge className="shrink-0" variant="secondary">
-                                {t("conversation.workspace.archivedBadge")}
-                              </Badge>
-                            )}
                           </button>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -697,27 +742,12 @@ export function ConversationWorkspace({
                                 <Pencil />
                                 {t("conversation.workspace.rename")}
                               </DropdownMenuItem>
-                              {summary.isArchived ? (
-                                <DropdownMenuItem
-                                  onSelect={() =>
-                                    void controller.unarchiveConversation(
-                                      summary.id,
-                                    )
-                                  }
-                                >
-                                  <ArchiveRestore />
-                                  {t("conversation.workspace.unarchive")}
-                                </DropdownMenuItem>
-                              ) : (
-                                <DropdownMenuItem
-                                  onSelect={() =>
-                                    setPendingArchiveId(summary.id)
-                                  }
-                                >
-                                  <Archive />
-                                  {t("conversation.workspace.archive")}
-                                </DropdownMenuItem>
-                              )}
+                              <DropdownMenuItem
+                                onSelect={() => setPendingArchiveId(summary.id)}
+                              >
+                                <Archive />
+                                {t("conversation.workspace.archive")}
+                              </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 variant="destructive"
@@ -735,7 +765,7 @@ export function ConversationWorkspace({
                 </ul>
               )}
               {store.history.status === "loading" &&
-                store.history.summaries.length === 0 && (
+                activeSummaries.length === 0 && (
                   <p className="px-2.5 py-3 text-sm text-muted-foreground">
                     {t("conversation.workspace.loadingHistory")}
                   </p>
@@ -745,6 +775,13 @@ export function ConversationWorkspace({
                   {t("conversation.workspace.emptyHistory")}
                 </p>
               )}
+              {store.history.status === "ready" &&
+                activeSummaries.length === 0 &&
+                archivedSummaries.length > 0 && (
+                  <p className="px-2.5 py-3 text-sm text-muted-foreground">
+                    {t("conversation.workspace.noActiveHistory")}
+                  </p>
+                )}
               {store.history.status === "error" && (
                 <Alert variant="destructive">
                   <AlertDescription className="flex flex-col gap-2">
@@ -775,6 +812,22 @@ export function ConversationWorkspace({
                 }
               }}
               initialCategory={settingsCategory}
+              archivedConversations={{
+                status: archivedPanelStatus,
+                items: archivedConversationItems,
+                error:
+                  store.history.status === "error" ? store.history.error : null,
+                disabled: historyMutationDisabled,
+                onSelect: (id) => {
+                  setIsSettingsOpen(false)
+                  setSettingsCategory("general")
+                  void store.selectConversation(client, id)
+                },
+                onRename: setPendingRenameId,
+                onUnarchive: (id) => void controller.unarchiveConversation(id),
+                onDelete: setPendingDeleteId,
+                onRetry: () => void store.retryHistory(client),
+              }}
             />
             <SearchDialog
               key={isSearchOpen ? "search-open" : "search-closed"}
@@ -1091,9 +1144,8 @@ export function ConversationWorkspace({
             <AlertDialogAction
               onClick={() => {
                 const target = pendingArchiveId
-                setPendingArchiveId(null)
                 if (target !== null) {
-                  void controller.archiveConversation(target)
+                  void confirmArchiveConversation(target)
                 }
               }}
             >

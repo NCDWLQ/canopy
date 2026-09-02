@@ -1,6 +1,10 @@
 import * as React from "react"
-import { Bot, MessageSquare, Palette, Settings } from "lucide-react"
+import { Archive, Bot, MessageSquare, Palette, Settings } from "lucide-react"
 
+import {
+  ArchivedConversationsPanel,
+  type ArchivedConversationsPanelProps,
+} from "./ArchivedConversationsPanel"
 import { AppearanceSettingsPanel } from "./AppearanceSettingsPanel"
 import { ConversationSettingsPanel } from "./ConversationSettingsPanel"
 import { GeneralSettingsPanel } from "./GeneralSettingsPanel"
@@ -22,6 +26,7 @@ type SettingsDialogBaseProps = {
   client: ProviderClient
   readOnly: boolean
   initialCategory?: SettingsCategory
+  archivedConversations: ArchivedConversationsPanelProps
 }
 
 export type SettingsDialogProps = SettingsDialogBaseProps &
@@ -31,13 +36,18 @@ export type SettingsDialogProps = SettingsDialogBaseProps &
   )
 
 export type SettingsCategory =
-  "general" | "appearance" | "providers" | "conversation"
+  "general" | "appearance" | "providers" | "conversation" | "archived"
 
 type PendingDiscard =
   { kind: "switch"; category: SettingsCategory } | { kind: "close" }
 
 export function SettingsDialog(props: SettingsDialogProps) {
-  const { client, readOnly, initialCategory = "general" } = props
+  const {
+    client,
+    readOnly,
+    initialCategory = "general",
+    archivedConversations,
+  } = props
   const { t } = useTranslation()
   const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false)
   const [category, setCategory] =
@@ -162,6 +172,16 @@ export function SettingsDialog(props: SettingsDialogProps) {
               <MessageSquare data-icon="inline-start" />
               {t("settings.dialog.conversationsCategory")}
             </Button>
+            <Button
+              type="button"
+              variant={category === "archived" ? "secondary" : "ghost"}
+              className="w-full justify-start"
+              aria-current={category === "archived" ? "page" : undefined}
+              onClick={() => selectCategory("archived")}
+            >
+              <Archive data-icon="inline-start" />
+              {t("settings.dialog.archivedCategory")}
+            </Button>
           </nav>
           <div className="flex min-h-0 min-w-0 flex-col">
             {open &&
@@ -175,6 +195,8 @@ export function SettingsDialog(props: SettingsDialogProps) {
                   readOnly={readOnly}
                   onDirtyChange={setPanelDirty}
                 />
+              ) : category === "archived" ? (
+                <ArchivedConversationsPanel {...archivedConversations} />
               ) : (
                 <ProviderSettingsPanel
                   key={providerSessionKey}
