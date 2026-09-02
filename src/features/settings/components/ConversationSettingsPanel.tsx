@@ -1,5 +1,4 @@
 import * as React from "react"
-import { toast } from "sonner"
 
 import { useProviderStore } from "@/features/providers/store"
 import type { TitleModelBinding } from "@/features/providers/types"
@@ -30,7 +29,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import type { ProviderClient } from "@/lib/tauri"
@@ -38,6 +36,7 @@ import { trimRustWhitespace } from "@/lib/tauri/schemas"
 import { commandErrorMessage, useTranslation } from "@/lib/i18n"
 
 const FOLLOW_SESSION_TITLE_MODEL = "follow"
+const SYSTEM_PROMPT_SAVE_DELAY_MS = 300
 
 function titleModelBindingValue(binding: TitleModelBinding): string {
   return `${binding.providerId}\u001f${binding.model}`
@@ -82,24 +81,29 @@ export function ConversationSettingsPanel({
   const setDefaultSystemPrompt = useProviderStore(
     (state) => state.setDefaultSystemPrompt,
   )
-  const [promptEdit, setPromptEdit] = React.useState<string | null>(null)
-  const promptDraft = promptEdit ?? defaultSystemPrompt ?? ""
-  const promptDirty =
-    trimRustWhitespace(promptDraft) !== (defaultSystemPrompt ?? "")
+  const [promptDraft, setPromptDraft] = React.useState(
+    () => defaultSystemPrompt ?? "",
+  )
+  const [composing, setComposing] = React.useState(false)
+  const normalizedDraft = trimRustWhitespace(promptDraft)
+  const promptDirty = normalizedDraft !== (defaultSystemPrompt ?? "")
 
   React.useEffect(() => {
     onDirtyChange?.(promptDirty)
   }, [promptDirty, onDirtyChange])
 
-  const saveSystemPrompt = async () => {
-    const trimmed = trimRustWhitespace(promptDraft)
-    await setDefaultSystemPrompt(client, trimmed.length === 0 ? null : trimmed)
-    // Failure surfaces through the storeError alert above; keep the draft so
-    // the user can retry.
-    if (useProviderStore.getState().phase === "error") return
-    setPromptEdit(null)
-    toast.success(t("settings.conversation.systemPromptSaved"))
-  }
+  React.useEffect(() => {
+    if (!promptDirty || composing) return
+
+    const timer = setTimeout(() => {
+      void setDefaultSystemPrompt(
+        client,
+        normalizedDraft.length === 0 ? null : normalizedDraft,
+      )
+    }, SYSTEM_PROMPT_SAVE_DELAY_MS)
+
+    return () => clearTimeout(timer)
+  }, [client, composing, normalizedDraft, promptDirty, setDefaultSystemPrompt])
 
   const mutationDisabled = phase === "loading"
   const titleModelValue =
@@ -208,7 +212,7 @@ export function ConversationSettingsPanel({
             </FieldSet>
             <FieldSeparator />
             <FieldSet>
-              <Field data-disabled={mutationDisabled}>
+              <Field>
                 <FieldContent>
                   <FieldLabel htmlFor="default-system-prompt">
                     {t("settings.conversation.defaultSystemPrompt")}
@@ -220,19 +224,13 @@ export function ConversationSettingsPanel({
                 <Textarea
                   id="default-system-prompt"
                   value={promptDraft}
-                  disabled={mutationDisabled}
                   placeholder={t(
                     "settings.conversation.defaultSystemPromptPlaceholder",
                   )}
-                  onChange={(event) => setPromptEdit(event.target.value)}
+                  onChange={(event) => setPromptDraft(event.target.value)}
+                  onCompositionStart={() => setComposing(true)}
+                  onCompositionEnd={() => setComposing(false)}
                 />
-                <Button
-                  type="button"
-                  disabled={mutationDisabled || !promptDirty}
-                  onClick={() => void saveSystemPrompt()}
-                >
-                  {t("settings.conversation.saveDefaultSystemPrompt")}
-                </Button>
               </Field>
             </FieldSet>
           </FieldGroup>

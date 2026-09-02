@@ -332,9 +332,7 @@ export const en = {
     "Applied to conversations without a custom system prompt",
   "settings.conversation.defaultSystemPromptPlaceholder":
     "Leave empty for no default",
-  "settings.conversation.saveDefaultSystemPrompt": "Save",
   "settings.conversation.updateFailed": "Conversation setting was not saved",
-  "settings.conversation.systemPromptSaved": "Default system prompt saved.",
 
   // ConversationSettingsDialog.tsx
   "conversation.settingsDialog.title": "Conversation settings",

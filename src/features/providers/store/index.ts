@@ -161,6 +161,7 @@ function applyLanguagePreference(language: LocalePreference): void {
 
 export const useProviderStore = create<ProviderStore>((set, get) => {
   let requestEpoch = 0
+  let promptSaveEpoch = 0
 
   const beginRequest = () => {
     const epoch = ++requestEpoch
@@ -451,25 +452,38 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
     },
 
     setDefaultSystemPrompt: async (client, prompt) => {
-      const { epoch, previous } = beginRequest()
+      const epoch = ++promptSaveEpoch
       try {
         const defaultSystemPrompt = await client.setDefaultSystemPrompt(prompt)
-        if (isCurrent(epoch)) {
-          set(
-            readyOrUnconfigured(
-              previous.providers,
-              previous.activeProviderId,
-              previous.autoGenerateTitle,
-              previous.titleModelBinding,
-              previous.language,
-              previous.theme,
-              previous.themeColor,
-              defaultSystemPrompt,
-            ),
-          )
-        }
+        if (epoch !== promptSaveEpoch) return
+        const current = get()
+        set(
+          readyOrUnconfigured(
+            current.providers,
+            current.activeProviderId,
+            current.autoGenerateTitle,
+            current.titleModelBinding,
+            current.language,
+            current.theme,
+            current.themeColor,
+            defaultSystemPrompt,
+          ),
+        )
       } catch (error: unknown) {
-        fail(epoch, previous, error)
+        if (epoch !== promptSaveEpoch) return
+        const current = get()
+        set({
+          phase: "error",
+          providers: current.providers,
+          activeProviderId: current.activeProviderId,
+          autoGenerateTitle: current.autoGenerateTitle,
+          titleModelBinding: current.titleModelBinding,
+          defaultSystemPrompt: current.defaultSystemPrompt,
+          language: current.language,
+          theme: current.theme,
+          themeColor: current.themeColor,
+          error: normalizeError(error),
+        })
       }
     },
   }

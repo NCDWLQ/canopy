@@ -321,4 +321,31 @@ describe("provider store", () => {
     )
     expect(bridge.setDefaultSystemPrompt).toHaveBeenNthCalledWith(2, null)
   })
+
+  it("does not enter loading while persisting the default system prompt", async () => {
+    const bridge = client()
+    let resolveSave: ((value: string) => void) | undefined
+    bridge.setDefaultSystemPrompt.mockImplementationOnce(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveSave = resolve
+        }),
+    )
+    useProviderStore.setState({
+      phase: "ready",
+      providers: [provider],
+      activeProviderId: provider.id,
+    })
+
+    const pending = useProviderStore
+      .getState()
+      .setDefaultSystemPrompt(bridge, "Be helpful")
+    expect(useProviderStore.getState().phase).toBe("ready")
+    resolveSave!("Be helpful")
+    await pending
+    expect(useProviderStore.getState()).toMatchObject({
+      phase: "ready",
+      defaultSystemPrompt: "Be helpful",
+    })
+  })
 })

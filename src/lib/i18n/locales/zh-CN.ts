@@ -322,9 +322,7 @@ export const zhCN = {
   "settings.conversation.defaultSystemPromptDescription":
     "对话未单独设置时，默认使用此系统提示词",
   "settings.conversation.defaultSystemPromptPlaceholder": "留空表示不设置",
-  "settings.conversation.saveDefaultSystemPrompt": "保存",
   "settings.conversation.updateFailed": "对话设置未保存",
-  "settings.conversation.systemPromptSaved": "默认系统提示词已保存。",
 
   // ConversationSettingsDialog.tsx
   "conversation.settingsDialog.title": "对话设置",

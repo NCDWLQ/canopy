@@ -1,18 +1,11 @@
 import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { toast } from "sonner"
 
 import { ConversationSettingsPanel } from "./ConversationSettingsPanel"
 import { useProviderStore } from "@/features/providers/store"
 import type { ProviderView } from "@/features/providers/types"
 import type { ProviderClient } from "@/lib/tauri"
-
-vi.mock("sonner", () => ({
-  toast: { success: vi.fn(), error: vi.fn() },
-}))
-
-const toastSuccessMock = vi.mocked(toast.success)
 
 const provider: ProviderView = {
   id: "provider-1",
@@ -119,34 +112,60 @@ describe("ConversationSettingsPanel", () => {
     )
   })
 
-  it("saves a dirty default system prompt and can clear it", async () => {
+  it("auto-saves the default system prompt after editing", async () => {
     const user = userEvent.setup()
     const bridge = client()
     bridge.setDefaultSystemPrompt.mockResolvedValueOnce("Be helpful")
     render(<ConversationSettingsPanel client={bridge as ProviderClient} />)
 
     const textarea = screen.getByRole("textbox", { name: "默认系统提示词" })
-    expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
+    expect(
+      screen.queryByRole("button", { name: "保存" }),
+    ).not.toBeInTheDocument()
     await user.type(textarea, "Be helpful")
-    expect(screen.getByRole("button", { name: "保存" })).toBeEnabled()
-    await user.click(screen.getByRole("button", { name: "保存" }))
-    await waitFor(() =>
-      expect(bridge.setDefaultSystemPrompt).toHaveBeenCalledWith("Be helpful"),
-    )
-    await waitFor(() =>
-      expect(toastSuccessMock).toHaveBeenCalledWith("默认系统提示词已保存。"),
+    await waitFor(
+      () =>
+        expect(bridge.setDefaultSystemPrompt).toHaveBeenCalledWith("Be helpful"),
+      { timeout: 2000 },
     )
 
     useProviderStore.setState({ defaultSystemPrompt: "Be helpful" })
     await waitFor(() => expect(textarea).toHaveValue("Be helpful"))
+    bridge.setDefaultSystemPrompt.mockResolvedValueOnce(null)
     await user.clear(textarea)
-    await user.click(screen.getByRole("button", { name: "保存" }))
-    await waitFor(() =>
-      expect(bridge.setDefaultSystemPrompt).toHaveBeenCalledWith(null),
+    await waitFor(
+      () => expect(bridge.setDefaultSystemPrompt).toHaveBeenCalledWith(null),
+      { timeout: 2000 },
     )
   })
 
-  it("keeps the draft and surfaces an error alert when saving fails", async () => {
+  it("keeps later keystrokes after a save starts", async () => {
+    const user = userEvent.setup()
+    const bridge = client()
+    let resolveSave: ((value: string) => void) | undefined
+    bridge.setDefaultSystemPrompt.mockImplementationOnce(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveSave = resolve
+        }),
+    )
+    render(<ConversationSettingsPanel client={bridge as ProviderClient} />)
+
+    const textarea = screen.getByRole("textbox", { name: "默认系统提示词" })
+    await user.type(textarea, "Hi")
+    await waitFor(
+      () => expect(bridge.setDefaultSystemPrompt).toHaveBeenCalledWith("Hi"),
+      { timeout: 2000 },
+    )
+    expect(textarea).toBeEnabled()
+    await user.type(textarea, " there")
+    expect(textarea).toHaveValue("Hi there")
+
+    resolveSave!("Hi")
+    await waitFor(() => expect(textarea).toHaveValue("Hi there"))
+  })
+
+  it("keeps the draft and surfaces an error alert when auto-save fails", async () => {
     const user = userEvent.setup()
     const bridge = client()
     bridge.setDefaultSystemPrompt.mockRejectedValueOnce(new Error("offline"))
@@ -154,11 +173,8 @@ describe("ConversationSettingsPanel", () => {
 
     const textarea = screen.getByRole("textbox", { name: "默认系统提示词" })
     await user.type(textarea, "Be helpful")
-    await user.click(screen.getByRole("button", { name: "保存" }))
     expect(await screen.findByText("对话设置未保存")).toBeVisible()
     expect(screen.getByText("发生意外错误。")).toBeVisible()
-    // The draft is preserved for retry and no success toast fires.
     expect(textarea).toHaveValue("Be helpful")
-    expect(toastSuccessMock).not.toHaveBeenCalled()
   })
 })
