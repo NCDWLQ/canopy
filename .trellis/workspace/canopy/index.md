@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 60
-- **Last Active**: 2026-08-31
+- **Total Sessions**: 61
+- **Last Active**: 2026-09-02
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1359 | Active |
+| `journal-1.md` | ~1381 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 61 | 2026-09-02 | Settings: theme ToggleGroup and archived panel redesign | `cf734ee`, `da1f74a` | `main` |
 | 60 | 2026-08-31 | 全景视图用户节点删除 | `bfacd94` | `feat/message-delete` |
 | 59 | 2026-08-30 | 系统提示词功能 | `7e8f12f`, `7c3cef6` | `feat/system-prompt` |
 | 58 | 2026-08-30 | Memoize message nodes — streaming rerender verification | `23e1071` | `perf/react-render-hot-path` |

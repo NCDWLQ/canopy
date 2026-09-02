@@ -1357,3 +1357,25 @@ Completed step 3 of render hot-path work on perf/react-render-hot-path: added me
 ### Status
 
 [OK] **Completed**
+
+
+## Session 61: Settings: theme ToggleGroup and archived panel redesign
+
+**Date**: 2026-09-02
+**Task**: Settings: theme ToggleGroup and archived panel redesign
+**Branch**: `main`
+
+### Summary
+
+Replaced appearance theme Select with shadcn ToggleGroup. Redesigned archived conversations panel to open rows with visible unarchive button; rename/delete stay in overflow menu. Filled PRD and archived the panel-redesign task.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cf734ee` | (see git log) |
+| `da1f74a` | (see git log) |
+
+### Status
+
+[OK] **Completed**
