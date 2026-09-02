@@ -1,26 +1,30 @@
 import * as React from "react"
 import {
   Background,
-  Controls,
   Handle,
   MiniMap,
+  Panel,
   Position,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
   useStoreApi,
+  type FitViewOptions,
   type NodeProps,
   type NodeTypes,
 } from "@xyflow/react"
 import {
   Bot,
   GitBranch,
+  Maximize2,
   Minus,
   Plus,
   Terminal,
   Trash2,
   User,
   Wrench,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react"
 
 import type { TreeNodeView } from "../types"
@@ -88,12 +92,13 @@ function PanoramaNodeCard({ data }: NodeProps<PanoramaFlowNode>) {
       aria-current={data.isActiveNode ? "true" : undefined}
       aria-label={`${roleLabel}：${label}`}
       className={cn(
-        "group relative flex flex-col gap-1.5 rounded-lg border px-3 py-2 text-left shadow-sm transition-colors motion-reduce:transition-none",
+        "group relative flex flex-col gap-1.5 rounded-lg px-3 py-2 text-left transition-colors motion-reduce:transition-none",
         data.role === "user"
-          ? "border-border bg-muted"
-          : "border-border bg-card",
-        data.isOnActivePath && "border-ring/60",
-        data.isActiveNode && "border-ring ring-2 ring-ring/50",
+          ? "bg-panorama-user"
+          : "border border-border bg-card",
+        data.isOnActivePath && data.role !== "user" && "border-ring/60",
+        data.isOnActivePath && data.role === "user" && "ring-1 ring-ring/60",
+        data.isActiveNode && "ring-2 ring-ring/50",
       )}
       style={{ width: PANORAMA_CARD_WIDTH, height: PANORAMA_CARD_HEIGHT }}
     >
@@ -141,7 +146,7 @@ function PanoramaNodeCard({ data }: NodeProps<PanoramaFlowNode>) {
               type="button"
               variant="outline"
               size="icon-xs"
-              className="absolute -right-3 top-1/2 z-10 -translate-y-1/2 rounded-full text-muted-foreground shadow-sm hover:text-foreground"
+              className="absolute -right-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-background dark:bg-background text-muted-foreground hover:bg-muted dark:hover:bg-muted hover:text-foreground"
               aria-label={t(
                 isCollapsed
                   ? "conversation.panorama.expandBranch"
@@ -240,6 +245,93 @@ function PanoramaNodeCard({ data }: NodeProps<PanoramaFlowNode>) {
 const NODE_TYPES: NodeTypes = { panoramaCard: PanoramaNodeCard }
 
 const EMPTY_COLLAPSED_IDS: ReadonlySet<string> = new Set()
+
+function viewportTransitionDuration(): number {
+  return (window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ??
+    false)
+    ? 0
+    : 200
+}
+
+function PanoramaControls({
+  fitViewOptions,
+}: {
+  fitViewOptions: FitViewOptions
+}) {
+  const { t } = useTranslation()
+  const { zoomIn, zoomOut, fitView } = useReactFlow()
+
+  return (
+    <Panel
+      position="bottom-left"
+      className="overflow-hidden rounded-lg border border-border bg-background"
+      aria-label={t("conversation.panorama.controls")}
+    >
+      <div className="flex flex-col divide-y divide-border">
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="rounded-none"
+              aria-label={t("conversation.panorama.zoomIn")}
+              onClick={() =>
+                void zoomIn({ duration: viewportTransitionDuration() })
+              }
+            >
+              <ZoomIn className="size-3.5" aria-hidden="true" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="left" sideOffset={4}>
+            {t("conversation.panorama.zoomIn")}
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="rounded-none"
+              aria-label={t("conversation.panorama.zoomOut")}
+              onClick={() =>
+                void zoomOut({ duration: viewportTransitionDuration() })
+              }
+            >
+              <ZoomOut className="size-3.5" aria-hidden="true" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="left" sideOffset={4}>
+            {t("conversation.panorama.zoomOut")}
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="rounded-none"
+              aria-label={t("conversation.panorama.fitView")}
+              onClick={() =>
+                void fitView({
+                  ...fitViewOptions,
+                  duration: viewportTransitionDuration(),
+                })
+              }
+            >
+              <Maximize2 className="size-3.5" aria-hidden="true" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="left" sideOffset={4}>
+            {t("conversation.panorama.fitView")}
+          </TooltipContent>
+        </Tooltip>
+      </div>
+    </Panel>
+  )
+}
 
 /** Screen-space inset before a click triggers a viewport nudge. */
 const NODE_VIEW_PADDING = 48
@@ -445,9 +537,10 @@ function ConversationPanoramaView({
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable
+        proOptions={{ hideAttribution: true }}
       >
         <Background gap={28} />
-        <Controls showInteractive={false} fitViewOptions={fitViewOptions} />
+        <PanoramaControls fitViewOptions={fitViewOptions} />
         <MiniMap pannable zoomable />
       </ReactFlow>
     </div>

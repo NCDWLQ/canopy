@@ -1379,3 +1379,24 @@ Replaced appearance theme Select with shadcn ToggleGroup. Redesigned archived co
 ### Status
 
 [OK] **Completed**
+
+
+## Session 62: Add configurable theme color
+
+**Date**: 2026-09-02
+**Task**: Add configurable theme color
+**Branch**: `feat/theme-color-setting`
+
+### Summary
+
+Added a persisted seven-color shadcn primary selector to Appearance settings, including Tauri/SQLite contracts, frontend hydration, accessible swatches, bilingual labels, cross-layer tests, and updated Trellis specifications.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4f71ca2` | (see git log) |
+
+### Status
+
+[OK] **Completed**

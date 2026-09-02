@@ -66,6 +66,8 @@
   --color-success-foreground: var(--success-foreground);
   --color-success: var(--success);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-panorama-user: var(--panorama-user-bg);
+  --color-user-bubble: var(--user-bubble-bg);
 }
 
 :root {
@@ -77,7 +79,7 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --primary: oklch(0.32 0 0);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
@@ -114,11 +116,14 @@
   --code-header-bg: oklch(0.965 0.003 240);
   --code-inline-bg: oklch(0.96 0.002 240);
   --code-inline-border: oklch(0.91 0 0);
+  --panorama-user-bg: color-mix(in srgb, var(--primary) 12%, var(--muted));
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
 }
 
-.dark {
+/* Scope dark tokens to html so nested `.dark` containers (e.g. React Flow
+   colorMode) do not reset --primary and break theme-colored surfaces. */
+html.dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
@@ -127,7 +132,7 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
+  --primary: oklch(0.955 0 0);
   --primary-foreground: oklch(0.205 0 0);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
@@ -163,6 +168,72 @@
   --code-header-bg: oklch(0.165 0 0);
   --code-inline-bg: oklch(0.205 0 0);
   --code-inline-border: oklch(1 0 0 / 12%);
+  --panorama-user-bg: color-mix(in srgb, var(--primary) 42%, var(--card));
+  --user-bubble-bg: color-mix(in srgb, var(--primary) 42%, var(--card));
+}
+
+:root {
+  --theme-color-neutral-primary: oklch(0.32 0 0);
+  --theme-color-neutral-primary-foreground: oklch(0.985 0 0);
+  --theme-color-blue-primary: var(--color-blue-600);
+  --theme-color-blue-primary-foreground: var(--color-white);
+  --theme-color-green-primary: var(--color-green-700);
+  --theme-color-green-primary-foreground: var(--color-white);
+  --theme-color-orange-primary: var(--color-orange-700);
+  --theme-color-orange-primary-foreground: var(--color-white);
+  --theme-color-red-primary: var(--color-red-600);
+  --theme-color-red-primary-foreground: var(--color-white);
+  --theme-color-rose-primary: var(--color-rose-600);
+  --theme-color-rose-primary-foreground: var(--color-white);
+  --theme-color-violet-primary: var(--color-violet-600);
+  --theme-color-violet-primary-foreground: var(--color-white);
+}
+
+html.dark {
+  --theme-color-neutral-primary: oklch(0.955 0 0);
+  --theme-color-neutral-primary-foreground: oklch(0.205 0 0);
+  --theme-color-blue-primary: var(--color-blue-500);
+  --theme-color-blue-primary-foreground: var(--color-white);
+  --theme-color-green-primary: var(--color-green-600);
+  --theme-color-green-primary-foreground: var(--color-white);
+  --theme-color-orange-primary: var(--color-orange-500);
+  --theme-color-orange-primary-foreground: var(--color-white);
+  --theme-color-red-primary: var(--color-red-500);
+  --theme-color-red-primary-foreground: var(--color-white);
+  --theme-color-rose-primary: var(--color-rose-500);
+  --theme-color-rose-primary-foreground: var(--color-white);
+  --theme-color-violet-primary: var(--color-violet-500);
+  --theme-color-violet-primary-foreground: var(--color-white);
+}
+
+html[data-theme-color="blue"] {
+  --primary: var(--theme-color-blue-primary);
+  --primary-foreground: var(--theme-color-blue-primary-foreground);
+}
+
+html[data-theme-color="green"] {
+  --primary: var(--theme-color-green-primary);
+  --primary-foreground: var(--theme-color-green-primary-foreground);
+}
+
+html[data-theme-color="orange"] {
+  --primary: var(--theme-color-orange-primary);
+  --primary-foreground: var(--theme-color-orange-primary-foreground);
+}
+
+html[data-theme-color="red"] {
+  --primary: var(--theme-color-red-primary);
+  --primary-foreground: var(--theme-color-red-primary-foreground);
+}
+
+html[data-theme-color="rose"] {
+  --primary: var(--theme-color-rose-primary);
+  --primary-foreground: var(--theme-color-rose-primary-foreground);
+}
+
+html[data-theme-color="violet"] {
+  --primary: var(--theme-color-violet-primary);
+  --primary-foreground: var(--theme-color-violet-primary-foreground);
 }
 
 @layer base {

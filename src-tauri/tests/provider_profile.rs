@@ -14,7 +14,8 @@ use canopy_lib::providers::{
     ApiKeyAction, CredentialStore, ProviderError, ProviderInput, ProviderService, RedactedProvider,
 };
 use canopy_lib::settings::{
-    LanguagePreference, SettingsError, SettingsService, ThemePreference, TitleModelBinding,
+    LanguagePreference, SettingsError, SettingsService, ThemeColorPreference, ThemePreference,
+    TitleModelBinding,
 };
 use secrecy::{ExposeSecret, SecretString};
 use serde_json::json;
@@ -194,6 +195,47 @@ fn theme_preference_settings_round_trip_through_the_settings_kv() {
             .unwrap();
         assert!(matches!(
             service.get_theme().await,
+            Err(SettingsError::CorruptValue)
+        ));
+    });
+}
+
+#[test]
+fn theme_color_preference_settings_round_trip_through_the_settings_kv() {
+    run_async(async {
+        let pool = migrated_pool().await;
+        let service = SettingsService::new(pool.clone());
+
+        assert_eq!(
+            service.get_theme_color().await.unwrap(),
+            ThemeColorPreference::Neutral
+        );
+
+        for color in [
+            ThemeColorPreference::Blue,
+            ThemeColorPreference::Green,
+            ThemeColorPreference::Orange,
+            ThemeColorPreference::Red,
+            ThemeColorPreference::Rose,
+            ThemeColorPreference::Violet,
+            ThemeColorPreference::Neutral,
+        ] {
+            assert_eq!(service.set_theme_color(color).await.unwrap(), color);
+            assert_eq!(service.get_theme_color().await.unwrap(), color);
+            let stored: Option<String> =
+                sqlx::query_scalar("SELECT value FROM app_settings WHERE key = 'theme_color'")
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+            assert_eq!(stored.as_deref(), Some(color.as_setting_text()));
+        }
+
+        sqlx::query("UPDATE app_settings SET value = 'solarized' WHERE key = 'theme_color'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert!(matches!(
+            service.get_theme_color().await,
             Err(SettingsError::CorruptValue)
         ));
     });

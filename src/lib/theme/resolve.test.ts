@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest"
 
 import {
   effectiveTheme,
+  isThemeColorPreference,
   resolveSystemTheme,
+  resolveThemeColorPreference,
   resolveThemePreference,
 } from "./resolve"
+import { THEME_COLORS } from "./types"
 
 describe("resolveSystemTheme", () => {
   it("resolves dark when system is dark", () => {
@@ -28,6 +31,23 @@ describe("resolveThemePreference", () => {
     expect(resolveThemePreference(undefined)).toBe("system")
     expect(resolveThemePreference("")).toBe("system")
     expect(resolveThemePreference("solarized")).toBe("system")
+  })
+})
+
+describe("resolveThemeColorPreference", () => {
+  it("accepts valid theme color preferences", () => {
+    for (const color of THEME_COLORS) {
+      expect(isThemeColorPreference(color)).toBe(true)
+      expect(resolveThemeColorPreference(color)).toBe(color)
+    }
+  })
+
+  it("falls back to neutral for invalid/missing values", () => {
+    expect(resolveThemeColorPreference(null)).toBe("neutral")
+    expect(resolveThemeColorPreference(undefined)).toBe("neutral")
+    expect(resolveThemeColorPreference("")).toBe("neutral")
+    expect(resolveThemeColorPreference("solarized")).toBe("neutral")
+    expect(isThemeColorPreference("solarized")).toBe(false)
   })
 })
 

@@ -1,5 +1,7 @@
 import { z } from "zod"
 
+import { THEME_COLORS } from "@/lib/theme/types"
+
 import {
   commandErrorSchema,
   containsNonRustWhitespace,
@@ -19,6 +21,7 @@ export const protocolSchema = z.enum(["openai_compatible", "anthropic"])
 export const reasoningEffortSchema = z.enum(["low", "medium", "high"])
 export const languagePreferenceSchema = z.enum(["system", "zh-CN", "en"])
 export const themePreferenceSchema = z.enum(["system", "light", "dark"])
+export const themeColorPreferenceSchema = z.enum(THEME_COLORS)
 
 const endpointSchema = unicodeScalarStringSchema.refine((value) => {
   try {
@@ -104,6 +107,10 @@ export const setThemeRequestSchema = z
   .object({ theme: themePreferenceSchema })
   .strict()
 export const setThemeResultSchema = setThemeRequestSchema
+export const setThemeColorRequestSchema = z
+  .object({ theme_color: themeColorPreferenceSchema })
+  .strict()
+export const setThemeColorResultSchema = setThemeColorRequestSchema
 export const setDefaultSystemPromptRequestSchema = z
   .object({ prompt: systemPromptInputSchema })
   .strict()
@@ -157,6 +164,7 @@ export const listProvidersResultSchema = z
     title_model_binding: titleModelBindingDtoSchema.nullable(),
     language: languagePreferenceSchema,
     theme: themePreferenceSchema,
+    theme_color: themeColorPreferenceSchema,
     default_system_prompt: unicodeScalarStringSchema.nullable(),
   })
   .strict()

@@ -37,6 +37,7 @@ pub(crate) fn register_commands<R: tauri::Runtime>(
         providers::commands::set_title_model_binding,
         settings::commands::set_language,
         settings::commands::set_theme,
+        settings::commands::set_theme_color,
         settings::commands::set_default_system_prompt,
         providers::commands::reveal_provider_api_key,
         generation::commands::generate_from_active_path,
@@ -252,6 +253,10 @@ mod tests {
             ),
             ("set_theme", json!({ "request": { "theme": "dark" } })),
             (
+                "set_theme_color",
+                json!({ "request": { "theme_color": "blue" } }),
+            ),
+            (
                 "set_conversation_system_prompt",
                 json!({ "request": {
                     "conversation_id": "conversation",
@@ -283,7 +288,7 @@ mod tests {
                 }),
             ),
         ];
-        assert_eq!(database_backed.len(), 27);
+        assert_eq!(database_backed.len(), 28);
 
         for (command, body) in database_backed {
             let response = invoke(&webview, command, body).unwrap_err();
@@ -407,6 +412,34 @@ mod tests {
             json!({ "request": { "theme": "dark" } }),
         )
         .expect_err("valid theme reaches database resolution");
+        assert_eq!(reaches_database, database_unavailable());
+    }
+
+    #[test]
+    fn set_theme_color_command_is_registered_and_validates_before_database_access() {
+        let (_app, webview) = mock_production_app();
+        let rejected = invoke(
+            &webview,
+            "set_theme_color",
+            json!({ "request": { "theme_color": "solarized" } }),
+        )
+        .expect_err("unknown theme color is rejected as invalid input");
+        assert_eq!(
+            rejected,
+            json!({
+                "code": "invalid_input",
+                "message": "请求包含无效输入。",
+                "retryable": false,
+                "details": { "field": "theme_color", "reason": "invalid_theme_color" }
+            })
+        );
+
+        let reaches_database = invoke(
+            &webview,
+            "set_theme_color",
+            json!({ "request": { "theme_color": "blue" } }),
+        )
+        .expect_err("valid theme color reaches database resolution");
         assert_eq!(reaches_database, database_unavailable());
     }
 }

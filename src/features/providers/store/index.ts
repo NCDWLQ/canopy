@@ -16,8 +16,10 @@ import {
 } from "@/lib/i18n"
 import { useLocaleStore } from "@/lib/i18n/locale-store"
 import {
+  resolveThemeColorPreference,
   resolveThemePreference,
   useThemeStore,
+  type ThemeColorPreference,
   type ThemePreference,
 } from "@/lib/theme"
 
@@ -44,6 +46,7 @@ export type ProviderState = (
   defaultSystemPrompt: string | null
   language: LocalePreference
   theme: ThemePreference
+  themeColor: ThemeColorPreference
 }
 
 export type ProviderStore = ProviderState & {
@@ -73,6 +76,10 @@ export type ProviderStore = ProviderState & {
     language: LocalePreference,
   ) => Promise<void>
   setTheme: (client: ProviderClient, theme: ThemePreference) => Promise<void>
+  setThemeColor: (
+    client: ProviderClient,
+    themeColor: ThemeColorPreference,
+  ) => Promise<void>
   setDefaultSystemPrompt: (
     client: ProviderClient,
     prompt: string | null,
@@ -106,6 +113,7 @@ function readyOrUnconfigured(
   titleModelBinding: TitleModelBinding | null,
   language: LocalePreference,
   theme: ThemePreference,
+  themeColor: ThemeColorPreference,
   defaultSystemPrompt: string | null,
 ): ProviderState {
   if (activeProviderId !== null) {
@@ -118,6 +126,7 @@ function readyOrUnconfigured(
       defaultSystemPrompt,
       language,
       theme,
+      themeColor,
     }
   }
   return {
@@ -129,6 +138,7 @@ function readyOrUnconfigured(
     defaultSystemPrompt,
     language,
     theme,
+    themeColor,
   }
 }
 
@@ -164,6 +174,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
       defaultSystemPrompt: previous.defaultSystemPrompt,
       language: previous.language,
       theme: previous.theme,
+      themeColor: previous.themeColor,
     })
     return { epoch, previous }
   }
@@ -179,6 +190,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
       defaultSystemPrompt: previous.defaultSystemPrompt,
       language: previous.language,
       theme: previous.theme,
+      themeColor: previous.themeColor,
       error: normalizeError(error),
     })
   }
@@ -192,6 +204,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
     defaultSystemPrompt: null,
     language: "system",
     theme: "system",
+    themeColor: "neutral",
 
     loadProviders: async (client) => {
       const { epoch, previous } = beginRequest()
@@ -203,6 +216,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
           // fixtures (App smoke mocks) that bypass the bridge.
           const language = resolveLocalePreference(result.language)
           const theme = resolveThemePreference(result.theme)
+          const themeColor = resolveThemeColorPreference(result.themeColor)
           set(
             readyOrUnconfigured(
               result.providers,
@@ -211,6 +225,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
               result.titleModelBinding,
               language,
               theme,
+              themeColor,
               result.defaultSystemPrompt,
             ),
           )
@@ -218,6 +233,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
           // overrides the locale detected at startup; "system" keeps it.
           if (language !== "system") applyLanguagePreference(language)
           useThemeStore.getState().setThemePreference(theme)
+          useThemeStore.getState().setThemeColorPreference(themeColor)
         }
       } catch (error: unknown) {
         fail(epoch, previous, error)
@@ -246,6 +262,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
               previous.titleModelBinding,
               previous.language,
               previous.theme,
+              previous.themeColor,
               previous.defaultSystemPrompt,
             ),
           )
@@ -279,6 +296,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
               : previous.titleModelBinding,
             previous.language,
             previous.theme,
+            previous.themeColor,
             previous.defaultSystemPrompt,
           ),
         )
@@ -302,6 +320,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
               previous.titleModelBinding,
               previous.language,
               previous.theme,
+              previous.themeColor,
               previous.defaultSystemPrompt,
             ),
           )
@@ -324,6 +343,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
               previous.titleModelBinding,
               previous.language,
               previous.theme,
+              previous.themeColor,
               previous.defaultSystemPrompt,
             ),
           )
@@ -346,6 +366,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
               titleModelBinding,
               previous.language,
               previous.theme,
+              previous.themeColor,
               previous.defaultSystemPrompt,
             ),
           )
@@ -368,6 +389,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
               previous.titleModelBinding,
               stored,
               previous.theme,
+              previous.themeColor,
               previous.defaultSystemPrompt,
             ),
           )
@@ -393,10 +415,35 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
               previous.titleModelBinding,
               previous.language,
               stored,
+              previous.themeColor,
               previous.defaultSystemPrompt,
             ),
           )
           useThemeStore.getState().setThemePreference(stored)
+        }
+      } catch (error: unknown) {
+        fail(epoch, previous, error)
+      }
+    },
+
+    setThemeColor: async (client, themeColor) => {
+      const { epoch, previous } = beginRequest()
+      try {
+        const stored = await client.setThemeColor(themeColor)
+        if (isCurrent(epoch)) {
+          set(
+            readyOrUnconfigured(
+              previous.providers,
+              previous.activeProviderId,
+              previous.autoGenerateTitle,
+              previous.titleModelBinding,
+              previous.language,
+              previous.theme,
+              stored,
+              previous.defaultSystemPrompt,
+            ),
+          )
+          useThemeStore.getState().setThemeColorPreference(stored)
         }
       } catch (error: unknown) {
         fail(epoch, previous, error)
@@ -416,6 +463,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => {
               previous.titleModelBinding,
               previous.language,
               previous.theme,
+              previous.themeColor,
               defaultSystemPrompt,
             ),
           )

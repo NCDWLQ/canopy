@@ -30,6 +30,7 @@ function client() {
     setTitleModelBinding: vi.fn().mockResolvedValue(null),
     setLanguage: vi.fn().mockResolvedValue("system"),
     setTheme: vi.fn().mockResolvedValue("system"),
+    setThemeColor: vi.fn().mockResolvedValue("neutral"),
     setDefaultSystemPrompt: vi.fn().mockResolvedValue(null),
     revealProviderApiKey: vi.fn().mockResolvedValue(null),
     listProviderModels: vi.fn(),
@@ -81,6 +82,7 @@ describe("SettingsDialog", () => {
       titleModelBinding: null,
       language: "system",
       theme: "system",
+      themeColor: "neutral",
     })
   })
 

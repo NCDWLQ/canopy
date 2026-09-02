@@ -297,6 +297,7 @@ function createProviderClient() {
       titleModelBinding: null,
       language: "system",
       theme: "system",
+      themeColor: "neutral",
       defaultSystemPrompt: null,
     }),
     saveProvider: vi.fn<ProviderClient["saveProvider"]>(),
@@ -306,6 +307,7 @@ function createProviderClient() {
     setTitleModelBinding: vi.fn<ProviderClient["setTitleModelBinding"]>(),
     setLanguage: vi.fn<ProviderClient["setLanguage"]>(),
     setTheme: vi.fn<ProviderClient["setTheme"]>(),
+    setThemeColor: vi.fn<ProviderClient["setThemeColor"]>(),
     setDefaultSystemPrompt: vi.fn<ProviderClient["setDefaultSystemPrompt"]>(),
     revealProviderApiKey: vi
       .fn<ProviderClient["revealProviderApiKey"]>()

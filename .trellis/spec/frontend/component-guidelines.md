@@ -418,7 +418,9 @@ The correct form is deterministic, fixture-driven, and independent of SQLite and
   `role="switch"` button.
 - Closed-choice settings (protocol, title model, grouped lists) use shadcn
   `Select` with `SelectGroup` / `SelectLabel` / `SelectSeparator` as needed.
-  Do not fake a select with `DropdownMenu` + checkmarks.
+  Render the menu with `<SelectContent position="popper">`; horizontal
+  settings rows in `features/settings` use `align="end"`. Do not fake a select
+  with `DropdownMenu` + checkmarks.
 - `FieldDescription` helptext has no trailing period (or `。`).
 - The outline uses tree/treeitem semantics or an equivalent tested Radix pattern, visible focus, correct expanded/selected state, and roving keyboard focus.
 - Every icon-only action has an accessible name. Menus, dialogs, and tooltips use Radix focus management.
@@ -677,5 +679,5 @@ WebGL dependency on WebKitGTK.
   `HTMLElement.prototype.getBoundingClientRect` to a non-zero rect. Click
   nodes/buttons with `fireEvent`, not `userEvent`: jsdom dispatches pointer
   events with a null `view`, which crashes d3-zoom's drag bookkeeping.
-- Keep React Flow's attribution visible (MIT courtesy); the OutlineTree
-  remains the keyboard-accessible navigation surface for the same tree.
+- Hide React Flow attribution in the panorama canvas (`proOptions.hideAttribution`);
+  the OutlineTree remains the keyboard-accessible navigation surface for the same tree.

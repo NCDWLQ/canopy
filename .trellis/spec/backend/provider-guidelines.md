@@ -18,8 +18,8 @@ Ownership is split:
   protocol adapters, model discovery (no SQLite, Tauri, or conversation types)
 - `src-tauri/src/generation/` — `GenerationRuntime`, prepare/run/finalize,
   `set_conversation_provider`, system-prompt injection, auto-title
-- `src-tauri/src/settings/` — typed auto-title / language / theme /
-  `default_system_prompt` keys
+- `src-tauri/src/settings/` — typed auto-title / language / theme mode /
+  theme color / `default_system_prompt` keys
 - `conversations::service` — validated path load and assistant persist
 - migrations `0004_provider_profile.sql` through
   `0007_conversation_provider_binding_integrity.sql`
@@ -32,11 +32,12 @@ above; names and `{ request }` wrappers do not move:
 ```text
 list_providers({}) -> { providers, active_provider_id, auto_generate_title,
                         title_model_binding, language, theme,
-                        default_system_prompt }
+                        theme_color, default_system_prompt }
 save_provider(...) -> ProviderDto
 delete_provider({ provider_id }) -> { deleted }
 set_active_provider({ provider_id }) -> { provider_id }
 set_title_model_binding({ binding }) -> { binding }
+set_theme_color({ theme_color }) -> { theme_color }
 reveal_provider_api_key({ provider_id }) -> { api_key }
 list_provider_models({ source }) -> { models }
 generate_from_active_path({ conversation_id, active_node_id }, on_event)

@@ -316,6 +316,110 @@ const terminal = await providerClient.generateFromActivePath(
 Transient presentation is allowed before terminal authority, but only the
 backend result or a durable reload changes conversation records.
 
+## Scenario: Durable Appearance Theme Color
+
+### 1. Scope / Trigger
+
+Use this contract when adding or changing the Appearance theme-color Select,
+the shadcn `primary` palette, the `theme_color` settings key, or any field in
+the startup `list_providers` settings aggregate.
+
+### 2. Signatures
+
+```text
+app_settings["theme_color"] =
+  neutral | blue | green | orange | red | rose | violet
+
+list_providers({}) -> { ..., theme, theme_color, ... }
+set_theme_color({ theme_color }) -> { theme_color }
+
+type ThemeColorPreference = (typeof THEME_COLORS)[number]
+<html data-theme-color="blue"> -> --primary / --primary-foreground
+```
+
+`THEME_COLORS` is the frontend source for the resolver, Zod schema, and Select
+options. Rust owns a matching exhaustive `ThemeColorPreference` enum at the
+IPC/storage boundary.
+
+### 3. Contracts
+
+- SQLite is durable authority. Missing `theme_color` means `neutral`; do not
+  add a migration, Zustand persist middleware, or browser storage.
+- The settings repository/service and strict `set_theme_color` command own the
+  KV round trip. `list_providers` remains the aggregate startup read.
+- `useProviderStore.themeColor` is the loaded durable projection.
+  `useThemeStore.themeColor` is the UI-only projection. Hydration and a
+  successful authoritative write update both; a failed write keeps both on
+  the previous value and uses the existing Appearance error Alert.
+- `DocumentThemeSync` applies non-neutral values through
+  `document.documentElement.dataset.themeColor`; Neutral removes the
+  attribute so the original theme tokens remain the fallback.
+- `src/index.css` owns palette values. Each color maps only the shadcn
+  `--primary` / `--primary-foreground` pair in light and dark modes. The same
+  custom property drives the option/trigger swatch; do not duplicate raw
+  colors in the component or change background, accent, chart, or sidebar
+  token families as part of this preference.
+- The Appearance control uses the existing Radix shadcn `Select`, keeps every
+  `SelectItem` inside `SelectGroup`, includes the swatch inside item text so
+  `SelectValue` renders it, has an accessible field label, and is disabled
+  during the provider-store loading phase.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+|---|---|
+| KV key absent | Resolve Neutral and preserve the legacy appearance |
+| Request contains one of the seven values | Persist and return the same value |
+| Request contains any other value | `invalid_input`, field `theme_color`, reason `invalid_theme_color`, before DB access |
+| Stored KV value is unknown | `SettingsError::CorruptValue`; do not silently reset it |
+| Aggregate `theme_color` is unknown/missing | Strict Zod decode rejects the response |
+| Save rejects | Provider/theme stores and selected trigger retain the prior color; show Appearance Alert |
+| Light/dark mode changes | Selected color remains; CSS resolves the mode-specific primary pair |
+
+### 5. Good / Base / Bad Cases
+
+- **Good**: Violet is saved, both stores adopt the returned value, `<html>`
+  carries `data-theme-color="violet"`, and primary surfaces plus the selected
+  swatch use the dark/light Violet pair.
+- **Base**: an upgraded profile has no key, resolves Neutral, and renders the
+  exact pre-feature primary colors without an attribute.
+- **Bad**: writing `localStorage`, applying raw `bg-blue-*` classes to primary
+  components, changing state before the command succeeds without rollback, or
+  defining the seven-value list separately in resolver/schema/component code.
+
+### 6. Tests Required
+
+- Rust: missing-key default, all seven KV round trips, corrupt value,
+  command validation before database access, command registration, and shared
+  provider fixture round trip.
+- Bridge: strict request/result and aggregate decoding, snake/camel mapping,
+  and invalid/missing values.
+- Stores/App: startup hydration, successful write, failure preservation in
+  both stores, Neutral fallback, root attribute application/removal, and no
+  conversation-workspace re-render.
+- Appearance: seven option labels/swatches, selected trigger swatch, bilingual
+  relabelling, keyboard-accessible Select, loading disablement, successful
+  selection, and failure rollback/Alert.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+localStorage.setItem("themeColor", color)
+document.documentElement.style.setProperty("--primary", "#2563eb")
+set({ themeColor: color }) // optimistic durable state with no rollback
+```
+
+#### Correct
+
+```ts
+const stored = await client.setThemeColor(themeColor)
+set({ ...previous, themeColor: stored })
+useThemeStore.getState().setThemeColorPreference(stored)
+// DocumentThemeSync maps the closed value to CSS-owned semantic tokens.
+```
+
 ## Testing
 
 - Test store actions and selectors without React when possible.

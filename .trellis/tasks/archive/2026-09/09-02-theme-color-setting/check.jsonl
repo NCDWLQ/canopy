@@ -1,0 +1,9 @@
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Frontend formatting, lint, test, and forbidden-pattern review."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Verify shadcn composition, accessibility, and settings UI ownership."}
+{"file":".trellis/spec/frontend/state-management.md","reason":"Verify durable preference, hydration, failure, and identity behavior."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Verify closed unions and strict Zod wire validation."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Rust testing and quality gate expectations."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Verify KV defaults, transactions, and corrupt-value handling."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Verify invalid input and database error contracts."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Audit command catalogs, fixtures, DTOs, stores, and UI end to end."}
+{"file":".trellis/tasks/09-02-theme-color-setting/research/shadcn-theme-color.md","reason":"Check implementation against verified Select and theme-token contracts."}

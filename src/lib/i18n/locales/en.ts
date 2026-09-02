@@ -165,6 +165,10 @@ export const en = {
   "conversation.panorama.openPanorama": "View Panorama",
   "conversation.panorama.closePanorama": "Back to Conversation",
   "conversation.panorama.canvas": "Conversation Panorama",
+  "conversation.panorama.controls": "Canvas zoom controls",
+  "conversation.panorama.zoomIn": "Zoom in",
+  "conversation.panorama.zoomOut": "Zoom out",
+  "conversation.panorama.fitView": "Fit view",
   "conversation.panorama.collapseBranch": ({ label }: { label: string }) =>
     `Collapse branches of ${label}`,
   "conversation.panorama.expandBranch": ({ label }: { label: string }) =>
@@ -302,6 +306,16 @@ export const en = {
   "settings.appearance.themeSystem": "Follow system",
   "settings.appearance.themeLight": "Light",
   "settings.appearance.themeDark": "Dark",
+  "settings.appearance.themeColor": "Theme color",
+  "settings.appearance.themeColorDescription":
+    "Choose the primary accent color used across the interface",
+  "settings.appearance.themeColorNeutral": "Neutral",
+  "settings.appearance.themeColorBlue": "Blue",
+  "settings.appearance.themeColorGreen": "Green",
+  "settings.appearance.themeColorOrange": "Orange",
+  "settings.appearance.themeColorRed": "Red",
+  "settings.appearance.themeColorRose": "Rose",
+  "settings.appearance.themeColorViolet": "Violet",
   "settings.appearance.updateFailed": "Appearance setting was not saved",
 
   // ConversationSettingsPanel.tsx

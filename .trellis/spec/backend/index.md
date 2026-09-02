@@ -12,7 +12,7 @@ application core. Product code is organized by capability:
 | Module | Owns |
 |--------|------|
 | `infra` | `DATABASE_URL`, ordered migration catalog, managed SQLite pool, identity/time |
-| `settings` | typed `app_settings` (language, theme, auto-title, title-model binding, default system prompt) |
+| `settings` | typed `app_settings` (language, theme mode, theme color, auto-title, title-model binding, default system prompt) |
 | `llm` | protocol, endpoint validation, HTTP adapters, model discovery (no SQL/Tauri) |
 | `providers` | profiles, keyring credentials, active provider, `list_providers` façade, title-binding validation |
 | `conversations` | conversation tree, search, persistence; no provider table SQL |

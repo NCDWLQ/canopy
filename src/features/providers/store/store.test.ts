@@ -27,6 +27,7 @@ function client() {
     setTitleModelBinding: vi.fn(),
     setLanguage: vi.fn(),
     setTheme: vi.fn(),
+    setThemeColor: vi.fn(),
     setDefaultSystemPrompt: vi.fn(),
     revealProviderApiKey: vi.fn(),
     listProviderModels: vi.fn(),
@@ -45,6 +46,7 @@ describe("provider store", () => {
       titleModelBinding: null,
       language: "system",
       theme: "system",
+      themeColor: "neutral",
       defaultSystemPrompt: null,
     })
     useLocaleStore.getState().setLocale("zh-CN")
@@ -60,6 +62,7 @@ describe("provider store", () => {
       titleModelBinding: null,
       language: "system",
       theme: "system",
+      themeColor: "neutral",
       defaultSystemPrompt: "Be helpful",
     })
     await useProviderStore.getState().loadProviders(bridge)
@@ -123,6 +126,7 @@ describe("provider store", () => {
       titleModelBinding: null,
       language: "system",
       theme: "dark",
+      themeColor: "blue",
       defaultSystemPrompt: null,
     })
     await useProviderStore.getState().loadProviders(bridge)
@@ -143,6 +147,36 @@ describe("provider store", () => {
     expect(useProviderStore.getState().theme).toBe("dark")
     expect(useThemeStore.getState().theme).toBe("dark")
     expect(useThemeStore.getState().resolvedTheme).toBe("dark")
+  })
+
+  it("hydrates an explicit theme color preference from the provider list", async () => {
+    const bridge = client()
+    bridge.listProviders.mockResolvedValueOnce({
+      providers: [provider],
+      activeProviderId: provider.id,
+      autoGenerateTitle: true,
+      titleModelBinding: null,
+      language: "system",
+      theme: "system",
+      themeColor: "rose",
+      defaultSystemPrompt: null,
+    })
+    await useProviderStore.getState().loadProviders(bridge)
+    expect(useProviderStore.getState().themeColor).toBe("rose")
+    expect(useThemeStore.getState().themeColor).toBe("rose")
+  })
+
+  it("persists the theme color preference and applies it to the UI theme store", async () => {
+    const bridge = client()
+    bridge.setThemeColor.mockResolvedValueOnce("orange")
+    useProviderStore.setState({
+      phase: "ready",
+      providers: [provider],
+      activeProviderId: provider.id,
+    })
+    await useProviderStore.getState().setThemeColor(bridge, "orange")
+    expect(useProviderStore.getState().themeColor).toBe("orange")
+    expect(useThemeStore.getState().themeColor).toBe("orange")
   })
 
   it("auto-activates the first saved provider when the list was empty", async () => {

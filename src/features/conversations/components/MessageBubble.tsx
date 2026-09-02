@@ -45,7 +45,7 @@ export function MessageBubble({
         aria-label={messageAria}
         className={cn("group flex flex-col items-end my-3 w-full", className)}
       >
-        <div className="max-w-[85%] rounded-2xl bg-muted px-4 py-2.5 text-sm text-foreground">
+        <div className="max-w-[85%] rounded-2xl bg-primary/[0.08] px-4 py-2.5 text-sm text-foreground dark:bg-user-bubble">
           {children}
         </div>
         {footer && <div className="mt-1 w-full max-w-[85%]">{footer}</div>}
