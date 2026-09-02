@@ -418,7 +418,9 @@ The correct form is deterministic, fixture-driven, and independent of SQLite and
   `role="switch"` button.
 - Closed-choice settings (protocol, title model, grouped lists) use shadcn
   `Select` with `SelectGroup` / `SelectLabel` / `SelectSeparator` as needed.
-  Do not fake a select with `DropdownMenu` + checkmarks.
+  Render the menu with `<SelectContent position="popper">`; horizontal
+  settings rows in `features/settings` use `align="end"`. Do not fake a select
+  with `DropdownMenu` + checkmarks.
 - `FieldDescription` helptext has no trailing period (or `。`).
 - The outline uses tree/treeitem semantics or an equivalent tested Radix pattern, visible focus, correct expanded/selected state, and roving keyboard focus.
 - Every icon-only action has an accessible name. Menus, dialogs, and tooltips use Radix focus management.
