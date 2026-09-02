@@ -92,7 +92,7 @@ function PanoramaNodeCard({ data }: NodeProps<PanoramaFlowNode>) {
       aria-current={data.isActiveNode ? "true" : undefined}
       aria-label={`${roleLabel}：${label}`}
       className={cn(
-        "group relative flex flex-col gap-1.5 rounded-lg border px-3 py-2 text-left shadow-sm transition-colors motion-reduce:transition-none",
+        "group relative flex flex-col gap-1.5 rounded-lg border px-3 py-2 text-left transition-colors motion-reduce:transition-none",
         data.role === "user"
           ? "border-border bg-muted"
           : "border-border bg-card",
@@ -145,7 +145,7 @@ function PanoramaNodeCard({ data }: NodeProps<PanoramaFlowNode>) {
               type="button"
               variant="outline"
               size="icon-xs"
-              className="absolute -right-3 top-1/2 z-10 -translate-y-1/2 rounded-full text-muted-foreground shadow-sm hover:text-foreground"
+              className="absolute -right-3 top-1/2 z-10 -translate-y-1/2 rounded-full text-muted-foreground hover:text-foreground"
               aria-label={t(
                 isCollapsed
                   ? "conversation.panorama.expandBranch"
