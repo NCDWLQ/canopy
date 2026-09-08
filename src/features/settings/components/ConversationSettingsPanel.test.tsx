@@ -76,7 +76,7 @@ describe("ConversationSettingsPanel", () => {
     })
     expect(toggle).toHaveAttribute("aria-checked", "true")
     expect(
-      screen.getByText("首轮对话后，使用下方配置的模型自动生成标题"),
+      screen.getByText("首条消息发送时，使用下方配置的模型自动生成标题"),
     ).toBeVisible()
     expect(toggle.closest("fieldset")).toContainElement(
       screen.getByText("标题生成模型"),

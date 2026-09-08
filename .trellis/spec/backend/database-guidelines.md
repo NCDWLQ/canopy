@@ -36,7 +36,13 @@ SQL ownership by table family:
   (`provider_id`, `model`, `reasoning_effort`) and `system_prompt` may be
   written after an already-validated payload; this SQL must not `FROM
   providers` or `JOIN providers`. `system_prompt` is independent of provider
-  delete: the migration 7 trigger must not clear it.
+  delete: the migration 7 trigger must not clear it. Auto-title writes go
+  through `update_title_if_current`
+  (`UPDATE conversations SET title = ?new WHERE id = ?id AND title = ?expected`),
+  a compare-and-swap that returns whether a row was written; a miss means a
+  manual rename or a concurrent title job won and the caller must not emit
+  `conversation://title-updated`. `update_title` variants do not bump
+  `updated_at`.
 - `providers` / `provider_credential_operations` — `providers::repository`.
 - typed `app_settings` keys — `settings::repository` (`language`, `theme`,
   `theme_color`, `auto_generate_title`, `title_model_binding`,

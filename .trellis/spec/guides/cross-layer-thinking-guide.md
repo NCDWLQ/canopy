@@ -337,6 +337,10 @@ generation. Before adding HTTP or an event:
       Use `app.emit` + one decoded frontend listener.
 - [ ] Are user strings interpolated into prompt markup? Escape `& < >` so
       data cannot close a wrapper tag.
+- [ ] Can the side effect race the user? A delayed write that can land after
+      a manual edit needs a guard: auto-title gates HTTP on the stored title
+      still equalling the create-time placeholder and writes via CAS
+      (`update_title_if_current`), so renames and retries are never clobbered.
 
 → Specs: `.trellis/spec/backend/provider-guidelines.md` (auto-title,
 system-prompt injection), `.trellis/spec/frontend/type-safety.md` (title

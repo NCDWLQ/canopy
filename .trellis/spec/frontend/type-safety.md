@@ -487,7 +487,10 @@ Commands: `list_providers`, `set_auto_generate_title`,
 - Decode failure: ignore the event; do not write the store.
 - One listen at workspace/app mount (`useConversationTitleUpdates`); unlisten
   on unmount. Per-row listeners are forbidden. Stores never call `listen`.
-- Title event does not mutate node maps or generation records.
+- Title event does not mutate node maps or generation records. It may arrive
+  while the first reply is still streaming (title HTTP runs in parallel with
+  the reply since the auto-title trigger moved to post-prepare); applying it
+  must not disturb the in-flight generation state.
 
 ### 4. Validation & Error Matrix
 

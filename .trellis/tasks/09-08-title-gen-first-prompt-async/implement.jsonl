@@ -1,0 +1,11 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "后端规格索引，定位 auto-title 相关契约"}
+{"file": ".trellis/spec/backend/provider-guidelines.md", "reason": "auto-title 主契约：触发时机、上下文加载、prompt 形状、模型解析、测试基线"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "generation/title.rs、title_prompt.rs 的归属与 settings/providers 命令分工"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "conversations.title 更新语义与 app_settings 键约定；新增 CAS 写入需遵守"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "前端规格索引"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "auto-title 设置命令与全局标题事件的类型契约"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "conversation://title-updated 事件到 store 的应用规则"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "设置页文案（en/zh）更新规则"}
+{"file": ".trellis/spec/guides/index.md", "reason": "共享思考指南索引"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "auto-title 不得使用 GenerationRuntime、需转义 markup、全局 emit 的跨层约束"}
+{"file": ".trellis/tasks/09-08-title-gen-first-prompt-async/research/title-generation-practices.md", "reason": "主流产品标题生成实践调研，提示词改写与 CAS 设计的依据"}

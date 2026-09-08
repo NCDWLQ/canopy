@@ -312,8 +312,8 @@ mod tests {
     #[test]
     fn title_request_disables_thinking_and_limits_output() {
         let prompt = TitlePrompt {
-            system: "Generate a short conversation title for a history list.".to_owned(),
-            user: "<conversation>\n<user>\nUSER_EXCERPT_SENTINEL\n</user>\n<assistant>\nASSISTANT_EXCERPT_SENTINEL\n</assistant>\n</conversation>".to_owned(),
+            system: "Generate a short conversation title from the user's first message.".to_owned(),
+            user: "<user_message>\nUSER_EXCERPT_SENTINEL\n</user_message>".to_owned(),
         };
         let request = build_title_request("fixture-model", &prompt).unwrap();
         assert_eq!(request["max_tokens"], 256);
@@ -326,7 +326,8 @@ mod tests {
         assert_eq!(request["messages"][0]["role"], "user");
         let user_content = request["messages"][0]["content"].as_str().unwrap();
         assert!(user_content.contains("USER_EXCERPT_SENTINEL"));
-        assert!(user_content.contains("<conversation>"));
+        assert!(user_content.contains("<user_message>"));
+        assert!(!user_content.contains("<assistant>"));
     }
 
     #[test]

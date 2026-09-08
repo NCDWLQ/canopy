@@ -1,6 +1,7 @@
 const RUST_UNICODE_WHITESPACE = /\p{White_Space}+/gu
 const TITLE_SCALAR_LIMIT = 40
 
+/** Create-time placeholder. Rust `derived_placeholder_title` must stay identical. */
 export function deriveConversationTitle(prompt: string): string {
   const normalized = prompt
     .replace(RUST_UNICODE_WHITESPACE, " ")

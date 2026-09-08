@@ -113,6 +113,10 @@ where
     else {
         return Ok(());
     };
+    let expected_title = context.conversation.title.clone();
+    if expected_title != derived_placeholder_title(&context.first_user_content) {
+        return Ok(());
+    }
     let configured_binding = settings.get_title_model_binding().await.map_err(|_| ())?;
     let (provider, model) =
         resolve_provider_and_model(&provider_service, &context, configured_binding).await?;
@@ -120,13 +124,19 @@ where
         .load_by_id_with_secret(&provider.id)
         .await
         .map_err(|_| ())?;
-    let prompt = build_title_prompt(&context.first_user_content, &context.assistant_content);
+    let prompt = build_title_prompt(&context.first_user_content);
     let generated = generate(provider, model, secret, prompt).await?;
     let title = clean_title(&generated).ok_or(())?;
-    persistence
-        .update_title(conversation_id, &title)
+    let updated = persistence
+        .update_title_if_current(conversation_id, &expected_title, &title)
         .await
         .map_err(|_| ())?;
+    if !updated {
+        log::warn!(
+            "operation=auto_generate_title code=title_cas_mismatch conversation_id={conversation_id}"
+        );
+        return Ok(());
+    }
     emit(TitleUpdatedPayload {
         conversation_id: conversation_id.to_owned(),
         title,
@@ -160,6 +170,30 @@ async fn resolve_provider_and_model(
     let provider = provider_service.load_active().await.map_err(|_| ())?;
     let model = provider.model.clone();
     Ok((provider, model))
+}
+
+/// Matches `deriveConversationTitle` in the frontend: collapse Unicode
+/// whitespace, then cap at 40 scalars with an ellipsis. Auto-title HTTP
+/// runs only while the stored title is still that create-time placeholder,
+/// so a completed title or a manual rename is not replaced on retry.
+const PLACEHOLDER_TITLE_LIMIT: usize = 40;
+
+fn derived_placeholder_title(prompt: &str) -> String {
+    let normalized = prompt.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut chars = normalized.chars();
+    let mut title = String::new();
+    for _ in 0..PLACEHOLDER_TITLE_LIMIT {
+        match chars.next() {
+            Some(ch) => title.push(ch),
+            None => return normalized,
+        }
+    }
+    if chars.next().is_some() {
+        title.push('…');
+        title
+    } else {
+        normalized
+    }
 }
 
 fn clean_title(raw: &str) -> Option<String> {
@@ -231,8 +265,8 @@ mod tests {
     };
 
     use super::{
-        clean_title, resolve_provider_and_model, run_auto_title_with, TitleUpdatedPayload,
-        TITLE_UPDATED_EVENT,
+        clean_title, derived_placeholder_title, resolve_provider_and_model, run_auto_title_with,
+        TitleUpdatedPayload, TITLE_UPDATED_EVENT,
     };
 
     fn test_runtime() -> tokio::runtime::Runtime {
@@ -272,13 +306,13 @@ mod tests {
         .unwrap();
     }
 
-    async fn seed_first_reply(pool: &sqlx::SqlitePool) -> ConversationPersistenceService {
+    async fn seed_first_user(pool: &sqlx::SqlitePool) -> ConversationPersistenceService {
         let persistence = ConversationPersistenceService::new(pool.clone());
         persistence
             .create_conversation(
                 NewConversation {
                     id: "conversation".to_owned(),
-                    title: "占位标题".to_owned(),
+                    title: "用户问题".to_owned(),
                     root_node_id: "user".to_owned(),
                 },
                 NewNode {
@@ -292,19 +326,6 @@ mod tests {
                     metadata: json!({}),
                 },
             )
-            .await
-            .unwrap();
-        persistence
-            .append_completed_assistant(NewNode {
-                id: "assistant".to_owned(),
-                parent_id: Some("user".to_owned()),
-                conversation_id: "conversation".to_owned(),
-                role: Role::Assistant,
-                content: "助手回答".to_owned(),
-                model: Some("active-model".to_owned()),
-                created_at: 2,
-                metadata: json!({}),
-            })
             .await
             .unwrap();
         persistence
@@ -383,7 +404,31 @@ mod tests {
     }
 
     #[test]
-    fn enabled_first_reply_updates_title_and_emits_exact_global_event() {
+    fn placeholder_title_mirrors_frontend_derivation() {
+        assert_eq!(derived_placeholder_title("用户问题"), "用户问题");
+        assert_eq!(derived_placeholder_title("  a\n\tb  "), "a b");
+        assert_eq!(
+            derived_placeholder_title("\u{3000}First\u{00a0}\t prompt\nline\u{2029}"),
+            "First prompt line"
+        );
+        assert_eq!(
+            derived_placeholder_title(&"字".repeat(41)),
+            format!("{}…", "字".repeat(40))
+        );
+        assert_eq!(derived_placeholder_title(&"字".repeat(40)), "字".repeat(40));
+        let emoji_prefix = "🙂".repeat(39);
+        assert_eq!(
+            derived_placeholder_title(&format!("{emoji_prefix}界tail")),
+            format!("{emoji_prefix}界…")
+        );
+        assert_eq!(
+            derived_placeholder_title(&format!("{emoji_prefix}界")),
+            format!("{emoji_prefix}界")
+        );
+    }
+
+    #[test]
+    fn enabled_first_user_updates_title_and_emits_exact_global_event() {
         test_runtime().block_on(async {
             let pool = migrated_pool().await;
             insert_provider(&pool, "active", "active-model").await;
@@ -393,7 +438,7 @@ mod tests {
             .execute(&pool)
             .await
             .unwrap();
-            seed_first_reply(&pool).await;
+            seed_first_user(&pool).await;
             let service = provider_service(pool.clone());
             let emitted = Arc::new(Mutex::new(None));
             let emit_slot = emitted.clone();
@@ -401,7 +446,11 @@ mod tests {
                 pool.clone(),
                 service,
                 "conversation",
-                |_provider, _model, _secret, _prompt| {
+                |_provider, _model, _secret, prompt| {
+                    assert!(prompt.user.contains("<user_message>"));
+                    assert!(prompt.user.contains("用户问题"));
+                    assert!(!prompt.user.contains("<assistant>"));
+                    assert!(!prompt.user.contains("助手"));
                     std::future::ready(Ok("  “生成标题”  ".to_owned()))
                 },
                 move |payload| {
@@ -429,7 +478,7 @@ mod tests {
     }
 
     #[test]
-    fn disabled_or_non_first_reply_is_a_noop() {
+    fn disabled_or_already_titled_is_a_noop() {
         test_runtime().block_on(async {
             let pool = migrated_pool().await;
             insert_provider(&pool, "active", "active-model").await;
@@ -439,7 +488,7 @@ mod tests {
             .execute(&pool)
             .await
             .unwrap();
-            let persistence = seed_first_reply(&pool).await;
+            seed_first_user(&pool).await;
             let service = provider_service(pool.clone());
             let settings = SettingsService::new(pool.clone());
             settings.set_auto_generate_title(false).await.unwrap();
@@ -454,32 +503,32 @@ mod tests {
             )
             .await
             .unwrap();
-            assert_eq!(stored_title(&pool).await, "占位标题");
+            assert_eq!(stored_title(&pool).await, "用户问题");
 
             settings.set_auto_generate_title(true).await.unwrap();
-            persistence
-                .append_completed_assistant(NewNode {
-                    id: "assistant-2".to_owned(),
-                    parent_id: Some("user".to_owned()),
-                    conversation_id: "conversation".to_owned(),
-                    role: Role::Assistant,
-                    content: "第二次回答".to_owned(),
-                    model: Some("active-model".to_owned()),
-                    created_at: 3,
-                    metadata: json!({}),
-                })
-                .await
-                .unwrap();
+            run_auto_title_with(
+                pool.clone(),
+                service.clone(),
+                "conversation",
+                |_, _, _, _| std::future::ready(Ok("生成标题".to_owned())),
+                |_| Ok(()),
+            )
+            .await
+            .unwrap();
+            assert_eq!(stored_title(&pool).await, "生成标题");
+
             run_auto_title_with(
                 pool.clone(),
                 service,
                 "conversation",
-                |_, _, _, _| async { panic!("non-first reply must not call the title provider") },
-                |_| panic!("non-first reply must not emit"),
+                |_, _, _, _| async {
+                    panic!("retry after a successful title must not call the title provider")
+                },
+                |_| panic!("retry after a successful title must not emit"),
             )
             .await
             .unwrap();
-            assert_eq!(stored_title(&pool).await, "占位标题");
+            assert_eq!(stored_title(&pool).await, "生成标题");
         });
     }
 
@@ -496,7 +545,7 @@ mod tests {
             .execute(&pool)
             .await
             .unwrap();
-            let persistence = seed_first_reply(&pool).await;
+            let persistence = seed_first_user(&pool).await;
             let service = provider_service(pool.clone());
             let settings = SettingsService::new(pool.clone());
 
@@ -576,7 +625,7 @@ mod tests {
                 .execute(&pool)
                 .await
                 .unwrap();
-            seed_first_reply(&pool).await;
+            seed_first_user(&pool).await;
             let service = provider_service(pool.clone());
             let result = run_auto_title_with(
                 pool.clone(),
@@ -589,7 +638,7 @@ mod tests {
             )
             .await;
             assert!(result.is_err());
-            assert_eq!(stored_title(&pool).await, "占位标题");
+            assert_eq!(stored_title(&pool).await, "用户问题");
         });
     }
 
@@ -604,7 +653,7 @@ mod tests {
             .execute(&pool)
             .await
             .unwrap();
-            seed_first_reply(&pool).await;
+            seed_first_user(&pool).await;
             let service = provider_service(pool.clone());
             let result = run_auto_title_with(
                 pool.clone(),
@@ -615,12 +664,12 @@ mod tests {
             )
             .await;
             assert!(result.is_err());
-            assert_eq!(stored_title(&pool).await, "占位标题");
+            assert_eq!(stored_title(&pool).await, "用户问题");
         });
     }
 
     #[test]
-    fn auto_title_overwrites_a_concurrent_manual_rename() {
+    fn manual_rename_during_title_generation_is_kept_by_cas() {
         test_runtime().block_on(async {
             let pool = migrated_pool().await;
             insert_provider(&pool, "active", "active-model").await;
@@ -630,7 +679,108 @@ mod tests {
             .execute(&pool)
             .await
             .unwrap();
-            let persistence = seed_first_reply(&pool).await;
+            let persistence = seed_first_user(&pool).await;
+            let service = provider_service(pool.clone());
+            run_auto_title_with(
+                pool.clone(),
+                service,
+                "conversation",
+                {
+                    let persistence = persistence.clone();
+                    move |_, _, _, _| {
+                        let persistence = persistence.clone();
+                        async move {
+                            persistence
+                                .rename_conversation("conversation", "手动标题")
+                                .await
+                                .unwrap();
+                            Ok("自动标题".to_owned())
+                        }
+                    }
+                },
+                |_| panic!("a CAS miss must not emit"),
+            )
+            .await
+            .unwrap();
+            assert_eq!(stored_title(&pool).await, "手动标题");
+        });
+    }
+
+    #[test]
+    fn later_nodes_do_not_change_the_first_user_excerpt_or_block_title() {
+        test_runtime().block_on(async {
+            let pool = migrated_pool().await;
+            insert_provider(&pool, "active", "active-model").await;
+            sqlx::query(
+                "INSERT INTO app_settings (key, value) VALUES ('active_provider_id', 'active')",
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            let persistence = seed_first_user(&pool).await;
+            persistence
+                .append_completed_assistant(NewNode {
+                    id: "assistant".to_owned(),
+                    parent_id: Some("user".to_owned()),
+                    conversation_id: "conversation".to_owned(),
+                    role: Role::Assistant,
+                    content: "助手回答不得进入标题提示词".to_owned(),
+                    model: Some("active-model".to_owned()),
+                    created_at: 2,
+                    metadata: json!({}),
+                })
+                .await
+                .unwrap();
+            persistence
+                .append_user_node(NewNode {
+                    id: "user-2".to_owned(),
+                    parent_id: Some("assistant".to_owned()),
+                    conversation_id: "conversation".to_owned(),
+                    role: Role::User,
+                    content: "第二条用户消息".to_owned(),
+                    model: None,
+                    created_at: 3,
+                    metadata: json!({}),
+                })
+                .await
+                .unwrap();
+            let service = provider_service(pool.clone());
+            let emitted = Arc::new(Mutex::new(None));
+            let emit_slot = emitted.clone();
+            run_auto_title_with(
+                pool.clone(),
+                service,
+                "conversation",
+                |_provider, _model, _secret, prompt| {
+                    assert!(prompt.user.contains("用户问题"));
+                    assert!(!prompt.user.contains("助手回答"));
+                    assert!(!prompt.user.contains("第二条用户消息"));
+                    std::future::ready(Ok("生成标题".to_owned()))
+                },
+                move |payload| {
+                    *emit_slot.lock().unwrap() = Some(payload);
+                    Ok(())
+                },
+            )
+            .await
+            .unwrap();
+            assert_eq!(stored_title(&pool).await, "生成标题");
+            assert_eq!(emitted.lock().unwrap().as_ref().unwrap().title, "生成标题");
+        });
+    }
+
+    #[test]
+    fn manual_rename_before_title_start_skips_http() {
+        test_runtime().block_on(async {
+            let pool = migrated_pool().await;
+            insert_provider(&pool, "active", "active-model").await;
+            sqlx::query(
+                "INSERT INTO app_settings (key, value) VALUES ('active_provider_id', 'active')",
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            let persistence = seed_first_user(&pool).await;
             persistence
                 .rename_conversation("conversation", "手动标题")
                 .await
@@ -640,12 +790,89 @@ mod tests {
                 pool.clone(),
                 service,
                 "conversation",
-                |_, _, _, _| std::future::ready(Ok("自动标题".to_owned())),
-                |_| Ok(()),
+                |_, _, _, _| async {
+                    panic!("a renamed conversation must not call the title provider")
+                },
+                |_| panic!("a renamed conversation must not emit"),
             )
             .await
             .unwrap();
-            assert_eq!(stored_title(&pool).await, "自动标题");
+            assert_eq!(stored_title(&pool).await, "手动标题");
+        });
+    }
+
+    #[test]
+    fn overlapping_title_jobs_keep_the_first_cas_write() {
+        test_runtime().block_on(async {
+            let pool = migrated_pool().await;
+            insert_provider(&pool, "active", "active-model").await;
+            sqlx::query(
+                "INSERT INTO app_settings (key, value) VALUES ('active_provider_id', 'active')",
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            seed_first_user(&pool).await;
+            let hold_late = Arc::new(tokio::sync::Notify::new());
+            let late_ready = Arc::new(tokio::sync::Notify::new());
+            let emitted_late = Arc::new(Mutex::new(None));
+            let emitted_early = Arc::new(Mutex::new(None));
+
+            let late = {
+                let hold_late = hold_late.clone();
+                let late_ready = late_ready.clone();
+                let emit_slot = emitted_late.clone();
+                run_auto_title_with(
+                    pool.clone(),
+                    provider_service(pool.clone()),
+                    "conversation",
+                    move |_, _, _, _| {
+                        let hold_late = hold_late.clone();
+                        let late_ready = late_ready.clone();
+                        async move {
+                            late_ready.notify_one();
+                            hold_late.notified().await;
+                            Ok("后到标题".to_owned())
+                        }
+                    },
+                    move |payload| {
+                        *emit_slot.lock().unwrap() = Some(payload);
+                        Ok(())
+                    },
+                )
+            };
+            let early = {
+                let late_ready = late_ready.clone();
+                let hold_late = hold_late.clone();
+                let emit_slot = emitted_early.clone();
+                let pool = pool.clone();
+                async move {
+                    late_ready.notified().await;
+                    let result = run_auto_title_with(
+                        pool.clone(),
+                        provider_service(pool),
+                        "conversation",
+                        |_, _, _, _| std::future::ready(Ok("先到标题".to_owned())),
+                        move |payload| {
+                            *emit_slot.lock().unwrap() = Some(payload);
+                            Ok(())
+                        },
+                    )
+                    .await;
+                    hold_late.notify_one();
+                    result
+                }
+            };
+
+            let (late_result, early_result) = futures_util::future::join(late, early).await;
+            late_result.unwrap();
+            early_result.unwrap();
+            assert_eq!(stored_title(&pool).await, "先到标题");
+            assert!(emitted_late.lock().unwrap().is_none());
+            assert_eq!(
+                emitted_early.lock().unwrap().as_ref().unwrap().title,
+                "先到标题"
+            );
         });
     }
 }

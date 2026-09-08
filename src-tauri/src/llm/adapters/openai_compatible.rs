@@ -316,8 +316,8 @@ mod tests {
     #[test]
     fn title_request_bounds_reasoning_and_separates_roles() {
         let prompt = TitlePrompt {
-            system: "Generate a short conversation title for a history list.".to_owned(),
-            user: "<conversation>\n<user>\nUSER_EXCERPT_SENTINEL\n</user>\n<assistant>\nASSISTANT_EXCERPT_SENTINEL\n</assistant>\n</conversation>".to_owned(),
+            system: "Generate a short conversation title from the user's first message.".to_owned(),
+            user: "<user_message>\nUSER_EXCERPT_SENTINEL\n</user_message>".to_owned(),
         };
         let request =
             serde_json::to_value(build_title_request("fixture-model", &prompt).unwrap()).unwrap();
@@ -332,7 +332,8 @@ mod tests {
         assert_eq!(request["messages"][1]["role"], "user");
         let user_content = request["messages"][1]["content"].as_str().unwrap();
         assert!(user_content.contains("USER_EXCERPT_SENTINEL"));
-        assert!(user_content.contains("<conversation>"));
+        assert!(user_content.contains("<user_message>"));
+        assert!(!user_content.contains("<assistant>"));
         assert!(!user_content.contains("Generate a short conversation title"));
     }
 

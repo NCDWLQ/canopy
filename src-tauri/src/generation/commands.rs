@@ -155,6 +155,15 @@ pub async fn generate_from_active_path<R: tauri::Runtime>(
     .await
     .map_err(CommandError::from)?;
 
+    // Independent of GenerationRuntime: start after prepare (user node is
+    // durable) and before run() so title HTTP overlaps the reply stream.
+    spawn_auto_title(
+        pool,
+        profile_service,
+        app,
+        prepared.conversation_id().to_owned(),
+    );
+
     let event_channel = on_event.clone();
     let delta_channel = on_event.clone();
     let thinking_channel = on_event.clone();
@@ -196,12 +205,7 @@ pub async fn generate_from_active_path<R: tauri::Runtime>(
             let _ = runtime.inner().cancel(&generation_id);
             Ok(cancelled)
         }
-        Ok(terminal) => {
-            if let GenerationTerminalDto::Completed { node, .. } = &terminal {
-                spawn_auto_title(pool, profile_service, app, node.conversation_id.clone());
-            }
-            Ok(terminal)
-        }
+        Ok(terminal) => Ok(terminal),
     }
 }
 
