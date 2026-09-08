@@ -1422,3 +1422,24 @@ Replaced ConversationPane's forced bottom-scroll with MessageScroller live-edge 
 ### Status
 
 [OK] **Completed**
+
+
+## Session 64: 标题生成：仅首条用户消息 + 与回复并行
+
+**Date**: 2026-09-08
+**Task**: 标题生成：仅首条用户消息 + 与回复并行
+**Branch**: `feat/title-gen-first-prompt-async`
+
+### Summary
+
+自动标题改为仅用首条用户消息，prepare 后与回复并行触发；新增占位门控 + update_title_if_current CAS 防覆盖；提示词按主流实践重写（<=50 字符、跟随用户语言、只输出标题）；同步 auto-title 相关 spec。Grok 4.6 子代理实现+质检，cargo/pnpm 全绿。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4c2b78d` | (see git log) |
+
+### Status
+
+[OK] **Completed**
