@@ -835,6 +835,43 @@ fn conversation_rename_unarchive_and_delete_fail_closed_for_missing_ids() {
 }
 
 #[test]
+fn update_title_if_current_writes_only_when_the_stored_title_matches() {
+    run_async(async {
+        let pool = migrated_pool().await;
+        let service = ConversationPersistenceService::new(pool.clone());
+        service
+            .create_conversation(
+                conversation("conversation-a", "root-a"),
+                node("root-a", None, "conversation-a", Role::User, "root", 1),
+            )
+            .await
+            .expect("conversation is created");
+
+        assert!(service
+            .update_title_if_current("conversation-a", "Conversation conversation-a", "Auto")
+            .await
+            .expect("matching CAS writes"));
+        let title: String =
+            sqlx::query_scalar("SELECT title FROM conversations WHERE id = 'conversation-a'")
+                .fetch_one(&pool)
+                .await
+                .expect("stored title is readable");
+        assert_eq!(title, "Auto");
+
+        assert!(!service
+            .update_title_if_current("conversation-a", "Conversation conversation-a", "Lost")
+            .await
+            .expect("stale CAS is a miss"));
+        let title: String =
+            sqlx::query_scalar("SELECT title FROM conversations WHERE id = 'conversation-a'")
+                .fetch_one(&pool)
+                .await
+                .expect("stored title is readable");
+        assert_eq!(title, "Auto");
+    });
+}
+
+#[test]
 fn conversation_archive_unarchive_round_trip_is_idempotent_and_guard_preserved() {
     run_async(async {
         let pool = migrated_pool().await;

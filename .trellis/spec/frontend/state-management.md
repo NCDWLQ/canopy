@@ -67,7 +67,9 @@ decoded and projected before entering the store.
   subscribed in a workspace/app hook, decoded in `src/lib/tauri`, then applied
   through `applyTitleUpdate`. That action patches the matching history
   summary title and, if loaded, `state.title`. It does not invent summary
-  rows, touch `nodesById` or `generationRuns`, or take a mutation lock.
+  rows, touch `nodesById` or `generationRuns`, or take a mutation lock. The
+  event can arrive mid-stream (auto-title runs in parallel with the first
+  reply), so the handler must stay safe against live generation state.
   Stores still never call `listen`.
 - Selectors are pure, narrow, and exported from the store module.
 - Keep one owner for root-to-active projection. It must preserve order and

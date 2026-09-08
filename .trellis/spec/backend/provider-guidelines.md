@@ -245,17 +245,18 @@ late cancellation.
   a `thinking_delta` event with its own 1MB budget, and persists into
   `nodes.metadata.thinking` only when non-empty.
 
-## Scenario: Auto-Title After First Assistant Persist
+## Scenario: Auto-Title Parallel With First Reply
 
 ### 1. Scope / Trigger
 
 Use this contract when changing title generation, `app_settings` keys
 `auto_generate_title` / `title_model_binding`, `title_prompt.rs`, title
-sanitization, or the global `conversation://title-updated` emit. Owning files:
-`src-tauri/src/generation/{title.rs,title_prompt.rs}`,
+sanitization, the placeholder gate, the CAS write, or the global
+`conversation://title-updated` emit. Owning files:
+`src-tauri/src/generation/{title.rs,title_prompt.rs,commands.rs}`,
 `src-tauri/src/settings/`, `src-tauri/src/providers/service.rs` (binding
 validation on save/delete), and
-`conversations::service::{load_auto_title_context, update_title}`.
+`conversations::service::{load_auto_title_context, update_title_if_current}`.
 
 This path is a generation-module side effect. It must not use
 `GenerationRuntime`, occupy a generation lock, write JSONL nodes, or emit
@@ -270,7 +271,8 @@ set_auto_generate_title({ enabled }) -> { enabled }
 set_title_model_binding({ binding: { provider_id, model } | null })
   -> { binding }
 app.emit("conversation://title-updated", { conversation_id, title })
-build_title_prompt(user, assistant) -> TitlePrompt { system, user }
+build_title_prompt(user) -> TitlePrompt { system, user }
+update_title_if_current(conversation_id, expected, new) -> bool
 ```
 
 Settings keys in `app_settings`: `auto_generate_title` (`"true"` / `"false"`;
@@ -279,37 +281,61 @@ or absent = follow conversation).
 
 ### 3. Contracts
 
-- Spawn after a `Completed` assistant persist (`spawn_auto_title`). Context
-  loads only when the conversation has exactly one assistant node and at least
-  one user node; otherwise skip HTTP.
-- Binding resolve: stored settings binding if that provider+model still
-  exists, else conversation `provider_id`/`model`, else active provider.
+- Spawn in `generate_from_active_path` after `prepare_generation` succeeds
+  (first user node durable) and **before** `run()` starts streaming, so the
+  title HTTP overlaps the reply. Never spawn on a `Completed` terminal and
+  never wait for any assistant node — the input is the first user message
+  only. Reply cancel/failure does not cancel or gate the title task.
+- Context: `load_auto_title_context` returns the chronologically first user
+  node plus the conversation row; `None` only when no user node exists.
+  Assistant count is irrelevant.
+- Placeholder gate: title HTTP runs only while the stored title still equals
+  `derived_placeholder_title(first_user_content)` — the Rust mirror of the
+  frontend `deriveConversationTitle` (collapse Unicode whitespace via
+  `split_whitespace`, cap at 40 scalars, append `…` when truncated). This is
+  what makes auto-title at-most-once: a successful LLM title or a manual
+  rename never matches the placeholder, so retries/duplicate spawns skip
+  HTTP. The two implementations must stay in sync; change both together.
+- CAS write: on success call
+  `update_title_if_current(id, expected_title_read_at_spawn, new_title)`
+  (`UPDATE conversations SET title = ?new WHERE id = ?id AND title = ?expected`).
+  A miss (user renamed, or a concurrent title job won) logs
+  `title_cas_mismatch` and does **not** emit. CAS alone is not sufficient
+  without the placeholder gate: on a later `generate` call the "expected"
+  value would be the already-written LLM title and the CAS would overwrite it.
+- Binding resolve order: settings `title_model_binding` → conversation
+  `provider_id`/`model` → active provider. A configured binding whose
+  provider is gone is a **hard skip (error), not a fall-through**.
 - `save_provider` / `delete_provider` that drop the bound provider or model
   must clear `title_model_binding` in the same transaction.
 - Prompt lives only in `generation/title_prompt.rs` and is split by role:
   instructions go to the system role, data to the user role. OpenAI-compatible
   sends `messages: [system, user]`; Anthropic sends the top-level `system`
-  field plus a single user message. Wrap excerpts in
-  `<conversation><user>…</user><assistant>…</assistant></conversation>` inside
-  the user part. Truncate each excerpt to 2000 Unicode scalars, then escape
-  `&`, `<`, `>` before interpolation. Model returns plain title text, not
-  JSON. The system prompt carries few-shot examples, a plain-factual style
-  directive, and bans emoji / 《》 / quotes / Markdown.
+  field plus a single user message. The user part wraps the first user
+  message in `<user_message>…</user_message>` only (no assistant block).
+  Truncate to 2000 Unicode scalars, then escape `&`, `<`, `>` before
+  interpolation. The system instruction demands: title text only (no quotes,
+  no `Title:` / `标题：` prefix, no explanation, no Markdown, no trailing
+  punctuation), at most 50 characters, same language as the user message,
+  title only visible content when truncated, plain-factual style, bans
+  emoji / 《》 / wrapping punctuation, carries few-shot examples, and marks
+  `<user_message>` as untrusted data. Model returns plain title text, not
+  JSON.
 - Title request budget: `max_tokens = 256` on both protocols. OpenAI-compatible
   additionally sends `reasoning_effort: "low"` so thinking models do not burn
   the budget on reasoning; Anthropic sends an explicit
   `thinking: {"type": "disabled"}` payload — omitting the field is not "off"
   for every endpoint (DeepSeek v4 defaults to thinking and burns the whole
   `max_tokens` before any text).
-- The prompt forbids `Title:` / `标题：` prefixes, and `clean_title` also
-  strips one leading prefix (`title:` ASCII case-insensitive, `标题:`
-  half-width, or `标题：` full-width — colon required, strip once, after
-  quote stripping) as a post-hoc guard. `clean_title` collapses whitespace,
-  then strips **paired** wrapping quotes (`"` `'` `“”` `‘’`). Never
-  `trim_end` a quote character. Empty or >200 chars after sanitize → keep the
-  existing truncated placeholder; do not emit.
-- Success: `UPDATE conversations.title`, then emit snake_case
-  `{ conversation_id, title }`.
+- `clean_title` strips one leading prefix (`title:` ASCII case-insensitive,
+  `标题:` half-width, or `标题：` full-width — colon required, strip once,
+  after quote stripping) as a post-hoc guard. `clean_title` collapses
+  whitespace, then strips **paired** wrapping quotes (`"` `'` `“”` `‘’`).
+  Never `trim_end` a quote character. Empty or >200 chars after sanitize →
+  keep the existing placeholder; do not emit.
+- Success: CAS `UPDATE conversations.title`, then emit snake_case
+  `{ conversation_id, title }`. The event may arrive while the first reply
+  is still streaming; the frontend applies it in place.
 - Failure: log only; leave the existing title; no error UI.
 
 ### 4. Validation & Error Matrix
@@ -319,25 +345,39 @@ or absent = follow conversation).
 | `auto_generate_title` missing or `"true"` | Treat as on |
 | `auto_generate_title` `"false"` | No title HTTP |
 | Unknown `auto_generate_title` value | `SettingsError::CorruptValue`, mapped historically to `provider_unavailable` / `服务提供商当前不可用。` / retryable |
-| Assistant count ≠ 1, or no user node | No title HTTP |
-| Settings binding's provider/model gone | Fall through to conversation, then active |
+| No user node | No title HTTP |
+| Stored title ≠ derived placeholder (LLM-titled or renamed) | No title HTTP |
+| CAS miss (rename or concurrent win during in-flight title) | Log `title_cas_mismatch`; keep stored title; no emit |
+| Settings binding's provider gone | Hard skip (error); **no** fall-through to conversation/active |
 | HTTP / sanitize / persist / emit failure | Log; keep placeholder; no UI error |
-| User text contains `</conversation>` or `<` | Escaped as data; not treated as instructions |
+| User text contains `</user_message>` or `<` | Escaped as data; not treated as instructions |
 
 ### 5. Good / Base / Bad Cases
 
-- **Good**: first completed assistant, toggle on, sanitized title persisted,
-  event emitted; HTTP failure leaves the placeholder.
-- **Base**: toggle off, or a second assistant persist → no title HTTP.
-- **Bad**: title call inside `GenerationRuntime`; interpolating raw user text
-  into markup; `trim_end_matches(['"', '”'])` turning `要求输出“HACKED”`
-  into `要求输出“HACKED`.
+- **Good**: first user message prepared, toggle on, title HTTP overlaps the
+  reply stream, sanitized title CAS-persisted, event emitted (possibly
+  mid-stream); HTTP failure leaves the placeholder.
+- **Base**: toggle off, stored title already LLM-generated or manually
+  renamed → no title HTTP; rename landing during an in-flight title → CAS
+  miss, manual title kept.
+- **Bad**: spawning on `Completed` (serializes title behind the reply);
+  gating on assistant count; pure CAS without the placeholder gate (a retry
+  after a successful title overwrites it); title call inside
+  `GenerationRuntime`; interpolating raw user text into markup;
+  `trim_end_matches(['"', '”'])` turning `要求输出“HACKED”` into
+  `要求输出“HACKED`.
 
 ### 6. Tests Required
 
-- Prompt: 2000-char bound per excerpt; `&` / `<` / `>` escaped; instructions
-  stay in the system role and out of the user data block;
-  `</conversation>` in user text cannot close the wrapper.
+- Prompt: 2000-char bound on the user excerpt; `&` / `<` / `>` escaped
+  (`&` before angle brackets); instructions stay in the system role and out
+  of the user data block; no `<assistant>` / `<conversation>` in the
+  payload; `</user_message>` in user text cannot close the wrapper; system
+  instruction carries the ≤50-char, same-language, output-only directives
+  and few-shot examples.
+- Placeholder mirror: `derived_placeholder_title` matches the frontend
+  `deriveConversationTitle` on Unicode whitespace, 40-scalar boundary, and
+  emoji/scalar edge cases.
 - Title requests: `max_tokens = 256`; OpenAI-compatible carries
   `reasoning_effort = "low"`; Anthropic sends explicit
   `thinking: {"type": "disabled"}`; main-chat LLM adapter
@@ -348,8 +388,12 @@ or absent = follow conversation).
   untouched); blank / 201-char rejected.
 - Settings: missing key defaults on; binding JSON round-trip; `save_provider`
   clearing a stale binding in the same transaction.
-- Persist path: first assistant + on → HTTP + UPDATE + emit; off / second
-  assistant → no HTTP.
+- Orchestration: enabled + placeholder title → HTTP + CAS UPDATE + emit;
+  off → no HTTP; already-titled or renamed-before-start → no HTTP; rename
+  during in-flight title → CAS miss keeps manual title, no emit; two
+  overlapping title jobs → first CAS write wins, loser does not emit;
+  later assistant/user nodes neither enter the prompt nor block titling;
+  missing configured binding provider → hard skip, no HTTP.
 
 ### 7. Wrong vs Correct
 
@@ -357,16 +401,21 @@ or absent = follow conversation).
 
 ```rust
 generation_runtime.spawn(title_prompt); // occupies the generation lock
+if assistants.len() == 1 { spawn_auto_title(...) } // gates on the reply
+update_title(id, title) // unconditional write clobbers a concurrent rename
 title.trim_end_matches(['"', '”']);
-format!("<user>\n{user}\n</user>") // user may contain </conversation>
+format!("<user>\n{user}\n</user>") // user may contain </user_message>
 ```
 
 #### Correct
 
 ```rust
-tokio::spawn(generate_conversation_title(...)); // no GenerationRuntime
+// after prepare_generation, before run(): reply and title HTTP overlap
+spawn_auto_title(pool, provider_service, app, conversation_id);
+if stored_title == derived_placeholder_title(&first_user) { /* run HTTP */ }
+update_title_if_current(id, &expected_at_spawn, &title) // CAS; miss → no emit
 strip_wrapping_quotes(title); // paired wrappers only
-escape_markup(&truncate(user)) // then interpolate
+escape_markup(&truncate(user)) // then interpolate into <user_message>
 ```
 
 ## Scenario: System Prompt Injection At Prepare

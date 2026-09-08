@@ -210,6 +210,9 @@ describe("conversation store", () => {
       },
     })
 
+    const nodesBefore = useConversationStore.getState().nodesById
+    const runsBefore = useConversationStore.getState().generationRuns
+
     useConversationStore.getState().applyTitleUpdate({
       conversationId: "conversation-1",
       title: "生成的标题",
@@ -225,6 +228,8 @@ describe("conversation store", () => {
       state.history.summaries.find((summary) => summary.id === "conversation-2")
         ?.title,
     ).toBe("其他标题")
+    expect(state.nodesById).toBe(nodesBefore)
+    expect(state.generationRuns).toBe(runsBefore)
   })
 
   it("loads the authoritative tree with the newest deterministic leaf selected", async () => {

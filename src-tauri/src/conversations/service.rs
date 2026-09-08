@@ -20,7 +20,6 @@ pub struct ConversationPersistenceService {
 pub struct AutoTitleContext {
     pub conversation: Conversation,
     pub first_user_content: String,
-    pub assistant_content: String,
 }
 
 impl ConversationPersistenceService {
@@ -390,23 +389,17 @@ impl ConversationPersistenceService {
                     entity: "conversation",
                 })?;
         let nodes = ConversationRepository::load_nodes(&mut transaction, conversation_id).await?;
-        let mut users = nodes.iter().filter(|node| node.role == Role::User);
-        let first_user_content = users.next().map(|node| node.content.clone());
-        let assistants = nodes
+        let first_user_content = nodes
             .iter()
-            .filter(|node| node.role == Role::Assistant)
-            .collect::<Vec<_>>();
+            .find(|node| node.role == Role::User)
+            .map(|node| node.content.clone());
         transaction.commit().await?;
         let Some(first_user_content) = first_user_content else {
-            return Ok(None);
-        };
-        let [assistant] = assistants.as_slice() else {
             return Ok(None);
         };
         Ok(Some(AutoTitleContext {
             conversation,
             first_user_content,
-            assistant_content: assistant.content.clone(),
         }))
     }
 
@@ -423,6 +416,24 @@ impl ConversationPersistenceService {
         }
         transaction.commit().await?;
         Ok(())
+    }
+
+    pub async fn update_title_if_current(
+        &self,
+        conversation_id: &str,
+        expected_title: &str,
+        title: &str,
+    ) -> Result<bool, PersistenceError> {
+        let mut transaction = self.pool.begin().await?;
+        let updated = ConversationRepository::update_title_if_current(
+            &mut transaction,
+            conversation_id,
+            expected_title,
+            title,
+        )
+        .await?;
+        transaction.commit().await?;
+        Ok(updated)
     }
 
     pub async fn archive_conversation(
