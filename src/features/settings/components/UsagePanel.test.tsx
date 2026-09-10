@@ -1,4 +1,10 @@
-import { render, screen, within } from "@testing-library/react"
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
 
@@ -215,6 +221,43 @@ describe("UsagePanel", () => {
     expect(await screen.findByText("暂无用量数据")).toBeVisible()
     expect(clearUsageRecords).toHaveBeenCalledTimes(1)
     expect(screen.queryByText("总 Token")).not.toBeInTheDocument()
+  })
+
+  it("ignores a refresh that resolves after clear succeeds", async () => {
+    const user = userEvent.setup()
+    let resolveRefresh: ((value: UsageSummaryView) => void) | undefined
+    const getUsageSummary = vi
+      .fn()
+      .mockResolvedValueOnce(populatedSummary())
+      .mockImplementationOnce(
+        () =>
+          new Promise<UsageSummaryView>((resolve) => {
+            resolveRefresh = resolve
+          }),
+      )
+    const clearUsageRecords = vi.fn().mockResolvedValue(undefined)
+    render(
+      <UsagePanel
+        client={usageClient({ getUsageSummary, clearUsageRecords })}
+        now={NOW}
+      />,
+    )
+    expect(await screen.findByText("总 Token")).toBeVisible()
+
+    await user.click(screen.getByRole("button", { name: "清除统计数据" }))
+    fireEvent.click(screen.getByRole("button", { name: "刷新", hidden: true }))
+    const confirm = screen.getByRole("alertdialog")
+    await user.click(
+      within(confirm).getByRole("button", { name: "清除统计数据" }),
+    )
+    expect(await screen.findByText("暂无用量数据")).toBeVisible()
+
+    resolveRefresh?.(populatedSummary())
+    await waitFor(() => {
+      expect(screen.getByText("暂无用量数据")).toBeVisible()
+      expect(screen.queryByText("总 Token")).not.toBeInTheDocument()
+    })
+    expect(screen.getByRole("button", { name: "刷新" })).toBeEnabled()
   })
 
   it("shows a load error that refresh can retry", async () => {

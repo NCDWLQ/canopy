@@ -170,10 +170,13 @@ export function UsagePanel({ client, now: nowProp }: UsagePanelProps) {
 
   const handleClear = async () => {
     setConfirmClear(false)
+    const requestId = ++requestIdRef.current
+    setRefreshing(false)
     setClearing(true)
     setError(null)
     try {
       await usageClient.clearUsageRecords()
+      if (requestIdRef.current !== requestId) return
       setSummary({
         totals: { input: 0, output: 0, total: 0, records: 0 },
         byDay: [],
@@ -182,10 +185,13 @@ export function UsagePanel({ client, now: nowProp }: UsagePanelProps) {
       })
       setStatus("empty")
     } catch (caught: unknown) {
+      if (requestIdRef.current !== requestId) return
       setErrorSource("clear")
       setError(isUiError(caught) ? caught : null)
     } finally {
-      setClearing(false)
+      if (requestIdRef.current === requestId) {
+        setClearing(false)
+      }
     }
   }
 
