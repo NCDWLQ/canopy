@@ -157,6 +157,7 @@ fn ordered_migrations_create_the_expected_schema_and_managed_pool_is_reused() {
                 (6, "provider_models"),
                 (7, "conversation_provider_binding_integrity"),
                 (8, "conversation_system_prompt"),
+                (9, "token_usage"),
             ]
         );
 
@@ -182,7 +183,8 @@ fn ordered_migrations_create_the_expected_schema_and_managed_pool_is_reused() {
                 "conversations",
                 "nodes",
                 "provider_credential_operations",
-                "providers"
+                "providers",
+                "usage_records"
             ]
         );
 
@@ -196,6 +198,8 @@ fn ordered_migrations_create_the_expected_schema_and_managed_pool_is_reused() {
         assert_eq!(
             indexes,
             vec![
+                "idx_usage_records_created_at",
+                "idx_usage_records_provider_model",
                 "nodes_children_order",
                 "nodes_conversation_order",
                 "nodes_one_root_per_conversation",
@@ -242,6 +246,47 @@ fn ordered_migrations_create_the_expected_schema_and_managed_pool_is_reused() {
                 .iter()
                 .any(|name| name == "system_prompt"),
             "migration 0008 must add conversations.system_prompt, got {conversation_columns:?}"
+        );
+
+        let usage_columns: Vec<String> =
+            sqlx::query_scalar("SELECT name FROM pragma_table_info('usage_records') ORDER BY name")
+                .fetch_all(&pool)
+                .await
+                .expect("usage_records columns are inspectable");
+        assert_eq!(
+            usage_columns,
+            vec![
+                "conversation_id",
+                "created_at",
+                "id",
+                "input_tokens",
+                "model",
+                "node_id",
+                "output_tokens",
+                "provider_id",
+                "source",
+                "total_tokens",
+            ]
+        );
+        let usage_foreign_keys: i64 =
+            sqlx::query_scalar("SELECT count(*) FROM pragma_foreign_key_list('usage_records')")
+                .fetch_one(&pool)
+                .await
+                .expect("usage_records foreign keys are inspectable");
+        assert_eq!(
+            usage_foreign_keys, 0,
+            "usage_records must not have foreign keys"
+        );
+        let rejected_source = sqlx::query(
+            "INSERT INTO usage_records (
+                source, provider_id, model, input_tokens, output_tokens, created_at
+             ) VALUES ('other', 'provider', 'model', 1, 1, '2026-01-01T00:00:00.000Z')",
+        )
+        .execute(&pool)
+        .await;
+        assert!(
+            rejected_source.is_err(),
+            "usage_records.source must reject values outside chat|title"
         );
 
         let node_foreign_keys: i64 =

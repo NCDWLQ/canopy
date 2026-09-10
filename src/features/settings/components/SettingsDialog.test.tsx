@@ -12,7 +12,7 @@ import { SettingsDialog } from "./SettingsDialog"
 import type { ArchivedConversationsPanelProps } from "./ArchivedConversationsPanel"
 import { useProviderStore } from "@/features/providers/store"
 import type { ProviderView } from "@/features/providers/types"
-import type { ProviderClient } from "@/lib/tauri"
+import type { ProviderClient, UsageClient } from "@/lib/tauri"
 
 const provider: ProviderView = {
   id: "provider-1",
@@ -42,6 +42,18 @@ function client() {
     listProviderModels: vi.fn(),
     generateFromActivePath: vi.fn(),
     cancelGeneration: vi.fn(),
+  }
+}
+
+function usageClient(): UsageClient {
+  return {
+    getUsageSummary: vi.fn().mockResolvedValue({
+      totals: { input: 0, output: 0, total: 0, records: 0 },
+      byDay: [],
+      byModel: [],
+      bySource: [],
+    }),
+    clearUsageRecords: vi.fn().mockResolvedValue(undefined),
   }
 }
 
@@ -358,6 +370,26 @@ describe("SettingsDialog", () => {
         screen.queryByRole("dialog", { hidden: true }),
       ).not.toBeInTheDocument(),
     )
+  })
+
+  it("navigates to the usage panel", async () => {
+    const user = userEvent.setup()
+    render(
+      <SettingsDialog
+        client={client() as ProviderClient}
+        usageClient={usageClient()}
+        archivedConversations={archivedConversations()}
+      />,
+    )
+    await user.click(screen.getByRole("button", { name: "设置" }))
+    await user.click(screen.getByRole("button", { name: "用量" }))
+    expect(
+      screen.getByRole("button", { name: "用量", current: "page" }),
+    ).toBeVisible()
+    expect(await screen.findByText("暂无用量数据")).toBeVisible()
+    expect(
+      screen.queryByRole("combobox", { name: "语言" }),
+    ).not.toBeInTheDocument()
   })
 
   it("navigates to the archived conversations panel", async () => {

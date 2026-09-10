@@ -84,10 +84,18 @@ pub struct TitlePrompt {
     pub user: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TokenUsage {
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    pub total_tokens: Option<u64>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GeneratedContent {
     pub content: String,
     pub thinking: Option<String>,
+    pub usage: Option<TokenUsage>,
 }
 
 /// Immutable provider inputs captured at generation prepare time. Protocol

@@ -10,7 +10,7 @@ use serde_json::Value;
 use crate::llm::{
     client::{map_status, map_transport_error, OpenAiCompatibleClient, MAX_RESPONSE_BYTES},
     ChatPrompt, GeneratedContent, LlmError, MessageRole, ReasoningEffort, StreamingRequest,
-    TitlePrompt, ValidatedEndpoint,
+    TitlePrompt, TokenUsage, ValidatedEndpoint,
 };
 
 const ANTHROPIC_VERSION: &str = "2023-06-01";
@@ -140,7 +140,7 @@ pub(crate) async fn stream_title(
     secret: Option<&secrecy::SecretString>,
     cancellation: &tokio_util::sync::CancellationToken,
     prompt: &TitlePrompt,
-) -> Result<String, LlmError> {
+) -> Result<GeneratedContent, LlmError> {
     stream_body(
         client,
         endpoint,
@@ -151,7 +151,6 @@ pub(crate) async fn stream_title(
         |_| Ok(()),
     )
     .await
-    .map(|generated| generated.content)
 }
 
 async fn stream_body<F, T>(
@@ -192,6 +191,8 @@ where
     let mut blocks: std::collections::HashMap<u64, String> = std::collections::HashMap::new();
     let mut content = String::new();
     let mut thinking = String::new();
+    let mut input_tokens = None;
+    let mut output_tokens = None;
     let mut stop_reason = false;
     let mut stopped = false;
     while let Some(event) =
@@ -203,6 +204,11 @@ where
         let event = event.map_err(|_| LlmError::Protocol)?;
         let value: Value = serde_json::from_str(&event.data).map_err(|_| LlmError::Protocol)?;
         match event.event.as_str() {
+            "message_start" => {
+                if let Some(input) = value["message"]["usage"]["input_tokens"].as_u64() {
+                    input_tokens = Some(input);
+                }
+            }
             "content_block_start" => {
                 let index = value["index"].as_u64().ok_or(LlmError::Protocol)?;
                 let kind = value["content_block"]["type"]
@@ -242,6 +248,9 @@ where
                 if !stop_reason {
                     return Err(LlmError::Protocol);
                 }
+                if let Some(output) = value["usage"]["output_tokens"].as_u64() {
+                    output_tokens = Some(output);
+                }
             }
             "message_stop" => {
                 stopped = true;
@@ -257,7 +266,26 @@ where
     Ok(GeneratedContent {
         content,
         thinking: (!thinking.is_empty()).then_some(thinking),
+        usage: token_usage_from_anthropic(input_tokens, output_tokens),
     })
+}
+
+fn token_usage_from_anthropic(
+    input_tokens: Option<u64>,
+    output_tokens: Option<u64>,
+) -> Option<TokenUsage> {
+    match (input_tokens, output_tokens) {
+        (None, None) => None,
+        (input, output) => {
+            let input_tokens = input.unwrap_or(0);
+            let output_tokens = output.unwrap_or(0);
+            Some(TokenUsage {
+                input_tokens,
+                output_tokens,
+                total_tokens: Some(input_tokens.saturating_add(output_tokens)),
+            })
+        }
+    }
 }
 
 #[cfg(test)]

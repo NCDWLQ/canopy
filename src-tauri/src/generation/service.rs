@@ -13,6 +13,7 @@ use crate::llm::{
 };
 use crate::providers::{domain::validate_model, ProviderError, ProviderService};
 use crate::settings::SettingsService;
+use crate::usage::{UsageService, UsageSource};
 
 use super::{GenerationError, GenerationLease, GenerationRuntime};
 
@@ -128,12 +129,14 @@ pub(crate) struct PreparedGeneration {
     conversation_id: String,
     active_node_id: String,
     model: String,
+    provider_id: String,
     endpoint: ValidatedEndpoint,
     prompt: ChatPrompt,
     secret: Option<SecretString>,
     protocol: Protocol,
     client: OpenAiCompatibleClient,
     persistence: ConversationPersistenceService,
+    usage: UsageService,
     lease: GenerationLease,
 }
 
@@ -174,11 +177,13 @@ impl PreparedGeneration {
         };
         let outcome = finish_generation(
             &self.persistence,
+            &self.usage,
             &self.lease,
             streamed,
             PendingAssistant {
                 parent_id: self.active_node_id,
                 conversation_id: self.conversation_id,
+                provider_id: self.provider_id,
                 model: self.model,
             },
         )
@@ -193,6 +198,7 @@ impl PreparedGeneration {
 struct PendingAssistant {
     parent_id: String,
     conversation_id: String,
+    provider_id: String,
     model: String,
 }
 
@@ -218,6 +224,7 @@ pub(crate) enum GenerationStage {
 
 async fn finish_generation(
     persistence: &ConversationPersistenceService,
+    usage: &UsageService,
     lease: &GenerationLease,
     streamed: Result<GeneratedContent, LlmError>,
     pending: PendingAssistant,
@@ -226,14 +233,15 @@ async fn finish_generation(
         Ok(generated) => match lease.begin_finalizing() {
             Ok(true) => {
                 let source = SystemIdentityTimeSource;
+                let token_usage = generated.usage;
                 match persistence
                     .append_completed_assistant(NewNode {
                         id: source.new_id(),
                         parent_id: Some(pending.parent_id),
-                        conversation_id: pending.conversation_id,
+                        conversation_id: pending.conversation_id.clone(),
                         role: Role::Assistant,
                         content: generated.content,
-                        model: Some(pending.model),
+                        model: Some(pending.model.clone()),
                         created_at: source.now_millis(),
                         metadata: generated
                             .thinking
@@ -241,7 +249,19 @@ async fn finish_generation(
                     })
                     .await
                 {
-                    Ok(node) => GenerationOutcome::Completed(node),
+                    Ok(node) => {
+                        usage
+                            .record_best_effort(
+                                Some(&pending.conversation_id),
+                                Some(&node.id),
+                                UsageSource::Chat,
+                                &pending.provider_id,
+                                &pending.model,
+                                token_usage,
+                            )
+                            .await;
+                        GenerationOutcome::Completed(node)
+                    }
                     Err(error) => GenerationOutcome::Failed {
                         stage: GenerationStage::Persistence,
                         error: error.into(),
@@ -310,12 +330,14 @@ pub(crate) async fn prepare_generation(
         conversation_id,
         active_node_id,
         model,
+        provider_id: provider.id,
         endpoint,
         prompt,
         secret,
         protocol: provider.protocol,
         client,
         persistence,
+        usage: UsageService::new(pool),
         lease,
     })
 }
@@ -334,9 +356,10 @@ mod tests {
         },
         error::{CommandError, CommandErrorCode},
         infra::database::MIGRATION_CATALOG,
-        llm::{LlmError, MessageRole, Protocol},
+        llm::{LlmError, MessageRole, Protocol, TokenUsage},
         providers::{NativeCredentialStore, ProviderService},
         settings::SettingsService,
+        usage::UsageService,
     };
 
     use super::{
@@ -395,6 +418,7 @@ mod tests {
         PendingAssistant {
             parent_id: "user".to_owned(),
             conversation_id: "conversation".to_owned(),
+            provider_id: "provider".to_owned(),
             model: "model".to_owned(),
         }
     }
@@ -403,7 +427,12 @@ mod tests {
         GeneratedContent {
             content: content.to_owned(),
             thinking: None,
+            usage: None,
         }
+    }
+
+    fn usage_service(pool: sqlx::SqlitePool) -> UsageService {
+        UsageService::new(pool)
     }
 
     async fn insert_provider(pool: &sqlx::SqlitePool, id: &str, protocol: Protocol, model: &str) {
@@ -438,6 +467,7 @@ mod tests {
                 .unwrap();
             let outcome = finish_generation(
                 &persistence,
+                &usage_service(pool.clone()),
                 &lease,
                 Ok(generated("persisted answer")),
                 pending(),
@@ -458,17 +488,19 @@ mod tests {
     #[test]
     fn thinking_is_persisted_only_when_the_provider_emits_it() {
         test_runtime().block_on(async {
-            let (_, persistence) = seeded_persistence().await;
+            let (pool, persistence) = seeded_persistence().await;
             let runtime = GenerationRuntime::default();
             let lease = runtime
                 .reserve("conversation".to_owned(), GENERATION_A.to_owned())
                 .unwrap();
             let outcome = finish_generation(
                 &persistence,
+                &usage_service(pool.clone()),
                 &lease,
                 Ok(GeneratedContent {
                     content: "answer".to_owned(),
                     thinking: Some("reasoning trace".to_owned()),
+                    usage: None,
                 }),
                 pending(),
             )
@@ -477,6 +509,105 @@ mod tests {
                 panic!("completed provider result must persist");
             };
             assert_eq!(node.metadata, json!({ "thinking": "reasoning trace" }));
+        });
+    }
+
+    #[test]
+    fn usage_is_recorded_after_successful_finalization() {
+        test_runtime().block_on(async {
+            let (pool, persistence) = seeded_persistence().await;
+            let runtime = GenerationRuntime::default();
+            let lease = runtime
+                .reserve("conversation".to_owned(), GENERATION_A.to_owned())
+                .unwrap();
+            let outcome = finish_generation(
+                &persistence,
+                &usage_service(pool.clone()),
+                &lease,
+                Ok(GeneratedContent {
+                    content: "answer".to_owned(),
+                    thinking: None,
+                    usage: Some(TokenUsage {
+                        input_tokens: 11,
+                        output_tokens: 7,
+                        total_tokens: Some(18),
+                    }),
+                }),
+                pending(),
+            )
+            .await;
+            let GenerationOutcome::Completed(node) = outcome else {
+                panic!("completed provider result must persist");
+            };
+            let row: (String, String, i64, i64, i64) = sqlx::query_as(
+                "SELECT source, node_id, input_tokens, output_tokens, total_tokens                  FROM usage_records",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+            assert_eq!(row.0, "chat");
+            assert_eq!(row.1, node.id);
+            assert_eq!(row.2, 11);
+            assert_eq!(row.3, 7);
+            assert_eq!(row.4, 18);
+        });
+    }
+
+    #[test]
+    fn missing_usage_does_not_insert_a_record() {
+        test_runtime().block_on(async {
+            let (pool, persistence) = seeded_persistence().await;
+            let runtime = GenerationRuntime::default();
+            let lease = runtime
+                .reserve("conversation".to_owned(), GENERATION_A.to_owned())
+                .unwrap();
+            let outcome = finish_generation(
+                &persistence,
+                &usage_service(pool.clone()),
+                &lease,
+                Ok(generated("answer")),
+                pending(),
+            )
+            .await;
+            assert!(matches!(outcome, GenerationOutcome::Completed(_)));
+            let count: i64 = sqlx::query_scalar("SELECT count(*) FROM usage_records")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+            assert_eq!(count, 0);
+        });
+    }
+
+    #[test]
+    fn usage_persist_failure_does_not_block_generation() {
+        test_runtime().block_on(async {
+            let (pool, persistence) = seeded_persistence().await;
+            sqlx::query("DROP TABLE usage_records")
+                .execute(&pool)
+                .await
+                .unwrap();
+            let runtime = GenerationRuntime::default();
+            let lease = runtime
+                .reserve("conversation".to_owned(), GENERATION_A.to_owned())
+                .unwrap();
+            let outcome = finish_generation(
+                &persistence,
+                &usage_service(pool.clone()),
+                &lease,
+                Ok(GeneratedContent {
+                    content: "answer".to_owned(),
+                    thinking: None,
+                    usage: Some(TokenUsage {
+                        input_tokens: 3,
+                        output_tokens: 2,
+                        total_tokens: Some(5),
+                    }),
+                }),
+                pending(),
+            )
+            .await;
+            assert!(matches!(outcome, GenerationOutcome::Completed(_)));
+            assert_eq!(assistant_count(&pool).await, 1);
         });
     }
 
@@ -658,9 +789,11 @@ mod tests {
             let lease = runtime
                 .reserve("conversation".to_owned(), GENERATION_A.to_owned())
                 .unwrap();
+            let usage = usage_service(pool.clone());
             let worker = tokio::spawn(async move {
                 let outcome = finish_generation(
                     &persistence,
+                    &usage,
                     &lease,
                     Ok(generated("persist despite late cancel")),
                     pending(),
@@ -709,6 +842,7 @@ mod tests {
             assert!(matches!(
                 finish_generation(
                     &persistence,
+                    &usage_service(pool.clone()),
                     &lease,
                     Ok(generated("cancelled answer")),
                     pending(),
@@ -722,7 +856,14 @@ mod tests {
                 .reserve("conversation".to_owned(), GENERATION_B.to_owned())
                 .unwrap();
             assert!(matches!(
-                finish_generation(&persistence, &lease, Err(LlmError::Cancelled), pending(),).await,
+                finish_generation(
+                    &persistence,
+                    &usage_service(pool.clone()),
+                    &lease,
+                    Err(LlmError::Cancelled),
+                    pending(),
+                )
+                .await,
                 GenerationOutcome::Cancelled
             ));
             assert_eq!(assistant_count(&pool).await, 0);
@@ -739,8 +880,14 @@ mod tests {
                 .reserve("conversation".to_owned(), GENERATION_A.to_owned())
                 .unwrap();
             assert!(matches!(
-                finish_generation(&persistence, &lease, Err(LlmError::Unavailable), pending(),)
-                    .await,
+                finish_generation(
+                    &persistence,
+                    &usage_service(pool.clone()),
+                    &lease,
+                    Err(LlmError::Unavailable),
+                    pending(),
+                )
+                .await,
                 GenerationOutcome::Failed {
                     stage: super::GenerationStage::Generation,
                     ..
@@ -766,7 +913,14 @@ mod tests {
                 .reserve("conversation".to_owned(), GENERATION_A.to_owned())
                 .unwrap();
             assert!(matches!(
-                finish_generation(&persistence, &lease, Ok(generated("late")), pending()).await,
+                finish_generation(
+                    &persistence,
+                    &usage_service(pool.clone()),
+                    &lease,
+                    Ok(generated("late")),
+                    pending()
+                )
+                .await,
                 GenerationOutcome::Failed {
                     stage: super::GenerationStage::Persistence,
                     ..

@@ -9,13 +9,18 @@ use serde::{Deserialize, Serialize};
 use crate::llm::{
     client::{map_status, map_transport_error, OpenAiCompatibleClient, MAX_RESPONSE_BYTES},
     ChatPrompt, GeneratedContent, LlmError, ReasoningEffort, StreamingRequest, TitlePrompt,
-    ValidatedEndpoint,
+    TokenUsage, ValidatedEndpoint,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ChatMessage {
     role: &'static str,
     content: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+struct StreamOptions {
+    include_usage: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -27,6 +32,8 @@ pub struct ChatCompletionRequest {
     reasoning_effort: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     max_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stream_options: Option<StreamOptions>,
 }
 
 pub fn build_request(prompt: &ChatPrompt) -> ChatCompletionRequest {
@@ -43,6 +50,9 @@ pub fn build_request(prompt: &ChatPrompt) -> ChatCompletionRequest {
         stream: true,
         reasoning_effort: prompt.reasoning_effort.map(ReasoningEffort::as_str),
         max_tokens: None,
+        stream_options: Some(StreamOptions {
+            include_usage: true,
+        }),
     }
 }
 
@@ -75,6 +85,9 @@ fn build_title_request(
         // body; 60 could starve the body to empty on those models.
         reasoning_effort: Some(ReasoningEffort::Low.as_str()),
         max_tokens: Some(256),
+        stream_options: Some(StreamOptions {
+            include_usage: true,
+        }),
     })
 }
 
@@ -130,11 +143,10 @@ impl OpenAiCompatibleClient {
         secret: Option<&secrecy::SecretString>,
         cancellation: &tokio_util::sync::CancellationToken,
         prompt: &TitlePrompt,
-    ) -> Result<String, LlmError> {
+    ) -> Result<GeneratedContent, LlmError> {
         let body = build_title_request(model, prompt)?;
         self.stream_chat_completion(endpoint, secret, cancellation, body, |_| Ok(()), |_| Ok(()))
             .await
-            .map(|generated| generated.content)
     }
 
     async fn stream_chat_completion<F, T>(
@@ -142,99 +154,166 @@ impl OpenAiCompatibleClient {
         endpoint: &ValidatedEndpoint,
         secret: Option<&secrecy::SecretString>,
         cancellation: &tokio_util::sync::CancellationToken,
-        body: ChatCompletionRequest,
-        mut on_delta: F,
-        mut on_thinking: T,
+        mut body: ChatCompletionRequest,
+        on_delta: F,
+        on_thinking: T,
     ) -> Result<GeneratedContent, LlmError>
     where
         F: FnMut(&str) -> Result<(), LlmError>,
         T: FnMut(&str) -> Result<(), LlmError>,
     {
+        let include_stream_options = body.stream_options.is_some();
+        let response = self
+            .send_chat_completion(endpoint, secret, cancellation, &body)
+            .await?;
+        let response = if !response.status().is_success() {
+            let status = response.status();
+            let headers = response.headers().clone();
+            if include_stream_options && status.as_u16() == 400 {
+                let body_text = response.text().await.unwrap_or_default();
+                if body_text.to_ascii_lowercase().contains("stream_options") {
+                    body.stream_options = None;
+                    let retried = self
+                        .send_chat_completion(endpoint, secret, cancellation, &body)
+                        .await?;
+                    if !retried.status().is_success() {
+                        return Err(map_status(retried.status(), retried.headers()));
+                    }
+                    retried
+                } else {
+                    return Err(map_status(status, &headers));
+                }
+            } else {
+                return Err(map_status(status, &headers));
+            }
+        } else {
+            response
+        };
+
+        consume_chat_completion_sse(response, cancellation, on_delta, on_thinking).await
+    }
+
+    async fn send_chat_completion(
+        &self,
+        endpoint: &ValidatedEndpoint,
+        secret: Option<&secrecy::SecretString>,
+        cancellation: &tokio_util::sync::CancellationToken,
+        body: &ChatCompletionRequest,
+    ) -> Result<reqwest::Response, LlmError> {
         let mut builder = self
             .http_client()
             .post(endpoint.chat_completions_url().clone())
-            .json(&body);
+            .json(body);
         if let Some(secret) = secret {
             builder = builder.bearer_auth(secret.expose_secret());
         }
+        match select(cancellation.cancelled().boxed(), builder.send().boxed()).await {
+            Either::Left(_) => Err(LlmError::Cancelled),
+            Either::Right((response, _)) => response.map_err(map_transport_error),
+        }
+    }
+}
 
-        let response = match select(cancellation.cancelled().boxed(), builder.send().boxed()).await
-        {
+async fn consume_chat_completion_sse<F, T>(
+    response: reqwest::Response,
+    cancellation: &tokio_util::sync::CancellationToken,
+    mut on_delta: F,
+    mut on_thinking: T,
+) -> Result<GeneratedContent, LlmError>
+where
+    F: FnMut(&str) -> Result<(), LlmError>,
+    T: FnMut(&str) -> Result<(), LlmError>,
+{
+    let events = response.bytes_stream().eventsource();
+    pin_mut!(events);
+    let mut content = String::new();
+    let mut thinking = String::new();
+    let mut usage = None;
+    let mut finished = false;
+    let mut done = false;
+    loop {
+        let next = match select(cancellation.cancelled().boxed(), events.next().boxed()).await {
             Either::Left(_) => return Err(LlmError::Cancelled),
-            Either::Right((response, _)) => response.map_err(map_transport_error)?,
+            Either::Right((event, _)) => event,
         };
-        if !response.status().is_success() {
-            return Err(map_status(response.status(), response.headers()));
+        let Some(event) = next else { break };
+        let event = event.map_err(|_| LlmError::Protocol)?;
+        if event.data == "[DONE]" {
+            done = true;
+            break;
         }
-
-        let events = response.bytes_stream().eventsource();
-        pin_mut!(events);
-        let mut content = String::new();
-        let mut thinking = String::new();
-        let mut finished = false;
-        let mut done = false;
-        loop {
-            let next = match select(cancellation.cancelled().boxed(), events.next().boxed()).await {
-                Either::Left(_) => return Err(LlmError::Cancelled),
-                Either::Right((event, _)) => event,
-            };
-            let Some(event) = next else { break };
-            let event = event.map_err(|_| LlmError::Protocol)?;
-            if event.data == "[DONE]" {
-                done = true;
-                break;
-            }
-            if finished {
-                return Err(LlmError::Protocol);
-            }
-            let chunk: StreamChunk =
-                serde_json::from_str(&event.data).map_err(|_| LlmError::Protocol)?;
-            if chunk.error.is_some() || chunk.choices.len() != 1 {
-                return Err(LlmError::Protocol);
-            }
-            let choice = &chunk.choices[0];
-            if choice.index != 0 {
-                return Err(LlmError::Protocol);
-            }
-            if let Some(delta) = choice.delta.content.as_deref() {
-                if content.len().saturating_add(delta.len()) > MAX_RESPONSE_BYTES {
-                    return Err(LlmError::Protocol);
-                }
-                if !delta.is_empty() {
-                    on_delta(delta)?;
-                    content.push_str(delta);
-                }
-            }
-            if let Some(delta) = choice
-                .delta
-                .reasoning_content
-                .as_deref()
-                .or(choice.delta.reasoning.as_deref())
-            {
-                if thinking.len().saturating_add(delta.len()) > MAX_RESPONSE_BYTES {
-                    return Err(LlmError::Protocol);
-                }
-                if !delta.is_empty() {
-                    on_thinking(delta)?;
-                    thinking.push_str(delta);
-                }
-            }
-            if let Some(reason) = choice.finish_reason.as_deref() {
-                if reason != "stop" {
-                    return Err(LlmError::Protocol);
-                }
-                finished = true;
-            }
-        }
-
-        if !done || !finished || content.trim().is_empty() {
+        let chunk: StreamChunk =
+            serde_json::from_str(&event.data).map_err(|_| LlmError::Protocol)?;
+        if chunk.error.is_some() {
             return Err(LlmError::Protocol);
         }
-        Ok(GeneratedContent {
-            content,
-            thinking: (!thinking.is_empty()).then_some(thinking),
-        })
+        if let Some(reported) = chunk.usage.and_then(token_usage_from_openai) {
+            usage = Some(reported);
+        }
+        if chunk.choices.is_empty() {
+            continue;
+        }
+        if finished {
+            return Err(LlmError::Protocol);
+        }
+        if chunk.choices.len() != 1 {
+            return Err(LlmError::Protocol);
+        }
+        let choice = &chunk.choices[0];
+        if choice.index != 0 {
+            return Err(LlmError::Protocol);
+        }
+        if let Some(delta) = choice.delta.content.as_deref() {
+            if content.len().saturating_add(delta.len()) > MAX_RESPONSE_BYTES {
+                return Err(LlmError::Protocol);
+            }
+            if !delta.is_empty() {
+                on_delta(delta)?;
+                content.push_str(delta);
+            }
+        }
+        if let Some(delta) = choice
+            .delta
+            .reasoning_content
+            .as_deref()
+            .or(choice.delta.reasoning.as_deref())
+        {
+            if thinking.len().saturating_add(delta.len()) > MAX_RESPONSE_BYTES {
+                return Err(LlmError::Protocol);
+            }
+            if !delta.is_empty() {
+                on_thinking(delta)?;
+                thinking.push_str(delta);
+            }
+        }
+        if let Some(reason) = choice.finish_reason.as_deref() {
+            if reason != "stop" {
+                return Err(LlmError::Protocol);
+            }
+            finished = true;
+        }
     }
+
+    if !done || !finished || content.trim().is_empty() {
+        return Err(LlmError::Protocol);
+    }
+    Ok(GeneratedContent {
+        content,
+        thinking: (!thinking.is_empty()).then_some(thinking),
+        usage,
+    })
+}
+
+fn token_usage_from_openai(usage: OpenAiUsage) -> Option<TokenUsage> {
+    let input_tokens = usage.prompt_tokens?;
+    let output_tokens = usage.completion_tokens?;
+    Some(TokenUsage {
+        input_tokens,
+        output_tokens,
+        total_tokens: usage
+            .total_tokens
+            .or(Some(input_tokens.saturating_add(output_tokens))),
+    })
 }
 
 #[derive(Debug, Deserialize)]
@@ -242,7 +321,19 @@ struct StreamChunk {
     #[serde(default)]
     choices: Vec<StreamChoice>,
     #[serde(default)]
+    usage: Option<OpenAiUsage>,
+    #[serde(default)]
     error: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenAiUsage {
+    #[serde(default)]
+    prompt_tokens: Option<u64>,
+    #[serde(default)]
+    completion_tokens: Option<u64>,
+    #[serde(default)]
+    total_tokens: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -307,7 +398,8 @@ mod tests {
                     {"role": "assistant", "content": "shared"},
                     {"role": "user", "content": "SELECTED_SENTINEL"}
                 ],
-                "stream": true
+                "stream": true,
+                "stream_options": { "include_usage": true }
             })
         );
         assert!(!request.to_string().contains("SIBLING_SENTINEL"));
@@ -323,6 +415,7 @@ mod tests {
             serde_json::to_value(build_title_request("fixture-model", &prompt).unwrap()).unwrap();
         assert_eq!(request["max_tokens"], 256);
         assert_eq!(request["reasoning_effort"], "low");
+        assert_eq!(request["stream_options"]["include_usage"], true);
         assert_eq!(request["messages"].as_array().map(Vec::len), Some(2));
         assert_eq!(request["messages"][0]["role"], "system");
         assert!(request["messages"][0]["content"]

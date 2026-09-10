@@ -4,7 +4,7 @@ use serde_json::{json, Value};
 use crate::{
     conversations::PersistenceError, exports::ExportError, generation::GenerationError,
     infra::database::DatabaseError, llm::LlmError, providers::ProviderError,
-    settings::SettingsError,
+    settings::SettingsError, usage::UsageError,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -182,6 +182,20 @@ impl From<DatabaseError> for CommandError {
                 retryable: true,
                 details: None,
             },
+        }
+    }
+}
+
+impl From<UsageError> for CommandError {
+    fn from(error: UsageError) -> Self {
+        match error {
+            UsageError::Storage(error) if is_transient_storage_error(&error) => Self {
+                code: CommandErrorCode::DatabaseUnavailable,
+                message: "对话数据库当前不可用。".to_owned(),
+                retryable: true,
+                details: None,
+            },
+            UsageError::Storage(_) => Self::internal(),
         }
     }
 }

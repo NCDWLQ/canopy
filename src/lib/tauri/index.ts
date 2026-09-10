@@ -41,3 +41,15 @@ export type {
   UiError,
   UiErrorCode,
 } from "./types"
+
+export {
+  USAGE_COMMANDS,
+  createUsageClient,
+  type UsageClient,
+  type UsageSummaryView,
+  type UsageByDayView,
+  type UsageByModelView,
+  type UsageBySourceView,
+  type UsageSourceView,
+  type UsageTotalsView,
+} from "./usage-client"

@@ -2,6 +2,7 @@ import * as React from "react"
 import {
   Archive,
   Bot,
+  ChartColumn,
   MessageSquare,
   Palette,
   Settings,
@@ -15,6 +16,7 @@ import {
 import { AppearanceSettingsPanel } from "./AppearanceSettingsPanel"
 import { ConversationSettingsPanel } from "./ConversationSettingsPanel"
 import { GeneralSettingsPanel } from "./GeneralSettingsPanel"
+import { UsagePanel } from "./UsagePanel"
 import { ProviderSettingsPanel } from "@/features/providers/components/ProviderSettingsPanel"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
@@ -26,11 +28,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import type { ProviderClient } from "@/lib/tauri"
+import type { ProviderClient, UsageClient } from "@/lib/tauri"
 import { useTranslation } from "@/lib/i18n"
 
 type SettingsDialogBaseProps = {
   client: ProviderClient
+  usageClient?: UsageClient
   initialCategory?: SettingsCategory
   archivedConversations: ArchivedConversationsPanelProps
 }
@@ -42,7 +45,7 @@ export type SettingsDialogProps = SettingsDialogBaseProps &
   )
 
 export type SettingsCategory =
-  "general" | "appearance" | "providers" | "conversation" | "archived"
+  "general" | "appearance" | "providers" | "conversation" | "usage" | "archived"
 
 type PendingDiscard =
   { kind: "switch"; category: SettingsCategory } | { kind: "close" }
@@ -74,7 +77,12 @@ function SettingsNavButton({
 }
 
 export function SettingsDialog(props: SettingsDialogProps) {
-  const { client, initialCategory = "general", archivedConversations } = props
+  const {
+    client,
+    usageClient,
+    initialCategory = "general",
+    archivedConversations,
+  } = props
   const { t } = useTranslation()
   const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false)
   const [category, setCategory] =
@@ -184,6 +192,12 @@ export function SettingsDialog(props: SettingsDialogProps) {
               onClick={() => selectCategory("conversation")}
             />
             <SettingsNavButton
+              active={category === "usage"}
+              label={t("settings.dialog.usageCategory")}
+              icon={ChartColumn}
+              onClick={() => selectCategory("usage")}
+            />
+            <SettingsNavButton
               active={category === "archived"}
               label={t("settings.dialog.archivedCategory")}
               icon={Archive}
@@ -201,6 +215,8 @@ export function SettingsDialog(props: SettingsDialogProps) {
                   client={client}
                   onDirtyChange={setPanelDirty}
                 />
+              ) : category === "usage" ? (
+                <UsagePanel client={usageClient} />
               ) : category === "archived" ? (
                 <ArchivedConversationsPanel {...archivedConversations} />
               ) : (
