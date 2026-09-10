@@ -40,7 +40,7 @@ src/
 │   │   ├── store/                    # Zustand state, actions, selectors
 │   │   └── types/                    # frontend domain projections
 │   ├── settings/
-│   │   └── components/               # SettingsDialog shell and global preference panels
+│   │   └── components/               # SettingsDialog shell, preference panels, UsagePanel / UsageHeatmap
 │   └── providers/
 │       └── components/               # provider list/editor panels and model selection UI
 ├── hooks/                            # only hooks shared across features
@@ -90,6 +90,9 @@ only cross-feature IPC contract fixtures may live under a shared test path.
   boundary and imports `cn` from `@/lib/utils`.
 - `src/App.test.tsx` demonstrates accessible Testing Library queries instead
   of class-name or snapshot assertions.
+- `src/features/settings/components/UsagePanel.tsx` is the Settings `usage`
+  category: summary cards, heatmap, per-model/per-day tables, refresh, and
+  clear-with-confirm. It talks to `src/lib/tauri/usage-client.ts` only.
 - `src/main.tsx` demonstrates a fail-fast application root check and a minimal
   entry point.
 - `.trellis/spec/frontend/component-guidelines.md` defines the intended

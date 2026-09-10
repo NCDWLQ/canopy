@@ -47,8 +47,13 @@ SQL ownership by table family:
 - typed `app_settings` keys — `settings::repository` (`language`, `theme`,
   `theme_color`, `auto_generate_title`, `title_model_binding`,
   `default_system_prompt`).
+- `usage_records` — `usage::repository`. No foreign keys by design: deleting a
+  conversation must not erase account-level usage facts. Inserts happen only
+  when adapters report `TokenUsage`; persist failures are logged and must not
+  fail generation finalization.
 - `generation` does not own SQL. It composes provider validation and the
-  conversation persistence-only setter in one service transaction.
+  conversation persistence-only setter in one service transaction, then asks
+  `usage` to insert a record after a successful stream.
 
 - Register and preload one application database through the Tauri SQL plugin.
 - Resolve its `sqlx::SqlitePool` from the plugin's public `DbInstances` and
@@ -789,6 +794,100 @@ UPDATE nodes SET content = ?1 WHERE role = 'system';
 ```sql
 UPDATE conversations SET system_prompt = ?1 WHERE id = ?2;
 -- bind None to inherit; never UPDATE node history
+```
+
+## Scenario: Token usage records (migration 0009)
+
+### 1. Scope / Trigger
+
+Use this contract when changing `usage_records`, migration `0009_token_usage.sql`,
+`usage::{repository,service,commands}`, or the generation/title insert sites.
+Usage IPC is additive and lives in `usage/`; it is not part of the frozen
+provider command list.
+
+### 2. Signatures
+
+```text
+get_usage_summary({}) -> UsageSummary
+clear_usage_records({}) -> { cleared: true }
+
+UsageSummary {
+  totals: { input, output, total, records }
+  by_day: [{ day, input, output, total, records }]      -- local dates, last 371 days
+  by_model: [{ provider_id, model, input, output, total, records }]  -- total desc
+  by_source: [{ source, input, output, total, records }] -- chat | title
+}
+```
+
+```sql
+-- 0009_token_usage.sql
+CREATE TABLE usage_records (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  conversation_id TEXT,   -- nullable; no FK
+  node_id TEXT,           -- chat assistant node; NULL for title
+  source TEXT NOT NULL CHECK (source IN ('chat', 'title')),
+  provider_id TEXT NOT NULL,
+  model TEXT NOT NULL,
+  input_tokens INTEGER NOT NULL,
+  output_tokens INTEGER NOT NULL,
+  total_tokens INTEGER,   -- provider total, else input+output
+  created_at TEXT NOT NULL -- RFC3339 UTC
+);
+```
+
+### 3. Contracts
+
+- Insert only when `GeneratedContent.usage` is `Some`. Missing usage is not a
+  zero row.
+- `total_tokens` is the provider-reported total when present; otherwise
+  `input + output`.
+- Day buckets use SQLite `date(created_at, 'localtime')`. The summary window is
+  a fixed 371 days (`USAGE_SUMMARY_DAY_WINDOW`); the UI heatmap uses the full
+  window and the per-day table slices the last 30 local days.
+- No FKs to `conversations` / `nodes`: stats outlive conversation deletes.
+- Generation compose site: after the assistant node transaction succeeds,
+  `usage` insert errors are logged and ignored so finalization still returns
+  `completed`. Title jobs follow the same rule.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+|---|---|
+| Adapter reports usage | one `usage_records` row (`source=chat` or `title`) |
+| Adapter reports no usage | no row; generation succeeds |
+| `usage_records` insert fails | warn/log; generation/title still succeed |
+| `get_usage_summary` on empty table | zeros + empty arrays, not an error |
+| `clear_usage_records` | `{ cleared: true }` and subsequent summary is empty |
+
+### 5. Good / Base / Bad Cases
+
+- **Good**: OpenAI-compatible stream with `include_usage` writes `source=chat`
+  with `node_id` set; auto-title writes `source=title` with `node_id` NULL.
+- **Base**: missing `usage_records` before 0009 is created by the forward
+  migration; the released `v0.4.0` fixture upgrade suite must still pass.
+- **Bad**: blocking `finish_generation` on a usage insert error, or attaching
+  usage to `nodes.metadata` (immutable history trigger + title has no node).
+
+### 6. Tests Required
+
+- Adapter SSE fixtures: usage present, usage absent, OpenAI 400 mentioning
+  `stream_options` retries without the field.
+- Repository aggregation with explicit timestamps (local-day grouping).
+- `finish_generation`: record inserted / skipped / insert failure does not
+  fail the assistant persist (`generation/service.rs`).
+- Released fixture forward-upgrade through 0009
+  (`released_database_upgrade.rs`).
+- IPC contract fixture `contract-fixtures/usage-ipc.json` matches Rust
+  serialization and the Zod client.
+
+### 7. Wrong vs Correct
+
+```sql
+-- Wrong: FK would delete stats with the conversation
+FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+
+-- Correct: no FK; conversation_id is informational only
+conversation_id TEXT
 ```
 
 ## Common Mistakes

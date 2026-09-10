@@ -122,6 +122,18 @@ API key, authorization header, encrypted secret, or secret-derived verifier.
   the assistant transaction succeeds. Generation/provider failures use stage
   `generation`; archive, transaction, or readback failures use stage
   `persistence`; cancellation returns no assistant.
+- Token usage is optional side data, not part of the generation terminal DTO.
+  Adapters return `GeneratedContent.usage: Option<TokenUsage>`. OpenAI-compatible
+  requests set `stream_options.include_usage = true` on `ChatCompletionRequest`
+  (shared by chat and title). A 400 whose error text mentions `stream_options`
+  retries once without that field inside `stream_chat_completion`; other 400s
+  do not retry. Anthropic reads `message.usage.input_tokens` from
+  `message_start` and overwrites `output_tokens` from the last
+  `message_delta.usage` without changing the existing `stop_reason` Protocol
+  error path. Missing usage is `None`, never a synthetic zero. `generation`
+  inserts into `usage_records` after a successful persist; insert failure must
+  not change the generation terminal result. Usage IPC
+  (`get_usage_summary` / `clear_usage_records`) lives in `usage::commands`.
 
 ### 4. Validation & Error Matrix
 

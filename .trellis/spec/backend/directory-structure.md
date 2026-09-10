@@ -18,7 +18,8 @@ src-tauri/
 │   ├── 0005_multi_provider.sql
 │   ├── 0006_provider_models.sql
 │   ├── 0007_conversation_provider_binding_integrity.sql
-│   └── 0008_conversation_system_prompt.sql
+│   ├── 0008_conversation_system_prompt.sql
+│   └── 0009_token_usage.sql
 ├── src/
 │   ├── lib.rs                # Tauri builder, production command registry
 │   ├── main.rs               # desktop process entry point only
@@ -33,7 +34,7 @@ src-tauri/
 │   │   ├── service.rs
 │   │   └── commands.rs       # set_language / set_theme / set_auto_generate_title / set_default_system_prompt
 │   ├── llm/
-│   │   ├── domain.rs         # Protocol, ValidatedEndpoint, prompt types
+│   │   ├── domain.rs         # Protocol, ValidatedEndpoint, prompt types, TokenUsage
 │   │   ├── error.rs          # LlmError
 │   │   ├── client.rs         # hardened HTTP client
 │   │   ├── model_list.rs
@@ -62,6 +63,12 @@ src-tauri/
 │   │   ├── commands.rs       # generate / cancel / set_conversation_provider
 │   │   ├── title.rs          # auto-title; bypasses GenerationRuntime
 │   │   └── title_prompt.rs
+│   ├── usage/
+│   │   ├── domain.rs         # UsageSource, UsageSummary, RFC3339 helpers
+│   │   ├── error.rs          # UsageError
+│   │   ├── repository.rs     # usage_records insert / aggregate / clear
+│   │   ├── service.rs
+│   │   └── commands.rs       # get_usage_summary / clear_usage_records
 │   └── exports/
 │       ├── dto.rs
 │       ├── service.rs        # validation and bounded filesystem write
@@ -94,7 +101,8 @@ lib / Tauri composition
   ├─> settings ──────> infra
   ├─> llm ───────────> (reqwest/tokio only)
   ├─> providers ─────> settings + llm + infra
-  ├─> generation ────> conversations + providers + settings + llm + infra
+  ├─> generation ────> conversations + providers + settings + llm + usage + infra
+  ├─> usage ─────────> infra
   └─> exports ───────> filesystem
 
 error (IPC mapping) ─> errors from every command-facing module
@@ -107,6 +115,7 @@ Forbidden dependencies:
 - `settings -> providers | generation | conversations`
 - `llm -> providers | generation | conversations | Tauri | sqlx`
 - `infra ->` any product module
+- `usage -> generation | llm | conversations | providers` (generation composes usage; usage does not import generation)
 - non-command code importing another module's `commands` file
 
 Create a module only when its implementation lands; do not add empty directory
@@ -151,6 +160,9 @@ Cross-cutting type ownership:
 | `LanguagePreference` / `ThemePreference` / `TitleModelBinding` | `settings::domain` |
 | Identity/time source | `infra::identity` |
 | Managed pool / migration catalog | `infra::database` |
+| `TokenUsage` / `GeneratedContent.usage` | `llm::domain` |
+| `usage_records` SQL and aggregates | `usage::repository` |
+| `get_usage_summary` / `clear_usage_records` | `usage::commands` |
 
 ## Migrations and Tests
 
