@@ -1,0 +1,7 @@
+{"file": ".trellis/tasks/09-16-usage-time-range/research/current-usage-contract.md", "reason": "Verify implementation against the audited current-state baseline and task-specific invariants"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Verify request validation, fixture parity, and typed projections"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "Verify both locale dictionaries stay aligned"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verify behavioral UI regressions and accessible control coverage"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify deterministic boundary tests and warning-free Rust checks"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Verify the same range boundary reaches every aggregation and UI consumer"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Verify one shared interval predicate and no duplicated request-state logic"}

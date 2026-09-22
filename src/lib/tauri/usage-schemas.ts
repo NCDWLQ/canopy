@@ -2,6 +2,15 @@ import { z } from "zod"
 
 const tokenCountSchema = z.number().int().nonnegative()
 const usageSourceSchema = z.enum(["chat", "title"])
+export const usageRangeSchema = z.enum(["last_7_days", "last_30_days", "all"])
+const isoDaySchema = z.string().date()
+
+export const usageSummaryRequestSchema = z
+  .object({
+    range: usageRangeSchema.optional(),
+    through_day: isoDaySchema.optional(),
+  })
+  .strict()
 
 export const emptyUsageRequestSchema = z.object({}).strict()
 
@@ -59,6 +68,7 @@ export const clearUsageRecordsResultSchema = z
   .strict()
 
 export type UsageSummaryDto = z.infer<typeof usageSummaryDtoSchema>
+export type UsageSummaryRequestDto = z.infer<typeof usageSummaryRequestSchema>
 export type ClearUsageRecordsResultDto = z.infer<
   typeof clearUsageRecordsResultSchema
 >

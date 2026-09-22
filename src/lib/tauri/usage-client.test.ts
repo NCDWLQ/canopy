@@ -1,7 +1,10 @@
 import fixture from "../../../contract-fixtures/usage-ipc.json"
 
 import { USAGE_COMMANDS, createUsageClient } from "./usage-client"
-import { usageSummaryDtoSchema } from "./usage-schemas"
+import {
+  usageSummaryDtoSchema,
+  usageSummaryRequestSchema,
+} from "./usage-schemas"
 import { type InvokeTransport } from "./client"
 
 type RecordedCall = { command: string; args: Record<string, unknown> }
@@ -63,8 +66,19 @@ describe("usage Tauri contract", () => {
       args: { request: {} },
     })
 
-    await expect(client.clearUsageRecords()).resolves.toBeUndefined()
+    await client.getUsageSummary({
+      range: "last_30_days",
+      through_day: "2026-09-10",
+    })
     expect(transport.calls[1]).toEqual({
+      command: "get_usage_summary",
+      args: {
+        request: { range: "last_30_days", through_day: "2026-09-10" },
+      },
+    })
+
+    await expect(client.clearUsageRecords()).resolves.toBeUndefined()
+    expect(transport.calls[2]).toEqual({
       command: "clear_usage_records",
       args: { request: {} },
     })
@@ -95,5 +109,22 @@ describe("usage Tauri contract", () => {
     await expect(
       createUsageClient(transport).getUsageSummary(),
     ).rejects.toMatchObject({ code: "internal", retryable: false })
+  })
+
+  it("rejects invalid range and date options before invoking Tauri", async () => {
+    expect(usageSummaryRequestSchema.safeParse({ range: "week" }).success).toBe(
+      false,
+    )
+    expect(
+      usageSummaryRequestSchema.safeParse({ through_day: "2026-02-29" })
+        .success,
+    ).toBe(false)
+    const transport = recordingTransport({})
+    await expect(
+      createUsageClient(transport).getUsageSummary({
+        range: "week" as "all",
+      }),
+    ).rejects.toMatchObject({ code: "internal", retryable: false })
+    expect(transport.calls).toHaveLength(0)
   })
 })

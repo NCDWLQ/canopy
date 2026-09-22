@@ -2,7 +2,41 @@ use serde::{Deserialize, Serialize};
 
 use crate::llm::TokenUsage;
 
-pub const USAGE_SUMMARY_DAY_WINDOW: i64 = 371;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UsageRange {
+    #[serde(rename = "last_7_days")]
+    Last7Days,
+    #[serde(rename = "last_30_days")]
+    Last30Days,
+    All,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UsageInterval {
+    pub start_day: Option<String>,
+    pub through_day: String,
+}
+
+impl UsageInterval {
+    pub fn resolve(range: UsageRange, through_day: &str) -> Option<Self> {
+        let (year, month, day) = parse_iso_day(through_day)?;
+        let offset = match range {
+            UsageRange::Last7Days => -6,
+            UsageRange::Last30Days => -29,
+            UsageRange::All => 0,
+        };
+        let start_day = (offset != 0).then(|| format_iso_day(add_days(year, month, day, offset)));
+        Some(Self {
+            start_day,
+            through_day: through_day.to_owned(),
+        })
+    }
+}
+
+pub fn is_iso_day(value: &str) -> bool {
+    parse_iso_day(value).is_some()
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UsageSource {
@@ -148,9 +182,41 @@ fn civil_from_unix_days(days: i64) -> (i32, u32, u32) {
     (year as i32, month, day)
 }
 
+fn parse_iso_day(value: &str) -> Option<(i32, u32, u32)> {
+    let bytes = value.as_bytes();
+    if bytes.len() != 10 || bytes[4] != b'-' || bytes[7] != b'-' {
+        return None;
+    }
+    let year = value[0..4].parse().ok()?;
+    let month = value[5..7].parse().ok()?;
+    let day = value[8..10].parse().ok()?;
+    let parsed = (year, month, day);
+    (format_iso_day(civil_from_unix_days(unix_days_from_civil(year, month, day))) == value)
+        .then_some(parsed)
+}
+
+fn add_days(year: i32, month: u32, day: u32, offset: i64) -> (i32, u32, u32) {
+    civil_from_unix_days(unix_days_from_civil(year, month, day) + offset)
+}
+
+fn unix_days_from_civil(year: i32, month: u32, day: u32) -> i64 {
+    let year = i64::from(year) - i64::from(month <= 2);
+    let era = year.div_euclid(400);
+    let yoe = year - era * 400;
+    let month = i64::from(month);
+    let day = i64::from(day);
+    let doy = (153 * (month + if month > 2 { -3 } else { 9 }) + 2) / 5 + day - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe - 719_468
+}
+
+fn format_iso_day((year, month, day): (i32, u32, u32)) -> String {
+    format!("{year:04}-{month:02}-{day:02}")
+}
+
 #[cfg(test)]
 mod tests {
-    use super::rfc3339_utc_from_millis;
+    use super::{is_iso_day, rfc3339_utc_from_millis, UsageInterval, UsageRange};
 
     #[test]
     fn rfc3339_formats_unix_epoch() {
@@ -163,5 +229,30 @@ mod tests {
             rfc3339_utc_from_millis(1_704_067_200_123),
             "2024-01-01T00:00:00.123Z"
         );
+    }
+
+    #[test]
+    fn usage_intervals_are_inclusive_and_calendar_aware() {
+        assert_eq!(
+            UsageInterval::resolve(UsageRange::Last7Days, "2026-03-01")
+                .unwrap()
+                .start_day
+                .as_deref(),
+            Some("2026-02-23")
+        );
+        assert_eq!(
+            UsageInterval::resolve(UsageRange::Last30Days, "2024-03-01")
+                .unwrap()
+                .start_day
+                .as_deref(),
+            Some("2024-02-01")
+        );
+        assert!(UsageInterval::resolve(UsageRange::All, "2026-03-01")
+            .unwrap()
+            .start_day
+            .is_none());
+        assert!(is_iso_day("2024-02-29"));
+        assert!(!is_iso_day("2026-02-29"));
+        assert!(!is_iso_day("2026-2-1"));
     }
 }

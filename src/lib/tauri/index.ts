@@ -50,6 +50,8 @@ export {
   type UsageByDayView,
   type UsageByModelView,
   type UsageBySourceView,
+  type GetUsageSummaryOptions,
+  type UsageRange,
   type UsageSourceView,
   type UsageTotalsView,
 } from "./usage-client"

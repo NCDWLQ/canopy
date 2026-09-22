@@ -1,11 +1,16 @@
 use sqlx::{SqliteConnection, SqlitePool};
 
 use super::{
-    domain::USAGE_SUMMARY_DAY_WINDOW, NewUsageRecord, UsageByDay, UsageByModel, UsageBySource,
-    UsageError, UsageSummary, UsageTotals,
+    domain::UsageInterval, NewUsageRecord, UsageByDay, UsageByModel, UsageBySource, UsageError,
+    UsageSummary, UsageTotals,
 };
 
 pub(crate) struct UsageRepository;
+
+// Keep every aggregate on the same inclusive local-calendar interval. Both
+// placeholders are bound in the same order for each query below.
+const USAGE_INTERVAL_PREDICATE: &str = "WHERE (?1 IS NULL OR date(created_at, 'localtime') >= ?1)
+               AND date(created_at, 'localtime') <= ?2";
 
 impl UsageRepository {
     pub(crate) async fn insert(
@@ -39,20 +44,32 @@ impl UsageRepository {
         Ok(())
     }
 
-    pub(crate) async fn summary(pool: &SqlitePool) -> Result<UsageSummary, UsageError> {
-        let totals = sqlx::query_as::<_, (i64, i64, i64, i64)>(
+    pub(crate) async fn local_day(pool: &SqlitePool) -> Result<String, UsageError> {
+        Ok(sqlx::query_scalar("SELECT date('now', 'localtime')")
+            .fetch_one(pool)
+            .await?)
+    }
+
+    pub(crate) async fn summary(
+        pool: &SqlitePool,
+        interval: &UsageInterval,
+    ) -> Result<UsageSummary, UsageError> {
+        let totals_query = format!(
             "SELECT
                 COALESCE(SUM(input_tokens), 0),
                 COALESCE(SUM(output_tokens), 0),
                 COALESCE(SUM(COALESCE(total_tokens, input_tokens + output_tokens)), 0),
                 COUNT(*)
-             FROM usage_records",
-        )
-        .fetch_one(pool)
-        .await?;
+             FROM usage_records
+             {USAGE_INTERVAL_PREDICATE}"
+        );
+        let totals = sqlx::query_as::<_, (i64, i64, i64, i64)>(&totals_query)
+            .bind(&interval.start_day)
+            .bind(&interval.through_day)
+            .fetch_one(pool)
+            .await?;
 
-        let day_window = format!("-{offset} days", offset = USAGE_SUMMARY_DAY_WINDOW - 1);
-        let by_day = sqlx::query_as::<_, (String, i64, i64, i64, i64)>(
+        let by_day_query = format!(
             "SELECT
                 date(created_at, 'localtime') AS day,
                 SUM(input_tokens),
@@ -60,15 +77,17 @@ impl UsageRepository {
                 SUM(COALESCE(total_tokens, input_tokens + output_tokens)),
                 COUNT(*)
              FROM usage_records
-             WHERE date(created_at, 'localtime') >= date('now', 'localtime', ?1)
+             {USAGE_INTERVAL_PREDICATE}
              GROUP BY day
-             ORDER BY day ASC",
-        )
-        .bind(&day_window)
-        .fetch_all(pool)
-        .await?;
+             ORDER BY day ASC"
+        );
+        let by_day = sqlx::query_as::<_, (String, i64, i64, i64, i64)>(&by_day_query)
+            .bind(&interval.start_day)
+            .bind(&interval.through_day)
+            .fetch_all(pool)
+            .await?;
 
-        let by_model = sqlx::query_as::<_, (String, String, i64, i64, i64, i64)>(
+        let by_model_query = format!(
             "SELECT
                 provider_id,
                 model,
@@ -77,13 +96,17 @@ impl UsageRepository {
                 SUM(COALESCE(total_tokens, input_tokens + output_tokens)) AS total,
                 COUNT(*)
              FROM usage_records
+             {USAGE_INTERVAL_PREDICATE}
              GROUP BY provider_id, model
-             ORDER BY total DESC, provider_id ASC, model ASC",
-        )
-        .fetch_all(pool)
-        .await?;
+             ORDER BY total DESC, provider_id ASC, model ASC"
+        );
+        let by_model = sqlx::query_as::<_, (String, String, i64, i64, i64, i64)>(&by_model_query)
+            .bind(&interval.start_day)
+            .bind(&interval.through_day)
+            .fetch_all(pool)
+            .await?;
 
-        let by_source = sqlx::query_as::<_, (String, i64, i64, i64, i64)>(
+        let by_source_query = format!(
             "SELECT
                 source,
                 SUM(input_tokens),
@@ -91,11 +114,15 @@ impl UsageRepository {
                 SUM(COALESCE(total_tokens, input_tokens + output_tokens)),
                 COUNT(*)
              FROM usage_records
+             {USAGE_INTERVAL_PREDICATE}
              GROUP BY source
-             ORDER BY source ASC",
-        )
-        .fetch_all(pool)
-        .await?;
+             ORDER BY source ASC"
+        );
+        let by_source = sqlx::query_as::<_, (String, i64, i64, i64, i64)>(&by_source_query)
+            .bind(&interval.start_day)
+            .bind(&interval.through_day)
+            .fetch_all(pool)
+            .await?;
 
         Ok(UsageSummary {
             totals: UsageTotals {
@@ -148,7 +175,7 @@ mod tests {
     use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 
     use crate::infra::database::MIGRATION_CATALOG;
-    use crate::usage::{NewUsageRecord, UsageService, UsageSource};
+    use crate::usage::{NewUsageRecord, UsageRange, UsageService, UsageSource};
 
     fn test_runtime() -> tokio::runtime::Runtime {
         tokio::runtime::Builder::new_current_thread()
@@ -191,6 +218,14 @@ mod tests {
             total_tokens: input + output,
             created_at: created_at.to_owned(),
         }
+    }
+
+    async fn local_day(pool: &sqlx::SqlitePool, timestamp: &str) -> String {
+        sqlx::query_scalar("SELECT date(?1, 'localtime')")
+            .bind(timestamp)
+            .fetch_one(pool)
+            .await
+            .unwrap()
     }
 
     #[test]
@@ -253,18 +288,25 @@ mod tests {
                     .fetch_one(&pool)
                     .await
                     .unwrap();
+            let expected_old_day: String =
+                sqlx::query_scalar("SELECT date('2020-01-01T12:00:00.000Z', 'localtime')")
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
 
-            let summary = service.summary().await.unwrap();
+            let summary = service
+                .summary(UsageRange::All, Some(&expected_day_b))
+                .await
+                .unwrap();
             assert_eq!(summary.totals.input, 134);
             assert_eq!(summary.totals.output, 64);
             assert_eq!(summary.totals.total, 198);
             assert_eq!(summary.totals.records, 4);
 
-            let recent_days: Vec<&str> =
-                summary.by_day.iter().map(|row| row.day.as_str()).collect();
-            assert!(recent_days.contains(&expected_day_a.as_str()));
-            assert!(recent_days.contains(&expected_day_b.as_str()));
-            assert!(!recent_days.contains(&"2020-01-01"));
+            let days: Vec<&str> = summary.by_day.iter().map(|row| row.day.as_str()).collect();
+            assert!(days.contains(&expected_day_a.as_str()));
+            assert!(days.contains(&expected_day_b.as_str()));
+            assert!(days.contains(&expected_old_day.as_str()));
 
             let day_a = summary
                 .by_day
@@ -317,11 +359,139 @@ mod tests {
             assert_eq!(title.records, 1);
 
             service.clear().await.unwrap();
-            let emptied = service.summary().await.unwrap();
+            let emptied = service
+                .summary(UsageRange::All, Some(&expected_day_b))
+                .await
+                .unwrap();
             assert_eq!(emptied.totals.records, 0);
             assert!(emptied.by_day.is_empty());
             assert!(emptied.by_model.is_empty());
             assert!(emptied.by_source.is_empty());
+        });
+    }
+
+    #[test]
+    fn summary_applies_one_inclusive_interval_to_every_aggregate() {
+        test_runtime().block_on(async {
+            let pool = migrated_pool().await;
+            let service = UsageService::new(pool.clone());
+            for (source, provider, model, input, output, day) in [
+                (UsageSource::Chat, "openai", "gpt", 1, 1, "2026-09-03"),
+                (
+                    UsageSource::Title,
+                    "anthropic",
+                    "claude",
+                    2,
+                    2,
+                    "2026-09-04",
+                ),
+                (UsageSource::Chat, "openai", "gpt", 3, 3, "2026-09-10"),
+                (
+                    UsageSource::Title,
+                    "anthropic",
+                    "claude",
+                    4,
+                    4,
+                    "2026-09-11",
+                ),
+                (UsageSource::Chat, "openai", "gpt", 5, 5, "2020-01-01"),
+                (
+                    UsageSource::Title,
+                    "anthropic",
+                    "claude",
+                    6,
+                    6,
+                    "2026-08-11",
+                ),
+                (UsageSource::Chat, "openai", "gpt", 7, 7, "2026-08-12"),
+            ] {
+                service
+                    .insert(record(
+                        source,
+                        provider,
+                        model,
+                        input,
+                        output,
+                        &format!("{day}T00:00:00.000Z"),
+                    ))
+                    .await
+                    .unwrap();
+            }
+
+            let day_before_seven = local_day(&pool, "2026-09-03T00:00:00.000Z").await;
+            let seven_start = local_day(&pool, "2026-09-04T00:00:00.000Z").await;
+            let through_day = local_day(&pool, "2026-09-10T00:00:00.000Z").await;
+            let future_day = local_day(&pool, "2026-09-11T00:00:00.000Z").await;
+            let old_day = local_day(&pool, "2020-01-01T00:00:00.000Z").await;
+            let day_before_thirty = local_day(&pool, "2026-08-11T00:00:00.000Z").await;
+            let thirty_start = local_day(&pool, "2026-08-12T00:00:00.000Z").await;
+
+            let seven = service
+                .summary(UsageRange::Last7Days, Some(&through_day))
+                .await
+                .unwrap();
+            assert_eq!(seven.totals.total, 10);
+            assert_eq!(seven.totals.records, 2);
+            assert_eq!(
+                seven
+                    .by_day
+                    .iter()
+                    .map(|row| row.day.as_str())
+                    .collect::<Vec<_>>(),
+                [seven_start.as_str(), through_day.as_str()]
+            );
+            assert_eq!(seven.by_model.len(), 2);
+            assert_eq!(seven.by_source.len(), 2);
+            assert_eq!(
+                seven.by_model.iter().map(|row| row.total).sum::<i64>(),
+                seven.totals.total
+            );
+            assert_eq!(
+                seven.by_source.iter().map(|row| row.total).sum::<i64>(),
+                seven.totals.total
+            );
+
+            let thirty = service
+                .summary(UsageRange::Last30Days, Some(&through_day))
+                .await
+                .unwrap();
+            assert_eq!(thirty.totals.total, 26);
+            assert_eq!(thirty.totals.records, 4);
+            assert_eq!(
+                thirty
+                    .by_day
+                    .iter()
+                    .map(|row| row.day.as_str())
+                    .collect::<Vec<_>>(),
+                [
+                    thirty_start.as_str(),
+                    day_before_seven.as_str(),
+                    seven_start.as_str(),
+                    through_day.as_str()
+                ]
+            );
+            assert!(!thirty.by_day.iter().any(|row| row.day == day_before_thirty));
+            assert_eq!(
+                thirty.by_day.iter().map(|row| row.total).sum::<i64>(),
+                thirty.totals.total
+            );
+            assert_eq!(
+                thirty.by_model.iter().map(|row| row.total).sum::<i64>(),
+                thirty.totals.total
+            );
+            assert_eq!(
+                thirty.by_source.iter().map(|row| row.total).sum::<i64>(),
+                thirty.totals.total
+            );
+
+            let all = service
+                .summary(UsageRange::All, Some(&through_day))
+                .await
+                .unwrap();
+            assert_eq!(all.totals.total, 48);
+            assert_eq!(all.totals.records, 6);
+            assert!(all.by_day.iter().any(|row| row.day == old_day));
+            assert!(!all.by_day.iter().any(|row| row.day == future_day));
         });
     }
 }

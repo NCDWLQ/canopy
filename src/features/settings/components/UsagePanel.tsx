@@ -19,72 +19,53 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { Spinner } from "@/components/ui/spinner"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { commandErrorMessage, useTranslation } from "@/lib/i18n"
-import { cn } from "@/lib/utils"
 import {
   createUsageClient,
-  type UsageByDayView,
   type UsageClient,
-  type UsageSummaryView,
+  type UsageRange,
   type UsageSourceView,
+  type UsageSummaryView,
 } from "@/lib/tauri"
 import type { UiError } from "@/lib/tauri/types"
 
 import { UsageHeatmap } from "./UsageHeatmap"
 import { localIsoDate } from "./usageHeatmap"
 
-export type UsagePanelProps = {
-  client?: UsageClient
-  now?: Date
-}
-
-type PanelStatus = "loading" | "ready" | "empty" | "error"
+export type UsagePanelProps = { client?: UsageClient; now?: Date }
+type SnapshotStatus = "loading" | "ready" | "empty" | "error"
 type DetailTab = "model" | "day"
+const DEFAULT_RANGE: UsageRange = "last_30_days"
+const RANGE_OPTIONS: readonly UsageRange[] = [
+  "last_7_days",
+  "last_30_days",
+  "all",
+]
 
-function addLocalDays(date: Date, days: number): Date {
+function addLocalDays(date: Date, days: number) {
   const next = new Date(date)
   next.setDate(next.getDate() + days)
   return next
 }
-
 function sumTotalsBetween(
-  byDay: readonly UsageByDayView[],
+  byDay: UsageSummaryView["byDay"],
   start: string,
   end: string,
-): number {
+) {
   return byDay
     .filter((row) => row.day >= start && row.day <= end)
     .reduce((sum, row) => sum + row.total, 0)
 }
-
-function recentDays(
-  byDay: readonly UsageByDayView[],
-  now: Date,
-  count: number,
-): UsageByDayView[] {
-  const end = localIsoDate(now)
-  const start = localIsoDate(addLocalDays(now, 1 - count))
-  return byDay
-    .filter((row) => row.day >= start && row.day <= end)
-    .slice()
-    .sort((left, right) => right.day.localeCompare(left.day))
-}
-
-function formatCompactCount(value: number): string {
+function formatCompactCount(value: number) {
   const abs = Math.abs(value)
-  if (abs >= 1_000_000) {
-    return `${trimTrailingZero(value / 1_000_000)}M`
-  }
-  if (abs >= 1000) {
-    return `${trimTrailingZero(value / 1000)}k`
-  }
+  if (abs >= 1_000_000) return `${trimTrailingZero(value / 1_000_000)}M`
+  if (abs >= 1000) return `${trimTrailingZero(value / 1000)}k`
   return String(value)
 }
-
-function trimTrailingZero(value: number): string {
+function trimTrailingZero(value: number) {
   return value.toFixed(1).replace(/\.0$/, "")
 }
-
 function isUiError(error: unknown): error is UiError {
   return (
     typeof error === "object" &&
@@ -93,6 +74,14 @@ function isUiError(error: unknown): error is UiError {
     typeof error.code === "string"
   )
 }
+function emptySummary(): UsageSummaryView {
+  return {
+    totals: { input: 0, output: 0, total: 0, records: 0 },
+    byDay: [],
+    byModel: [],
+    bySource: [],
+  }
+}
 
 export function UsagePanel({ client, now: nowProp }: UsagePanelProps) {
   const { t, locale } = useTranslation()
@@ -100,15 +89,26 @@ export function UsagePanel({ client, now: nowProp }: UsagePanelProps) {
     () => client ?? createUsageClient(),
     [client],
   )
-  const [status, setStatus] = React.useState<PanelStatus>("loading")
-  const [summary, setSummary] = React.useState<UsageSummaryView | null>(null)
-  const [error, setError] = React.useState<UiError | null>(null)
+  const [overview, setOverview] = React.useState<UsageSummaryView | null>(null)
+  const [overviewStatus, setOverviewStatus] =
+    React.useState<SnapshotStatus>("loading")
+  const [overviewError, setOverviewError] = React.useState<UiError | null>(null)
+  const [period, setPeriod] = React.useState<UsageSummaryView | null>(null)
+  const [periodStatus, setPeriodStatus] =
+    React.useState<SnapshotStatus>("loading")
+  const [periodError, setPeriodError] = React.useState<UiError | null>(null)
+  const [range, setRange] = React.useState<UsageRange>(DEFAULT_RANGE)
   const [refreshing, setRefreshing] = React.useState(false)
   const [clearing, setClearing] = React.useState(false)
   const [confirmClear, setConfirmClear] = React.useState(false)
-  const [errorSource, setErrorSource] = React.useState<"load" | "clear">("load")
+  const [clearError, setClearError] = React.useState<UiError | null>(null)
   const [detailTab, setDetailTab] = React.useState<DetailTab>("model")
-  const [now] = React.useState(() => nowProp ?? new Date())
+  const [now, setNow] = React.useState(() => nowProp ?? new Date())
+  const overviewRef = React.useRef<UsageSummaryView | null>(null)
+  const overviewRequestRef = React.useRef(0)
+  const periodRequestRef = React.useRef(0)
+  const rangeRef = React.useRef<UsageRange>(DEFAULT_RANGE)
+  const throughDayRef = React.useRef(localIsoDate(nowProp ?? new Date()))
   const numberFormat = React.useMemo(
     () => new Intl.NumberFormat(locale),
     [locale],
@@ -122,94 +122,152 @@ export function UsagePanel({ client, now: nowProp }: UsagePanelProps) {
     [locale],
   )
 
-  const requestIdRef = React.useRef(0)
+  const loadPeriod = React.useCallback(
+    (nextRange: UsageRange, throughDay: string) => {
+      const requestId = ++periodRequestRef.current
+      if (nextRange === "all") {
+        setPeriod(null)
+        setPeriodError(null)
+        return
+      }
+      setPeriod(null)
+      setPeriodError(null)
+      setPeriodStatus("loading")
+      void usageClient
+        .getUsageSummary({ range: nextRange, through_day: throughDay })
+        .then(
+          (next) => {
+            if (
+              periodRequestRef.current !== requestId ||
+              rangeRef.current !== nextRange ||
+              throughDayRef.current !== throughDay
+            )
+              return
+            setPeriod(next)
+            setPeriodStatus(next.totals.records === 0 ? "empty" : "ready")
+          },
+          (caught: unknown) => {
+            if (
+              periodRequestRef.current !== requestId ||
+              rangeRef.current !== nextRange ||
+              throughDayRef.current !== throughDay
+            )
+              return
+            setPeriodError(isUiError(caught) ? caught : null)
+            setPeriodStatus("error")
+          },
+        )
+    },
+    [usageClient],
+  )
 
-  const applyLoaded = React.useCallback((next: UsageSummaryView) => {
-    setSummary(next)
-    setStatus(next.totals.records === 0 ? "empty" : "ready")
-    setError(null)
-  }, [])
+  const loadOverview = React.useCallback(
+    (throughDay: string, refresh: boolean, displayNow: Date) => {
+      const requestId = ++overviewRequestRef.current
+      if (!refresh) setOverviewStatus("loading")
+      setOverviewError(null)
+      void usageClient
+        .getUsageSummary({ range: "all", through_day: throughDay })
+        .then(
+          (next) => {
+            if (
+              overviewRequestRef.current !== requestId ||
+              throughDayRef.current !== throughDay
+            )
+              return
+            overviewRef.current = next
+            setNow(displayNow)
+            setOverview(next)
+            setOverviewStatus(next.totals.records === 0 ? "empty" : "ready")
+            setRefreshing(false)
+          },
+          (caught: unknown) => {
+            if (
+              overviewRequestRef.current !== requestId ||
+              throughDayRef.current !== throughDay
+            )
+              return
+            setOverviewError(isUiError(caught) ? caught : null)
+            if (overviewRef.current === null) setOverviewStatus("error")
+            setRefreshing(false)
+          },
+        )
+    },
+    [usageClient],
+  )
 
   React.useEffect(() => {
-    const requestId = ++requestIdRef.current
-    void usageClient.getUsageSummary().then(
-      (next) => {
-        if (requestIdRef.current !== requestId) return
-        applyLoaded(next)
-      },
-      (caught: unknown) => {
-        if (requestIdRef.current !== requestId) return
-        setErrorSource("load")
-        setError(isUiError(caught) ? caught : null)
-        setStatus("error")
-      },
-    )
+    const capturedNow = nowProp ?? new Date()
+    const throughDay = localIsoDate(capturedNow)
+    throughDayRef.current = throughDay
+    let active = true
+    void Promise.resolve().then(() => {
+      if (!active) return
+      loadOverview(throughDay, false, capturedNow)
+      loadPeriod(rangeRef.current, throughDay)
+    })
     return () => {
-      requestIdRef.current += 1
+      active = false
+      overviewRequestRef.current += 1
+      periodRequestRef.current += 1
     }
-  }, [usageClient, applyLoaded])
+  }, [loadOverview, loadPeriod, nowProp])
 
-  const handleRefresh = () => {
-    const requestId = ++requestIdRef.current
-    setRefreshing(true)
-    setError(null)
-    void usageClient.getUsageSummary().then(
-      (next) => {
-        if (requestIdRef.current !== requestId) return
-        applyLoaded(next)
-        setRefreshing(false)
-      },
-      (caught: unknown) => {
-        if (requestIdRef.current !== requestId) return
-        setErrorSource("load")
-        setError(isUiError(caught) ? caught : null)
-        setRefreshing(false)
-      },
+  const selectRange = (nextRange: string) => {
+    if (
+      !RANGE_OPTIONS.includes(nextRange as UsageRange) ||
+      nextRange === rangeRef.current
     )
+      return
+    const selected = nextRange as UsageRange
+    rangeRef.current = selected
+    setRange(selected)
+    loadPeriod(selected, throughDayRef.current)
   }
-
+  const handleRefresh = () => {
+    const capturedNow = nowProp ?? new Date()
+    const throughDay = localIsoDate(capturedNow)
+    throughDayRef.current = throughDay
+    setRefreshing(true)
+    loadOverview(throughDay, true, capturedNow)
+    loadPeriod(rangeRef.current, throughDay)
+  }
   const handleClear = async () => {
     setConfirmClear(false)
-    const requestId = ++requestIdRef.current
+    ++overviewRequestRef.current
+    ++periodRequestRef.current
     setRefreshing(false)
     setClearing(true)
-    setError(null)
+    setClearError(null)
     try {
       await usageClient.clearUsageRecords()
-      if (requestIdRef.current !== requestId) return
-      setSummary({
-        totals: { input: 0, output: 0, total: 0, records: 0 },
-        byDay: [],
-        byModel: [],
-        bySource: [],
-      })
-      setStatus("empty")
+      const empty = emptySummary()
+      overviewRef.current = empty
+      setOverview(empty)
+      setOverviewStatus("empty")
+      setOverviewError(null)
+      setPeriod(null)
+      setPeriodStatus("empty")
+      setPeriodError(null)
     } catch (caught: unknown) {
-      if (requestIdRef.current !== requestId) return
-      setErrorSource("clear")
-      setError(isUiError(caught) ? caught : null)
+      setClearError(isUiError(caught) ? caught : null)
     } finally {
-      if (requestIdRef.current === requestId) {
-        setClearing(false)
-      }
+      setClearing(false)
     }
   }
 
   const today = localIsoDate(now)
   const last7Start = localIsoDate(addLocalDays(now, -6))
-  const todayTotal = summary ? sumTotalsBetween(summary.byDay, today, today) : 0
-  const last7Total = summary
-    ? sumTotalsBetween(summary.byDay, last7Start, today)
+  const todayTotal = overview
+    ? sumTotalsBetween(overview.byDay, today, today)
     : 0
-  const inputOutput =
-    summary === null
-      ? ""
-      : `${numberFormat.format(summary.totals.input)} / ${numberFormat.format(summary.totals.output)}`
-  const dayRows = summary ? recentDays(summary.byDay, now, 30) : []
-  const sourceRows = summary
-    ? [...summary.bySource].sort((left, right) => right.total - left.total)
-    : []
-  const busy = status === "loading" || refreshing || clearing
+  const last7Total = overview
+    ? sumTotalsBetween(overview.byDay, last7Start, today)
+    : 0
+  const detail = range === "all" ? overview : period
+  const detailStatus = range === "all" ? overviewStatus : periodStatus
+  const detailError = range === "all" ? overviewError : periodError
+  const busy = overviewStatus === "loading" || refreshing || clearing
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -233,7 +291,7 @@ export function UsagePanel({ client, now: nowProp }: UsagePanelProps) {
           aria-busy={busy}
           onClick={handleRefresh}
         >
-          {refreshing || status === "loading" ? (
+          {refreshing || overviewStatus === "loading" ? (
             <Spinner
               className="size-3.5"
               role="presentation"
@@ -251,50 +309,37 @@ export function UsagePanel({ client, now: nowProp }: UsagePanelProps) {
           aria-label={t("settings.usage.title")}
           className="flex flex-col gap-6"
         >
-          {error !== null && (
-            <Alert variant="destructive">
-              <AlertTitle>
-                {errorSource === "clear"
-                  ? t("settings.usage.clearFailed")
-                  : t("settings.usage.loadFailed")}
-              </AlertTitle>
-              <AlertDescription>
-                {commandErrorMessage(error.code)}
-              </AlertDescription>
-            </Alert>
+          {clearError !== null && (
+            <UsageErrorAlert
+              title={t("settings.usage.clearFailed")}
+              error={clearError}
+            />
           )}
-          {status === "loading" && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Spinner
-                className="size-4"
-                aria-label={t("settings.usage.loading")}
-              />
-              <span>{t("settings.usage.loading")}</span>
-            </div>
+          {overviewError !== null && (
+            <UsageErrorAlert
+              title={t("settings.usage.loadFailed")}
+              error={overviewError}
+            />
           )}
-          {status === "empty" && (
-            <Empty className="border">
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <ChartColumn aria-hidden="true" />
-                </EmptyMedia>
-                <EmptyTitle>{t("settings.usage.emptyTitle")}</EmptyTitle>
-                <EmptyDescription>
-                  {t("settings.usage.emptyDescription")}
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
+          {overviewStatus === "loading" && overview === null && (
+            <Loading label={t("settings.usage.loading")} />
           )}
-          {status === "ready" && summary !== null && (
+          {overviewStatus === "error" &&
+            overview === null &&
+            overviewError === null && (
+              <UsageErrorAlert title={t("settings.usage.loadFailed")} />
+            )}
+          {overviewStatus === "empty" && <UsageEmpty />}
+          {overview !== null && overviewStatus !== "empty" && (
             <>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <SummaryCard
                   label={t("settings.usage.totalTokens")}
-                  value={numberFormat.format(summary.totals.total)}
+                  value={numberFormat.format(overview.totals.total)}
                 />
                 <SummaryCard
                   label={t("settings.usage.inputOutput")}
-                  value={inputOutput}
+                  value={`${numberFormat.format(overview.totals.input)} / ${numberFormat.format(overview.totals.output)}`}
                 />
                 <SummaryCard
                   label={t("settings.usage.today")}
@@ -305,179 +350,82 @@ export function UsagePanel({ client, now: nowProp }: UsagePanelProps) {
                   value={numberFormat.format(last7Total)}
                 />
               </div>
-              {sourceRows.length > 0 && (
-                <div className="flex flex-col gap-2">
-                  <h2 className="text-sm font-medium">
-                    {t("settings.usage.bySourceTitle")}
-                  </h2>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {sourceRows.map((row) => (
-                      <SourceCard
-                        key={row.source}
-                        label={sourceLabel(row.source, t)}
-                        total={formatCompactCount(row.total)}
-                        records={numberFormat.format(row.records)}
-                        recordsLabel={t("settings.usage.recordCount")}
-                        share={percentageFormat.format(
-                          summary.totals.total > 0
-                            ? row.total / summary.totals.total
-                            : 0,
-                        )}
-                        shareValue={
-                          summary.totals.total > 0
-                            ? (row.total / summary.totals.total) * 100
-                            : 0
-                        }
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
               <div className="flex flex-col gap-2">
                 <h2 className="text-sm font-medium">
                   {t("settings.usage.heatmapTitle")}
                 </h2>
-                <UsageHeatmap byDay={summary.byDay} now={now} />
+                <UsageHeatmap byDay={overview.byDay} now={now} />
               </div>
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h2 className="text-sm font-medium">
                     {t("settings.usage.detailTitle")}
                   </h2>
-                  <div
-                    role="tablist"
-                    aria-label={t("settings.usage.detailTitle")}
-                    className="inline-flex rounded-lg border bg-muted p-0.5"
-                  >
-                    <DetailTabButton
-                      id="usage-detail-model-tab"
-                      selected={detailTab === "model"}
-                      controls="usage-detail-model-panel"
-                      onClick={() => setDetailTab("model")}
+                  <div className="flex items-center gap-2">
+                    <span
+                      id="usage-period-label"
+                      className="text-xs text-muted-foreground"
                     >
-                      {t("settings.usage.byModelTitle")}
-                    </DetailTabButton>
-                    <DetailTabButton
-                      id="usage-detail-day-tab"
-                      selected={detailTab === "day"}
-                      controls="usage-detail-day-panel"
-                      onClick={() => setDetailTab("day")}
+                      {t("settings.usage.period")}
+                    </span>
+                    <ToggleGroup
+                      type="single"
+                      value={range}
+                      disabled={clearing}
+                      variant="outline"
+                      size="sm"
+                      spacing={0}
+                      aria-labelledby="usage-period-label"
+                      onValueChange={selectRange}
                     >
-                      {t("settings.usage.byDayTitle")}
-                    </DetailTabButton>
+                      <ToggleGroupItem
+                        value="last_7_days"
+                        aria-label={t("settings.usage.periodLast7Days")}
+                      >
+                        {t("settings.usage.periodLast7Days")}
+                      </ToggleGroupItem>
+                      <ToggleGroupItem
+                        value="last_30_days"
+                        aria-label={t("settings.usage.periodLast30Days")}
+                      >
+                        {t("settings.usage.periodLast30Days")}
+                      </ToggleGroupItem>
+                      <ToggleGroupItem
+                        value="all"
+                        aria-label={t("settings.usage.periodAll")}
+                      >
+                        {t("settings.usage.periodAll")}
+                      </ToggleGroupItem>
+                    </ToggleGroup>
                   </div>
                 </div>
-                <div
-                  id="usage-detail-model-panel"
-                  role="tabpanel"
-                  aria-labelledby="usage-detail-model-tab"
-                  hidden={detailTab !== "model"}
-                  className="overflow-x-auto rounded-lg border"
-                >
-                  <table
-                    className="w-full text-sm"
-                    aria-label={t("settings.usage.modelTableLabel")}
-                  >
-                    <thead>
-                      <tr className="border-b text-left text-muted-foreground">
-                        <th className="px-3 py-2 font-medium">
-                          {t("settings.usage.provider")}
-                        </th>
-                        <th className="px-3 py-2 font-medium">
-                          {t("settings.usage.model")}
-                        </th>
-                        <th className="px-3 py-2 text-right font-medium">
-                          {t("settings.usage.input")}
-                        </th>
-                        <th className="px-3 py-2 text-right font-medium">
-                          {t("settings.usage.output")}
-                        </th>
-                        <th className="px-3 py-2 text-right font-medium">
-                          {t("settings.usage.total")}
-                        </th>
-                        <th className="px-3 py-2 text-right font-medium">
-                          {t("settings.usage.recordCount")}
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[...summary.byModel]
-                        .sort((left, right) => right.total - left.total)
-                        .map((row) => (
-                          <tr
-                            key={`${row.providerId}:${row.model}`}
-                            className="border-b last:border-b-0"
-                          >
-                            <td className="px-3 py-2">{row.providerId}</td>
-                            <td className="px-3 py-2">{row.model}</td>
-                            <td className="px-3 py-2 text-right tabular-nums">
-                              {formatCompactCount(row.input)}
-                            </td>
-                            <td className="px-3 py-2 text-right tabular-nums">
-                              {formatCompactCount(row.output)}
-                            </td>
-                            <td className="px-3 py-2 text-right tabular-nums">
-                              {formatCompactCount(row.total)}
-                            </td>
-                            <td className="px-3 py-2 text-right tabular-nums">
-                              {numberFormat.format(row.records)}
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div
-                  id="usage-detail-day-panel"
-                  role="tabpanel"
-                  aria-labelledby="usage-detail-day-tab"
-                  hidden={detailTab !== "day"}
-                  className="overflow-x-auto rounded-lg border"
-                >
-                  <table
-                    className="w-full text-sm"
-                    aria-label={t("settings.usage.dayTableLabel")}
-                  >
-                    <thead>
-                      <tr className="border-b text-left text-muted-foreground">
-                        <th className="px-3 py-2 font-medium">
-                          {t("settings.usage.date")}
-                        </th>
-                        <th className="px-3 py-2 text-right font-medium">
-                          {t("settings.usage.input")}
-                        </th>
-                        <th className="px-3 py-2 text-right font-medium">
-                          {t("settings.usage.output")}
-                        </th>
-                        <th className="px-3 py-2 text-right font-medium">
-                          {t("settings.usage.total")}
-                        </th>
-                        <th className="px-3 py-2 text-right font-medium">
-                          {t("settings.usage.recordCount")}
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {dayRows.map((row) => (
-                        <tr key={row.day} className="border-b last:border-b-0">
-                          <td className="px-3 py-2 tabular-nums">{row.day}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">
-                            {formatCompactCount(row.input)}
-                          </td>
-                          <td className="px-3 py-2 text-right tabular-nums">
-                            {formatCompactCount(row.output)}
-                          </td>
-                          <td className="px-3 py-2 text-right tabular-nums">
-                            {formatCompactCount(row.total)}
-                          </td>
-                          <td className="px-3 py-2 text-right tabular-nums">
-                            {numberFormat.format(row.records)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                {detailStatus === "loading" && (
+                  <Loading label={t("settings.usage.periodLoading")} />
+                )}
+                {detailStatus === "error" && (
+                  <UsageErrorAlert
+                    title={t("settings.usage.periodLoadFailed")}
+                    error={detailError}
+                  />
+                )}
+                {detailStatus === "empty" && (
+                  <div className="rounded-lg border p-4 text-sm text-muted-foreground">
+                    <p className="font-medium text-foreground">
+                      {t("settings.usage.periodEmptyTitle")}
+                    </p>
+                    <p>{t("settings.usage.periodEmptyDescription")}</p>
+                  </div>
+                )}
+                {detail !== null && detailStatus === "ready" && (
+                  <UsageDetails
+                    detail={detail}
+                    detailTab={detailTab}
+                    setDetailTab={setDetailTab}
+                    numberFormat={numberFormat}
+                    percentageFormat={percentageFormat}
+                    t={t}
+                  />
+                )}
               </div>
               <div className="flex items-center justify-between gap-3 border-t pt-4">
                 <p className="text-sm font-medium">
@@ -511,27 +459,242 @@ export function UsagePanel({ client, now: nowProp }: UsagePanelProps) {
   )
 }
 
+function UsageDetails({
+  detail,
+  detailTab,
+  setDetailTab,
+  numberFormat,
+  percentageFormat,
+  t,
+}: {
+  detail: UsageSummaryView
+  detailTab: DetailTab
+  setDetailTab: (tab: DetailTab) => void
+  numberFormat: Intl.NumberFormat
+  percentageFormat: Intl.NumberFormat
+  t: ReturnType<typeof useTranslation>["t"]
+}) {
+  const sourceRows = [...detail.bySource].sort(
+    (left, right) => right.total - left.total,
+  )
+  return (
+    <>
+      {sourceRows.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <h3 className="text-sm font-medium">
+            {t("settings.usage.bySourceTitle")}
+          </h3>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {sourceRows.map((row) => (
+              <SourceCard
+                key={row.source}
+                label={sourceLabel(row.source, t)}
+                total={formatCompactCount(row.total)}
+                inputOutput={`${numberFormat.format(row.input)} / ${numberFormat.format(row.output)}`}
+                inputOutputLabel={t("settings.usage.inputOutput")}
+                share={percentageFormat.format(
+                  detail.totals.total > 0 ? row.total / detail.totals.total : 0,
+                )}
+                shareValue={
+                  detail.totals.total > 0
+                    ? (row.total / detail.totals.total) * 100
+                    : 0
+                }
+              />
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="flex flex-col gap-2">
+        <div
+          role="tablist"
+          aria-label={t("settings.usage.detailTitle")}
+          className="inline-flex w-fit rounded-lg border bg-muted p-0.5"
+        >
+          <DetailTabButton
+            id="usage-detail-model-tab"
+            selected={detailTab === "model"}
+            controls="usage-detail-model-panel"
+            onClick={() => setDetailTab("model")}
+          >
+            {t("settings.usage.byModelTitle")}
+          </DetailTabButton>
+          <DetailTabButton
+            id="usage-detail-day-tab"
+            selected={detailTab === "day"}
+            controls="usage-detail-day-panel"
+            onClick={() => setDetailTab("day")}
+          >
+            {t("settings.usage.byDayTitle")}
+          </DetailTabButton>
+        </div>
+        <UsageTable
+          id="usage-detail-model-panel"
+          labelledBy="usage-detail-model-tab"
+          hidden={detailTab !== "model"}
+          label={t("settings.usage.modelTableLabel")}
+          headers={[
+            t("settings.usage.provider"),
+            t("settings.usage.model"),
+            t("settings.usage.input"),
+            t("settings.usage.output"),
+            t("settings.usage.total"),
+            t("settings.usage.callCount"),
+          ]}
+          rows={[...detail.byModel]
+            .sort((left, right) => right.total - left.total)
+            .map((row) => [
+              row.providerId,
+              row.model,
+              formatCompactCount(row.input),
+              formatCompactCount(row.output),
+              formatCompactCount(row.total),
+              numberFormat.format(row.records),
+            ])}
+        />
+        <UsageTable
+          id="usage-detail-day-panel"
+          labelledBy="usage-detail-day-tab"
+          hidden={detailTab !== "day"}
+          label={t("settings.usage.dayTableLabel")}
+          headers={[
+            t("settings.usage.date"),
+            t("settings.usage.input"),
+            t("settings.usage.output"),
+            t("settings.usage.total"),
+            t("settings.usage.callCount"),
+          ]}
+          rows={[...detail.byDay]
+            .sort((left, right) => right.day.localeCompare(left.day))
+            .map((row) => [
+              row.day,
+              formatCompactCount(row.input),
+              formatCompactCount(row.output),
+              formatCompactCount(row.total),
+              numberFormat.format(row.records),
+            ])}
+        />
+      </div>
+    </>
+  )
+}
+function UsageTable({
+  id,
+  labelledBy,
+  hidden,
+  label,
+  headers,
+  rows,
+}: {
+  id: string
+  labelledBy: string
+  hidden: boolean
+  label: string
+  headers: readonly string[]
+  rows: readonly (readonly string[])[]
+}) {
+  return (
+    <div
+      id={id}
+      role="tabpanel"
+      aria-labelledby={labelledBy}
+      hidden={hidden}
+      className="overflow-x-auto rounded-lg border"
+    >
+      <table className="w-full text-sm" aria-label={label}>
+        <thead>
+          <tr className="border-b text-left text-muted-foreground">
+            {headers.map((header, index) => (
+              <th
+                key={header}
+                className={`px-3 py-2 font-medium ${index > 1 ? "text-right" : ""}`}
+              >
+                {header}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr
+              key={row.slice(0, 2).join(":")}
+              className="border-b last:border-b-0"
+            >
+              {row.map((value, index) => (
+                <td
+                  key={`${index}:${value}`}
+                  className={`px-3 py-2 ${index > 1 ? "text-right tabular-nums" : ""}`}
+                >
+                  {value}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+function UsageEmpty() {
+  const { t } = useTranslation()
+  return (
+    <Empty className="border">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <ChartColumn aria-hidden="true" />
+        </EmptyMedia>
+        <EmptyTitle>{t("settings.usage.emptyTitle")}</EmptyTitle>
+        <EmptyDescription>
+          {t("settings.usage.emptyDescription")}
+        </EmptyDescription>
+      </EmptyHeader>
+    </Empty>
+  )
+}
+function Loading({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <Spinner className="size-4" aria-label={label} />
+      <span>{label}</span>
+    </div>
+  )
+}
+function UsageErrorAlert({
+  title,
+  error,
+}: {
+  title: string
+  error?: UiError | null
+}) {
+  return (
+    <Alert variant="destructive">
+      <AlertTitle>{title}</AlertTitle>
+      {error !== null && error !== undefined && (
+        <AlertDescription>{commandErrorMessage(error.code)}</AlertDescription>
+      )}
+    </Alert>
+  )
+}
 function sourceLabel(
   source: UsageSourceView,
   t: ReturnType<typeof useTranslation>["t"],
-): string {
+) {
   return source === "chat"
     ? t("settings.usage.sourceChat")
     : t("settings.usage.sourceTitle")
 }
-
 function SourceCard({
   label,
   total,
-  records,
-  recordsLabel,
+  inputOutput,
+  inputOutputLabel,
   share,
   shareValue,
 }: {
   label: string
   total: string
-  records: string
-  recordsLabel: string
+  inputOutput: string
+  inputOutputLabel: string
   share: string
   shareValue: number
 }) {
@@ -541,7 +704,7 @@ function SourceCard({
         <div className="min-w-0">
           <div className="truncate text-sm font-medium">{label}</div>
           <div className="mt-1 text-xs text-muted-foreground">
-            {recordsLabel} {records}
+            {inputOutputLabel} {inputOutput}
           </div>
         </div>
         <div className="shrink-0 text-right">
@@ -558,7 +721,6 @@ function SourceCard({
     </div>
   )
 }
-
 function DetailTabButton({
   id,
   selected,
@@ -579,19 +741,13 @@ function DetailTabButton({
       role="tab"
       aria-selected={selected}
       aria-controls={controls}
-      className={cn(
-        "rounded-md px-3 py-1 text-xs font-medium transition-colors",
-        selected
-          ? "bg-background text-foreground shadow-sm"
-          : "text-muted-foreground hover:text-foreground",
-      )}
+      className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${selected ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
       onClick={onClick}
     >
       {children}
     </button>
   )
 }
-
 function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border p-3">

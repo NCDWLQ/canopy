@@ -2,6 +2,10 @@
   "command_names": ["get_usage_summary", "clear_usage_records"],
   "requests": {
     "get_usage_summary": {},
+    "get_usage_summary_explicit": {
+      "range": "last_30_days",
+      "through_day": "2026-09-10"
+    },
     "clear_usage_records": {}
   },
   "successes": {

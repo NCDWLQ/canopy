@@ -808,12 +808,14 @@ provider command list.
 ### 2. Signatures
 
 ```text
-get_usage_summary({}) -> UsageSummary
+get_usage_summary({ range?, through_day? }) -> UsageSummary
 clear_usage_records({}) -> { cleared: true }
+
+UsageRange = last_7_days | last_30_days | all
 
 UsageSummary {
   totals: { input, output, total, records }
-  by_day: [{ day, input, output, total, records }]      -- local dates, last 371 days
+  by_day: [{ day, input, output, total, records }]      -- local dates in the requested interval
   by_model: [{ provider_id, model, input, output, total, records }]  -- total desc
   by_source: [{ source, input, output, total, records }] -- chat | title
 }
@@ -841,9 +843,13 @@ CREATE TABLE usage_records (
   zero row.
 - `total_tokens` is the provider-reported total when present; otherwise
   `input + output`.
-- Day buckets use SQLite `date(created_at, 'localtime')`. The summary window is
-  a fixed 371 days (`USAGE_SUMMARY_DAY_WINDOW`); the UI heatmap uses the full
-  window and the per-day table slices the last 30 local days.
+- `through_day` is a strict local calendar `YYYY-MM-DD`; omitted requests
+  remain all-time and resolve the command's current local day. Invalid ranges
+  and malformed dates are rejected at the command boundary.
+- Day buckets and every aggregate use the same SQLite local-date predicate:
+  `date(created_at, 'localtime') <= through_day`, plus `>= through_day - 6`
+  for `last_7_days` or `>= through_day - 29` for `last_30_days`. `all` has no
+  lower bound, so it includes history older than the heatmap's visual year.
 - No FKs to `conversations` / `nodes`: stats outlive conversation deletes.
 - Generation compose site: after the assistant node transaction succeeds,
   `usage` insert errors are logged and ignored so finalization still returns
@@ -857,6 +863,7 @@ CREATE TABLE usage_records (
 | Adapter reports no usage | no row; generation succeeds |
 | `usage_records` insert fails | warn/log; generation/title still succeed |
 | `get_usage_summary` on empty table | zeros + empty arrays, not an error |
+| Range request | inclusive local-date bounds; future rows are excluded |
 | `clear_usage_records` | `{ cleared: true }` and subsequent summary is empty |
 
 ### 5. Good / Base / Bad Cases
@@ -872,7 +879,9 @@ CREATE TABLE usage_records (
 
 - Adapter SSE fixtures: usage present, usage absent, OpenAI 400 mentioning
   `stream_options` retries without the field.
-- Repository aggregation with explicit timestamps (local-day grouping).
+- Repository aggregation with fixed through-days proving inclusive 7/30-day
+  bounds, future exclusion, all-time old history, and matching totals/source/
+  model/day predicates.
 - `finish_generation`: record inserted / skipped / insert failure does not
   fail the assistant persist (`generation/service.rs`).
 - Released fixture forward-upgrade through 0009
@@ -888,6 +897,13 @@ FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
 
 -- Correct: no FK; conversation_id is informational only
 conversation_id TEXT
+
+-- Wrong: each aggregate invents its own date window
+-- totals: no WHERE; by_day: last 371 days; by_model: all rows
+
+-- Correct: totals, by_day, by_model, and by_source reuse one predicate
+WHERE (?1 IS NULL OR date(created_at, 'localtime') >= ?1)
+  AND date(created_at, 'localtime') <= ?2
 ```
 
 ## Common Mistakes

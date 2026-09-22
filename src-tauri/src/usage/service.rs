@@ -1,8 +1,9 @@
 use sqlx::SqlitePool;
 
 use super::{
-    domain::rfc3339_utc_now, repository::UsageRepository, NewUsageRecord, UsageError, UsageSource,
-    UsageSummary,
+    domain::{rfc3339_utc_now, UsageInterval},
+    repository::UsageRepository,
+    NewUsageRecord, UsageError, UsageRange, UsageSource, UsageSummary,
 };
 use crate::llm::TokenUsage;
 
@@ -38,8 +39,18 @@ impl UsageService {
         Ok(())
     }
 
-    pub async fn summary(&self) -> Result<UsageSummary, UsageError> {
-        UsageRepository::summary(&self.pool).await
+    pub async fn summary(
+        &self,
+        range: UsageRange,
+        through_day: Option<&str>,
+    ) -> Result<UsageSummary, UsageError> {
+        let through_day = match through_day {
+            Some(day) => day.to_owned(),
+            None => UsageRepository::local_day(&self.pool).await?,
+        };
+        let interval = UsageInterval::resolve(range, &through_day)
+            .expect("command validates usage summary through_day");
+        UsageRepository::summary(&self.pool, &interval).await
     }
 
     /// Persist usage when present. Failures are logged and never returned to
