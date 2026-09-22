@@ -45,7 +45,7 @@ export function UsageHeatmap({
   ]
 
   return (
-    <div className="flex gap-2 overflow-x-auto pb-1">
+    <div className="flex w-full gap-2 pb-1">
       <div
         className="grid shrink-0 grid-rows-7 gap-[3px] text-[10px] leading-none text-muted-foreground"
         aria-hidden="true"
@@ -65,7 +65,7 @@ export function UsageHeatmap({
       <div
         role="img"
         aria-label={t("settings.usage.heatmapLabel")}
-        className="grid grid-flow-col grid-rows-7 gap-[3px]"
+        className="grid min-w-0 flex-1 grid-flow-col grid-cols-[repeat(53,minmax(0,1fr))] grid-rows-[repeat(7,0.625rem)] items-center gap-[3px]"
       >
         {cells.map((cell) => {
           const level = cell.inFuture ? 0 : heatmapLevel(cell.total, max)
@@ -80,7 +80,7 @@ export function UsageHeatmap({
                     tokens: cell.total,
                   })}
                   className={cn(
-                    "block size-2.5 rounded-[2px]",
+                    "block aspect-square w-full max-w-2.5 justify-self-center rounded-[2px]",
                     LEVEL_CLASS[level],
                     cell.inFuture && "opacity-40",
                   )}

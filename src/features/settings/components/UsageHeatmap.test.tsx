@@ -51,6 +51,8 @@ describe("UsageHeatmap", () => {
     )
 
     const heatmap = screen.getByRole("img", { name: "近一年每日用量热度图" })
+    expect(heatmap.parentElement).not.toHaveClass("overflow-x-auto")
+    expect(heatmap).toHaveClass("min-w-0", "flex-1")
     const cells = heatmap.querySelectorAll("[data-date]")
     expect(cells).toHaveLength(371)
 
