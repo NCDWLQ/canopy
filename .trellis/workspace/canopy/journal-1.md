@@ -1443,3 +1443,24 @@ Replaced ConversationPane's forced bottom-scroll with MessageScroller live-edge 
 ### Status
 
 [OK] **Completed**
+
+
+## Session 65: Finish token usage stats
+
+**Date**: 2026-09-22
+**Task**: Finish token usage stats
+**Branch**: `feat/token-usage-stats`
+
+### Summary
+
+Completed and archived 09-10-token-usage-stats. Updated usage summary cards and English/Chinese labels to show input/output token totals, verified frontend and Rust quality checks, and preserved the separate 09-16 usage-time-range planning files.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cacb2ab` | (see git log) |
+
+### Status
+
+[OK] **Completed**

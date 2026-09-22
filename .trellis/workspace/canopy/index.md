@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 64
-- **Last Active**: 2026-09-08
+- **Total Sessions**: 65
+- **Last Active**: 2026-09-22
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1445 | Active |
+| `journal-1.md` | ~1466 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 65 | 2026-09-22 | Finish token usage stats | `cacb2ab` | `feat/token-usage-stats` |
 | 64 | 2026-09-08 | 标题生成：仅首条用户消息 + 与回复并行 | `4c2b78d` | `feat/title-gen-first-prompt-async` |
 | 63 | 2026-09-02 | Preserve scroll during streaming | `97d273b`, `9f61dbe` | `fix/preserve-scroll-during-stream` |
 | 62 | 2026-09-02 | Add configurable theme color | `4f71ca2` | `feat/theme-color-setting` |
