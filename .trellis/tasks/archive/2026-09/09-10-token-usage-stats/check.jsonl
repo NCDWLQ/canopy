@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/provider-guidelines.md", "reason": "Verify adapter changes keep SSE/generation contracts intact and degrade gracefully without usage"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Verify 0009 migration, catalog registration, and repository query conventions"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Backend testing strategy and standards for adapter/repository tests"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Zustand/SQLite durability conventions for the usage panel data flow"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Check for reuse instead of duplicating aggregation/formatting helpers"}

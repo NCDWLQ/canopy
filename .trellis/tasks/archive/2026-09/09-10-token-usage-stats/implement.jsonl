@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/provider-guidelines.md", "reason": "LLM/SSE adapter contracts, generation commit rules, auto-title behavior — usage capture must follow these"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "SQLite schema/migration/repository rules for the new usage_records table and 0009 migration"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Module layout and ownership for adding the usage module and wiring commands in lib.rs"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "CommandError IPC mapping and redaction rules for new commands; usage persist failure must not block generation"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Where UsagePanel and the Settings category belong"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Cross-layer contract discipline for Rust IPC -> Zod -> UI"}
