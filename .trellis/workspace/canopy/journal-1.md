@@ -1464,3 +1464,24 @@ Completed and archived 09-10-token-usage-stats. Updated usage summary cards and 
 ### Status
 
 [OK] **Completed**
+
+
+## Session 66: Usage time range filtering
+
+**Date**: 2026-09-22
+**Task**: Usage time range filtering
+**Branch**: `feat/token-usage-stats`
+
+### Summary
+
+Added coherent 7-day, 30-day, and all-time usage ranges across Rust, IPC, and the settings UI; preserved overview/heatmap behavior, improved source and call-count labels, and added boundary and async-race regressions.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9208713` | (see git log) |
+
+### Status
+
+[OK] **Completed**
