@@ -103,8 +103,12 @@ export function UsagePanel({ client, now: nowProp }: UsagePanelProps) {
   const [confirmClear, setConfirmClear] = React.useState(false)
   const [clearError, setClearError] = React.useState<UiError | null>(null)
   const [detailTab, setDetailTab] = React.useState<DetailTab>("model")
+  const [periodLoadingHeight, setPeriodLoadingHeight] = React.useState<
+    number | null
+  >(null)
   const [now, setNow] = React.useState(() => nowProp ?? new Date())
   const overviewRef = React.useRef<UsageSummaryView | null>(null)
+  const detailBodyRef = React.useRef<HTMLDivElement>(null)
   const overviewRequestRef = React.useRef(0)
   const periodRequestRef = React.useRef(0)
   const rangeRef = React.useRef<UsageRange>(DEFAULT_RANGE)
@@ -126,10 +130,14 @@ export function UsagePanel({ client, now: nowProp }: UsagePanelProps) {
     (nextRange: UsageRange, throughDay: string) => {
       const requestId = ++periodRequestRef.current
       if (nextRange === "all") {
+        setPeriodLoadingHeight(null)
         setPeriod(null)
         setPeriodError(null)
         return
       }
+      const detailHeight =
+        detailBodyRef.current?.getBoundingClientRect().height ?? 0
+      setPeriodLoadingHeight(detailHeight > 0 ? detailHeight : null)
       setPeriod(null)
       setPeriodError(null)
       setPeriodStatus("loading")
@@ -399,33 +407,43 @@ export function UsagePanel({ client, now: nowProp }: UsagePanelProps) {
                     </ToggleGroup>
                   </div>
                 </div>
-                {detailStatus === "loading" && (
-                  <Loading label={t("settings.usage.periodLoading")} />
-                )}
-                {detailStatus === "error" && (
-                  <UsageErrorAlert
-                    title={t("settings.usage.periodLoadFailed")}
-                    error={detailError}
-                  />
-                )}
-                {detailStatus === "empty" && (
-                  <div className="rounded-lg border p-4 text-sm text-muted-foreground">
-                    <p className="font-medium text-foreground">
-                      {t("settings.usage.periodEmptyTitle")}
-                    </p>
-                    <p>{t("settings.usage.periodEmptyDescription")}</p>
-                  </div>
-                )}
-                {detail !== null && detailStatus === "ready" && (
-                  <UsageDetails
-                    detail={detail}
-                    detailTab={detailTab}
-                    setDetailTab={setDetailTab}
-                    numberFormat={numberFormat}
-                    percentageFormat={percentageFormat}
-                    t={t}
-                  />
-                )}
+                <div
+                  ref={detailBodyRef}
+                  className="flex flex-col gap-3 [overflow-anchor:none]"
+                  style={
+                    detailStatus === "loading" && periodLoadingHeight !== null
+                      ? { minHeight: periodLoadingHeight }
+                      : undefined
+                  }
+                >
+                  {detailStatus === "loading" && (
+                    <Loading label={t("settings.usage.periodLoading")} />
+                  )}
+                  {detailStatus === "error" && (
+                    <UsageErrorAlert
+                      title={t("settings.usage.periodLoadFailed")}
+                      error={detailError}
+                    />
+                  )}
+                  {detailStatus === "empty" && (
+                    <div className="rounded-lg border p-4 text-sm text-muted-foreground">
+                      <p className="font-medium text-foreground">
+                        {t("settings.usage.periodEmptyTitle")}
+                      </p>
+                      <p>{t("settings.usage.periodEmptyDescription")}</p>
+                    </div>
+                  )}
+                  {detail !== null && detailStatus === "ready" && (
+                    <UsageDetails
+                      detail={detail}
+                      detailTab={detailTab}
+                      setDetailTab={setDetailTab}
+                      numberFormat={numberFormat}
+                      percentageFormat={percentageFormat}
+                      t={t}
+                    />
+                  )}
+                </div>
               </div>
               <div className="flex items-center justify-between gap-3 border-t pt-4">
                 <p className="text-sm font-medium">
