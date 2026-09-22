@@ -267,9 +267,9 @@ export const en = {
   "settings.usage.emptyDescription":
     "Token usage appears here after a completed model reply.",
   "settings.usage.totalTokens": "Total tokens",
-  "settings.usage.records": "Generation records",
-  "settings.usage.today": "Today",
-  "settings.usage.last7Days": "Last 7 days",
+  "settings.usage.inputOutput": "Input / Output",
+  "settings.usage.today": "Today's tokens",
+  "settings.usage.last7Days": "Last 7 days' tokens",
   "settings.usage.bySourceTitle": "By source",
   "settings.usage.sourceChat": "Chat replies",
   "settings.usage.sourceTitle": "Title generation",

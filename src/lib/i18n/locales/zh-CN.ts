@@ -261,9 +261,9 @@ export const zhCN = {
   "settings.usage.emptyDescription":
     "完成一次模型对话后，这里会显示 token 消耗统计。",
   "settings.usage.totalTokens": "总 Token",
-  "settings.usage.records": "生成记录数",
-  "settings.usage.today": "今日",
-  "settings.usage.last7Days": "近 7 日",
+  "settings.usage.inputOutput": "输入 / 输出",
+  "settings.usage.today": "今日 Token",
+  "settings.usage.last7Days": "近 7 日 Token",
   "settings.usage.bySourceTitle": "按来源",
   "settings.usage.sourceChat": "聊天回复",
   "settings.usage.sourceTitle": "标题生成",

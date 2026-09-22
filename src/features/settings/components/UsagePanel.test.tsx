@@ -118,9 +118,9 @@ describe("UsagePanel", () => {
 
     expect(await screen.findByText("暂无用量数据")).toBeVisible()
     expect(screen.queryByText("总 Token")).not.toBeInTheDocument()
-    expect(screen.queryByText("生成记录数")).not.toBeInTheDocument()
-    expect(screen.queryByText("今日")).not.toBeInTheDocument()
-    expect(screen.queryByText("近 7 日")).not.toBeInTheDocument()
+    expect(screen.queryByText("输入 / 输出")).not.toBeInTheDocument()
+    expect(screen.queryByText("今日 Token")).not.toBeInTheDocument()
+    expect(screen.queryByText("近 7 日 Token")).not.toBeInTheDocument()
     expect(
       screen.queryByRole("img", { name: "近一年每日用量热度图" }),
     ).not.toBeInTheDocument()
@@ -143,8 +143,15 @@ describe("UsagePanel", () => {
 
     expect(await screen.findByText("总 Token")).toBeVisible()
     expect(screen.getByText(numberFormat.format(128450))).toBeVisible()
-    expect(screen.getByText(numberFormat.format(342))).toBeVisible()
+    expect(screen.getByText("输入 / 输出")).toBeVisible()
+    expect(
+      screen.getByText(
+        `${numberFormat.format(85300)} / ${numberFormat.format(43100)}`,
+      ),
+    ).toBeVisible()
+    expect(screen.getByText("今日 Token")).toBeVisible()
     expect(screen.getByText(numberFormat.format(12300))).toBeVisible()
+    expect(screen.getByText("近 7 日 Token")).toBeVisible()
     expect(screen.getByText(numberFormat.format(26300))).toBeVisible()
     expect(screen.getByText("按来源")).toBeVisible()
     expect(screen.getByText("聊天回复")).toBeVisible()

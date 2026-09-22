@@ -201,6 +201,10 @@ export function UsagePanel({ client, now: nowProp }: UsagePanelProps) {
   const last7Total = summary
     ? sumTotalsBetween(summary.byDay, last7Start, today)
     : 0
+  const inputOutput =
+    summary === null
+      ? ""
+      : `${numberFormat.format(summary.totals.input)} / ${numberFormat.format(summary.totals.output)}`
   const dayRows = summary ? recentDays(summary.byDay, now, 30) : []
   const sourceRows = summary
     ? [...summary.bySource].sort((left, right) => right.total - left.total)
@@ -289,8 +293,8 @@ export function UsagePanel({ client, now: nowProp }: UsagePanelProps) {
                   value={numberFormat.format(summary.totals.total)}
                 />
                 <SummaryCard
-                  label={t("settings.usage.records")}
-                  value={numberFormat.format(summary.totals.records)}
+                  label={t("settings.usage.inputOutput")}
+                  value={inputOutput}
                 />
                 <SummaryCard
                   label={t("settings.usage.today")}
