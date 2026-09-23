@@ -137,7 +137,7 @@ describe("UsagePanel", () => {
     expect(lastSeven).toHaveAttribute("aria-checked", "true")
   })
 
-  it("switches periods without showing old rows, ignores stale responses, and reuses overview for all time", async () => {
+  it("keeps current rows visible while switching, ignores stale responses, and reuses overview for all time", async () => {
     const user = userEvent.setup()
     let resolveSeven: ((value: UsageSummaryView) => void) | undefined
     let resolveThirty: ((value: UsageSummaryView) => void) | undefined
@@ -155,32 +155,15 @@ describe("UsagePanel", () => {
     expect(await screen.findByText("总 Token")).toBeVisible()
     resolveThirty?.(summary(300, "old-30"))
     expect(await screen.findByText("old-30")).toBeVisible()
-    const detailBody = screen.getByText("按来源").parentElement?.parentElement
-    if (detailBody === null || detailBody === undefined)
-      throw new Error("expected usage detail body")
-    const rectSpy = vi
-      .spyOn(detailBody, "getBoundingClientRect")
-      .mockReturnValue({
-        bottom: 320,
-        height: 320,
-        left: 0,
-        right: 0,
-        top: 0,
-        width: 0,
-        x: 0,
-        y: 0,
-        toJSON: () => ({}),
-      })
     await user.click(screen.getByRole("radio", { name: "近 7 日" }))
-    expect(screen.queryByText("old-30")).not.toBeInTheDocument()
-    expect(detailBody).toHaveStyle({ minHeight: "320px" })
+    expect(screen.getByText("old-30")).toBeVisible()
+    expect(screen.queryByText("正在加载所选时间范围…")).not.toBeInTheDocument()
     await user.click(screen.getByRole("radio", { name: "近 30 日" }))
     resolveSeven?.(summary(70, "stale-7"))
     resolveThirty?.(summary(30, "current-30"))
     expect(await screen.findByText("current-30")).toBeVisible()
     expect(screen.queryByText("stale-7")).not.toBeInTheDocument()
-    expect(detailBody).not.toHaveStyle({ minHeight: "320px" })
-    rectSpy.mockRestore()
+    expect(screen.queryByText("old-30")).not.toBeInTheDocument()
     const beforeAll = getUsageSummary.mock.calls.length
     await user.click(screen.getByRole("radio", { name: "全部" }))
     expect(await screen.findByText("gpt-5")).toBeVisible()
