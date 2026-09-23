@@ -8,7 +8,7 @@ use canopy_lib::{
     generation::chat_prompt_from_path,
     llm::{
         adapters::anthropic, model_list::list_models, LlmError, OpenAiCompatibleClient, Protocol,
-        StreamingRequest, ValidatedEndpoint,
+        StreamingRequest, TokenUsage, ValidatedEndpoint,
     },
 };
 use secrecy::SecretString;
@@ -729,6 +729,97 @@ fn anthropic_model_list_falls_back_to_the_openai_surface_on_404() {
         )
         .await;
         assert!(matches!(result, Err(LlmError::Authentication)));
+        server.finish();
+    });
+}
+
+fn anthropic_events_with_usage() -> Vec<Vec<u8>> {
+    vec![
+        sse_event(
+            "message_start",
+            r#"{"type":"message_start","message":{"usage":{"input_tokens":21,"output_tokens":1}}}"#,
+        ),
+        sse_event(
+            "content_block_start",
+            r#"{"type":"content_block_start","index":0,"content_block":{"type":"text"}}"#,
+        ),
+        sse_event(
+            "content_block_delta",
+            r#"{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"answer"}}"#,
+        ),
+        sse_event(
+            "message_delta",
+            r#"{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":3}}"#,
+        ),
+        sse_event(
+            "message_delta",
+            r#"{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":9}}"#,
+        ),
+        sse_event("message_stop", r#"{"type":"message_stop"}"#),
+    ]
+}
+
+#[test]
+fn anthropic_stream_captures_start_input_and_last_delta_output() {
+    run_async(async {
+        let path = protocol_path().await;
+        let server = TestServer::spawn(
+            "200 OK",
+            &[("Content-Type", "text/event-stream")],
+            anthropic_events_with_usage(),
+        );
+        let endpoint = ValidatedEndpoint::parse(&server.endpoint, Protocol::Anthropic).unwrap();
+        let generated = anthropic::stream(
+            &OpenAiCompatibleClient::new().unwrap(),
+            StreamingRequest {
+                endpoint: &endpoint,
+                prompt: &chat_prompt(&path, "claude-fixture", None),
+                secret: None,
+                cancellation: &CancellationToken::new(),
+            },
+            |_| Ok(()),
+            |_| Ok(()),
+        )
+        .await
+        .unwrap();
+        assert_eq!(generated.content, "answer");
+        assert_eq!(
+            generated.usage,
+            Some(TokenUsage {
+                input_tokens: 21,
+                output_tokens: 9,
+                total_tokens: Some(30),
+            })
+        );
+        server.finish();
+    });
+}
+
+#[test]
+fn anthropic_stream_without_usage_completes_with_none() {
+    run_async(async {
+        let path = protocol_path().await;
+        let server = TestServer::spawn(
+            "200 OK",
+            &[("Content-Type", "text/event-stream")],
+            anthropic_events(),
+        );
+        let endpoint = ValidatedEndpoint::parse(&server.endpoint, Protocol::Anthropic).unwrap();
+        let generated = anthropic::stream(
+            &OpenAiCompatibleClient::new().unwrap(),
+            StreamingRequest {
+                endpoint: &endpoint,
+                prompt: &chat_prompt(&path, "claude-fixture", None),
+                secret: None,
+                cancellation: &CancellationToken::new(),
+            },
+            |_| Ok(()),
+            |_| Ok(()),
+        )
+        .await
+        .unwrap();
+        assert_eq!(generated.content, "Generated answer");
+        assert_eq!(generated.usage, None);
         server.finish();
     });
 }

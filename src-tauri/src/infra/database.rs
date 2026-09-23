@@ -59,6 +59,11 @@ pub const MIGRATION_CATALOG: &[ApplicationMigration] = &[
         description: "conversation_system_prompt",
         sql: include_str!("../../migrations/0008_conversation_system_prompt.sql"),
     },
+    ApplicationMigration {
+        version: 9,
+        description: "token_usage",
+        sql: include_str!("../../migrations/0009_token_usage.sql"),
+    },
 ];
 
 pub fn plugin_migrations() -> Vec<Migration> {

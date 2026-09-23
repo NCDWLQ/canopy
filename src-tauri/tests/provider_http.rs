@@ -7,13 +7,15 @@ use canopy_lib::{
         ConversationPersistenceService, NewConversation, NewNode, Role, ValidatedPath,
     },
     generation::chat_prompt_from_path,
-    llm::{LlmError, OpenAiCompatibleClient, Protocol, ValidatedEndpoint},
+    llm::{
+        LlmError, OpenAiCompatibleClient, Protocol, StreamingRequest, TokenUsage, ValidatedEndpoint,
+    },
 };
 use secrecy::SecretString;
 use serde_json::json;
 use tokio_util::sync::CancellationToken;
 
-use support::{migrated_pool, run_async, sse, TestServer};
+use support::{migrated_pool, run_async, sse, SequenceResponse, TestServer};
 
 fn chat_prompt(path: &ValidatedPath, model: &str) -> canopy_lib::llm::ChatPrompt {
     chat_prompt_from_path(path, model, None, None).unwrap()
@@ -133,6 +135,7 @@ fn local_sse_stream_preserves_deltas_request_path_and_header_boundary() {
                 {"role": "user", "content": "SELECTED_SENTINEL"}
             ])
         );
+        assert_eq!(value["stream_options"]["include_usage"], true);
     });
 }
 
@@ -426,5 +429,172 @@ fn response_bound_midstream_cancellation_and_network_failure_are_typed() {
             matches!(result, Err(LlmError::Network)),
             "unexpected transport result: {result:?}"
         );
+    });
+}
+
+fn openai_sse_with_usage() -> Vec<Vec<u8>> {
+    vec![
+        sse(r#"{"choices":[{"index":0,"delta":{"content":"answer"},"finish_reason":"stop"}]}"#),
+        sse(
+            r#"{"choices":[],"usage":{"prompt_tokens":11,"completion_tokens":7,"total_tokens":18}}"#,
+        ),
+        sse("[DONE]"),
+    ]
+}
+
+fn openai_sse_without_usage() -> Vec<Vec<u8>> {
+    vec![
+        sse(r#"{"choices":[{"index":0,"delta":{"content":"answer"},"finish_reason":"stop"}]}"#),
+        sse("[DONE]"),
+    ]
+}
+
+#[test]
+fn openai_stream_captures_final_usage_chunk() {
+    run_async(async {
+        let path = sibling_path().await;
+        let server = TestServer::spawn(
+            "200 OK",
+            &[("Content-Type", "text/event-stream")],
+            openai_sse_with_usage(),
+        );
+        let endpoint =
+            ValidatedEndpoint::parse(&server.endpoint, Protocol::OpenAiCompatible).unwrap();
+        let generated = OpenAiCompatibleClient::new()
+            .unwrap()
+            .stream_with_thinking(
+                StreamingRequest {
+                    endpoint: &endpoint,
+                    prompt: &chat_prompt(&path, "fixture-model"),
+                    secret: None,
+                    cancellation: &CancellationToken::new(),
+                },
+                |_| Ok(()),
+                |_| Ok(()),
+            )
+            .await
+            .unwrap();
+        assert_eq!(generated.content, "answer");
+        assert_eq!(
+            generated.usage,
+            Some(TokenUsage {
+                input_tokens: 11,
+                output_tokens: 7,
+                total_tokens: Some(18),
+            })
+        );
+        server.finish();
+    });
+}
+
+#[test]
+fn openai_stream_without_usage_completes_with_none() {
+    run_async(async {
+        let path = sibling_path().await;
+        let server = TestServer::spawn(
+            "200 OK",
+            &[("Content-Type", "text/event-stream")],
+            openai_sse_without_usage(),
+        );
+        let endpoint =
+            ValidatedEndpoint::parse(&server.endpoint, Protocol::OpenAiCompatible).unwrap();
+        let generated = OpenAiCompatibleClient::new()
+            .unwrap()
+            .stream_with_thinking(
+                StreamingRequest {
+                    endpoint: &endpoint,
+                    prompt: &chat_prompt(&path, "fixture-model"),
+                    secret: None,
+                    cancellation: &CancellationToken::new(),
+                },
+                |_| Ok(()),
+                |_| Ok(()),
+            )
+            .await
+            .unwrap();
+        assert_eq!(generated.content, "answer");
+        assert_eq!(generated.usage, None);
+        server.finish();
+    });
+}
+
+#[test]
+fn openai_retries_once_when_400_mentions_stream_options() {
+    run_async(async {
+        let path = sibling_path().await;
+        let server = TestServer::spawn_sequence(vec![
+            SequenceResponse::json(
+                "400 Bad Request",
+                r#"{"error":{"message":"unknown field `stream_options`"}}"#,
+            ),
+            SequenceResponse {
+                status: "200 OK".to_owned(),
+                headers: vec![("Content-Type".to_owned(), "text/event-stream".to_owned())],
+                chunks: openai_sse_with_usage(),
+            },
+        ]);
+        let endpoint =
+            ValidatedEndpoint::parse(&server.endpoint, Protocol::OpenAiCompatible).unwrap();
+        let generated = OpenAiCompatibleClient::new()
+            .unwrap()
+            .stream_with_thinking(
+                StreamingRequest {
+                    endpoint: &endpoint,
+                    prompt: &chat_prompt(&path, "fixture-model"),
+                    secret: None,
+                    cancellation: &CancellationToken::new(),
+                },
+                |_| Ok(()),
+                |_| Ok(()),
+            )
+            .await
+            .unwrap();
+        assert_eq!(generated.content, "answer");
+        assert_eq!(
+            generated.usage,
+            Some(TokenUsage {
+                input_tokens: 11,
+                output_tokens: 7,
+                total_tokens: Some(18),
+            })
+        );
+        let requests = server.finish_all();
+        assert_eq!(requests.len(), 2);
+        let first: serde_json::Value =
+            serde_json::from_str(requests[0].split("\r\n\r\n").nth(1).unwrap()).unwrap();
+        let second: serde_json::Value =
+            serde_json::from_str(requests[1].split("\r\n\r\n").nth(1).unwrap()).unwrap();
+        assert_eq!(first["stream_options"]["include_usage"], true);
+        assert!(second.get("stream_options").is_none());
+    });
+}
+
+#[test]
+fn openai_does_not_retry_400_that_does_not_mention_stream_options() {
+    run_async(async {
+        let path = sibling_path().await;
+        let server = TestServer::spawn_sequence(vec![SequenceResponse::json(
+            "400 Bad Request",
+            r#"{"error":{"message":"invalid model"}}"#,
+        )]);
+        let endpoint =
+            ValidatedEndpoint::parse(&server.endpoint, Protocol::OpenAiCompatible).unwrap();
+        let error = OpenAiCompatibleClient::new()
+            .unwrap()
+            .stream_with_thinking(
+                StreamingRequest {
+                    endpoint: &endpoint,
+                    prompt: &chat_prompt(&path, "fixture-model"),
+                    secret: None,
+                    cancellation: &CancellationToken::new(),
+                },
+                |_| Ok(()),
+                |_| Ok(()),
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(error, LlmError::Protocol));
+        let requests = server.finish_all();
+        assert_eq!(requests.len(), 1);
     });
 }

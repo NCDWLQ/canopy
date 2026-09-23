@@ -22,6 +22,16 @@ vi.mock("@/lib/tauri", () => ({
         defaultSystemPrompt: null,
       }),
   }),
+  createUsageClient: () => ({
+    getUsageSummary: () =>
+      Promise.resolve({
+        totals: { input: 0, output: 0, total: 0, requests: 0 },
+        byDay: [],
+        byModel: [],
+        bySource: [],
+      }),
+    clearUsageRecords: () => Promise.resolve(),
+  }),
 }))
 
 describe("Canopy scaffold", () => {

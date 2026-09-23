@@ -1,0 +1,71 @@
+{
+  "command_names": ["get_usage_summary", "clear_usage_records"],
+  "requests": {
+    "get_usage_summary": {},
+    "get_usage_summary_explicit": {
+      "range": "last_30_days",
+      "through_day": "2026-09-10"
+    },
+    "clear_usage_records": {}
+  },
+  "successes": {
+    "get_usage_summary": {
+      "totals": {
+        "input": 80,
+        "output": 40,
+        "total": 120,
+        "records": 3
+      },
+      "by_day": [
+        {
+          "day": "2026-09-10",
+          "input": 10,
+          "output": 2,
+          "total": 12,
+          "records": 1
+        }
+      ],
+      "by_model": [
+        {
+          "provider_id": "openai",
+          "model": "gpt-5",
+          "input": 80,
+          "output": 40,
+          "total": 120,
+          "records": 3
+        }
+      ],
+      "by_source": [
+        {
+          "source": "chat",
+          "input": 70,
+          "output": 40,
+          "total": 110,
+          "records": 2
+        },
+        {
+          "source": "title",
+          "input": 10,
+          "output": 0,
+          "total": 10,
+          "records": 1
+        }
+      ]
+    },
+    "clear_usage_records": {
+      "cleared": true
+    }
+  },
+  "errors": {
+    "database_unavailable": {
+      "code": "database_unavailable",
+      "message": "对话数据库当前不可用。",
+      "retryable": true
+    },
+    "internal": {
+      "code": "internal",
+      "message": "发生意外错误。",
+      "retryable": false
+    }
+  }
+}

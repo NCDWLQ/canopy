@@ -6,6 +6,7 @@ pub mod infra;
 pub mod llm;
 pub mod providers;
 pub mod settings;
+pub mod usage;
 
 use infra::database::register_sql_plugin;
 
@@ -43,6 +44,8 @@ pub(crate) fn register_commands<R: tauri::Runtime>(
         generation::commands::generate_from_active_path,
         generation::commands::cancel_generation,
         providers::commands::list_provider_models,
+        usage::commands::get_usage_summary,
+        usage::commands::clear_usage_records,
     ])
 }
 
@@ -287,8 +290,10 @@ mod tests {
                     "onEvent": "__CHANNEL__:0"
                 }),
             ),
+            ("get_usage_summary", json!({ "request": {} })),
+            ("clear_usage_records", json!({ "request": {} })),
         ];
-        assert_eq!(database_backed.len(), 28);
+        assert_eq!(database_backed.len(), 30);
 
         for (command, body) in database_backed {
             let response = invoke(&webview, command, body).unwrap_err();

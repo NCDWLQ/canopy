@@ -249,7 +249,72 @@ export const zhCN = {
   "settings.dialog.appearanceCategory": "外观",
   "settings.dialog.providersCategory": "模型提供商",
   "settings.dialog.conversationsCategory": "对话",
+  "settings.dialog.usageCategory": "用量",
   "settings.dialog.archivedCategory": "已归档对话",
+
+  // UsagePanel.tsx + UsageHeatmap.tsx
+  "settings.usage.title": "用量",
+  "settings.usage.refresh": "刷新",
+  "settings.usage.loading": "正在加载用量数据…",
+  "settings.usage.loadFailed": "用量数据加载失败",
+  "settings.usage.emptyTitle": "暂无用量数据",
+  "settings.usage.emptyDescription":
+    "完成一次模型对话后，这里会显示 token 消耗统计。",
+  "settings.usage.totalTokens": "总 Token",
+  "settings.usage.inputOutput": "输入 / 输出",
+  "settings.usage.today": "今日 Token",
+  "settings.usage.last7Days": "近 7 日 Token",
+  "settings.usage.bySourceTitle": "按来源",
+  "settings.usage.sourceChat": "聊天回复",
+  "settings.usage.sourceTitle": "标题生成",
+  "settings.usage.heatmapTitle": "每日用量（近一年）",
+  "settings.usage.heatmapLabel": "近一年每日用量热度图",
+  "settings.usage.heatmapCell": ({
+    day,
+    tokens,
+  }: {
+    day: string
+    tokens: number
+  }) => `${day}：${tokens} token`,
+  "settings.usage.heatmapTooltip": ({
+    day,
+    tokens,
+  }: {
+    day: string
+    tokens: number
+  }) => `${day} · ${tokens} token`,
+  "settings.usage.weekdaySun": "日",
+  "settings.usage.weekdayMon": "一",
+  "settings.usage.weekdayTue": "二",
+  "settings.usage.weekdayWed": "三",
+  "settings.usage.weekdayThu": "四",
+  "settings.usage.weekdayFri": "五",
+  "settings.usage.weekdaySat": "六",
+  "settings.usage.detailTitle": "明细",
+  "settings.usage.period": "时间范围",
+  "settings.usage.periodLast7Days": "近 7 日",
+  "settings.usage.periodLast30Days": "近 30 日",
+  "settings.usage.periodAll": "全部",
+  "settings.usage.periodLoading": "正在加载所选时间范围…",
+  "settings.usage.periodLoadFailed": "所选时间范围加载失败",
+  "settings.usage.periodEmptyTitle": "此时间范围内暂无用量",
+  "settings.usage.periodEmptyDescription": "可选择其他时间范围查看用量。",
+  "settings.usage.byModelTitle": "按模型",
+  "settings.usage.byDayTitle": "按日",
+  "settings.usage.provider": "提供商",
+  "settings.usage.model": "模型",
+  "settings.usage.input": "输入",
+  "settings.usage.output": "输出",
+  "settings.usage.total": "总计",
+  "settings.usage.date": "日期",
+  "settings.usage.callCount": "调用次数",
+  "settings.usage.modelTableLabel": "按模型用量",
+  "settings.usage.dayTableLabel": "按日用量",
+  "settings.usage.dangerTitle": "危险区",
+  "settings.usage.clear": "清除统计数据",
+  "settings.usage.clearConfirmTitle": "清除用量统计？",
+  "settings.usage.clearConfirmBody": "将删除全部本地用量记录，此操作无法撤销。",
+  "settings.usage.clearFailed": "未能清除用量数据",
 
   // ArchivedConversationsPanel.tsx
   "settings.archived.title": "已归档对话",

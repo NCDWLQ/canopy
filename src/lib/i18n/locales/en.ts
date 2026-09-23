@@ -255,7 +255,74 @@ export const en = {
   "settings.dialog.appearanceCategory": "Appearance",
   "settings.dialog.providersCategory": "Model Providers",
   "settings.dialog.conversationsCategory": "Conversations",
+  "settings.dialog.usageCategory": "Usage",
   "settings.dialog.archivedCategory": "Archived Conversations",
+
+  // UsagePanel.tsx + UsageHeatmap.tsx
+  "settings.usage.title": "Usage",
+  "settings.usage.refresh": "Refresh",
+  "settings.usage.loading": "Loading usage…",
+  "settings.usage.loadFailed": "Could not load usage data",
+  "settings.usage.emptyTitle": "No usage data",
+  "settings.usage.emptyDescription":
+    "Token usage appears here after a completed model reply.",
+  "settings.usage.totalTokens": "Total tokens",
+  "settings.usage.inputOutput": "Input / Output",
+  "settings.usage.today": "Today's tokens",
+  "settings.usage.last7Days": "Last 7 days' tokens",
+  "settings.usage.bySourceTitle": "By source",
+  "settings.usage.sourceChat": "Chat replies",
+  "settings.usage.sourceTitle": "Title generation",
+  "settings.usage.heatmapTitle": "Daily usage (past year)",
+  "settings.usage.heatmapLabel": "Daily usage heatmap for the past year",
+  "settings.usage.heatmapCell": ({
+    day,
+    tokens,
+  }: {
+    day: string
+    tokens: number
+  }) => `${day}: ${tokens} tokens`,
+  "settings.usage.heatmapTooltip": ({
+    day,
+    tokens,
+  }: {
+    day: string
+    tokens: number
+  }) => `${day} · ${tokens} tokens`,
+  "settings.usage.weekdaySun": "Sun",
+  "settings.usage.weekdayMon": "Mon",
+  "settings.usage.weekdayTue": "Tue",
+  "settings.usage.weekdayWed": "Wed",
+  "settings.usage.weekdayThu": "Thu",
+  "settings.usage.weekdayFri": "Fri",
+  "settings.usage.weekdaySat": "Sat",
+  "settings.usage.detailTitle": "Details",
+  "settings.usage.period": "Period",
+  "settings.usage.periodLast7Days": "Last 7 days",
+  "settings.usage.periodLast30Days": "Last 30 days",
+  "settings.usage.periodAll": "All time",
+  "settings.usage.periodLoading": "Loading selected period…",
+  "settings.usage.periodLoadFailed": "Could not load selected period",
+  "settings.usage.periodEmptyTitle": "No usage in this period",
+  "settings.usage.periodEmptyDescription":
+    "Choose another period to inspect usage.",
+  "settings.usage.byModelTitle": "By model",
+  "settings.usage.byDayTitle": "By day",
+  "settings.usage.provider": "Provider",
+  "settings.usage.model": "Model",
+  "settings.usage.input": "Input",
+  "settings.usage.output": "Output",
+  "settings.usage.total": "Total",
+  "settings.usage.date": "Date",
+  "settings.usage.callCount": "Calls",
+  "settings.usage.modelTableLabel": "Usage by model",
+  "settings.usage.dayTableLabel": "Usage by day",
+  "settings.usage.dangerTitle": "Danger zone",
+  "settings.usage.clear": "Clear usage data",
+  "settings.usage.clearConfirmTitle": "Clear usage statistics?",
+  "settings.usage.clearConfirmBody":
+    "This deletes all local usage records and cannot be undone.",
+  "settings.usage.clearFailed": "Could not clear usage data",
 
   // ArchivedConversationsPanel.tsx
   "settings.archived.title": "Archived Conversations",

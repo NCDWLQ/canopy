@@ -7,6 +7,6 @@ pub mod model_list;
 pub use client::OpenAiCompatibleClient;
 pub use domain::{
     ChatPrompt, GeneratedContent, MessageRole, PromptMessage, Protocol, ReasoningEffort,
-    StreamingRequest, TitlePrompt, ValidatedEndpoint,
+    StreamingRequest, TitlePrompt, TokenUsage, ValidatedEndpoint,
 };
 pub use error::LlmError;

@@ -47,8 +47,13 @@ SQL ownership by table family:
 - typed `app_settings` keys — `settings::repository` (`language`, `theme`,
   `theme_color`, `auto_generate_title`, `title_model_binding`,
   `default_system_prompt`).
+- `usage_records` — `usage::repository`. No foreign keys by design: deleting a
+  conversation must not erase account-level usage facts. Inserts happen only
+  when adapters report `TokenUsage`; persist failures are logged and must not
+  fail generation finalization.
 - `generation` does not own SQL. It composes provider validation and the
-  conversation persistence-only setter in one service transaction.
+  conversation persistence-only setter in one service transaction, then asks
+  `usage` to insert a record after a successful stream.
 
 - Register and preload one application database through the Tauri SQL plugin.
 - Resolve its `sqlx::SqlitePool` from the plugin's public `DbInstances` and
@@ -789,6 +794,116 @@ UPDATE nodes SET content = ?1 WHERE role = 'system';
 ```sql
 UPDATE conversations SET system_prompt = ?1 WHERE id = ?2;
 -- bind None to inherit; never UPDATE node history
+```
+
+## Scenario: Token usage records (migration 0009)
+
+### 1. Scope / Trigger
+
+Use this contract when changing `usage_records`, migration `0009_token_usage.sql`,
+`usage::{repository,service,commands}`, or the generation/title insert sites.
+Usage IPC is additive and lives in `usage/`; it is not part of the frozen
+provider command list.
+
+### 2. Signatures
+
+```text
+get_usage_summary({ range?, through_day? }) -> UsageSummary
+clear_usage_records({}) -> { cleared: true }
+
+UsageRange = last_7_days | last_30_days | all
+
+UsageSummary {
+  totals: { input, output, total, records }
+  by_day: [{ day, input, output, total, records }]      -- local dates in the requested interval
+  by_model: [{ provider_id, model, input, output, total, records }]  -- total desc
+  by_source: [{ source, input, output, total, records }] -- chat | title
+}
+```
+
+```sql
+-- 0009_token_usage.sql
+CREATE TABLE usage_records (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  conversation_id TEXT,   -- nullable; no FK
+  node_id TEXT,           -- chat assistant node; NULL for title
+  source TEXT NOT NULL CHECK (source IN ('chat', 'title')),
+  provider_id TEXT NOT NULL,
+  model TEXT NOT NULL,
+  input_tokens INTEGER NOT NULL,
+  output_tokens INTEGER NOT NULL,
+  total_tokens INTEGER,   -- provider total, else input+output
+  created_at TEXT NOT NULL -- RFC3339 UTC
+);
+```
+
+### 3. Contracts
+
+- Insert only when `GeneratedContent.usage` is `Some`. Missing usage is not a
+  zero row.
+- `total_tokens` is the provider-reported total when present; otherwise
+  `input + output`.
+- `through_day` is a strict local calendar `YYYY-MM-DD`; omitted requests
+  remain all-time and resolve the command's current local day. Invalid ranges
+  and malformed dates are rejected at the command boundary.
+- Day buckets and every aggregate use the same SQLite local-date predicate:
+  `date(created_at, 'localtime') <= through_day`, plus `>= through_day - 6`
+  for `last_7_days` or `>= through_day - 29` for `last_30_days`. `all` has no
+  lower bound, so it includes history older than the heatmap's visual year.
+- No FKs to `conversations` / `nodes`: stats outlive conversation deletes.
+- Generation compose site: after the assistant node transaction succeeds,
+  `usage` insert errors are logged and ignored so finalization still returns
+  `completed`. Title jobs follow the same rule.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+|---|---|
+| Adapter reports usage | one `usage_records` row (`source=chat` or `title`) |
+| Adapter reports no usage | no row; generation succeeds |
+| `usage_records` insert fails | warn/log; generation/title still succeed |
+| `get_usage_summary` on empty table | zeros + empty arrays, not an error |
+| Range request | inclusive local-date bounds; future rows are excluded |
+| `clear_usage_records` | `{ cleared: true }` and subsequent summary is empty |
+
+### 5. Good / Base / Bad Cases
+
+- **Good**: OpenAI-compatible stream with `include_usage` writes `source=chat`
+  with `node_id` set; auto-title writes `source=title` with `node_id` NULL.
+- **Base**: missing `usage_records` before 0009 is created by the forward
+  migration; the released `v0.4.0` fixture upgrade suite must still pass.
+- **Bad**: blocking `finish_generation` on a usage insert error, or attaching
+  usage to `nodes.metadata` (immutable history trigger + title has no node).
+
+### 6. Tests Required
+
+- Adapter SSE fixtures: usage present, usage absent, OpenAI 400 mentioning
+  `stream_options` retries without the field.
+- Repository aggregation with fixed through-days proving inclusive 7/30-day
+  bounds, future exclusion, all-time old history, and matching totals/source/
+  model/day predicates.
+- `finish_generation`: record inserted / skipped / insert failure does not
+  fail the assistant persist (`generation/service.rs`).
+- Released fixture forward-upgrade through 0009
+  (`released_database_upgrade.rs`).
+- IPC contract fixture `contract-fixtures/usage-ipc.json` matches Rust
+  serialization and the Zod client.
+
+### 7. Wrong vs Correct
+
+```sql
+-- Wrong: FK would delete stats with the conversation
+FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+
+-- Correct: no FK; conversation_id is informational only
+conversation_id TEXT
+
+-- Wrong: each aggregate invents its own date window
+-- totals: no WHERE; by_day: last 371 days; by_model: all rows
+
+-- Correct: totals, by_day, by_model, and by_source reuse one predicate
+WHERE (?1 IS NULL OR date(created_at, 'localtime') >= ?1)
+  AND date(created_at, 'localtime') <= ?2
 ```
 
 ## Common Mistakes

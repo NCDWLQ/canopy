@@ -364,6 +364,22 @@ async fn assert_released_baseline(pool: &SqlitePool) {
         "upgrade must leave released conversation rows without a system prompt"
     );
 
+    let usage_table: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM sqlite_schema WHERE type = 'table' AND name = 'usage_records'",
+    )
+    .fetch_one(pool)
+    .await
+    .expect("usage_records table is inspectable");
+    assert_eq!(
+        usage_table, 1,
+        "migration 0009 must add usage_records on upgrade"
+    );
+    let usage_rows: i64 = sqlx::query_scalar("SELECT count(*) FROM usage_records")
+        .fetch_one(pool)
+        .await
+        .expect("usage_records is readable");
+    assert_eq!(usage_rows, 0, "upgrade must not invent usage rows");
+
     let residual_orphan_models: i64 =
         sqlx::query_scalar("SELECT count(*) FROM conversations WHERE model = ?1")
             .bind(STALE_MODEL)

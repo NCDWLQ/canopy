@@ -16,7 +16,8 @@ application core. Product code is organized by capability:
 | `llm` | protocol, endpoint validation, HTTP adapters, model discovery (no SQL/Tauri) |
 | `providers` | profiles, keyring credentials, active provider, `list_providers` façade, title-binding validation |
 | `conversations` | conversation tree, search, persistence; no provider table SQL |
-| `generation` | reply runtime, prepare/run/finalize, conversation-provider binding, system-prompt injection, auto-title |
+| `generation` | reply runtime, prepare/run/finalize, conversation-provider binding, system-prompt injection, auto-title; composes `usage` after a successful stream |
+| `usage` | `usage_records` table, insert + aggregate + clear, `get_usage_summary` / `clear_usage_records` |
 | `exports` | bounded Markdown file writes (path/content validation + filesystem IO) |
 | `error.rs` | `CommandError` IPC mapping only |
 

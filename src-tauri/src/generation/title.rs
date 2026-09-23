@@ -13,6 +13,7 @@ use crate::settings::{SettingsService, TitleModelBinding};
 
 use super::title_prompt::build_title_prompt;
 use crate::providers::{domain::validate_model, Provider, ProviderService};
+use crate::usage::{UsageService, UsageSource};
 
 pub(crate) const TITLE_UPDATED_EVENT: &str = "conversation://title-updated";
 
@@ -46,17 +47,30 @@ async fn run_auto_title<R: Runtime>(
     app: AppHandle<R>,
     conversation_id: &str,
 ) -> Result<(), ()> {
+    let pool_for_usage = pool.clone();
+    let conversation_for_usage = conversation_id.to_owned();
     run_auto_title_with(
         pool,
         provider_service,
         conversation_id,
-        generate_title_from_provider,
+        move |provider, model, secret, prompt| {
+            generate_title_from_provider(
+                pool_for_usage,
+                conversation_for_usage,
+                provider,
+                model,
+                secret,
+                prompt,
+            )
+        },
         |payload| app.emit(TITLE_UPDATED_EVENT, payload).map_err(|_| ()),
     )
     .await
 }
 
 async fn generate_title_from_provider(
+    pool: SqlitePool,
+    conversation_id: String,
     provider: Provider,
     model: String,
     secret: Option<SecretString>,
@@ -66,7 +80,8 @@ async fn generate_title_from_provider(
         ValidatedEndpoint::parse(&provider.base_endpoint, provider.protocol).map_err(|_| ())?;
     let client = OpenAiCompatibleClient::new().map_err(|_| ())?;
     let cancellation = CancellationToken::new();
-    match provider.protocol {
+    let provider_id = provider.id.clone();
+    let generated = match provider.protocol {
         Protocol::OpenAiCompatible => {
             let model = validate_model(&model).map_err(|_| ())?;
             client
@@ -85,7 +100,18 @@ async fn generate_title_from_provider(
             .await
         }
     }
-    .map_err(|_| ())
+    .map_err(|_| ())?;
+    UsageService::new(pool)
+        .record_best_effort(
+            Some(&conversation_id),
+            None,
+            UsageSource::Title,
+            &provider_id,
+            &model,
+            generated.usage,
+        )
+        .await;
+    Ok(generated.content)
 }
 
 async fn run_auto_title_with<G, Fut, E>(
